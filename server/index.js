@@ -498,11 +498,8 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Wildcard route for SPA – serve index.html for any non-API request
-app.get('*', (req, res) => {
-  if (req.path.startsWith('/api/')) {
-    return res.status(404).json({ ok: false, error: 'Not found' });
-  }
+// SPA fallback – serve index.html for any non-API path (regex avoids path-to-regexp '*' error on Express 4.21+)
+app.get(/^\/(?!api\/).*/, (req, res) => {
   res.sendFile(resolve(STATIC_DIR, 'index.html'));
 });
 
