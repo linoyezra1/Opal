@@ -1,0 +1,18 @@
+# Dependency folders
+node_modules/
+
+# Build outputs
+dist/
+.vite/
+
+# Local configuration & Secrets
+.env
+.idea/
+.vscode/
+
+# Tools
+ngrok.exe
+
+# Logs
+npm-debug.log*
+server/service-account.json
