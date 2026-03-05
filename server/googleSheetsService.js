@@ -300,6 +300,22 @@ function createAuth(auth) {
 }
 
 export function loadCredentialsFromFile(filePath) {
+  const inlineJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+  if (inlineJson) {
+    try {
+      const data = JSON.parse(inlineJson);
+      if (!data.client_email || !data.private_key) {
+        throw new Error('Invalid GOOGLE_APPLICATION_CREDENTIALS_JSON: missing client_email or private_key');
+      }
+      return { client_email: data.client_email, private_key: data.private_key };
+    } catch (e) {
+      console.error(
+        'Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON, falling back to GOOGLE_APPLICATION_CREDENTIALS/file:',
+        e?.message || e
+      );
+    }
+  }
+
   const path =
     filePath ??
     process.env.GOOGLE_APPLICATION_CREDENTIALS ??

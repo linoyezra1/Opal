@@ -3,7 +3,7 @@
  * Requires: .env with CARDCOM_*, GOOGLE_SHEET_ID, BASE_URL; service-account.json for Sheets.
  */
 
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import { createLowProfileDeal, getLowProfileIndicator } from './cardcomService.js';
@@ -15,8 +15,14 @@ import {
 } from './googleSheetsService.js';
 import { resolve } from 'path';
 
+try {
+  dotenv.config();
+} catch (e) {
+  console.warn('Failed to load .env via dotenv:', e?.message || e);
+}
+
 const app = express();
-const PORT = process.env.PORT ?? 3001;
+const PORT = process.env.PORT || 3001;
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 /** Frontend app URL for post-payment redirect (Cardcom sends user here after success). */
@@ -33,6 +39,9 @@ function ts() {
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' })); // Cardcom may POST as form-urlencoded
+
+const STATIC_DIR = resolve(process.cwd(), 'dist');
+app.use(express.static(STATIC_DIR));
 
 /** Plan id → amount in ILS (for payer row) */
 const PLAN_AMOUNTS = {
@@ -489,8 +498,16 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`[${ts()}] Opal API at http://localhost:${PORT}`);
+// Wildcard route for SPA – serve index.html for any non-API request
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ ok: false, error: 'Not found' });
+  }
+  res.sendFile(resolve(STATIC_DIR, 'index.html'));
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`[${ts()}] Opal API listening on http://0.0.0.0:${PORT}`);
   if (!SHEET_ID) console.warn(`[${ts()}] GOOGLE_SHEET_ID not set`);
   if (!process.env.CARDCOM_TERMINAL) console.warn(`[${ts()}] CARDCOM_TERMINAL not set`);
 });
