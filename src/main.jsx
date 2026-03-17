@@ -5,6 +5,7 @@ import App from './App.jsx';
 import Success from './pages/Success.jsx';
 import BeneficiaryForm from './pages/BeneficiaryForm.jsx';
 import Error from './pages/Error.jsx';
+import Admin from './pages/Admin.jsx';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -15,6 +16,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/success" element={<Success />} />
         <Route path="/beneficiary-form" element={<BeneficiaryForm />} />
         <Route path="/error" element={<Error />} />
+        <Route path="/admin" element={<Admin />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>

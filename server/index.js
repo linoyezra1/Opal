@@ -1,6 +1,6 @@
 /**
- * Opal API – Cardcom checkout + webhook → Google Sheets.
- * Requires: .env with CARDCOM_*, GOOGLE_SHEET_ID, BASE_URL; service-account.json for Sheets.
+ * Opal API – Cardcom checkout + webhook → MongoDB.
+ * Requires: .env with CARDCOM_*, BASE_URL, MONGO_URL.
  */
 
 import dotenv from 'dotenv';
@@ -8,11 +8,12 @@ import express from 'express';
 import cors from 'cors';
 import { createLowProfileDeal, getLowProfileIndicator } from './cardcomService.js';
 import {
-  appendPayerAndBeneficiaries,
-  appendToSheetTab,
-  formPayloadToSheetParams,
-  loadCredentialsFromFile,
-} from './googleSheetsService.js';
+  getDeals,
+  saveBeneficiaryUpdate,
+  saveContactLead,
+  saveDeal,
+  saveOrganizationLead,
+} from './mongoService.js';
 import { resolve } from 'path';
 
 try {
@@ -23,10 +24,12 @@ try {
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 /** Frontend app URL for post-payment redirect (Cardcom sends user here after success). */
 const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'OpalAdmin2026';
+const ADMIN_TOKENS = new Map();
 
 /** Precise timestamp for logging (HH:mm:ss.SSS) */
 function ts() {
@@ -34,6 +37,31 @@ function ts() {
   const hms = d.toTimeString().slice(0, 8);
   const ms = String(d.getMilliseconds()).padStart(3, '0');
   return `${hms}.${ms}`;
+}
+
+function createAdminToken(username) {
+  const token = Buffer.from(`${username}:${Date.now()}:${Math.random()}`).toString('base64url');
+  ADMIN_TOKENS.set(token, Date.now() + 12 * 60 * 60 * 1000);
+  return token;
+}
+
+function isValidAdminToken(token) {
+  const expiry = ADMIN_TOKENS.get(token);
+  if (!expiry) return false;
+  if (Date.now() > expiry) {
+    ADMIN_TOKENS.delete(token);
+    return false;
+  }
+  return true;
+}
+
+function requireAdmin(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!token || !isValidAdminToken(token)) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+  next();
 }
 
 app.use(cors());
@@ -62,25 +90,8 @@ function cleanupPending() {
 }
 setInterval(cleanupPending, 10 * 60 * 1000);
 
-function getCredentials() {
-  const paths = [
-    process.env.GOOGLE_APPLICATION_CREDENTIALS,
-    resolve(process.cwd(), 'service-account.json'),
-    resolve(process.cwd(), '..', 'service-account.json'),
-    resolve(process.cwd(), '..', 'service-account.json.json'),
-  ].filter(Boolean);
-  for (const p of paths) {
-    try {
-      return loadCredentialsFromFile(p);
-    } catch {
-      continue;
-    }
-  }
-  throw new Error('service-account.json not found. Place it in server folder or set GOOGLE_APPLICATION_CREDENTIALS.');
-}
-
-/** Build sheet payload with safe fallbacks so missing metadata never crashes the webhook. */
-function buildSheetPayloadFromFormState(formState) {
+/** Build payload with safe fallbacks so missing metadata never crashes. */
+function buildDealPayloadFromFormState(formState) {
   const fs = formState && typeof formState === 'object' ? formState : {};
   const planId = fs.selectedPlanId ?? '';
   const planSku = planId ? `MAKAT-${String(planId).replace('plan-', '').toUpperCase()}` : '';
@@ -101,7 +112,7 @@ function buildSheetPayloadFromFormState(formState) {
         dateOfBirth: b?.dateOfBirth ?? '',
       }))
     : [];
-  return { payer, beneficiaries };
+  return { payer, beneficiaries, raw: fs };
 }
 
 /**
@@ -207,7 +218,7 @@ app.get('/api/cardcom-webhook', (req, res) => {
 });
 
 /**
- * Process webhook in background: confirm deal with Cardcom, then write to sheet.
+ * Process webhook in background: confirm deal with Cardcom, then persist to MongoDB.
  * Uses fallbacks everywhere so missing metadata does not crash.
  */
 async function handleWebhookSuccess(lowProfileCode) {
@@ -263,50 +274,41 @@ async function handleWebhookSuccess(lowProfileCode) {
     }
     pendingDeals.delete(lowProfileCode);
 
-    const transactionId =
-      indicator?.internalDealNumber != null ? String(indicator.internalDealNumber) : lowProfileCode;
+    const transactionId = indicator?.internalDealNumber != null ? String(indicator.internalDealNumber) : lowProfileCode;
     const payerAmount = typeof pending.payerAmount === 'number' ? pending.payerAmount : 0;
-    const sheetPayload = buildSheetPayloadFromFormState(pending.formState);
-    const params = formPayloadToSheetParams(sheetPayload, transactionId, payerAmount);
+    const dealPayload = buildDealPayloadFromFormState(pending.formState);
 
-    if (!SHEET_ID) {
-      console.log(`[${ts()}] Payment status: ${paymentStatus} - Result: FAILURE`);
-      console.warn(`[${ts()}] Webhook: GOOGLE_SHEET_ID not set, skipping sheet write`);
-      return;
-    }
-
-    let auth;
-    try {
-      auth = getCredentials();
-    } catch (e) {
-      console.log(`[${ts()}] Payment status: ${paymentStatus} - Result: FAILURE`);
-      console.error(`[${ts()}] Webhook: getCredentials failed`, e.message);
-      return;
-    }
-
-    console.log(`[${ts()}] Attempting to write to Google Sheets...`);
+    console.log(`[${ts()}] Attempting to write deal to MongoDB...`);
     let result;
     try {
-      result = await appendPayerAndBeneficiaries({
-        spreadsheetId: SHEET_ID,
-        auth,
-        ...params,
+      result = await saveDeal({
+        transactionId,
+        payerAmount,
+        formState: pending.formState || {},
+        paymentStatus: paymentStatus === 'TEST' ? 'test_success' : 'paid',
         terminalNumber: terminalNum,
+        source: 'cardcom-webhook',
+        indicator: {
+          processEndOk: indicator?.processEndOk ?? null,
+          dealResponse: indicator?.dealResponse ?? null,
+          internalDealNumber: indicator?.internalDealNumber ?? null,
+        },
+        normalizedPayload: dealPayload,
       });
-    } catch (sheetErr) {
-      console.log(`[${ts()}] Google Sheets write failed`);
-      console.error(`[${ts()}] Payment status: ${paymentStatus} - Result: FAILURE`, sheetErr);
-      throw sheetErr;
+    } catch (dbErr) {
+      console.log(`[${ts()}] MongoDB write failed`);
+      console.error(`[${ts()}] Payment status: ${paymentStatus} - Result: FAILURE`, dbErr);
+      throw dbErr;
     }
 
     if (result.duplicate) {
-      console.log(`[${ts()}] Google Sheets write completed (duplicate skipped)`);
+      console.log(`[${ts()}] MongoDB write completed (duplicate skipped)`);
       console.log(`[${ts()}] Payment status: ${paymentStatus} - Result: FAILURE (duplicate)`);
     } else {
-      console.log(`[${ts()}] Google Sheets write completed`);
+      console.log(`[${ts()}] MongoDB write completed`);
       console.log(`[${ts()}] Payment status: ${paymentStatus} - Result: SUCCESS`);
     }
-    console.log(`[${ts()}] Webhook: sheet updated, transactionId=`, transactionId);
+    console.log(`[${ts()}] Webhook: deal saved, transactionId=`, transactionId);
   } catch (err) {
     const paymentStatus = (Number(process.env.CARDCOM_TERMINAL) === 1000) ? 'TEST' : 'LIVE';
     console.log(`[${ts()}] Payment status: ${paymentStatus} - Result: FAILURE`);
@@ -314,37 +316,23 @@ async function handleWebhookSuccess(lowProfileCode) {
   }
 }
 
-/** Tab names in the same spreadsheet for contact / organization forms */
-const SHEET_TAB_CONTACT = 'צרו קשר';
-const SHEET_TAB_ORGANIZATION = 'רשום ארגון';
 const OPAL_EMAIL = process.env.OPAL_EMAIL || 'opal2000@zahav.net.il';
 
 /**
  * POST /api/contact – "צרו קשר" form. Body: { name, email, phone, message }.
- * Appends to sheet tab "צרו קשר"; optionally notify Opal (email can be wired via OPAL_EMAIL).
+ * Saves lead to MongoDB collection: contactLeads.
  */
 app.post('/api/contact', async (req, res) => {
   try {
     const { name = '', email = '', phone = '', message = '' } = req.body || {};
-    const row = [
-      new Date().toISOString(),
-      String(name).trim(),
-      String(email).trim(),
-      String(phone).trim(),
-      String(message).trim(),
-    ];
-    if (!SHEET_ID) {
-      console.log(`[${ts()}] Contact form (no sheet):`, row);
-      return res.json({ success: true, message: 'נשלח' });
-    }
-    const auth = getCredentials();
-    await appendToSheetTab({
-      spreadsheetId: SHEET_ID,
-      auth,
-      sheetTitle: SHEET_TAB_CONTACT,
-      rows: [row],
+    await saveContactLead({
+      name: String(name).trim(),
+      email: String(email).trim(),
+      phone: String(phone).trim(),
+      message: String(message).trim(),
+      opalEmail: OPAL_EMAIL,
     });
-    console.log(`[${ts()}] Contact form appended to "${SHEET_TAB_CONTACT}"`);
+    console.log(`[${ts()}] Contact form saved to MongoDB`);
     res.json({ success: true, message: 'נשלח בהצלחה' });
   } catch (err) {
     console.error(`[${ts()}] Contact form error:`, err);
@@ -354,7 +342,7 @@ app.post('/api/contact', async (req, res) => {
 
 /**
  * POST /api/organization – "רשום ארגון" form. Body: { organizationName, contactName, phone, email, notes }.
- * Appends to sheet tab "רשום ארגון".
+ * Saves lead to MongoDB collection: organizationLeads.
  */
 app.post('/api/organization', async (req, res) => {
   try {
@@ -365,26 +353,14 @@ app.post('/api/organization', async (req, res) => {
       email = '',
       notes = '',
     } = req.body || {};
-    const row = [
-      new Date().toISOString(),
-      String(organizationName).trim(),
-      String(contactName).trim(),
-      String(phone).trim(),
-      String(email).trim(),
-      String(notes).trim(),
-    ];
-    if (!SHEET_ID) {
-      console.log(`[${ts()}] Organization form (no sheet):`, row);
-      return res.json({ success: true, message: 'נשלח' });
-    }
-    const auth = getCredentials();
-    await appendToSheetTab({
-      spreadsheetId: SHEET_ID,
-      auth,
-      sheetTitle: SHEET_TAB_ORGANIZATION,
-      rows: [row],
+    await saveOrganizationLead({
+      organizationName: String(organizationName).trim(),
+      contactName: String(contactName).trim(),
+      phone: String(phone).trim(),
+      email: String(email).trim(),
+      notes: String(notes).trim(),
     });
-    console.log(`[${ts()}] Organization form appended to "${SHEET_TAB_ORGANIZATION}"`);
+    console.log(`[${ts()}] Organization form saved to MongoDB`);
     res.json({ success: true, message: 'נשלח בהצלחה' });
   } catch (err) {
     console.error(`[${ts()}] Organization form error:`, err);
@@ -403,8 +379,7 @@ app.post('/api/organization', async (req, res) => {
  *   additionalMembers: Array<{ relation?: string, firstName, lastName, id, dateOfBirth?, maritalStatus?, healthFund?, supplementalInsurance? }>
  * }
  *
- * Writes primary (status 1) + additional members (status 0) with same Transaction ID.
- * Uses appendPayerAndBeneficiaries (Google Sheets writer).
+ * Writes beneficiary update into MongoDB under deal document.
  */
 app.post('/api/update-beneficiaries', async (req, res) => {
   try {
@@ -446,43 +421,28 @@ app.post('/api/update-beneficiaries', async (req, res) => {
         return !!(m.firstName || m.lastName || m.id || m.dateOfBirth);
       });
 
-    if (!SHEET_ID) {
-      // For local dev without sheet configured, just echo payload.
-      console.log(`[${ts()}] update-beneficiaries (no sheet):`, { transactionId, organizationName, agentName, primaryMember: pm, beneficiaries });
-      return res.json({ success: true, message: 'נשמר (ללא חיבור לגיליון).' });
-    }
-
-    const auth = getCredentials();
-    const terminalNum = Number(process.env.CARDCOM_TERMINAL ?? 0) || 0;
-
-    const result = await appendPayerAndBeneficiaries({
-      spreadsheetId: SHEET_ID,
-      auth,
+    const result = await saveBeneficiaryUpdate({
       transactionId,
-      payerAmount: 0,
-      payer: {
-        fullName: `${primaryFirstName} ${primaryLastName}`.trim(),
+      organizationName,
+      agentName,
+      primaryMember: {
+        firstName: primaryFirstName,
+        lastName: primaryLastName,
         id: primaryId,
         email: primaryEmail,
-        agentName,
-        organizationName,
-        planId: '',
-        planSku: '',
+        phone: String(pm.phone ?? '').trim(),
+        address: String(pm.address ?? '').trim(),
         dateOfBirth: String(pm.dateOfBirth ?? '').trim(),
         maritalStatus: String(pm.maritalStatus ?? '').trim(),
         healthFund: String(pm.healthFund ?? '').trim(),
         supplementalInsurance: String(pm.supplementalInsurance ?? '').trim(),
-        // phone/address are intentionally accepted on frontend but not mapped to the sheet writer yet
       },
-      beneficiaries,
-      terminalNumber: terminalNum,
+      additionalMembers: beneficiaries,
     });
 
     res.json({
       success: true,
-      appendedCount: result.appendedCount,
-      duplicate: !!result.duplicate,
-      payerRowIndex: result.payerRowIndex,
+      dealId: result.id,
     });
   } catch (err) {
     console.error(`[${ts()}] update-beneficiaries error:`, err);
@@ -493,9 +453,28 @@ app.post('/api/update-beneficiaries', async (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
-    sheetIdConfigured: !!SHEET_ID,
+    mongoConfigured: !!process.env.MONGO_URL,
     cardcomConfigured: !!(process.env.CARDCOM_TERMINAL && process.env.CARDCOM_USER),
   });
+});
+
+app.post('/api/admin/login', (req, res) => {
+  const { username = '', password = '' } = req.body || {};
+  if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+    return res.status(401).json({ success: false, error: 'שם משתמש או סיסמה שגויים' });
+  }
+  const token = createAdminToken(username);
+  return res.json({ success: true, token });
+});
+
+app.get('/api/admin/deals', requireAdmin, async (req, res) => {
+  try {
+    const deals = await getDeals();
+    res.json({ success: true, deals });
+  } catch (e) {
+    console.error(`[${ts()}] admin/deals error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to fetch deals' });
+  }
 });
 
 // SPA fallback – serve index.html for any non-API path (regex avoids path-to-regexp '*' error on Express 4.21+)
@@ -505,6 +484,8 @@ app.get(/^\/(?!api\/).*/, (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[${ts()}] Opal API listening on http://0.0.0.0:${PORT}`);
-  if (!SHEET_ID) console.warn(`[${ts()}] GOOGLE_SHEET_ID not set`);
+  if (!process.env.MONGO_URL) {
+    console.warn(`[${ts()}] MONGO_URL not set`);
+  }
   if (!process.env.CARDCOM_TERMINAL) console.warn(`[${ts()}] CARDCOM_TERMINAL not set`);
 });
