@@ -9,6 +9,7 @@ import cors from 'cors';
 import { createLowProfileDeal, getLowProfileIndicator } from './cardcomService.js';
 import {
   getDeals,
+  getSalesDashboardData,
   saveBeneficiaryUpdate,
   saveContactLead,
   saveDeal,
@@ -474,6 +475,33 @@ app.get('/api/admin/deals', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(`[${ts()}] admin/deals error:`, e);
     res.status(500).json({ success: false, error: 'Failed to fetch deals' });
+  }
+});
+
+app.get('/api/admin/sales-dashboard', requireAdmin, async (req, res) => {
+  try {
+    const summaryCategories = String(req.query.summaryCategories || '')
+      .split(',')
+      .map((x) => x.trim())
+      .filter(Boolean);
+    const data = await getSalesDashboardData({
+      month: req.query.month || '',
+      fromDate: req.query.fromDate || '',
+      toDate: req.query.toDate || '',
+      providerEnabled: String(req.query.providerEnabled || '') === 'true',
+      providerValue: req.query.providerValue || '',
+      agentEnabled: String(req.query.agentEnabled || '') === 'true',
+      agentValue: req.query.agentValue || '',
+      organizationSearch: req.query.organizationSearch || '',
+      customerSearch: req.query.customerSearch || '',
+      idSearch: req.query.idSearch || '',
+      amountDue: req.query.amountDue || '0',
+      summaryCategories,
+    });
+    res.json({ success: true, ...data });
+  } catch (e) {
+    console.error(`[${ts()}] admin/sales-dashboard error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to load sales dashboard' });
   }
 });
 

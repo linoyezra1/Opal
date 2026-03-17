@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 const API_BASE = window.location.origin;
 const TOKEN_KEY = 'opal_admin_token';
@@ -111,6 +112,7 @@ export default function Admin() {
         <div className="flex flex-wrap gap-3 justify-between items-center">
           <h1 className="text-3xl font-bold text-medical-blue-dark">לוח ניהול אופל</h1>
           <div className="flex gap-2">
+            <Link to="/admin/sales-dashboard" className="px-4 py-2 rounded-lg bg-medical-teal text-white">Sales Dashboard</Link>
             <button onClick={() => loadDeals()} className="px-4 py-2 rounded-lg bg-medical-blue text-white">רענון</button>
             <button
               onClick={() => {
