@@ -3,7 +3,7 @@ import Header from './components/Header';
 import PackageSelection, { PLANS } from './components/PackageSelection';
 import BeneficiaryFields from './components/BeneficiaryFields';
 
-const API_BASE = 'http://localhost:3001';
+const API_BASE = window.location.origin; // use the deployed origin in production
 const PENDING_KEY = 'opal_pending_data';
 
 function savePending(partial) {
