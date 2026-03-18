@@ -49,9 +49,6 @@ const initialState = {
   beneficiaries: [],
 };
 
-const initialContact = { name: '', email: '', phone: '', area: '', message: '' };
-const initialOrganization = { organizationName: '', contactName: '', phone: '', email: '', notes: '' };
-
 function validateId(value) {
   const digits = value.replace(/\D/g, '');
   return digits.length === 9;
@@ -69,15 +66,6 @@ export default function App() {
   const [submitError, setSubmitError] = useState(null);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [selectedLandingPlanOption, setSelectedLandingPlanOption] = useState('');
-  const [contact, setContact] = useState(initialContact);
-  const [organization, setOrganization] = useState(initialOrganization);
-  const [contactSent, setContactSent] = useState(false);
-  const [organizationSent, setOrganizationSent] = useState(false);
-  const [contactSending, setContactSending] = useState(false);
-  const [organizationSending, setOrganizationSending] = useState(false);
-  const [contactError, setContactError] = useState(null);
-  const [organizationError, setOrganizationError] = useState(null);
-  const [contactConsent, setContactConsent] = useState(false);
 
   const selectedLandingPlan = useMemo(
     () => LANDING_PLANS.find((p) => p.optionId === selectedLandingPlanOption) || null,
@@ -220,12 +208,13 @@ export default function App() {
             כשאתה צריך רופא, אתה צריך אותו עכשיו. במקום להמתין ימים ארוכים בתסכול, אצלנו תקבל ביטחון וטיפול מקצועי ומנוסה אצלך בבית עוד היום.. ללא עיכובים מיותרים
           </p>
           <p>
-חברת אופאל מציגה שרות רפואי "רופא עד הבית " בזמינות 24/7 עם ספקי רפואה ורופאים מנוסים, הגעה מהירה ללקוח מבלי לצאת מהבית והכל במחירים אטרקטיבים במסגרת הארגון           </p>
+            חברת אופאל מציגה שרות רפואי "רופא עד הבית " בזמינות 24/7 עם ספקי רפואה ורופאים מנוסים, הגעה מהירה ללקוח מבלי לצאת מהבית והכל במחירים אטרקטיבים במסגרת הארגון
+          </p>
         </section>
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <h2 className="text-xl font-bold text-medical-blue-dark mb-4">מה תקבל  במסגרת המנוי  רופא עד הבית ?</h2>
+            <h2 className="text-xl font-bold text-medical-blue-dark mb-4">מה תקבל במסגרת המנוי רופא עד הבית?</h2>
             <ul className="space-y-2 text-medical-grey-dark list-disc pr-5">
               <li>ייעוץ טלפוני רפואי 24/7</li>
               <li>ייעוץ רפואי טלפוני</li>
@@ -241,10 +230,18 @@ export default function App() {
             </ul>
           </div>
           <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <div className="h-64 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-center p-4 text-slate-500">
-
+            <h3 className="text-lg font-semibold text-medical-blue-dark mb-3">רופא עד הבית - המחשה</h3>
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm">
+              <img
+                src="/png1.png"
+                alt="רופא בודק לחץ דם בבית"
+                className="w-full h-72 object-cover object-center"
+                loading="lazy"
+              />
             </div>
-            <p className="text-xs text-slate-500 mt-3">* אזור זה מיועד להחלפה מהירה לתמונה האמיתית בהמשך.</p>
+            <p className="text-sm text-slate-600 mt-3 leading-6">
+              שירות רפואי זמין ומקצועי עד הבית, באווירה רגועה ונעימה.
+            </p>
           </div>
         </section>
 
@@ -255,7 +252,12 @@ export default function App() {
               {LANDING_PLANS.map((plan) => {
                 const checked = selectedLandingPlanOption === plan.optionId;
                 return (
-                  <label key={plan.optionId} className={`flex items-start gap-3 p-3 rounded-lg border ${checked ? 'border-medical-blue bg-medical-blue/5' : 'border-slate-200'}`}>
+                  <label
+                    key={plan.optionId}
+                    className={`flex items-start gap-3 p-3 rounded-lg border ${
+                      checked ? 'border-medical-blue bg-medical-blue/5' : 'border-slate-200'
+                    }`}
+                  >
                     <input
                       type="checkbox"
                       checked={checked}
@@ -283,9 +285,9 @@ export default function App() {
               <p className="text-sm text-medical-grey-dark">הנני מאשר את כתב השרות וחבילת נאות</p>
             </div>
             <div className="text-sm space-x-2 space-x-reverse">
-              <a href="#" className="text-medical-blue hover:underline">לינק לתנאי כתב השרות</a>
-              <span className="text-slate-400">|</span>
-
+              <a href="#" className="text-medical-blue hover:underline">
+                לינק לתנאי כתב השרות
+              </a>
             </div>
             {errors.acceptedTerms ? <p className="text-red-600 text-sm mt-2">{errors.acceptedTerms}</p> : null}
           </section>
@@ -293,9 +295,27 @@ export default function App() {
           <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-medical-blue-dark mb-3">סה"כ לתשלום חודשי</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <input type="text" readOnly value={selectedLandingPlan ? 'מנוי ב- V {חיוב}' : ''} className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50" placeholder="מנוי ב- V {חיוב}" />
-              <input type="text" readOnly value={selectedLandingPlan ? selectedLandingPlan.charge : ''} className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50" placeholder="סכום" />
-              <input type="text" readOnly value={selectedLandingPlan ? '₪' : ''} className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50" placeholder="₪" />
+              <input
+                type="text"
+                readOnly
+                value={selectedLandingPlan ? 'מנוי ב- V {חיוב}' : ''}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50"
+                placeholder="מנוי ב- V {חיוב}"
+              />
+              <input
+                type="text"
+                readOnly
+                value={selectedLandingPlan ? selectedLandingPlan.charge : ''}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50"
+                placeholder="סכום"
+              />
+              <input
+                type="text"
+                readOnly
+                value={selectedLandingPlan ? '₪' : ''}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50"
+                placeholder="₪"
+              />
             </div>
           </section>
 
@@ -304,32 +324,70 @@ export default function App() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
                 <label className="block text-sm text-medical-grey-dark mb-1">שם מלא *</label>
-                <input type="text" value={formState.fullName} onChange={(e) => update('fullName', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-medical-blue" placeholder="שם מלא" />
+                <input
+                  type="text"
+                  value={formState.fullName}
+                  onChange={(e) => update('fullName', e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-medical-blue"
+                  placeholder="שם מלא"
+                />
                 {errors.fullName && <p className="text-red-600 text-sm mt-1">{errors.fullName}</p>}
               </div>
               <div>
                 <label className="block text-sm text-medical-grey-dark mb-1">תעודת זהות *</label>
-                <input type="text" inputMode="numeric" maxLength={9} value={formState.id} onChange={(e) => update('id', e.target.value.replace(/\D/g, '').slice(0, 9))} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-medical-blue" placeholder="9 ספרות" />
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={9}
+                  value={formState.id}
+                  onChange={(e) => update('id', e.target.value.replace(/\D/g, '').slice(0, 9))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-medical-blue"
+                  placeholder="9 ספרות"
+                />
                 {errors.id && <p className="text-red-600 text-sm mt-1">{errors.id}</p>}
               </div>
               <div>
                 <label className="block text-sm text-medical-grey-dark mb-1">טלפון *</label>
-                <input type="tel" value={formState.phone} onChange={(e) => update('phone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-medical-blue" placeholder="לדוגמה 0501234567" />
+                <input
+                  type="tel"
+                  value={formState.phone}
+                  onChange={(e) => update('phone', e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-medical-blue"
+                  placeholder="לדוגמה 0501234567"
+                />
                 {errors.phone && <p className="text-red-600 text-sm mt-1">{errors.phone}</p>}
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-sm text-medical-grey-dark mb-1">אימייל *</label>
-                <input type="email" value={formState.email} onChange={(e) => update('email', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-medical-blue" placeholder="דוגמה@example.com" />
+                <input
+                  type="email"
+                  value={formState.email}
+                  onChange={(e) => update('email', e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-medical-blue"
+                  placeholder="דוגמה@example.com"
+                />
                 {errors.email && <p className="text-red-600 text-sm mt-1">{errors.email}</p>}
               </div>
               <div>
                 <label className="block text-sm text-medical-grey-dark mb-1">שם הסוכן *</label>
-                <input type="text" value={formState.agentName} onChange={(e) => update('agentName', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-medical-blue" placeholder="שם הסוכן" />
+                <input
+                  type="text"
+                  value={formState.agentName}
+                  onChange={(e) => update('agentName', e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-medical-blue"
+                  placeholder="שם הסוכן"
+                />
                 {errors.agentName && <p className="text-red-600 text-sm mt-1">{errors.agentName}</p>}
               </div>
               <div>
                 <label className="block text-sm text-medical-grey-dark mb-1">שם הארגון *</label>
-                <input type="text" value={formState.organizationName} onChange={(e) => update('organizationName', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-medical-blue" placeholder="שם הארגון" />
+                <input
+                  type="text"
+                  value={formState.organizationName}
+                  onChange={(e) => update('organizationName', e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-medical-blue"
+                  placeholder="שם הארגון"
+                />
                 {errors.organizationName && <p className="text-red-600 text-sm mt-1">{errors.organizationName}</p>}
               </div>
             </div>
@@ -337,31 +395,52 @@ export default function App() {
 
           <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
             <label className="block text-sm font-medium text-medical-grey-dark mb-2">כמה מוטבים נוספים?</label>
-            <select value={formState.beneficiaryCount} onChange={(e) => setBeneficiaryCount(e.target.value)} className="w-full sm:w-48 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-medical-blue bg-white">
+            <select
+              value={formState.beneficiaryCount}
+              onChange={(e) => setBeneficiaryCount(e.target.value)}
+              className="w-full sm:w-48 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-medical-blue bg-white"
+            >
               {[0, 1, 2, 3, 4, 5].map((n) => (
-                <option key={n} value={n}>{n}</option>
+                <option key={n} value={n}>
+                  {n}
+                </option>
               ))}
             </select>
             <div className="mt-4">
-              <BeneficiaryFields count={formState.beneficiaryCount} beneficiaries={formState.beneficiaries} onChange={updateBeneficiary} errors={errors} />
+              <BeneficiaryFields
+                count={formState.beneficiaryCount}
+                beneficiaries={formState.beneficiaries}
+                onChange={updateBeneficiary}
+                errors={errors}
+              />
             </div>
           </section>
 
           <div className="pt-4">
             {submitError && <p className="text-red-600 text-sm mb-2">{submitError}</p>}
-            <button type="submit" disabled={isSubmitting} className="w-full sm:w-auto min-w-[220px] px-6 py-3 bg-medical-blue hover:bg-medical-blue-dark disabled:bg-medical-grey-light text-white font-semibold rounded-lg shadow-md transition-colors disabled:opacity-70">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full sm:w-auto min-w-[220px] px-6 py-3 bg-medical-blue hover:bg-medical-blue-dark disabled:bg-medical-grey-light text-white font-semibold rounded-lg shadow-md transition-colors disabled:opacity-70"
+            >
               {isSubmitting ? 'טוען…' : 'המשך לתשלום'}
             </button>
           </div>
         </form>
 
-
-
         <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm mt-4">
-          <p className="text-sm text-medical-grey-dark">אופאל - בית ליזמות רפואית, המקשרת על מקצועיות, מצוינות וחווית שירות פרטית.</p>
-          <p className="text-sm text-medical-grey-dark mt-1">טלפון: 0544281389 | דוא"ל: opal2000@zahav.net.il</p>
+          <p className="text-sm text-medical-grey-dark">
+            אופאל - בית ליזמות רפואית, המקשרת על מקצועיות, מצוינות וחווית שירות פרטית.
+          </p>
+          <p className="text-sm text-medical-grey-dark mt-1">
+            טלפון: 0544281389 | דוא"ל: opal2000@zahav.net.il
+          </p>
           <div className="mt-4 h-20 w-40 rounded-xl bg-medical-blue/10 border border-medical-blue/20 flex items-center justify-center text-medical-blue-dark font-semibold">
             Opal Logo
           </div>
         </section>
 
+      </main>
+    </div>
+  );
+}
