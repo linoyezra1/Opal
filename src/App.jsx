@@ -21,13 +21,13 @@ function savePending(partial) {
 }
 
 const LANDING_PLANS = [
-  { optionId: 'opt-family', mappedPlanId: 'plan-a', label: 'מנוי חבילה למשפחה זוג + עד 3 ילדים מחיר רגיל 128 ₪', charge: 68 },
-  { optionId: 'opt-adult', mappedPlanId: 'plan-b', label: 'מנוי למבוגר מחיר רגיל 49 ₪', charge: 29 },
-  { optionId: 'opt-spouse', mappedPlanId: 'plan-fg', label: 'תוספת בן / בת זוג מחיר רגיל 35 ₪', charge: 22 },
-  { optionId: 'opt-child-alone', mappedPlanId: 'plan-fg', label: 'מנוי לילד ללא תלות במבוגר 35 ₪', charge: 27 },
-  { optionId: 'opt-child-add', mappedPlanId: 'plan-fg', label: 'מנוי תוספת ילד כתוספת למבוגר מחיר רגיל 14 ₪', charge: 10 },
-  { optionId: 'opt-65-single', mappedPlanId: 'plan-fg', label: 'מנוי יחיד מעל גיל 65+ מחיר 58 ₪', charge: 35 },
-  { optionId: 'opt-65-couple', mappedPlanId: 'plan-fg', label: 'מנוי לזוג מבוגרים מעל גיל 65 מחיר 79 ₪', charge: 45 },
+  { optionId: 'opt-family', mappedPlanId: 'plan-a', name: 'מנויי חבילה למשפחה זוג + עד 3 ילדים', regularPrice: 126, charge: 59, recommended: true },
+  { optionId: 'opt-adult', mappedPlanId: 'plan-b', name: 'מנויי למבוגר', regularPrice: 49, charge: 29, recommended: false },
+  { optionId: 'opt-spouse', mappedPlanId: 'plan-fg', name: 'תוספת בן / בת זוג', regularPrice: 35, charge: 22, recommended: false },
+  { optionId: 'opt-child-alone', mappedPlanId: 'plan-fg', name: 'מנוי ילד ללא תלות במבוגר', regularPrice: 35, charge: 27, recommended: false },
+  { optionId: 'opt-child-add', mappedPlanId: 'plan-fg', name: 'מנוי תוספת ילד כתוספת לבגיר', regularPrice: 14, charge: 10, recommended: false },
+  { optionId: 'opt-65-single', mappedPlanId: 'plan-fg', name: 'מנוי יחיד מעל גיל 65+', regularPrice: 56, charge: 35, recommended: false },
+  { optionId: 'opt-65-couple', mappedPlanId: 'plan-fg', name: 'מנוי לזוג מבוגרים מעל גיל 65', regularPrice: 79, charge: 45, recommended: false },
 ];
 
 const initialBeneficiary = () => ({
@@ -192,18 +192,25 @@ export default function App() {
 
   return (
     <div dir="rtl" className="min-h-screen bg-[#D9EAF3] text-right">
-      <main className="max-w-5xl mx-auto px-4 py-6 sm:py-10 space-y-8">
-        <header className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
+      <main className="max-w-5xl mx-auto px-4 py-6 sm:py-10 space-y-6 sm:space-y-8">
+        <header className="bg-[#22A8AE] rounded-2xl p-6 sm:p-8 shadow-md flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between text-white">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-medical-blue-dark">מנוי רופא פרטי עד הבית 24/7 בפחות משקל ליום</h1>
-            <p className="text-medical-grey-dark mt-2">אופל - שירות רפואי</p>
+            <h1 className="text-2xl sm:text-4xl font-extrabold leading-tight">מנוי רופא פרטי עד הבית 24/7 בפחות משקל ליום</h1>
+            <p className="mt-2 text-white/90 font-medium">אופל - שירות רפואי</p>
           </div>
-          <div className="h-20 w-40 rounded-xl bg-medical-blue/10 border border-medical-blue/20 flex items-center justify-center text-medical-blue-dark font-semibold">
+          <div className="h-20 w-40 rounded-xl bg-white/15 border border-white/30 flex items-center justify-center text-white font-bold">
             OPAL LOGO
           </div>
         </header>
 
-        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm leading-8 text-medical-grey-dark">
+        <img
+          src="/png1.png"
+          alt="רופא בודק לחץ דם בבית"
+          className="w-full h-[260px] sm:h-[360px] lg:h-[420px] object-cover object-center rounded-2xl shadow-md"
+          loading="lazy"
+        />
+
+        <section className="bg-[#21A8AE] rounded-2xl p-6 sm:p-8 shadow-md leading-8 text-white">
           <p className="mb-4">
             כשאתה צריך רופא, אתה צריך אותו עכשיו. במקום להמתין ימים ארוכים בתסכול, אצלנו תקבל ביטחון וטיפול מקצועי ומנוסה אצלך בבית עוד היום.. ללא עיכובים מיותרים
           </p>
@@ -212,50 +219,41 @@ export default function App() {
           </p>
         </section>
 
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <h2 className="text-xl font-bold text-medical-blue-dark mb-4">מה תקבל במסגרת המנוי רופא עד הבית?</h2>
-            <ul className="space-y-2 text-medical-grey-dark list-disc pr-5">
-              <li>ייעוץ טלפוני רפואי 24/7</li>
-              <li>ייעוץ רפואי טלפוני</li>
-              <li>הכוונה להמשך טיפול אצל רופא מומחה</li>
-              <li>מתן מרשמים ותרופות</li>
-              <li>מתן פניות רפואיות</li>
-              <li>ייעוץ טלפוני בתחום רפואת המשפחה</li>
-              <li>מתן תעודה רפואית</li>
-              <li>בדיקה גופנית וקבלת אבחנה רפואית</li>
-              <li>זריקת וולטרן, פרמין ועוד</li>
-              <li>קבלת אבחנה רפואית</li>
-              <li>מתן הפנייה במקרה הצורך לחדר מיון (טופס 17)</li>
-            </ul>
-          </div>
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-medical-blue-dark mb-3">רופא עד הבית - המחשה</h3>
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm">
-              <img
-                src="/png1.png"
-                alt="רופא בודק לחץ דם בבית"
-                className="w-full h-72 object-cover object-center"
-                loading="lazy"
-              />
-            </div>
-            <p className="text-sm text-slate-600 mt-3 leading-6">
-              שירות רפואי זמין ומקצועי עד הבית, באווירה רגועה ונעימה.
-            </p>
-          </div>
+        <section className="bg-[#0F6B72] rounded-2xl p-6 sm:p-8 shadow-md">
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-6">מה תקבל במסגרת המנוי רופא עד הבית?</h2>
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-2 text-white text-lg leading-8 list-disc pr-5">
+            <li>ייעוץ טלפוני רפואי 24/7</li>
+            <li>ייעוץ רפואי טלפוני</li>
+            <li>הכוונה להמשך טיפול אצל רופא מומחה</li>
+            <li>מתן מרשמים ותרופות</li>
+            <li>מתן פניות רפואיות</li>
+            <li>ייעוץ טלפוני בתחום רפואת המשפחה</li>
+            <li>מתן תעודה רפואית</li>
+            <li>בדיקה גופנית וקבלת אבחנה רפואית</li>
+            <li>זריקת וולטרן, פרמין ועוד</li>
+            <li>קבלת אבחנה רפואית</li>
+            <li>מתן הפנייה במקרה הצורך לחדר מיון (טופס 17)</li>
+          </ul>
         </section>
 
         <form onSubmit={handleSubmit} className="space-y-6 text-right">
-          <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <h2 className="text-xl font-bold text-medical-blue-dark mb-4">מחיר חודשי במסגרת ההסדר בארגון</h2>
-            <div className="space-y-3">
+          <section className="bg-[#CFE3EA] rounded-2xl p-6 sm:p-8 shadow-md border border-[#bfd7df]">
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-[#0F6B72] mb-5">מחיר חודשי במסגרת ההסדר בארגון</h2>
+            <div className="hidden sm:grid sm:grid-cols-12 text-sm font-bold text-[#0F6B72] border-b border-[#9bc3cf] pb-2 mb-3">
+              <div className="col-span-1 text-center">בחירה</div>
+              <div className="col-span-6">מסלול</div>
+              <div className="col-span-2 text-center">מחיר רגיל</div>
+              <div className="col-span-2 text-center">מחיר במסגרת ההסדר</div>
+              <div className="col-span-1 text-center">מומלץ</div>
+            </div>
+            <div className="space-y-2">
               {LANDING_PLANS.map((plan) => {
                 const checked = selectedLandingPlanOption === plan.optionId;
                 return (
                   <label
                     key={plan.optionId}
-                    className={`flex items-start gap-3 p-3 rounded-lg border ${
-                      checked ? 'border-medical-blue bg-medical-blue/5' : 'border-slate-200'
+                    className={`grid grid-cols-1 sm:grid-cols-12 items-center gap-3 p-3 rounded-lg border ${
+                      checked ? 'border-[#0F6B72] bg-white shadow-sm' : 'border-[#9bc3cf] bg-[#d9eaf0]'
                     }`}
                   >
                     <input
@@ -266,11 +264,23 @@ export default function App() {
                         setSelectedLandingPlanOption(nextChecked ? plan.optionId : '');
                         update('selectedPlanId', nextChecked ? plan.mappedPlanId : '');
                       }}
-                      className="mt-1"
+                      className="sm:col-span-1 mt-1 justify-self-start sm:justify-self-center accent-[#0F6B72]"
                     />
-                    <div className="flex-1">
-                      <p className="font-medium text-medical-blue-dark">{plan.label}</p>
-                      <p className="text-sm text-medical-grey-dark">מחיר לתשלום: ₪ {plan.charge}</p>
+                    <div className="sm:col-span-6">
+                      <p className="font-bold text-[#0F6B72]">{plan.name}</p>
+                    </div>
+                    <div className="sm:col-span-2 text-slate-700 sm:text-center font-semibold">
+                      מחיר רגיל: ₪ {plan.regularPrice}
+                    </div>
+                    <div className="sm:col-span-2 text-[#0F6B72] font-extrabold sm:text-center">
+                      ₪ {plan.charge}
+                    </div>
+                    <div className="sm:col-span-1 sm:text-center">
+                      {plan.recommended ? (
+                        <span className="inline-flex px-2 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
+                          מומלץ
+                        </span>
+                      ) : null}
                     </div>
                   </label>
                 );
@@ -428,14 +438,14 @@ export default function App() {
           </div>
         </form>
 
-        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm mt-4">
-          <p className="text-sm text-medical-grey-dark">
+        <section className="bg-[#0F6B72] rounded-2xl p-6 shadow-md mt-4 text-white">
+          <p className="text-sm">
             אופאל - בית ליזמות רפואית, המקשרת על מקצועיות, מצוינות וחווית שירות פרטית.
           </p>
-          <p className="text-sm text-medical-grey-dark mt-1">
+          <p className="text-sm mt-1">
             טלפון: 0544281389 | דוא"ל: opal2000@zahav.net.il
           </p>
-          <div className="mt-4 h-20 w-40 rounded-xl bg-medical-blue/10 border border-medical-blue/20 flex items-center justify-center text-medical-blue-dark font-semibold">
+          <div className="mt-4 h-20 w-40 rounded-xl bg-white/15 border border-white/30 flex items-center justify-center font-semibold">
             Opal Logo
           </div>
         </section>
