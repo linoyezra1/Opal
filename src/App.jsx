@@ -217,16 +217,15 @@ export default function App() {
 
         <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm leading-8 text-medical-grey-dark">
           <p className="mb-4">
-            כשתאנה צריך רופא, אתה צריך אותו עכשיו. במקום להמתין ימים ארוכים בתסכול, אצלנו תקבל ביטחון וטיפול מקצועי ומוסמך אצלך בבית עוד היום.. ללא עיכובים מיותרים
+            כשאתה צריך רופא, אתה צריך אותו עכשיו. במקום להמתין ימים ארוכים בתסכול, אצלנו תקבל ביטחון וטיפול מקצועי ומנוסה אצלך בבית עוד היום.. ללא עיכובים מיותרים
           </p>
           <p>
-            חברת אופל מציגה שירות רפואי "רופא עד הבית " במומחיות 24/7 עם צוותי רפואה ורופאים מוסמכים, הגעה מהירה ללקוח מכל לארץ ומכל המגזרים במחירים אטרקטיביים ובמסגרת הארגון
-          </p>
+חברת אופאל מציגה שרות רפואי "רופא עד הבית " בזמינות 24/7 עם ספקי רפואה ורופאים מנוסים, הגעה מהירה ללקוח מבלי לצאת מהבית והכל במחירים אטרקטיבים במסגרת הארגון           </p>
         </section>
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <h2 className="text-xl font-bold text-medical-blue-dark mb-4">מה תקבל</h2>
+            <h2 className="text-xl font-bold text-medical-blue-dark mb-4">מה תקבל  במסגרת המנוי  רופא עד הבית ?</h2>
             <ul className="space-y-2 text-medical-grey-dark list-disc pr-5">
               <li>ייעוץ טלפוני רפואי 24/7</li>
               <li>ייעוץ רפואי טלפוני</li>
@@ -243,7 +242,7 @@ export default function App() {
           </div>
           <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
             <div className="h-64 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-center p-4 text-slate-500">
-              תמונת דמה: רופא בודק לחץ דם בבית של זקנה כאשר היא יושבת על הקורסא בבית ומרגישה מרוצה והרופא עושה הבעות של בודק
+
             </div>
             <p className="text-xs text-slate-500 mt-3">* אזור זה מיועד להחלפה מהירה לתמונה האמיתית בהמשך.</p>
           </div>
@@ -286,7 +285,7 @@ export default function App() {
             <div className="text-sm space-x-2 space-x-reverse">
               <a href="#" className="text-medical-blue hover:underline">לינק לתנאי כתב השרות</a>
               <span className="text-slate-400">|</span>
-              <a href="#" className="text-medical-blue hover:underline">דף נחיתה מקורי</a>
+
             </div>
             {errors.acceptedTerms ? <p className="text-red-600 text-sm mt-2">{errors.acceptedTerms}</p> : null}
           </section>
@@ -301,7 +300,7 @@ export default function App() {
           </section>
 
           <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-medical-blue-dark mb-4">לתשלום - פרטי הצטרפות</h2>
+            <h2 className="text-lg font-semibold text-medical-blue-dark mb-4">פרטי הצטרפות ומעבר לתשלום</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
                 <label className="block text-sm text-medical-grey-dark mb-1">שם מלא *</label>
@@ -356,77 +355,7 @@ export default function App() {
           </div>
         </form>
 
-        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm mt-4">
-          <h2 className="text-xl font-bold text-medical-teal-dark mb-1">צור קשר</h2>
-          <p className="text-medical-grey-dark text-sm mb-4">אנא מלא/י פרטים</p>
-          {contactSent ? (
-            <p className="text-medical-teal-dark font-medium py-2">נשלח בהצלחה. תודה.</p>
-          ) : (
-            <form
-              className="space-y-4 max-w-xl"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                setContactSending(true);
-                setContactError(null);
-                try {
-                  const res = await fetch(`${API_BASE}/api/contact`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      name: contact.name,
-                      phone: contact.phone,
-                      email: contact.email,
-                      message: `${contact.message || ''} | אזור מגורים: ${contact.area || ''}`,
-                    }),
-                  });
-                  const data = await res.json().catch(() => ({}));
-                  if (res.ok && data.success) {
-                    setContactSent(true);
-                    setContact(initialContact);
-                    setContactConsent(false);
-                  } else {
-                    setContactError(data.error || 'שגיאה בשליחה');
-                  }
-                } catch (err) {
-                  setContactError(err.message || 'שגיאת רשת');
-                } finally {
-                  setContactSending(false);
-                }
-              }}
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-medical-grey-dark mb-1">שם ומשפחה</label>
-                  <input type="text" value={contact.name} onChange={(e) => setContact((c) => ({ ...c, name: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-teal focus:border-medical-teal" placeholder="שם מלא" />
-                </div>
-                <div>
-                  <label className="block text-sm text-medical-grey-dark mb-1">מייל</label>
-                  <input type="email" value={contact.email} onChange={(e) => setContact((c) => ({ ...c, email: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-teal focus:border-medical-teal" placeholder='דוא"ל' />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm text-medical-grey-dark mb-1">נייד</label>
-                <input type="tel" value={contact.phone} onChange={(e) => setContact((c) => ({ ...c, phone: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-teal focus:border-medical-teal" placeholder="טלפון" />
-              </div>
-              <div>
-                <label className="block text-sm text-medical-grey-dark mb-1">אזור מגורים</label>
-                <input type="text" value={contact.area} onChange={(e) => setContact((c) => ({ ...c, area: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-teal focus:border-medical-teal" placeholder="אזור מגורים" />
-              </div>
-              <div>
-                <label className="block text-sm text-medical-grey-dark mb-1">הודעה</label>
-                <textarea value={contact.message} onChange={(e) => setContact((c) => ({ ...c, message: e.target.value }))} rows={3} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-teal focus:border-medical-teal" placeholder="הודעה" />
-              </div>
-              <label className="inline-flex items-center gap-2 text-sm text-medical-grey-dark">
-                <input type="checkbox" checked={contactConsent} onChange={(e) => setContactConsent(e.target.checked)} />
-                הנני מאשר קבלת הודעות למייל סימון ב- V
-              </label>
-              {contactError && <p className="text-red-600 text-sm">{contactError}</p>}
-              <button type="submit" disabled={contactSending || !contactConsent} className="px-5 py-2.5 bg-medical-teal hover:bg-medical-teal-dark text-white font-medium rounded-lg disabled:opacity-70">
-                {contactSending ? 'שולח…' : 'שלח'}
-              </button>
-            </form>
-          )}
-        </section>
+
 
         <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm mt-4">
           <p className="text-sm text-medical-grey-dark">אופאל - בית ליזמות רפואית, המקשרת על מקצועיות, מצוינות וחווית שירות פרטית.</p>
@@ -436,70 +365,3 @@ export default function App() {
           </div>
         </section>
 
-        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm mt-4">
-          <h2 className="text-xl font-bold text-medical-teal-dark mb-4">רשום ארגון</h2>
-          <p className="text-medical-grey-dark text-sm mb-4">הרשמת ארגון לשירות. נציג יצור איתכם קשר.</p>
-          {organizationSent ? (
-            <p className="text-medical-teal-dark font-medium py-2">נשלח בהצלחה. תודה.</p>
-          ) : (
-            <form
-              className="space-y-4 max-w-xl"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                setOrganizationSending(true);
-                setOrganizationError(null);
-                try {
-                  const res = await fetch(`${API_BASE}/api/organization`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(organization),
-                  });
-                  const data = await res.json().catch(() => ({}));
-                  if (res.ok && data.success) {
-                    setOrganizationSent(true);
-                    setOrganization(initialOrganization);
-                  } else {
-                    setOrganizationError(data.error || 'שגיאה בשליחה');
-                  }
-                } catch (err) {
-                  setOrganizationError(err.message || 'שגיאת רשת');
-                } finally {
-                  setOrganizationSending(false);
-                }
-              }}
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-medical-grey-dark mb-1">שם הארגון</label>
-                  <input type="text" value={organization.organizationName} onChange={(e) => setOrganization((o) => ({ ...o, organizationName: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-teal focus:border-medical-teal" placeholder="שם הארגון" />
-                </div>
-                <div>
-                  <label className="block text-sm text-medical-grey-dark mb-1">שם איש קשר</label>
-                  <input type="text" value={organization.contactName} onChange={(e) => setOrganization((o) => ({ ...o, contactName: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-teal focus:border-medical-teal" placeholder="איש קשר" />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-medical-grey-dark mb-1">טלפון</label>
-                  <input type="tel" value={organization.phone} onChange={(e) => setOrganization((o) => ({ ...o, phone: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-teal focus:border-medical-teal" placeholder="טלפון" />
-                </div>
-                <div>
-                  <label className="block text-sm text-medical-grey-dark mb-1">אימייל</label>
-                  <input type="email" value={organization.email} onChange={(e) => setOrganization((o) => ({ ...o, email: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-teal focus:border-medical-teal" placeholder='דוא"ל' />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm text-medical-grey-dark mb-1">הערות</label>
-                <textarea value={organization.notes} onChange={(e) => setOrganization((o) => ({ ...o, notes: e.target.value }))} rows={2} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-teal focus:border-medical-teal" placeholder="הערות" />
-              </div>
-              {organizationError && <p className="text-red-600 text-sm">{organizationError}</p>}
-              <button type="submit" disabled={organizationSending} className="px-5 py-2.5 bg-medical-teal hover:bg-medical-teal-dark text-white font-medium rounded-lg disabled:opacity-70">
-                {organizationSending ? 'שולח…' : 'שליחה'}
-              </button>
-            </form>
-          )}
-        </section>
-      </main>
-    </div>
-  );
-}
