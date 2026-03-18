@@ -206,7 +206,7 @@ export default function App() {
         <img
           src="/png1.png"
           alt="רופא בודק לחץ דם בבית"
-          className="w-full h-[260px] sm:h-[360px] lg:h-[420px] object-cover object-center rounded-2xl shadow-md"
+          className="w-full h-auto max-w-lg mx-auto rounded-lg shadow-lg"
           loading="lazy"
         />
 
