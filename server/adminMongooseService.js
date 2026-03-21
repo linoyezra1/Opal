@@ -310,6 +310,47 @@ export async function listProducts() {
   });
 }
 
+export async function updateProduct(id, payload) {
+  await ensureConnection();
+  if (!mongoose.isValidObjectId(id)) throw new Error('Invalid product id');
+  const productName = String(payload.productName || payload.name || '').trim();
+  const sku = String(payload.sku || '').trim();
+  if (!productName || !sku) throw new Error('productName and sku are required');
+  const oid = new mongoose.Types.ObjectId(id);
+  const doc = await Product.findByIdAndUpdate(
+    oid,
+    {
+      $set: {
+        productName,
+        name: productName,
+        sku,
+        baseDescription: String(payload.baseDescription || ''),
+        updatedAt: new Date(),
+      },
+    },
+    { new: true, runValidators: true }
+  );
+  if (!doc) throw new Error('Product not found');
+  await Vendor.updateMany(
+    { 'productLinks.productId': oid },
+    { $set: { 'productLinks.$[elem].sku': sku } },
+    { arrayFilters: [{ 'elem.productId': oid }] }
+  );
+  return { id: String(doc._id) };
+}
+
+export async function deleteProduct(id) {
+  await ensureConnection();
+  if (!mongoose.isValidObjectId(id)) throw new Error('Invalid product id');
+  const oid = new mongoose.Types.ObjectId(id);
+  await Vendor.updateMany({}, { $pull: { productLinks: { productId: oid } } });
+  await PricingEntry.deleteMany({ productId: oid });
+  await OrgPricingPolicy.updateMany({}, { $pull: { relatedProducts: { productId: oid } } });
+  const r = await Product.findByIdAndDelete(oid);
+  if (!r) throw new Error('Product not found');
+  return { ok: true };
+}
+
 export async function createVendor(payload) {
   await ensureConnection();
   const links = Array.isArray(payload.productLinks) ? payload.productLinks : [];
@@ -378,19 +419,90 @@ export async function listVendors() {
   }));
 }
 
-/** מחיר ספק למוצר (למילוי אוטומטי במחירון) */
+export async function updateVendor(id, payload) {
+  await ensureConnection();
+  if (!mongoose.isValidObjectId(id)) throw new Error('Invalid vendor id');
+  const links = Array.isArray(payload.productLinks) ? payload.productLinks : [];
+  const productLinks = await Promise.all(
+    links.map(async (l) => {
+      const pid = l.productId;
+      if (!pid || !mongoose.isValidObjectId(pid)) throw new Error('Invalid productId in productLinks');
+      const p = await Product.findById(pid).lean();
+      const sku = p ? p.sku : String(l.sku || '');
+      return {
+        productId: pid,
+        sku,
+        vendorCost: Number(l.vendorCost || 0),
+      };
+    })
+  );
+  const doc = await Vendor.findByIdAndUpdate(
+    id,
+    {
+      $set: {
+        vendorName: String(payload.vendorName || '').trim(),
+        idNum: String(payload.idNum || '').trim(),
+        phone: String(payload.phone || '').trim(),
+        email: String(payload.email || '').trim(),
+        address: String(payload.address || '').trim(),
+        bankName: String(payload.bankName || '').trim(),
+        bankNum: String(payload.bankNum || '').trim(),
+        accountHolder: String(payload.accountHolder || '').trim(),
+        branchNum: String(payload.branchNum || '').trim(),
+        accountNum: String(payload.accountNum || '').trim(),
+        productLinks,
+        updatedAt: new Date(),
+      },
+    },
+    { new: true, runValidators: true }
+  );
+  if (!doc) throw new Error('Vendor not found');
+  return { id: String(doc._id) };
+}
+
+export async function deleteVendor(id) {
+  await ensureConnection();
+  if (!mongoose.isValidObjectId(id)) throw new Error('Invalid vendor id');
+  const oid = new mongoose.Types.ObjectId(id);
+  const pe = await PricingEntry.findOne({ vendorId: oid }).lean();
+  if (pe) throw new Error('לא ניתן למחוק ספק המשויך לשורות מחירון');
+  const op = await OrgPricingPolicy.findOne({ 'relatedProducts.vendorId': oid }).lean();
+  if (op) throw new Error('לא ניתן למחוק ספק המשויך למחירון ארגון');
+  const r = await Vendor.findByIdAndDelete(oid);
+  if (!r) throw new Error('Vendor not found');
+  return { ok: true };
+}
+
+/** Normalize subdocument productId to string (ObjectId | populated doc | Buffer) */
+function productLinkIdToString(productIdRef) {
+  if (productIdRef == null) return '';
+  if (typeof productIdRef === 'object') {
+    if (productIdRef._id != null) return String(productIdRef._id);
+    if (typeof productIdRef.toString === 'function') {
+      const s = productIdRef.toString();
+      if (s && s !== '[object Object]') return s;
+    }
+  }
+  return String(productIdRef);
+}
+
+/** מחיר ספק למוצר — ללא populate: אחרת productId הופך לאובייקט וההשוואה נכשלת */
 export async function getVendorCostForProduct(vendorId, productId) {
   await ensureConnection();
   if (!mongoose.isValidObjectId(vendorId) || !mongoose.isValidObjectId(productId)) return null;
-  const v = await Vendor.findById(vendorId).populate('productLinks.productId').lean();
+  const target = new mongoose.Types.ObjectId(productId).toString();
+  const v = await Vendor.findById(vendorId).lean();
   if (!v) return null;
-  const line = (v.productLinks || []).find((l) => String(l.productId) === String(productId));
+  const line = (v.productLinks || []).find((l) => productLinkIdToString(l.productId) === target);
   if (!line) return null;
-  const p = line.productId;
-  const sku = p && typeof p === 'object' ? p.sku : line.sku;
+  let sku = line.sku || '';
+  if (!sku) {
+    const p = await Product.findById(productId).select('sku').lean();
+    sku = p?.sku || '';
+  }
   return {
     vendorCost: Number(line.vendorCost || 0),
-    sku: sku || '',
+    sku,
     vendorName: v.vendorName,
   };
 }
@@ -465,6 +577,53 @@ export async function listPricingEntries() {
   });
 }
 
+export async function updatePricingEntry(id, payload) {
+  await ensureConnection();
+  if (!mongoose.isValidObjectId(id)) throw new Error('Invalid pricing entry id');
+  const vendorId = payload.vendorId;
+  const productId = payload.productId;
+  if (!mongoose.isValidObjectId(vendorId) || !mongoose.isValidObjectId(productId)) {
+    throw new Error('Invalid vendorId or productId');
+  }
+  let vendorCost = Number(payload.vendorCost ?? NaN);
+  if (Number.isNaN(vendorCost)) {
+    const vc = await getVendorCostForProduct(vendorId, productId);
+    vendorCost = vc ? vc.vendorCost : 0;
+  }
+  const retailPrice = Number(payload.retailPrice || 0);
+  const agentCommission = Number(payload.agentCommission || 0);
+  const pba = retailPrice - vendorCost;
+  const net = pba - agentCommission;
+  const doc = await PricingEntry.findByIdAndUpdate(
+    id,
+    {
+      $set: {
+        pricingName: String(payload.pricingName || '').trim(),
+        vendorId,
+        productId,
+        orgName: String(payload.orgName || '').trim(),
+        retailPrice,
+        vendorCost,
+        agentCommission,
+        profitBeforeAgent: pba,
+        netProfit: net,
+        profit: net,
+      },
+    },
+    { new: true, runValidators: true }
+  );
+  if (!doc) throw new Error('Pricing entry not found');
+  return { id: String(doc._id) };
+}
+
+export async function deletePricingEntry(id) {
+  await ensureConnection();
+  if (!mongoose.isValidObjectId(id)) throw new Error('Invalid id');
+  const r = await PricingEntry.findByIdAndDelete(id);
+  if (!r) throw new Error('Pricing entry not found');
+  return { ok: true };
+}
+
 export async function createSalesAgent(payload) {
   await ensureConnection();
   const b = payload.bankDetails || {};
@@ -506,6 +665,46 @@ export async function listSalesAgentsWithSales() {
     })
   );
   return rows;
+}
+
+export async function updateSalesAgent(id, payload) {
+  await ensureConnection();
+  if (!mongoose.isValidObjectId(id)) throw new Error('Invalid agent id');
+  const b = payload.bankDetails || {};
+  const doc = await SalesAgent.findByIdAndUpdate(
+    id,
+    {
+      $set: {
+        agentName: String(payload.agentName || '').trim(),
+        idNum: String(payload.idNum || '').trim(),
+        phone: String(payload.phone || '').trim(),
+        email: String(payload.email || '').trim(),
+        address: String(payload.address || '').trim(),
+        bankDetails: {
+          bankName: String(b.bankName || '').trim(),
+          bankNum: String(b.bankNum || '').trim(),
+          accountHolder: String(b.accountHolder || '').trim(),
+          branchNum: String(b.branchNum || '').trim(),
+          accountNum: String(b.accountNum || '').trim(),
+        },
+        updatedAt: new Date(),
+      },
+    },
+    { new: true }
+  );
+  if (!doc) throw new Error('Agent not found');
+  return { id: String(doc._id) };
+}
+
+export async function deleteSalesAgent(id) {
+  await ensureConnection();
+  if (!mongoose.isValidObjectId(id)) throw new Error('Invalid agent id');
+  const oid = new mongoose.Types.ObjectId(id);
+  const n = await countDealsByAgentId(String(id));
+  if (n > 0) throw new Error(`לא ניתן למחוק סוכן עם ${n} עסקאות מקושרות`);
+  const r = await SalesAgent.findByIdAndDelete(oid);
+  if (!r) throw new Error('Agent not found');
+  return { ok: true };
 }
 
 /** לשימוש ב-webhook: קישור מנוי לסוכן */

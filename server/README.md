@@ -66,10 +66,15 @@ npm start
 | POST | /api/admin/login | Admin login (temporary username/password) |
 | GET | /api/admin/deals | Get deals for dashboard (requires Bearer token) |
 | GET/POST | /api/admin/products | Product catalog (admin) |
+| PUT/DELETE | /api/admin/products/:id | Update or delete product (delete cascades links & pricing rows) |
 | GET/POST | /api/admin/vendors | Vendors + product cost links |
+| PUT/DELETE | /api/admin/vendors/:id | Update or delete vendor |
 | GET | /api/admin/vendor-cost | Query `vendorId` + `productId` → auto `vendorCost` / `sku` |
 | GET | /api/vendor-products/:vendorId/:productId | Same as above (path params; requires admin Bearer) |
 | GET/POST | /api/admin/pricing-entries | Price-list rows (retail, vendor cost, profit) |
+| PUT/DELETE | /api/admin/pricing-entries/:id | Update or delete a price-list row |
+| GET/POST | /api/admin/agents | List / create sales agents |
+| PUT/DELETE | /api/admin/agents/:id | Update or delete agent (delete blocked if deals reference agent) |
 | GET | /api/public/agents | Agents list for checkout dropdown (`id`, `agentName`) |
 | GET/POST | /api/admin/org-pricing | Legacy organization pricing policies |
 | GET | /api/admin/control-panel | Aggregated: abandoned carts, payment issues, leads, registered org pricings |

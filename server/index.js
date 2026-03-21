@@ -24,6 +24,10 @@ import {
   createProduct,
   createSalesAgent,
   createVendor,
+  deletePricingEntry,
+  deleteProduct,
+  deleteSalesAgent,
+  deleteVendor,
   getPricingContextByPricingId,
   getVendorCostForProduct,
   listIncompleteCheckoutDrafts,
@@ -34,6 +38,10 @@ import {
   listSalesAgentsWithSales,
   listVendors,
   resolveAgentIdFromFormState,
+  updatePricingEntry,
+  updateProduct,
+  updateSalesAgent,
+  updateVendor,
   upsertCheckoutDraft,
 } from './adminMongooseService.js';
 import { resolve } from 'path';
@@ -529,6 +537,26 @@ app.get('/api/admin/products', requireAdmin, async (req, res) => {
   }
 });
 
+app.put('/api/admin/products/:id', requireAdmin, async (req, res) => {
+  try {
+    const result = await updateProduct(req.params.id, req.body || {});
+    res.json({ success: true, ...result });
+  } catch (e) {
+    console.error(`[${ts()}] admin/products update error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to update product' });
+  }
+});
+
+app.delete('/api/admin/products/:id', requireAdmin, async (req, res) => {
+  try {
+    await deleteProduct(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    console.error(`[${ts()}] admin/products delete error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to delete product' });
+  }
+});
+
 app.post('/api/admin/vendors', requireAdmin, async (req, res) => {
   try {
     const body = req.body || {};
@@ -549,6 +577,26 @@ app.get('/api/admin/vendors', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(`[${ts()}] admin/vendors list error:`, e);
     res.status(500).json({ success: false, error: 'Failed to fetch vendors' });
+  }
+});
+
+app.put('/api/admin/vendors/:id', requireAdmin, async (req, res) => {
+  try {
+    const result = await updateVendor(req.params.id, req.body || {});
+    res.json({ success: true, ...result });
+  } catch (e) {
+    console.error(`[${ts()}] admin/vendors update error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to update vendor' });
+  }
+});
+
+app.delete('/api/admin/vendors/:id', requireAdmin, async (req, res) => {
+  try {
+    await deleteVendor(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    console.error(`[${ts()}] admin/vendors delete error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to delete vendor' });
   }
 });
 
@@ -613,6 +661,26 @@ app.get('/api/admin/pricing-entries', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(`[${ts()}] admin/pricing-entries list error:`, e);
     res.status(500).json({ success: false, error: 'Failed to fetch pricing entries' });
+  }
+});
+
+app.put('/api/admin/pricing-entries/:id', requireAdmin, async (req, res) => {
+  try {
+    const result = await updatePricingEntry(req.params.id, req.body || {});
+    res.json({ success: true, ...result });
+  } catch (e) {
+    console.error(`[${ts()}] admin/pricing-entries update error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to update pricing entry' });
+  }
+});
+
+app.delete('/api/admin/pricing-entries/:id', requireAdmin, async (req, res) => {
+  try {
+    await deletePricingEntry(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    console.error(`[${ts()}] admin/pricing-entries delete error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to delete pricing entry' });
   }
 });
 
@@ -746,6 +814,26 @@ app.get('/api/admin/agents', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(`[${ts()}] admin/agents list error:`, e);
     res.status(500).json({ success: false, error: 'Failed to fetch agents' });
+  }
+});
+
+app.put('/api/admin/agents/:id', requireAdmin, async (req, res) => {
+  try {
+    const result = await updateSalesAgent(req.params.id, req.body || {});
+    res.json({ success: true, ...result });
+  } catch (e) {
+    console.error(`[${ts()}] admin/agents update error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to update agent' });
+  }
+});
+
+app.delete('/api/admin/agents/:id', requireAdmin, async (req, res) => {
+  try {
+    await deleteSalesAgent(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    console.error(`[${ts()}] admin/agents delete error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to delete agent' });
   }
 });
 

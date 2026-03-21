@@ -1,7 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { API_BASE } from '../apiBase.js';
+import ConfirmDialog from '../components/ConfirmDialog.jsx';
 
-const API_BASE = window.location.origin;
 const TOKEN_KEY = 'opal_admin_token';
 
 const EMPTY_FORM = { productName: '', sku: '' };
@@ -12,6 +13,8 @@ export default function ProductManagement() {
   const [products, setProducts] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [editProduct, setEditProduct] = React.useState(null);
+  const [deleteTarget, setDeleteTarget] = React.useState(null);
 
   async function loadProducts() {
     if (!token) return;
@@ -59,6 +62,54 @@ export default function ProductManagement() {
     }
   }
 
+  async function saveEdit(e) {
+    e.preventDefault();
+    if (!editProduct?.id) return;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/products/${editProduct.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          productName: editProduct.productName,
+          sku: editProduct.sku,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || 'עדכון נכשל');
+      setEditProduct(null);
+      await loadProducts();
+    } catch (e2) {
+      setError(e2.message || 'שגיאה');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget?.id) return;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/products/${deleteTarget.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || 'מחיקה נכשלה');
+      setDeleteTarget(null);
+      await loadProducts();
+    } catch (e2) {
+      setError(e2.message || 'שגיאה');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   if (!token) {
     return (
       <div dir="rtl" className="min-h-screen bg-slate-50 p-6">
@@ -72,6 +123,52 @@ export default function ProductManagement() {
 
   return (
     <div dir="rtl" className="min-h-screen bg-slate-50 p-4 sm:p-8">
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="מחיקת מוצר"
+        message={deleteTarget ? `האם למחוק את "${deleteTarget.productName || deleteTarget.name}" (${deleteTarget.sku})? פעולה זו תסיר קישורים מספקים וממחירונים.` : ''}
+        confirmLabel="מחק"
+        danger
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
+      {editProduct ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/50" onClick={() => setEditProduct(null)}>
+          <div className="bg-white rounded-xl border max-w-lg w-full p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-xl font-bold text-medical-blue-dark mb-4">עריכת מוצר</h2>
+            <form onSubmit={saveEdit} className="space-y-4">
+              <div>
+                <label className="text-xs text-slate-500">שם מוצר</label>
+                <input
+                  className="w-full border rounded-lg px-3 py-2 mt-1"
+                  value={editProduct.productName}
+                  onChange={(e) => setEditProduct((p) => ({ ...p, productName: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500">מק&quot;ט</label>
+                <input
+                  className="w-full border rounded-lg px-3 py-2 mt-1 font-mono"
+                  value={editProduct.sku}
+                  onChange={(e) => setEditProduct((p) => ({ ...p, sku: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button type="button" onClick={() => setEditProduct(null)} className="px-4 py-2 rounded-lg bg-slate-200">
+                  ביטול
+                </button>
+                <button type="submit" disabled={loading} className="px-4 py-2 rounded-lg bg-medical-blue text-white">
+                  {loading ? 'שומר...' : 'שמירה'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex justify-between items-center flex-wrap gap-2">
           <h1 className="text-2xl font-bold text-medical-blue-dark">הקמת מוצר</h1>
@@ -129,6 +226,7 @@ export default function ProductManagement() {
                   <th className="p-2 text-right">שם מוצר</th>
                   <th className="p-2 text-right">מק&quot;ט</th>
                   <th className="p-2 text-right">נוצר</th>
+                  <th className="p-2 text-right">פעולות</th>
                 </tr>
               </thead>
               <tbody>
@@ -139,11 +237,29 @@ export default function ProductManagement() {
                     <td className="p-2 text-slate-500 whitespace-nowrap">
                       {p.createdAt ? new Date(p.createdAt).toLocaleString('he-IL') : '—'}
                     </td>
+                    <td className="p-2 whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditProduct({
+                            id: p.id,
+                            productName: p.productName || p.name,
+                            sku: p.sku,
+                          })
+                        }
+                        className="text-medical-blue text-sm font-semibold ml-2"
+                      >
+                        עריכה
+                      </button>
+                      <button type="button" onClick={() => setDeleteTarget(p)} className="text-red-600 text-sm font-semibold">
+                        מחק
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {!products.length ? (
                   <tr>
-                    <td colSpan={3} className="p-4 text-slate-500">
+                    <td colSpan={4} className="p-4 text-slate-500">
                       אין מוצרים — הוסיפו מוצרים לבסיס הנתונים.
                     </td>
                   </tr>
