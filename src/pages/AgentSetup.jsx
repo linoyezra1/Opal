@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 const API_BASE = window.location.origin;
 const TOKEN_KEY = 'opal_admin_token';
 
-const PRODUCTS = [
+const PRODUCT_FALLBACK = [
   { name: 'מנוי משפחתי', sku: 'PLAN-A' },
   { name: 'מנוי מבוגר', sku: 'PLAN-B' },
   { name: 'תוספת בן/בת זוג', sku: 'PLAN-FG-SPOUSE' },
@@ -13,23 +13,27 @@ const PRODUCTS = [
   { name: 'מנוי 65+ זוג', sku: 'PLAN-65-COUPLE' },
 ];
 
-const INITIAL_FORM = {
-  personal: { name: '', idOrCompanyNum: '', phone: '', email: '', address: '' },
-  bankDetails: { bankName: '', bankNumber: '', branchNumber: '', accountNumber: '', accountHolder: '' },
-  commissionModel: {
-    productName: PRODUCTS[0].name,
-    productSKU: PRODUCTS[0].sku,
-    retailPrice: '',
-    vendorCost: '',
-    agentCommission: '',
-    baseFee: '',
-  },
-};
+function buildInitialForm(products) {
+  const p0 = products[0] || PRODUCT_FALLBACK[0];
+  return {
+    personal: { name: '', idOrCompanyNum: '', phone: '', email: '', address: '' },
+    bankDetails: { bankName: '', bankNumber: '', branchNumber: '', accountNumber: '', accountHolder: '' },
+    commissionModel: {
+      productName: p0.name,
+      productSKU: p0.sku,
+      retailPrice: '',
+      vendorCost: '',
+      agentCommission: '',
+      baseFee: '',
+    },
+  };
+}
 
 export default function AgentSetup() {
   const [token] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState(INITIAL_FORM);
+  const [productOptions, setProductOptions] = useState(PRODUCT_FALLBACK);
+  const [form, setForm] = useState(() => buildInitialForm(PRODUCT_FALLBACK));
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -60,8 +64,33 @@ export default function AgentSetup() {
     loadAgents();
   }, [token]);
 
+  React.useEffect(() => {
+    if (!token) return;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/products`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success || !Array.isArray(data.products) || !data.products.length) return;
+        const opts = data.products.map((p) => ({ name: p.name, sku: p.sku }));
+        setProductOptions(opts);
+        setForm((prev) => ({
+          ...prev,
+          commissionModel: {
+            ...prev.commissionModel,
+            productName: opts[0].name,
+            productSKU: opts[0].sku,
+          },
+        }));
+      } catch {
+        // keep fallback catalog
+      }
+    })();
+  }, [token]);
+
   function setProductBySku(sku) {
-    const product = PRODUCTS.find((p) => p.sku === sku) || PRODUCTS[0];
+    const product = productOptions.find((p) => p.sku === sku) || productOptions[0];
     setForm((prev) => ({
       ...prev,
       commissionModel: {
@@ -95,7 +124,7 @@ export default function AgentSetup() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.error || 'שמירה נכשלה');
-      setForm(INITIAL_FORM);
+      setForm(buildInitialForm(productOptions));
       setStep(1);
       await loadAgents();
     } catch (e2) {
@@ -159,7 +188,7 @@ export default function AgentSetup() {
           {step === 3 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <select className="border rounded-lg px-3 py-2 bg-white" value={form.commissionModel.productSKU} onChange={(e) => setProductBySku(e.target.value)}>
-                {PRODUCTS.map((p) => (
+                {productOptions.map((p) => (
                   <option key={p.sku} value={p.sku}>{p.name} ({p.sku})</option>
                 ))}
               </select>

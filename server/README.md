@@ -23,6 +23,9 @@ Optional:
 - Deals are stored in collection **deals**.
 - Contact forms are stored in **contactLeads**.
 - Organization forms are stored in **organizationLeads**.
+- **products** – catalog (name, sku, baseDescription) for admin pricing.
+- **org_pricing_policies** – per-organization price lists with `relatedProducts[]` (product refs + retail/vendor/profit).
+- **checkout_drafts** – anonymous checkout progress for abandoned-cart tracking.
 
 ## 3. How to run
 
@@ -58,4 +61,9 @@ npm start
 | POST/GET | /api/cardcom-webhook | Cardcom callback (LowProfileCode in query or body) |
 | POST | /api/admin/login | Admin login (temporary username/password) |
 | GET | /api/admin/deals | Get deals for dashboard (requires Bearer token) |
+| GET/POST | /api/admin/products | Product catalog CRUD (admin) |
+| GET/POST | /api/admin/org-pricing | Organization pricing policies (`organizationName`, `pricingListName`, `relatedProducts[]`) |
+| GET | /api/admin/control-panel | Aggregated: abandoned carts, payment issues, leads, registered org pricings |
+| GET | /api/pricing-context?pricingId= | **Public** – resolve product names + prices for a landing page (Mongo `_id` of org pricing policy) |
+| POST | /api/checkout-draft | Save anonymous checkout draft (`sessionKey`, `formSnapshot`, `completed`) |
 | GET | /api/health | Health and config check |

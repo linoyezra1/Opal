@@ -115,6 +115,51 @@ export async function getDeals() {
   }));
 }
 
+function serializeDocDates(doc) {
+  const out = { ...doc, id: String(doc._id) };
+  delete out._id;
+  if (out.createdAt instanceof Date) out.createdAt = out.createdAt.toISOString();
+  return out;
+}
+
+/** B2C contact form leads */
+export async function getContactLeads(limit = 200) {
+  const db = await getDb();
+  const docs = await db.collection('contactLeads').find({}).sort({ createdAt: -1 }).limit(limit).toArray();
+  return docs.map(serializeDocDates);
+}
+
+/** B2B / corporate contact leads */
+export async function getOrganizationLeads(limit = 200) {
+  const db = await getDb();
+  const docs = await db.collection('organizationLeads').find({}).sort({ createdAt: -1 }).limit(limit).toArray();
+  return docs.map(serializeDocDates);
+}
+
+/** Deals with failed / problematic payment (פיגור תשלום / כשלון) */
+export async function getPaymentArrearsDeals(limit = 200) {
+  const db = await getDb();
+  const docs = await db
+    .collection('deals')
+    .find({
+      $or: [
+        { paymentStatus: { $regex: /fail|cancel|declin|error|void|refund|בוטל|נכשל|denied/i } },
+        { paymentStatus: 'pending' },
+      ],
+    })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .toArray();
+  return docs.map((d) => ({
+    id: String(d._id),
+    transactionId: d.transactionId,
+    paymentStatus: d.paymentStatus,
+    payerAmount: d.payerAmount,
+    formState: d.formState,
+    createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : null,
+  }));
+}
+
 function getDateRange(filters) {
   const range = {};
   if (filters.month) {

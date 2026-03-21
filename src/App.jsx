@@ -3,6 +3,21 @@ import BeneficiaryFields from './components/BeneficiaryFields';
 
 const API_BASE = window.location.origin;
 const PENDING_KEY = 'opal_pending_data';
+const CHECKOUT_SESSION_KEY = 'opal_checkout_session_key';
+
+function getCheckoutSessionKey() {
+  try {
+    if (typeof window === 'undefined' || !window.sessionStorage) return `s_${Date.now()}`;
+    let k = window.sessionStorage.getItem(CHECKOUT_SESSION_KEY);
+    if (!k) {
+      k = `s_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+      window.sessionStorage.setItem(CHECKOUT_SESSION_KEY, k);
+    }
+    return k;
+  } catch {
+    return `s_${Date.now()}`;
+  }
+}
 
 function savePending(partial) {
   try {
@@ -71,6 +86,28 @@ export default function App() {
     () => LANDING_PLANS.find((p) => p.optionId === selectedLandingPlanOption) || null,
     [selectedLandingPlanOption]
   );
+
+  React.useEffect(() => {
+    const hasProgress =
+      formState.fullName?.trim() ||
+      formState.phone?.trim() ||
+      formState.email?.trim() ||
+      formState.selectedPlanId;
+    if (!hasProgress) return undefined;
+    const t = window.setTimeout(() => {
+      fetch(`${API_BASE}/api/checkout-draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionKey: getCheckoutSessionKey(),
+          formSnapshot: formState,
+          step: 'checkout',
+          completed: false,
+        }),
+      }).catch(() => {});
+    }, 2500);
+    return () => window.clearTimeout(t);
+  }, [formState]);
 
   const update = useCallback((key, value) => {
     setFormState((prev) => ({ ...prev, [key]: value }));
@@ -177,6 +214,16 @@ export default function App() {
           return;
         }
         if (data.url) {
+          fetch(`${API_BASE}/api/checkout-draft`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionKey: getCheckoutSessionKey(),
+              formSnapshot: formState,
+              step: 'redirect_payment',
+              completed: true,
+            }),
+          }).catch(() => {});
           window.location.href = data.url;
           return;
         }

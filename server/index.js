@@ -14,12 +14,20 @@ import {
   saveContactLead,
   saveDeal,
   saveOrganizationLead,
+  getContactLeads,
+  getOrganizationLeads,
+  getPaymentArrearsDeals,
 } from './mongoService.js';
 import {
   createAgent,
-  createOrganizationPricing,
+  createOrgPricingPolicy,
+  createProduct,
+  getPricingContextByPricingId,
   listAgents,
-  listOrganizationPricings,
+  listIncompleteCheckoutDrafts,
+  listOrgPricingPolicies,
+  listProducts,
+  upsertCheckoutDraft,
 } from './adminMongooseService.js';
 import { resolve } from 'path';
 
@@ -484,29 +492,120 @@ app.get('/api/admin/deals', requireAdmin, async (req, res) => {
   }
 });
 
+app.post('/api/admin/products', requireAdmin, async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!String(body.name || '').trim()) return res.status(400).json({ success: false, error: 'name is required' });
+    if (!String(body.sku || '').trim()) return res.status(400).json({ success: false, error: 'sku (מק"ט) is required' });
+    const result = await createProduct(body);
+    res.json({ success: true, id: result.id });
+  } catch (e) {
+    console.error(`[${ts()}] admin/products create error:`, e);
+    const msg = e.code === 11000 ? 'מק"ט כבר קיים במערכת' : e.message || 'Failed to save product';
+    res.status(500).json({ success: false, error: msg });
+  }
+});
+
+app.get('/api/admin/products', requireAdmin, async (req, res) => {
+  try {
+    const products = await listProducts();
+    res.json({ success: true, products });
+  } catch (e) {
+    console.error(`[${ts()}] admin/products list error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to fetch products' });
+  }
+});
+
 app.post('/api/admin/org-pricing', requireAdmin, async (req, res) => {
   try {
     const body = req.body || {};
-    if (!String(body.orgName || '').trim()) return res.status(400).json({ success: false, error: 'orgName is required' });
-    if (!String(body.priceListName || '').trim()) return res.status(400).json({ success: false, error: 'priceListName is required' });
-    if (!String(body.vendorName || '').trim()) return res.status(400).json({ success: false, error: 'vendorName is required' });
-    if (!String(body.productName || '').trim()) return res.status(400).json({ success: false, error: 'productName is required' });
-    if (!String(body.productSKU || '').trim()) return res.status(400).json({ success: false, error: 'productSKU is required' });
-    const result = await createOrganizationPricing(body);
+    if (!String(body.organizationName || '').trim()) {
+      return res.status(400).json({ success: false, error: 'organizationName is required' });
+    }
+    if (!String(body.pricingListName || '').trim()) {
+      return res.status(400).json({ success: false, error: 'pricingListName is required' });
+    }
+    const related = Array.isArray(body.relatedProducts) ? body.relatedProducts : [];
+    if (!related.length) {
+      return res.status(400).json({ success: false, error: 'יש לבחור לפחות מוצר אחד עם מחירים' });
+    }
+    for (const line of related) {
+      if (!String(line.productId || '').trim()) {
+        return res.status(400).json({ success: false, error: 'כל שורה חייבת productId' });
+      }
+    }
+    const result = await createOrgPricingPolicy(body);
     res.json({ success: true, id: result.id });
   } catch (e) {
     console.error(`[${ts()}] admin/org-pricing create error:`, e);
-    res.status(500).json({ success: false, error: 'Failed to save organization pricing' });
+    res.status(500).json({ success: false, error: e.message || 'Failed to save organization pricing' });
   }
 });
 
 app.get('/api/admin/org-pricing', requireAdmin, async (req, res) => {
   try {
-    const rows = await listOrganizationPricings();
+    const rows = await listOrgPricingPolicies();
     res.json({ success: true, rows });
   } catch (e) {
     console.error(`[${ts()}] admin/org-pricing list error:`, e);
     res.status(500).json({ success: false, error: 'Failed to fetch organization pricing' });
+  }
+});
+
+/** Aggregated dashboard: abandoned carts, arrears, leads, registered org pricings */
+app.get('/api/admin/control-panel', requireAdmin, async (req, res) => {
+  try {
+    const [abandonedCarts, paymentArrears, privateLeads, corporateLeads, registeredOrganizations] = await Promise.all([
+      listIncompleteCheckoutDrafts(150),
+      getPaymentArrearsDeals(150),
+      getContactLeads(150),
+      getOrganizationLeads(150),
+      listOrgPricingPolicies(),
+    ]);
+    res.json({
+      success: true,
+      abandonedCarts,
+      paymentArrears,
+      privateLeads,
+      corporateLeads,
+      registeredOrganizations,
+    });
+  } catch (e) {
+    console.error(`[${ts()}] admin/control-panel error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to load control panel' });
+  }
+});
+
+/** Public — landing page: ?pricingId=<MongoId> (also accepts orgPricingId) */
+app.get('/api/pricing-context', async (req, res) => {
+  try {
+    const pricingId = String(req.query.pricingId || req.query.orgPricingId || '').trim();
+    if (!pricingId) {
+      return res.status(400).json({ success: false, error: 'pricingId or orgPricingId query param is required' });
+    }
+    const ctx = await getPricingContextByPricingId(pricingId);
+    if (!ctx) return res.status(404).json({ success: false, error: 'Pricing not found' });
+    res.json({ success: true, ...ctx });
+  } catch (e) {
+    console.error(`[${ts()}] pricing-context error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to resolve pricing' });
+  }
+});
+
+/** Anonymous checkout progress — for abandoned cart tracking */
+app.post('/api/checkout-draft', async (req, res) => {
+  try {
+    const body = req.body || {};
+    await upsertCheckoutDraft({
+      sessionKey: body.sessionKey,
+      formSnapshot: body.formSnapshot,
+      step: body.step,
+      completed: body.completed,
+    });
+    res.json({ success: true });
+  } catch (e) {
+    console.error(`[${ts()}] checkout-draft error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Invalid draft' });
   }
 });
 
