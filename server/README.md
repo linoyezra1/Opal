@@ -68,6 +68,7 @@ npm start
 | GET/POST | /api/admin/products | Product catalog (admin) |
 | GET/POST | /api/admin/vendors | Vendors + product cost links |
 | GET | /api/admin/vendor-cost | Query `vendorId` + `productId` → auto `vendorCost` / `sku` |
+| GET | /api/vendor-products/:vendorId/:productId | Same as above (path params; requires admin Bearer) |
 | GET/POST | /api/admin/pricing-entries | Price-list rows (retail, vendor cost, profit) |
 | GET | /api/public/agents | Agents list for checkout dropdown (`id`, `agentName`) |
 | GET/POST | /api/admin/org-pricing | Legacy organization pricing policies |

@@ -95,7 +95,11 @@ const pricingEntrySchema = new mongoose.Schema(
     orgName: { type: String, default: '' },
     retailPrice: { type: Number, required: true, min: 0, default: 0 },
     vendorCost: { type: Number, required: true, min: 0, default: 0 },
-    profit: { type: Number, required: true, default: 0 },
+    agentCommission: { type: Number, required: true, min: 0, default: 0 },
+    profitBeforeAgent: { type: Number, default: 0 },
+    netProfit: { type: Number, default: 0 },
+    /** mirrors netProfit for legacy */
+    profit: { type: Number, default: 0 },
     createdAt: { type: Date, default: Date.now },
   },
   { versionKey: false }
@@ -104,9 +108,13 @@ const pricingEntrySchema = new mongoose.Schema(
 pricingEntrySchema.pre('save', async function pricingEntryPreSave() {
   const r = Number(this.retailPrice || 0);
   const v = Number(this.vendorCost || 0);
+  const a = Number(this.agentCommission || 0);
   this.retailPrice = r;
   this.vendorCost = v;
-  this.profit = r - v;
+  this.agentCommission = a;
+  this.profitBeforeAgent = r - v;
+  this.netProfit = r - v - a;
+  this.profit = this.netProfit;
 });
 
 const salesAgentSchema = new mongoose.Schema(
@@ -135,10 +143,15 @@ salesAgentSchema.pre('save', async function salesAgentPreSave() {
 
 const relatedProductLineSchema = new mongoose.Schema(
   {
+    vendorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vendor' },
     productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
     retailPrice: { type: Number, required: true, min: 0, default: 0 },
     vendorCost: { type: Number, required: true, min: 0, default: 0 },
-    profit: { type: Number, required: true, default: 0 },
+    agentCommission: { type: Number, required: true, min: 0, default: 0 },
+    profitBeforeAgent: { type: Number, default: 0 },
+    netProfit: { type: Number, default: 0 },
+    /** legacy — same as netProfit */
+    profit: { type: Number, default: 0 },
   },
   { _id: false }
 );
@@ -159,9 +172,13 @@ orgPricingPolicySchema.pre('save', async function orgPricingPreSave() {
   for (const line of lines) {
     const retail = Number(line.retailPrice || 0);
     const vendor = Number(line.vendorCost || 0);
+    const ac = Number(line.agentCommission || 0);
     line.retailPrice = retail;
     line.vendorCost = vendor;
-    line.profit = retail - vendor;
+    line.agentCommission = ac;
+    line.profitBeforeAgent = retail - vendor;
+    line.netProfit = retail - vendor - ac;
+    line.profit = line.netProfit;
   }
   this.updatedAt = new Date();
 });
@@ -391,6 +408,9 @@ export async function createPricingEntry(payload) {
     vendorCost = vc ? vc.vendorCost : 0;
   }
   const retailPrice = Number(payload.retailPrice || 0);
+  const agentCommission = Number(payload.agentCommission || 0);
+  const pba = retailPrice - vendorCost;
+  const net = pba - agentCommission;
   const doc = await PricingEntry.create({
     pricingName: String(payload.pricingName || '').trim(),
     vendorId,
@@ -398,7 +418,10 @@ export async function createPricingEntry(payload) {
     orgName: String(payload.orgName || '').trim(),
     retailPrice,
     vendorCost,
-    profit: retailPrice - vendorCost,
+    agentCommission,
+    profitBeforeAgent: pba,
+    netProfit: net,
+    profit: net,
   });
   return { id: String(doc._id) };
 }
@@ -413,13 +436,21 @@ export async function listPricingEntries() {
   return docs.map((d) => {
     const v = d.vendorId;
     const p = d.productId;
+    const r = Number(d.retailPrice || 0);
+    const vc = Number(d.vendorCost || 0);
+    const ac = Number(d.agentCommission || 0);
+    const pba = d.profitBeforeAgent != null ? Number(d.profitBeforeAgent) : r - vc;
+    const net = d.netProfit != null ? Number(d.netProfit) : pba - ac;
     return {
       id: String(d._id),
       pricingName: d.pricingName,
       orgName: d.orgName || '',
-      retailPrice: Number(d.retailPrice || 0),
-      vendorCost: Number(d.vendorCost || 0),
-      profit: Number(d.profit ?? d.retailPrice - d.vendorCost),
+      retailPrice: r,
+      vendorCost: vc,
+      agentCommission: ac,
+      profitBeforeAgent: pba,
+      netProfit: net,
+      profit: Number(d.profit ?? net),
       createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
       vendor: v && typeof v === 'object' ? { id: String(v._id), vendorName: v.vendorName } : { id: String(d.vendorId), vendorName: '' },
       product:
@@ -503,12 +534,21 @@ export async function listPublicSalesAgents() {
 export async function createOrgPricingPolicy(payload) {
   await ensureConnection();
   const related = Array.isArray(payload.relatedProducts) ? payload.relatedProducts : [];
-  const lines = related.map((r) => ({
-    productId: r.productId,
-    retailPrice: Number(r.retailPrice || 0),
-    vendorCost: Number(r.vendorCost || 0),
-    profit: Number(r.retailPrice || 0) - Number(r.vendorCost || 0),
-  }));
+  const lines = related.map((r) => {
+    const retail = Number(r.retailPrice || 0);
+    const vendor = Number(r.vendorCost || 0);
+    const ac = Number(r.agentCommission || 0);
+    return {
+      vendorId: r.vendorId || undefined,
+      productId: r.productId,
+      retailPrice: retail,
+      vendorCost: vendor,
+      agentCommission: ac,
+      profitBeforeAgent: retail - vendor,
+      netProfit: retail - vendor - ac,
+      profit: retail - vendor - ac,
+    };
+  });
   const doc = await OrgPricingPolicy.create({
     organizationName: String(payload.organizationName || '').trim(),
     pricingListName: String(payload.pricingListName || '').trim(),
@@ -519,13 +559,18 @@ export async function createOrgPricingPolicy(payload) {
 
 export async function listOrgPricingPolicies() {
   await ensureConnection();
-  const docs = await OrgPricingPolicy.find({}).sort({ createdAt: -1 }).populate('relatedProducts.productId').lean();
+  const docs = await OrgPricingPolicy.find({})
+    .sort({ createdAt: -1 })
+    .populate('relatedProducts.productId')
+    .populate('relatedProducts.vendorId')
+    .lean();
   return docs.map((d) => ({
     id: String(d._id),
     organizationName: d.organizationName,
     pricingListName: d.pricingListName,
     relatedProducts: (d.relatedProducts || []).map((line) => {
       const p = line.productId;
+      const v = line.vendorId;
       const product =
         p && typeof p === 'object'
           ? {
@@ -536,15 +581,28 @@ export async function listOrgPricingPolicies() {
               baseDescription: p.baseDescription || '',
             }
           : { id: String(line.productId), productName: '', name: '', sku: '', baseDescription: '' };
+      const vendor =
+        v && typeof v === 'object'
+          ? { id: String(v._id), vendorName: v.vendorName }
+          : line.vendorId
+            ? { id: String(line.vendorId), vendorName: '' }
+            : null;
+      const retail = Number(line.retailPrice || 0);
+      const vc = Number(line.vendorCost || 0);
+      const ac = Number(line.agentCommission || 0);
+      const pba = line.profitBeforeAgent != null ? Number(line.profitBeforeAgent) : retail - vc;
+      const net = line.netProfit != null ? Number(line.netProfit) : pba - ac;
       return {
+        vendorId: vendor?.id || (line.vendorId ? String(line.vendorId) : null),
+        vendor,
         productId: product.id,
         product,
-        retailPrice: Number(line.retailPrice || 0),
-        vendorCost: Number(line.vendorCost || 0),
-        profit:
-          line.profit != null
-            ? Number(line.profit)
-            : Number(line.retailPrice || 0) - Number(line.vendorCost || 0),
+        retailPrice: retail,
+        vendorCost: vc,
+        agentCommission: ac,
+        profitBeforeAgent: pba,
+        netProfit: net,
+        profit: line.profit != null ? Number(line.profit) : net,
       };
     }),
     createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
@@ -556,7 +614,7 @@ export async function listOrgPricingPolicies() {
 export async function getPricingContextByPricingId(pricingId) {
   await ensureConnection();
   if (!mongoose.isValidObjectId(pricingId)) return null;
-  const doc = await OrgPricingPolicy.findById(pricingId).populate('relatedProducts.productId').lean();
+  const doc = await OrgPricingPolicy.findById(pricingId).populate('relatedProducts.productId').populate('relatedProducts.vendorId').lean();
   if (!doc) return null;
   const lines = doc.relatedProducts || [];
   const products = lines.map((line) => {
@@ -565,15 +623,24 @@ export async function getPricingContextByPricingId(pricingId) {
     const sku = p && typeof p === 'object' ? p.sku : '';
     const baseDescription = p && typeof p === 'object' ? p.baseDescription || '' : '';
     const productId = p && typeof p === 'object' ? String(p._id) : String(line.productId);
+    const rv = Number(line.retailPrice || 0);
+    const vendor = Number(line.vendorCost || 0);
+    const ac = Number(line.agentCommission || 0);
+    const pba = line.profitBeforeAgent != null ? Number(line.profitBeforeAgent) : rv - vendor;
+    const net = line.netProfit != null ? Number(line.netProfit) : pba - ac;
     return {
       productId,
+      vendorId: line.vendorId ? String(line.vendorId) : null,
       productName: name,
       name,
       sku,
       baseDescription,
-      retailPrice: Number(line.retailPrice || 0),
-      vendorCost: Number(line.vendorCost || 0),
-      profit: Number(line.profit ?? Number(line.retailPrice || 0) - Number(line.vendorCost || 0)),
+      retailPrice: rv,
+      vendorCost: vendor,
+      agentCommission: ac,
+      profitBeforeAgent: pba,
+      netProfit: net,
+      profit: Number(line.profit ?? net),
     };
   });
   return {

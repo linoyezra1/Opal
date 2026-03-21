@@ -1,7 +1,7 @@
-import React, { useMemo, useState, useEffect } from 'react';
+giimport React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { API_BASE } from '../apiBase.js';
 
-const API_BASE = window.location.origin;
 const TOKEN_KEY = 'opal_admin_token';
 
 export default function PricingDashboard() {
@@ -15,15 +15,58 @@ export default function PricingDashboard() {
   const [orgName, setOrgName] = useState('');
   const [retailPrice, setRetailPrice] = useState('');
   const [vendorCost, setVendorCost] = useState('');
+  const [agentCommission, setAgentCommission] = useState('');
   const [sku, setSku] = useState('');
+  const [costLoading, setCostLoading] = useState(false);
+  const [costError, setCostError] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const profit = useMemo(() => {
+  const profitBeforeAgent = useMemo(() => {
     const r = Number(retailPrice || 0);
     const v = Number(vendorCost || 0);
     return r - v;
   }, [retailPrice, vendorCost]);
+
+  const netProfit = useMemo(() => {
+    const a = Number(agentCommission || 0);
+    return profitBeforeAgent - a;
+  }, [profitBeforeAgent, agentCommission]);
+
+  const fetchVendorProductCost = useCallback(
+    async (vid, pid) => {
+      if (!token || !vid || !pid) {
+        setVendorCost('');
+        setSku('');
+        setCostError('');
+        setCostLoading(false);
+        return;
+      }
+      setCostLoading(true);
+      setCostError('');
+      try {
+        const res = await fetch(`${API_BASE}/api/vendor-products/${encodeURIComponent(vid)}/${encodeURIComponent(pid)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+          setVendorCost('');
+          setSku('');
+          setCostError(data.error || 'לא נמצאה התאמת ספק–מוצר');
+          return;
+        }
+        setVendorCost(String(data.vendorCost ?? ''));
+        setSku(data.sku || '');
+      } catch {
+        setVendorCost('');
+        setSku('');
+        setCostError('שגיאת רשת');
+      } finally {
+        setCostLoading(false);
+      }
+    },
+    [token]
+  );
 
   async function loadAll() {
     if (!token) return;
@@ -53,35 +96,11 @@ export default function PricingDashboard() {
     if (!vendorId || !productId) {
       setVendorCost('');
       setSku('');
+      setCostError('');
       return;
     }
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(
-          `${API_BASE}/api/admin/vendor-cost?vendorId=${encodeURIComponent(vendorId)}&productId=${encodeURIComponent(productId)}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        const data = await res.json().catch(() => ({}));
-        if (cancelled) return;
-        if (res.ok && data.success) {
-          setVendorCost(String(data.vendorCost ?? ''));
-          setSku(data.sku || '');
-        } else {
-          setVendorCost('');
-          setSku(products.find((p) => p.id === productId)?.sku || '');
-        }
-      } catch {
-        if (!cancelled) {
-          setVendorCost('');
-          setSku(products.find((p) => p.id === productId)?.sku || '');
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [vendorId, productId, token, products]);
+    fetchVendorProductCost(vendorId, productId);
+  }, [vendorId, productId, fetchVendorProductCost]);
 
   async function submit(e) {
     e.preventDefault();
@@ -98,6 +117,7 @@ export default function PricingDashboard() {
           orgName,
           retailPrice: Number(retailPrice || 0),
           vendorCost: vendorCost === '' ? undefined : Number(vendorCost),
+          agentCommission: Number(agentCommission || 0),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -105,6 +125,7 @@ export default function PricingDashboard() {
       setPricingName('');
       setOrgName('');
       setRetailPrice('');
+      setAgentCommission('');
       await loadAll();
     } catch (e2) {
       setError(e2.message || 'שגיאה');
@@ -127,6 +148,10 @@ export default function PricingDashboard() {
   return (
     <div dir="rtl" className="min-h-screen bg-slate-50 p-4 sm:p-8">
       <div className="max-w-5xl mx-auto space-y-6">
+        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          פיתוח מקומי: אם ה-API על פורט אחר מ-Vite, הגדירי בקובץ <code className="bg-white px-1">.env</code> את{' '}
+          <code className="bg-white px-1">VITE_API_URL=http://localhost:3001</code>
+        </p>
         <div className="flex flex-wrap justify-between gap-2">
           <h1 className="text-2xl font-bold text-medical-blue-dark">דשבורד מחירון</h1>
           <div className="flex gap-2 flex-wrap">
@@ -137,7 +162,7 @@ export default function PricingDashboard() {
               מוצרים
             </Link>
             <Link to="/admin/pricing" className="px-4 py-2 rounded-lg bg-slate-300 text-sm">
-              מחירון ארגונים (ישן)
+              מחירון ארגונים
             </Link>
             <Link to="/admin" className="px-4 py-2 rounded-lg bg-slate-200 text-sm">
               חזרה
@@ -179,19 +204,38 @@ export default function PricingDashboard() {
             </div>
             <div>
               <label className="text-xs text-slate-500">מק&quot;ט (אוטומטי)</label>
-              <input className="w-full border rounded-lg px-3 py-2 bg-slate-100" readOnly value={sku} placeholder="יבחר עם מוצר" />
+              <input
+                className="w-full border rounded-lg px-3 py-2 bg-white text-slate-900 font-mono"
+                readOnly
+                value={sku}
+                placeholder={costLoading ? 'טוען…' : '—'}
+              />
             </div>
             <div>
-              <label className="text-xs text-slate-500">עלות ספק (₪) — נמשכת מהספק</label>
-              <input className="w-full border rounded-lg px-3 py-2 bg-slate-100" readOnly value={vendorCost} placeholder="בחרו ספק+מוצר" />
+              <label className="text-xs text-slate-500">עלות ספק (₪) — מהמסד</label>
+              <input
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white text-slate-900 font-semibold"
+                readOnly
+                value={costLoading ? 'טוען…' : vendorCost !== '' ? vendorCost : ''}
+                placeholder={costError ? '—' : 'בחרו ספק + מוצר'}
+              />
+              {costError ? <p className="text-xs text-amber-700 mt-1">{costError}</p> : null}
             </div>
             <div>
               <label className="text-xs text-slate-500">מחיר קמעוני (₪) *</label>
               <input type="number" min="0" step="0.01" className="w-full border rounded-lg px-3 py-2" value={retailPrice} onChange={(e) => setRetailPrice(e.target.value)} required />
             </div>
             <div>
-              <label className="text-xs text-slate-500">רווח (חי)</label>
-              <input className="w-full border rounded-lg px-3 py-2 bg-emerald-50 font-bold text-emerald-800" readOnly value={profit} />
+              <label className="text-xs text-slate-500">עמלת סוכן (₪)</label>
+              <input type="number" min="0" step="0.01" className="w-full border rounded-lg px-3 py-2" value={agentCommission} onChange={(e) => setAgentCommission(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500">רווח לפני סוכן</label>
+              <input className="w-full border rounded-lg px-3 py-2 bg-blue-50 font-semibold text-blue-900" readOnly value={Number.isFinite(profitBeforeAgent) ? profitBeforeAgent : ''} />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500">רווח נקי (אחרי סוכן)</label>
+              <input className="w-full border rounded-lg px-3 py-2 bg-emerald-50 font-bold text-emerald-900" readOnly value={Number.isFinite(netProfit) ? netProfit : ''} />
             </div>
           </div>
           {error ? <p className="text-red-600 text-sm">{error}</p> : null}
@@ -212,7 +256,9 @@ export default function PricingDashboard() {
                   <th className="p-2 text-right">מוצר</th>
                   <th className="p-2 text-right">קמעוני</th>
                   <th className="p-2 text-right">ספק</th>
-                  <th className="p-2 text-right">רווח</th>
+                  <th className="p-2 text-right">עמלת סוכן</th>
+                  <th className="p-2 text-right">לפני סוכן</th>
+                  <th className="p-2 text-right">נקי</th>
                   <th className="p-2 text-right">תאריך</th>
                 </tr>
               </thead>
@@ -227,13 +273,15 @@ export default function PricingDashboard() {
                     </td>
                     <td className="p-2">₪{row.retailPrice}</td>
                     <td className="p-2">₪{row.vendorCost}</td>
-                    <td className="p-2 font-semibold text-emerald-700">₪{row.profit}</td>
+                    <td className="p-2">₪{row.agentCommission ?? 0}</td>
+                    <td className="p-2">₪{row.profitBeforeAgent ?? 0}</td>
+                    <td className="p-2 font-semibold text-emerald-700">₪{row.netProfit ?? row.profit ?? 0}</td>
                     <td className="p-2 text-xs whitespace-nowrap">{row.createdAt ? new Date(row.createdAt).toLocaleString('he-IL') : '—'}</td>
                   </tr>
                 ))}
                 {!entries.length ? (
                   <tr>
-                    <td colSpan={8} className="p-4 text-slate-500">
+                    <td colSpan={10} className="p-4 text-slate-500">
                       אין שורות
                     </td>
                   </tr>

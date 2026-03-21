@@ -568,6 +568,30 @@ app.get('/api/admin/vendor-cost', requireAdmin, async (req, res) => {
   }
 });
 
+/** מחיר ספק + מק"ט לפי ספק ומוצר (מזהים ב-path) — דשבורד מחירון */
+app.get('/api/vendor-products/:vendorId/:productId', requireAdmin, async (req, res) => {
+  try {
+    const vendorId = String(req.params.vendorId || '').trim();
+    const productId = String(req.params.productId || '').trim();
+    if (!vendorId || !productId) {
+      return res.status(400).json({ success: false, error: 'vendorId and productId are required' });
+    }
+    const data = await getVendorCostForProduct(vendorId, productId);
+    if (!data) {
+      return res.status(404).json({ success: false, error: 'לא נמצא מחיר ספק למוצר זה אצל הספק' });
+    }
+    res.json({
+      success: true,
+      vendorCost: data.vendorCost,
+      sku: data.sku,
+      vendorName: data.vendorName,
+    });
+  } catch (e) {
+    console.error(`[${ts()}] vendor-products/:vendorId/:productId error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to resolve vendor product cost' });
+  }
+});
+
 app.post('/api/admin/pricing-entries', requireAdmin, async (req, res) => {
   try {
     const body = req.body || {};
@@ -619,6 +643,9 @@ app.post('/api/admin/org-pricing', requireAdmin, async (req, res) => {
     for (const line of related) {
       if (!String(line.productId || '').trim()) {
         return res.status(400).json({ success: false, error: 'כל שורה חייבת productId' });
+      }
+      if (!String(line.vendorId || '').trim()) {
+        return res.status(400).json({ success: false, error: 'כל שורה חייבת vendorId (ספק) לחישוב עלות' });
       }
     }
     const result = await createOrgPricingPolicy(body);
