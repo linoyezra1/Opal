@@ -1,50 +1,32 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 
 const API_BASE = window.location.origin;
 const TOKEN_KEY = 'opal_admin_token';
 
-const PRODUCT_FALLBACK = [
-  { name: 'מנוי משפחתי', sku: 'PLAN-A' },
-  { name: 'מנוי מבוגר', sku: 'PLAN-B' },
-  { name: 'תוספת בן/בת זוג', sku: 'PLAN-FG-SPOUSE' },
-  { name: 'מנוי ילד', sku: 'PLAN-FG-CHILD' },
-  { name: 'מנוי 65+ יחיד', sku: 'PLAN-65-SINGLE' },
-  { name: 'מנוי 65+ זוג', sku: 'PLAN-65-COUPLE' },
-];
-
-function buildInitialForm(products) {
-  const p0 = products[0] || PRODUCT_FALLBACK[0];
-  return {
-    personal: { name: '', idOrCompanyNum: '', phone: '', email: '', address: '' },
-    bankDetails: { bankName: '', bankNumber: '', branchNumber: '', accountNumber: '', accountHolder: '' },
-    commissionModel: {
-      productName: p0.name,
-      productSKU: p0.sku,
-      retailPrice: '',
-      vendorCost: '',
-      agentCommission: '',
-      baseFee: '',
-    },
-  };
-}
+const emptyForm = () => ({
+  agentName: '',
+  idNum: '',
+  phone: '',
+  email: '',
+  address: '',
+  bankDetails: {
+    bankName: '',
+    bankNum: '',
+    accountHolder: '',
+    branchNum: '',
+    accountNum: '',
+  },
+});
 
 export default function AgentSetup() {
   const [token] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
-  const [step, setStep] = useState(1);
-  const [productOptions, setProductOptions] = useState(PRODUCT_FALLBACK);
-  const [form, setForm] = useState(() => buildInitialForm(PRODUCT_FALLBACK));
+  const [form, setForm] = useState(() => emptyForm());
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const profitBeforeAgent = useMemo(() => {
-    const retail = Number(form.commissionModel.retailPrice || 0);
-    const vendor = Number(form.commissionModel.vendorCost || 0);
-    return retail - vendor;
-  }, [form.commissionModel.retailPrice, form.commissionModel.vendorCost]);
-
-  async function loadAgents() {
+  const loadAgents = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     setError('');
@@ -58,74 +40,25 @@ export default function AgentSetup() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [token]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     loadAgents();
-  }, [token]);
-
-  React.useEffect(() => {
-    if (!token) return;
-    (async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/admin/products`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.success || !Array.isArray(data.products) || !data.products.length) return;
-        const opts = data.products.map((p) => ({ name: p.name, sku: p.sku }));
-        setProductOptions(opts);
-        setForm((prev) => ({
-          ...prev,
-          commissionModel: {
-            ...prev.commissionModel,
-            productName: opts[0].name,
-            productSKU: opts[0].sku,
-          },
-        }));
-      } catch {
-        // keep fallback catalog
-      }
-    })();
-  }, [token]);
-
-  function setProductBySku(sku) {
-    const product = productOptions.find((p) => p.sku === sku) || productOptions[0];
-    setForm((prev) => ({
-      ...prev,
-      commissionModel: {
-        ...prev.commissionModel,
-        productName: product.name,
-        productSKU: product.sku,
-      },
-    }));
-  }
+  }, [loadAgents]);
 
   async function submit(e) {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
-      const payload = {
-        ...form,
-        commissionModel: {
-          ...form.commissionModel,
-          retailPrice: Number(form.commissionModel.retailPrice || 0),
-          vendorCost: Number(form.commissionModel.vendorCost || 0),
-          profitBeforeAgent,
-          agentCommission: Number(form.commissionModel.agentCommission || 0),
-          baseFee: Number(form.commissionModel.baseFee || 0),
-        },
-      };
       const res = await fetch(`${API_BASE}/api/admin/agents`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(form),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.error || 'שמירה נכשלה');
-      setForm(buildInitialForm(productOptions));
-      setStep(1);
+      setForm(emptyForm());
       await loadAgents();
     } catch (e2) {
       setError(e2.message || 'שגיאה');
@@ -134,107 +67,101 @@ export default function AgentSetup() {
     }
   }
 
+  function setBank(field, value) {
+    setForm((prev) => ({
+      ...prev,
+      bankDetails: { ...prev.bankDetails, [field]: value },
+    }));
+  }
+
   if (!token) {
     return (
       <div dir="rtl" className="min-h-screen bg-slate-50 p-6">
         <p className="text-slate-700">יש להתחבר דרך מסך המנהל.</p>
-        <Link to="/admin" className="text-medical-blue underline">מעבר לכניסת מנהל</Link>
+        <Link to="/admin" className="text-medical-blue underline">
+          מעבר לכניסת מנהל
+        </Link>
       </div>
     );
   }
 
   return (
     <div dir="rtl" className="min-h-screen bg-slate-50 p-4 sm:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex justify-between items-center">
+      <div className="max-w-5xl mx-auto space-y-6">
+        <div className="flex justify-between items-center flex-wrap gap-2">
           <h1 className="text-2xl font-bold text-medical-blue-dark">הקמת סוכן</h1>
-          <Link to="/admin" className="px-4 py-2 rounded-lg bg-slate-200">חזרה לניהול</Link>
+          <div className="flex gap-2">
+            <Link to="/admin/products" className="px-4 py-2 rounded-lg bg-emerald-700 text-white text-sm">
+              מוצרים
+            </Link>
+            <Link to="/admin" className="px-4 py-2 rounded-lg bg-slate-200 text-sm">
+              חזרה לניהול
+            </Link>
+          </div>
         </div>
 
+        <p className="text-sm text-slate-600">
+          מכירות מחושבות לפי עסקאות (מנויים) ב-MongoDB עם <code className="bg-slate-100 px-1 rounded">agentId</code> שמקושר לסוכן.
+        </p>
+
         <form onSubmit={submit} className="bg-white rounded-xl border p-4 sm:p-6 space-y-4">
-          <div className="flex gap-2">
-            {[1, 2, 3].map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => setStep(n)}
-                className={`px-4 py-2 rounded-lg text-sm ${step === n ? 'bg-medical-blue text-white' : 'bg-slate-100'}`}
-              >
-                שלב {n}
-              </button>
-            ))}
+          <h2 className="font-semibold text-lg">פרטי סוכן</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input className="border rounded-lg px-3 py-2" placeholder="שם סוכן *" value={form.agentName} onChange={(e) => setForm((p) => ({ ...p, agentName: e.target.value }))} required />
+            <input className="border rounded-lg px-3 py-2" placeholder="תעודת זהות / ח.פ *" value={form.idNum} onChange={(e) => setForm((p) => ({ ...p, idNum: e.target.value }))} required />
+            <input className="border rounded-lg px-3 py-2" placeholder="טלפון" value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
+            <input className="border rounded-lg px-3 py-2" type="email" placeholder="אימייל" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} />
+            <input className="border rounded-lg px-3 py-2 md:col-span-2" placeholder="כתובת" value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
           </div>
-
-          {step === 1 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input className="border rounded-lg px-3 py-2" placeholder="שם מלא" value={form.personal.name} onChange={(e) => setForm((p) => ({ ...p, personal: { ...p.personal, name: e.target.value } }))} />
-              <input className="border rounded-lg px-3 py-2" placeholder='ח.פ / ת"ז' value={form.personal.idOrCompanyNum} onChange={(e) => setForm((p) => ({ ...p, personal: { ...p.personal, idOrCompanyNum: e.target.value } }))} />
-              <input className="border rounded-lg px-3 py-2" placeholder="טלפון" value={form.personal.phone} onChange={(e) => setForm((p) => ({ ...p, personal: { ...p.personal, phone: e.target.value } }))} />
-              <input className="border rounded-lg px-3 py-2" placeholder="אימייל" value={form.personal.email} onChange={(e) => setForm((p) => ({ ...p, personal: { ...p.personal, email: e.target.value } }))} />
-              <input className="border rounded-lg px-3 py-2 md:col-span-2" placeholder="כתובת" value={form.personal.address} onChange={(e) => setForm((p) => ({ ...p, personal: { ...p.personal, address: e.target.value } }))} />
-            </div>
-          ) : null}
-
-          {step === 2 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input className="border rounded-lg px-3 py-2" placeholder="שם הבנק" value={form.bankDetails.bankName} onChange={(e) => setForm((p) => ({ ...p, bankDetails: { ...p.bankDetails, bankName: e.target.value } }))} />
-              <input className="border rounded-lg px-3 py-2" placeholder="מספר בנק" value={form.bankDetails.bankNumber} onChange={(e) => setForm((p) => ({ ...p, bankDetails: { ...p.bankDetails, bankNumber: e.target.value } }))} />
-              <input className="border rounded-lg px-3 py-2" placeholder="מספר סניף" value={form.bankDetails.branchNumber} onChange={(e) => setForm((p) => ({ ...p, bankDetails: { ...p.bankDetails, branchNumber: e.target.value } }))} />
-              <input className="border rounded-lg px-3 py-2" placeholder="מספר חשבון" value={form.bankDetails.accountNumber} onChange={(e) => setForm((p) => ({ ...p, bankDetails: { ...p.bankDetails, accountNumber: e.target.value } }))} />
-              <input className="border rounded-lg px-3 py-2 md:col-span-2" placeholder="שם בעל החשבון" value={form.bankDetails.accountHolder} onChange={(e) => setForm((p) => ({ ...p, bankDetails: { ...p.bankDetails, accountHolder: e.target.value } }))} />
-            </div>
-          ) : null}
-
-          {step === 3 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <select className="border rounded-lg px-3 py-2 bg-white" value={form.commissionModel.productSKU} onChange={(e) => setProductBySku(e.target.value)}>
-                {productOptions.map((p) => (
-                  <option key={p.sku} value={p.sku}>{p.name} ({p.sku})</option>
-                ))}
-              </select>
-              <input className="border rounded-lg px-3 py-2 bg-slate-50" readOnly value={form.commissionModel.productName} />
-              <input className="border rounded-lg px-3 py-2" type="number" min="0" placeholder="מחיר לצרכן" value={form.commissionModel.retailPrice} onChange={(e) => setForm((p) => ({ ...p, commissionModel: { ...p.commissionModel, retailPrice: e.target.value } }))} />
-              <input className="border rounded-lg px-3 py-2" type="number" min="0" placeholder="מחיר לספק" value={form.commissionModel.vendorCost} onChange={(e) => setForm((p) => ({ ...p, commissionModel: { ...p.commissionModel, vendorCost: e.target.value } }))} />
-              <input className="border rounded-lg px-3 py-2 bg-emerald-50 text-emerald-700 font-bold" readOnly value={`רווח לפני סוכן: ${profitBeforeAgent}`} />
-              <input className="border rounded-lg px-3 py-2" type="number" min="0" placeholder="עמלת סוכן" value={form.commissionModel.agentCommission} onChange={(e) => setForm((p) => ({ ...p, commissionModel: { ...p.commissionModel, agentCommission: e.target.value } }))} />
-              <input className="border rounded-lg px-3 py-2" type="number" min="0" placeholder="עמלת בסיס" value={form.commissionModel.baseFee} onChange={(e) => setForm((p) => ({ ...p, commissionModel: { ...p.commissionModel, baseFee: e.target.value } }))} />
-            </div>
-          ) : null}
-
+          <h3 className="font-semibold">פרטי בנק</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input className="border rounded-lg px-3 py-2" placeholder="שם בנק *" value={form.bankDetails.bankName} onChange={(e) => setBank('bankName', e.target.value)} required />
+            <input className="border rounded-lg px-3 py-2" placeholder="מספר בנק" value={form.bankDetails.bankNum} onChange={(e) => setBank('bankNum', e.target.value)} />
+            <input className="border rounded-lg px-3 py-2" placeholder="שם בעל חשבון *" value={form.bankDetails.accountHolder} onChange={(e) => setBank('accountHolder', e.target.value)} required />
+            <input className="border rounded-lg px-3 py-2" placeholder="מספר סניף" value={form.bankDetails.branchNum} onChange={(e) => setBank('branchNum', e.target.value)} />
+            <input className="border rounded-lg px-3 py-2 md:col-span-2" placeholder="מספר חשבון" value={form.bankDetails.accountNum} onChange={(e) => setBank('accountNum', e.target.value)} />
+          </div>
           {error ? <p className="text-red-600 text-sm">{error}</p> : null}
-          <button disabled={loading} className="px-5 py-2 rounded-lg bg-medical-blue text-white">
+          <button type="submit" disabled={loading} className="px-5 py-2 rounded-lg bg-medical-blue text-white">
             {loading ? 'שומר...' : 'שמירת סוכן'}
           </button>
         </form>
 
         <div className="bg-white rounded-xl border p-4">
-          <h2 className="font-semibold text-lg mb-3">סוכנים רשומים</h2>
+          <div className="flex justify-between items-center mb-3">
+            <h2 className="font-semibold text-lg">סוכנים רשומים</h2>
+            <button type="button" onClick={() => loadAgents()} className="text-sm text-medical-blue underline">
+              רענון
+            </button>
+          </div>
           <div className="overflow-auto">
             <table className="min-w-full text-sm">
               <thead className="bg-slate-100">
                 <tr>
                   <th className="p-2 text-right">שם</th>
-                  <th className="p-2 text-right">ת"ז/ח.פ</th>
+                  <th className="p-2 text-right">ת&quot;ז / ח.פ</th>
                   <th className="p-2 text-right">טלפון</th>
-                  <th className="p-2 text-right">מוצר</th>
-                  <th className="p-2 text-right">מק"ט</th>
-                  <th className="p-2 text-right">רווח לפני סוכן</th>
-                  <th className="p-2 text-right">עמלת סוכן</th>
+                  <th className="p-2 text-right">אימייל</th>
+                  <th className="p-2 text-right">סה&quot;כ מכירות (מנויים)</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id} className="border-t">
-                    <td className="p-2">{r.personal?.name || '-'}</td>
-                    <td className="p-2">{r.personal?.idOrCompanyNum || '-'}</td>
-                    <td className="p-2">{r.personal?.phone || '-'}</td>
-                    <td className="p-2">{r.commissionModel?.productName || '-'}</td>
-                    <td className="p-2">{r.commissionModel?.productSKU || '-'}</td>
-                    <td className="p-2">{r.commissionModel?.profitBeforeAgent ?? 0}</td>
-                    <td className="p-2">{r.commissionModel?.agentCommission ?? 0}</td>
+                    <td className="p-2">{r.agentName}</td>
+                    <td className="p-2">{r.idNum}</td>
+                    <td className="p-2">{r.phone}</td>
+                    <td className="p-2">{r.email}</td>
+                    <td className="p-2 font-bold text-medical-blue-dark">{r.totalSales ?? 0}</td>
                   </tr>
                 ))}
-                {!rows.length ? <tr><td colSpan={7} className="p-3 text-slate-500">אין סוכנים להצגה</td></tr> : null}
+                {!rows.length ? (
+                  <tr>
+                    <td colSpan={5} className="p-4 text-slate-500">
+                      אין סוכנים
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </div>

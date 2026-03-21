@@ -115,8 +115,10 @@ export default function Admin() {
             <Link to="/admin/sales-dashboard" className="px-4 py-2 rounded-lg bg-medical-teal text-white">Sales Dashboard</Link>
             <Link to="/admin/control-panel" className="px-4 py-2 rounded-lg bg-amber-600 text-white">לוח בקרה</Link>
             <Link to="/admin/products" className="px-4 py-2 rounded-lg bg-emerald-700 text-white">מוצרים</Link>
-            <Link to="/admin/pricing" className="px-4 py-2 rounded-lg bg-medical-blue-dark text-white">מחירונים</Link>
-            <Link to="/admin/agents" className="px-4 py-2 rounded-lg bg-medical-blue text-white">הקמת סוכן</Link>
+            <Link to="/admin/vendors" className="px-4 py-2 rounded-lg bg-amber-800 text-white">ספקים</Link>
+            <Link to="/admin/price-list" className="px-4 py-2 rounded-lg bg-indigo-700 text-white">מחירון</Link>
+            <Link to="/admin/pricing" className="px-4 py-2 rounded-lg bg-medical-blue-dark text-white">מחירון ארגונים</Link>
+            <Link to="/admin/agents" className="px-4 py-2 rounded-lg bg-medical-blue text-white">סוכנים</Link>
             <button onClick={() => loadDeals()} className="px-4 py-2 rounded-lg bg-medical-blue text-white">רענון</button>
             <button
               onClick={() => {

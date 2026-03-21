@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 const API_BASE = window.location.origin;
 const TOKEN_KEY = 'opal_admin_token';
 
-const EMPTY_FORM = { name: '', sku: '', baseDescription: '' };
+const EMPTY_FORM = { productName: '', sku: '' };
 
 export default function ProductManagement() {
   const [token] = React.useState(() => localStorage.getItem(TOKEN_KEY) || '');
@@ -74,13 +74,16 @@ export default function ProductManagement() {
     <div dir="rtl" className="min-h-screen bg-slate-50 p-4 sm:p-8">
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex justify-between items-center flex-wrap gap-2">
-          <h1 className="text-2xl font-bold text-medical-blue-dark">ניהול מוצרים (בסיס למחירונים)</h1>
-          <div className="flex gap-2">
+          <h1 className="text-2xl font-bold text-medical-blue-dark">הקמת מוצר</h1>
+          <div className="flex gap-2 flex-wrap">
+            <Link to="/admin/vendors" className="px-4 py-2 rounded-lg bg-amber-700 text-white text-sm">
+              ספקים
+            </Link>
+            <Link to="/admin/price-list" className="px-4 py-2 rounded-lg bg-medical-blue-dark text-white text-sm">
+              מחירון
+            </Link>
             <Link to="/admin/control-panel" className="px-4 py-2 rounded-lg bg-medical-teal text-white text-sm">
               לוח בקרה
-            </Link>
-            <Link to="/admin/pricing" className="px-4 py-2 rounded-lg bg-medical-blue-dark text-white text-sm">
-              מחירוני ארגונים
             </Link>
             <Link to="/admin" className="px-4 py-2 rounded-lg bg-slate-200 text-sm">
               חזרה לניהול
@@ -93,21 +96,17 @@ export default function ProductManagement() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <input
               className="border rounded-lg px-3 py-2"
-              placeholder="שם מוצר"
-              value={form.name}
-              onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+              placeholder="שם מוצר *"
+              value={form.productName}
+              onChange={(e) => setForm((p) => ({ ...p, productName: e.target.value }))}
+              required
             />
             <input
               className="border rounded-lg px-3 py-2"
-              placeholder='מק"ט (SKU)'
+              placeholder='מק"ט (SKU) ייחודי *'
               value={form.sku}
               onChange={(e) => setForm((p) => ({ ...p, sku: e.target.value }))}
-            />
-            <textarea
-              className="border rounded-lg px-3 py-2 md:col-span-2 min-h-[80px]"
-              placeholder="תיאור בסיס (אופציונלי)"
-              value={form.baseDescription}
-              onChange={(e) => setForm((p) => ({ ...p, baseDescription: e.target.value }))}
+              required
             />
           </div>
           {error ? <p className="text-red-600 text-sm">{error}</p> : null}
@@ -127,18 +126,16 @@ export default function ProductManagement() {
             <table className="min-w-full text-sm">
               <thead className="bg-slate-100">
                 <tr>
-                  <th className="p-2 text-right">שם</th>
+                  <th className="p-2 text-right">שם מוצר</th>
                   <th className="p-2 text-right">מק&quot;ט</th>
-                  <th className="p-2 text-right">תיאור</th>
                   <th className="p-2 text-right">נוצר</th>
                 </tr>
               </thead>
               <tbody>
                 {products.map((p) => (
                   <tr key={p.id} className="border-t">
-                    <td className="p-2">{p.name}</td>
+                    <td className="p-2">{p.productName || p.name}</td>
                     <td className="p-2 font-mono">{p.sku}</td>
-                    <td className="p-2 text-slate-600 max-w-md truncate">{p.baseDescription || '—'}</td>
                     <td className="p-2 text-slate-500 whitespace-nowrap">
                       {p.createdAt ? new Date(p.createdAt).toLocaleString('he-IL') : '—'}
                     </td>
@@ -146,8 +143,8 @@ export default function ProductManagement() {
                 ))}
                 {!products.length ? (
                   <tr>
-                    <td colSpan={4} className="p-4 text-slate-500">
-                      אין מוצרים — הוסיפו מוצרים כדי שיופיעו במחירוני הארגונים.
+                    <td colSpan={3} className="p-4 text-slate-500">
+                      אין מוצרים — הוסיפו מוצרים לבסיס הנתונים.
                     </td>
                   </tr>
                 ) : null}

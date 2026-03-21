@@ -23,8 +23,12 @@ Optional:
 - Deals are stored in collection **deals**.
 - Contact forms are stored in **contactLeads**.
 - Organization forms are stored in **organizationLeads**.
-- **products** – catalog (name, sku, baseDescription) for admin pricing.
-- **org_pricing_policies** – per-organization price lists with `relatedProducts[]` (product refs + retail/vendor/profit).
+- **products** – catalog (`productName`, unique `sku`, `createdAt`).
+- **vendors** – supplier profile + `productLinks[]` (`productId`, `sku`, `vendorCost`).
+- **pricing_entries** – price-list rows (`pricingName`, `vendorId`, `productId`, optional `orgName`, `retailPrice`, `vendorCost`, `profit`).
+- **sales_agents** – agents for checkout (`agentName`, `idNum`, bank details, etc.); deals store `agentId` for sales counts.
+- **org_pricing_policies** – legacy org bulk price lists (`relatedProducts[]`).
+- **deals** – subscribers / payments; includes **`agentId`** when resolved from checkout.
 - **checkout_drafts** – anonymous checkout progress for abandoned-cart tracking.
 
 ## 3. How to run
@@ -61,8 +65,12 @@ npm start
 | POST/GET | /api/cardcom-webhook | Cardcom callback (LowProfileCode in query or body) |
 | POST | /api/admin/login | Admin login (temporary username/password) |
 | GET | /api/admin/deals | Get deals for dashboard (requires Bearer token) |
-| GET/POST | /api/admin/products | Product catalog CRUD (admin) |
-| GET/POST | /api/admin/org-pricing | Organization pricing policies (`organizationName`, `pricingListName`, `relatedProducts[]`) |
+| GET/POST | /api/admin/products | Product catalog (admin) |
+| GET/POST | /api/admin/vendors | Vendors + product cost links |
+| GET | /api/admin/vendor-cost | Query `vendorId` + `productId` → auto `vendorCost` / `sku` |
+| GET/POST | /api/admin/pricing-entries | Price-list rows (retail, vendor cost, profit) |
+| GET | /api/public/agents | Agents list for checkout dropdown (`id`, `agentName`) |
+| GET/POST | /api/admin/org-pricing | Legacy organization pricing policies |
 | GET | /api/admin/control-panel | Aggregated: abandoned carts, payment issues, leads, registered org pricings |
 | GET | /api/pricing-context?pricingId= | **Public** – resolve product names + prices for a landing page (Mongo `_id` of org pricing policy) |
 | POST | /api/checkout-draft | Save anonymous checkout draft (`sessionKey`, `formSnapshot`, `completed`) |

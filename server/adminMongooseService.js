@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { countDealsByAgentId } from './mongoService.js';
 
 const MONGO_URL = process.env.MONGO_URL || '';
 const DB_NAME = process.env.MONGO_DB_NAME || 'opal';
@@ -27,7 +28,9 @@ const organizationPricingSchema = new mongoose.Schema(
 
 const productSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, trim: true },
+    productName: { type: String, trim: true },
+    /** @deprecated legacy field — use productName */
+    name: { type: String, trim: true },
     sku: { type: String, required: true, trim: true, unique: true },
     baseDescription: { type: String, default: '' },
     createdAt: { type: Date, default: Date.now },
@@ -36,7 +39,100 @@ const productSchema = new mongoose.Schema(
   { versionKey: false }
 );
 
+productSchema.pre('validate', function productValidate(next) {
+  const pn = String(this.productName || this.name || '').trim();
+  if (pn) {
+    this.productName = pn;
+    this.name = pn;
+  }
+  if (!String(this.productName || '').trim()) {
+    this.invalidate('productName', 'productName is required');
+  }
+  next();
+});
+
 productSchema.pre('save', function productPreSave(next) {
+  this.updatedAt = new Date();
+  next();
+});
+
+const vendorProductLinkSchema = new mongoose.Schema(
+  {
+    productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+    sku: { type: String, default: '' },
+    vendorCost: { type: Number, required: true, min: 0, default: 0 },
+  },
+  { _id: false }
+);
+
+const vendorSchema = new mongoose.Schema(
+  {
+    vendorName: { type: String, required: true, trim: true },
+    idNum: { type: String, required: true, trim: true },
+    phone: { type: String, default: '' },
+    email: { type: String, default: '' },
+    address: { type: String, default: '' },
+    bankName: { type: String, default: '' },
+    bankNum: { type: String, default: '' },
+    accountHolder: { type: String, default: '' },
+    branchNum: { type: String, default: '' },
+    accountNum: { type: String, default: '' },
+    productLinks: { type: [vendorProductLinkSchema], default: [] },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+  },
+  { versionKey: false }
+);
+
+vendorSchema.pre('save', function vendorPreSave(next) {
+  this.updatedAt = new Date();
+  next();
+});
+
+const pricingEntrySchema = new mongoose.Schema(
+  {
+    pricingName: { type: String, required: true, trim: true },
+    vendorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vendor', required: true },
+    productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+    orgName: { type: String, default: '' },
+    retailPrice: { type: Number, required: true, min: 0, default: 0 },
+    vendorCost: { type: Number, required: true, min: 0, default: 0 },
+    profit: { type: Number, required: true, default: 0 },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { versionKey: false }
+);
+
+pricingEntrySchema.pre('save', function pricingEntryPreSave(next) {
+  const r = Number(this.retailPrice || 0);
+  const v = Number(this.vendorCost || 0);
+  this.retailPrice = r;
+  this.vendorCost = v;
+  this.profit = r - v;
+  next();
+});
+
+const salesAgentSchema = new mongoose.Schema(
+  {
+    agentName: { type: String, required: true, trim: true },
+    idNum: { type: String, required: true, trim: true },
+    phone: { type: String, default: '' },
+    email: { type: String, default: '' },
+    address: { type: String, default: '' },
+    bankDetails: {
+      bankName: { type: String, default: '' },
+      bankNum: { type: String, default: '' },
+      accountHolder: { type: String, default: '' },
+      branchNum: { type: String, default: '' },
+      accountNum: { type: String, default: '' },
+    },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+  },
+  { versionKey: false }
+);
+
+salesAgentSchema.pre('save', function salesAgentPreSave(next) {
   this.updatedAt = new Date();
   next();
 });
@@ -140,6 +236,12 @@ const CheckoutDraft =
 
 const Agent = mongoose.models.Agent || mongoose.model('Agent', agentSchema, 'agents');
 
+const Vendor = mongoose.models.Vendor || mongoose.model('Vendor', vendorSchema, 'vendors');
+
+const PricingEntry = mongoose.models.PricingEntry || mongoose.model('PricingEntry', pricingEntrySchema, 'pricing_entries');
+
+const SalesAgent = mongoose.models.SalesAgent || mongoose.model('SalesAgent', salesAgentSchema, 'sales_agents');
+
 /** @deprecated — legacy flat pricing row */
 export async function createOrganizationPricing(payload) {
   await ensureConnection();
@@ -171,8 +273,10 @@ export async function listOrganizationPricings() {
 
 export async function createProduct(payload) {
   await ensureConnection();
+  const productName = String(payload.productName || payload.name || '').trim();
   const doc = await Product.create({
-    name: String(payload.name || '').trim(),
+    productName,
+    name: productName,
     sku: String(payload.sku || '').trim(),
     baseDescription: String(payload.baseDescription || ''),
   });
@@ -182,13 +286,224 @@ export async function createProduct(payload) {
 export async function listProducts() {
   await ensureConnection();
   const docs = await Product.find({}).sort({ createdAt: -1 }).lean();
+  return docs.map((d) => {
+    const productName = d.productName || d.name || '';
+    return {
+      id: String(d._id),
+      productName,
+      name: productName,
+      sku: d.sku,
+      baseDescription: d.baseDescription || '',
+      createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
+    };
+  });
+}
+
+export async function createVendor(payload) {
+  await ensureConnection();
+  const links = Array.isArray(payload.productLinks) ? payload.productLinks : [];
+  const productLinks = await Promise.all(
+    links.map(async (l) => {
+      const pid = l.productId;
+      if (!pid || !mongoose.isValidObjectId(pid)) throw new Error('Invalid productId in productLinks');
+      const p = await Product.findById(pid).lean();
+      const sku = p ? p.sku : String(l.sku || '');
+      return {
+        productId: pid,
+        sku,
+        vendorCost: Number(l.vendorCost || 0),
+      };
+    })
+  );
+  const doc = await Vendor.create({
+    vendorName: String(payload.vendorName || '').trim(),
+    idNum: String(payload.idNum || '').trim(),
+    phone: String(payload.phone || '').trim(),
+    email: String(payload.email || '').trim(),
+    address: String(payload.address || '').trim(),
+    bankName: String(payload.bankName || '').trim(),
+    bankNum: String(payload.bankNum || '').trim(),
+    accountHolder: String(payload.accountHolder || '').trim(),
+    branchNum: String(payload.branchNum || '').trim(),
+    accountNum: String(payload.accountNum || '').trim(),
+    productLinks,
+  });
+  return { id: String(doc._id) };
+}
+
+export async function listVendors() {
+  await ensureConnection();
+  const docs = await Vendor.find({}).sort({ createdAt: -1 }).populate('productLinks.productId').lean();
   return docs.map((d) => ({
     id: String(d._id),
-    name: d.name,
-    sku: d.sku,
-    baseDescription: d.baseDescription || '',
+    vendorName: d.vendorName,
+    idNum: d.idNum,
+    phone: d.phone,
+    email: d.email,
+    address: d.address,
+    bankName: d.bankName,
+    bankNum: d.bankNum,
+    accountHolder: d.accountHolder,
+    branchNum: d.branchNum,
+    accountNum: d.accountNum,
+    productLinks: (d.productLinks || []).map((link) => {
+      const p = link.productId;
+      const prod =
+        p && typeof p === 'object'
+          ? {
+              id: String(p._id),
+              productName: p.productName || p.name,
+              sku: p.sku,
+            }
+          : { id: String(link.productId), productName: '', sku: link.sku || '' };
+      return {
+        productId: prod.id,
+        sku: prod.sku || link.sku,
+        vendorCost: Number(link.vendorCost || 0),
+        product: prod,
+      };
+    }),
     createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
   }));
+}
+
+/** מחיר ספק למוצר (למילוי אוטומטי במחירון) */
+export async function getVendorCostForProduct(vendorId, productId) {
+  await ensureConnection();
+  if (!mongoose.isValidObjectId(vendorId) || !mongoose.isValidObjectId(productId)) return null;
+  const v = await Vendor.findById(vendorId).populate('productLinks.productId').lean();
+  if (!v) return null;
+  const line = (v.productLinks || []).find((l) => String(l.productId) === String(productId));
+  if (!line) return null;
+  const p = line.productId;
+  const sku = p && typeof p === 'object' ? p.sku : line.sku;
+  return {
+    vendorCost: Number(line.vendorCost || 0),
+    sku: sku || '',
+    vendorName: v.vendorName,
+  };
+}
+
+export async function createPricingEntry(payload) {
+  await ensureConnection();
+  const vendorId = payload.vendorId;
+  const productId = payload.productId;
+  if (!mongoose.isValidObjectId(vendorId) || !mongoose.isValidObjectId(productId)) {
+    throw new Error('Invalid vendorId or productId');
+  }
+  let vendorCost = Number(payload.vendorCost ?? NaN);
+  if (Number.isNaN(vendorCost)) {
+    const vc = await getVendorCostForProduct(vendorId, productId);
+    vendorCost = vc ? vc.vendorCost : 0;
+  }
+  const retailPrice = Number(payload.retailPrice || 0);
+  const doc = await PricingEntry.create({
+    pricingName: String(payload.pricingName || '').trim(),
+    vendorId,
+    productId,
+    orgName: String(payload.orgName || '').trim(),
+    retailPrice,
+    vendorCost,
+    profit: retailPrice - vendorCost,
+  });
+  return { id: String(doc._id) };
+}
+
+export async function listPricingEntries() {
+  await ensureConnection();
+  const docs = await PricingEntry.find({})
+    .sort({ createdAt: -1 })
+    .populate('vendorId')
+    .populate('productId')
+    .lean();
+  return docs.map((d) => {
+    const v = d.vendorId;
+    const p = d.productId;
+    return {
+      id: String(d._id),
+      pricingName: d.pricingName,
+      orgName: d.orgName || '',
+      retailPrice: Number(d.retailPrice || 0),
+      vendorCost: Number(d.vendorCost || 0),
+      profit: Number(d.profit ?? d.retailPrice - d.vendorCost),
+      createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
+      vendor: v && typeof v === 'object' ? { id: String(v._id), vendorName: v.vendorName } : { id: String(d.vendorId), vendorName: '' },
+      product:
+        p && typeof p === 'object'
+          ? {
+              id: String(p._id),
+              productName: p.productName || p.name,
+              sku: p.sku,
+            }
+          : { id: String(d.productId), productName: '', sku: '' },
+    };
+  });
+}
+
+export async function createSalesAgent(payload) {
+  await ensureConnection();
+  const b = payload.bankDetails || {};
+  const doc = await SalesAgent.create({
+    agentName: String(payload.agentName || '').trim(),
+    idNum: String(payload.idNum || '').trim(),
+    phone: String(payload.phone || '').trim(),
+    email: String(payload.email || '').trim(),
+    address: String(payload.address || '').trim(),
+    bankDetails: {
+      bankName: String(b.bankName || '').trim(),
+      bankNum: String(b.bankNum || '').trim(),
+      accountHolder: String(b.accountHolder || '').trim(),
+      branchNum: String(b.branchNum || '').trim(),
+      accountNum: String(b.accountNum || '').trim(),
+    },
+  });
+  return { id: String(doc._id) };
+}
+
+export async function listSalesAgentsWithSales() {
+  await ensureConnection();
+  const docs = await SalesAgent.find({}).sort({ createdAt: -1 }).lean();
+  const rows = await Promise.all(
+    docs.map(async (d) => {
+      const id = String(d._id);
+      const totalSales = await countDealsByAgentId(id);
+      return {
+        id,
+        agentName: d.agentName,
+        idNum: d.idNum,
+        phone: d.phone,
+        email: d.email,
+        address: d.address,
+        bankDetails: d.bankDetails || {},
+        totalSales,
+        createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
+      };
+    })
+  );
+  return rows;
+}
+
+/** לשימוש ב-webhook: קישור מנוי לסוכן */
+export async function resolveAgentIdFromFormState(formState) {
+  await ensureConnection();
+  const fs = formState && typeof formState === 'object' ? formState : {};
+  const direct = String(fs.agentId || '').trim();
+  if (direct && mongoose.isValidObjectId(direct)) {
+    const a = await SalesAgent.findById(direct).lean();
+    if (a) return String(a._id);
+  }
+  const name = String(fs.agentName || '').trim();
+  if (name) {
+    const byName = await SalesAgent.findOne({ agentName: name }).lean();
+    if (byName) return String(byName._id);
+  }
+  return null;
+}
+
+export async function listPublicSalesAgents() {
+  await ensureConnection();
+  const docs = await SalesAgent.find({}).sort({ agentName: 1 }).select('agentName').lean();
+  return docs.map((d) => ({ id: String(d._id), agentName: d.agentName }));
 }
 
 export async function createOrgPricingPolicy(payload) {
@@ -221,11 +536,12 @@ export async function listOrgPricingPolicies() {
         p && typeof p === 'object'
           ? {
               id: String(p._id || p),
-              name: p.name,
+              productName: p.productName || p.name,
+              name: p.productName || p.name,
               sku: p.sku,
               baseDescription: p.baseDescription || '',
             }
-          : { id: String(line.productId), name: '', sku: '', baseDescription: '' };
+          : { id: String(line.productId), productName: '', name: '', sku: '', baseDescription: '' };
       return {
         productId: product.id,
         product,
@@ -251,12 +567,13 @@ export async function getPricingContextByPricingId(pricingId) {
   const lines = doc.relatedProducts || [];
   const products = lines.map((line) => {
     const p = line.productId;
-    const name = p && typeof p === 'object' ? p.name : '';
+    const name = p && typeof p === 'object' ? p.productName || p.name : '';
     const sku = p && typeof p === 'object' ? p.sku : '';
     const baseDescription = p && typeof p === 'object' ? p.baseDescription || '' : '';
     const productId = p && typeof p === 'object' ? String(p._id) : String(line.productId);
     return {
       productId,
+      productName: name,
       name,
       sku,
       baseDescription,

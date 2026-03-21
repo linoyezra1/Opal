@@ -19,14 +19,21 @@ import {
   getPaymentArrearsDeals,
 } from './mongoService.js';
 import {
-  createAgent,
   createOrgPricingPolicy,
+  createPricingEntry,
   createProduct,
+  createSalesAgent,
+  createVendor,
   getPricingContextByPricingId,
-  listAgents,
+  getVendorCostForProduct,
   listIncompleteCheckoutDrafts,
   listOrgPricingPolicies,
+  listPricingEntries,
   listProducts,
+  listPublicSalesAgents,
+  listSalesAgentsWithSales,
+  listVendors,
+  resolveAgentIdFromFormState,
   upsertCheckoutDraft,
 } from './adminMongooseService.js';
 import { resolve } from 'path';
@@ -291,7 +298,10 @@ async function handleWebhookSuccess(lowProfileCode) {
 
     const transactionId = indicator?.internalDealNumber != null ? String(indicator.internalDealNumber) : lowProfileCode;
     const payerAmount = typeof pending.payerAmount === 'number' ? pending.payerAmount : 0;
-    const dealPayload = buildDealPayloadFromFormState(pending.formState);
+    const agentId = await resolveAgentIdFromFormState(pending.formState);
+    const mergedForm = { ...(pending.formState || {}), ...(agentId ? { agentId } : {}) };
+
+    const dealPayload = buildDealPayloadFromFormState(mergedForm);
 
     console.log(`[${ts()}] Attempting to write deal to MongoDB...`);
     let result;
@@ -299,7 +309,8 @@ async function handleWebhookSuccess(lowProfileCode) {
       result = await saveDeal({
         transactionId,
         payerAmount,
-        formState: pending.formState || {},
+        formState: mergedForm,
+        agentId,
         paymentStatus: paymentStatus === 'TEST' ? 'test_success' : 'paid',
         terminalNumber: terminalNum,
         source: 'cardcom-webhook',
@@ -495,7 +506,9 @@ app.get('/api/admin/deals', requireAdmin, async (req, res) => {
 app.post('/api/admin/products', requireAdmin, async (req, res) => {
   try {
     const body = req.body || {};
-    if (!String(body.name || '').trim()) return res.status(400).json({ success: false, error: 'name is required' });
+    if (!String(body.productName || body.name || '').trim()) {
+      return res.status(400).json({ success: false, error: 'productName is required' });
+    }
     if (!String(body.sku || '').trim()) return res.status(400).json({ success: false, error: 'sku (מק"ט) is required' });
     const result = await createProduct(body);
     res.json({ success: true, id: result.id });
@@ -513,6 +526,80 @@ app.get('/api/admin/products', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(`[${ts()}] admin/products list error:`, e);
     res.status(500).json({ success: false, error: 'Failed to fetch products' });
+  }
+});
+
+app.post('/api/admin/vendors', requireAdmin, async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!String(body.vendorName || '').trim()) return res.status(400).json({ success: false, error: 'vendorName is required' });
+    if (!String(body.idNum || '').trim()) return res.status(400).json({ success: false, error: 'idNum (ח.פ) is required' });
+    const result = await createVendor(body);
+    res.json({ success: true, id: result.id });
+  } catch (e) {
+    console.error(`[${ts()}] admin/vendors create error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to save vendor' });
+  }
+});
+
+app.get('/api/admin/vendors', requireAdmin, async (req, res) => {
+  try {
+    const vendors = await listVendors();
+    res.json({ success: true, vendors });
+  } catch (e) {
+    console.error(`[${ts()}] admin/vendors list error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to fetch vendors' });
+  }
+});
+
+app.get('/api/admin/vendor-cost', requireAdmin, async (req, res) => {
+  try {
+    const vendorId = String(req.query.vendorId || '').trim();
+    const productId = String(req.query.productId || '').trim();
+    if (!vendorId || !productId) {
+      return res.status(400).json({ success: false, error: 'vendorId and productId are required' });
+    }
+    const data = await getVendorCostForProduct(vendorId, productId);
+    if (!data) return res.status(404).json({ success: false, error: 'לא נמצא מחיר ספק למוצר זה אצל הספק' });
+    res.json({ success: true, ...data });
+  } catch (e) {
+    console.error(`[${ts()}] admin/vendor-cost error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to resolve vendor cost' });
+  }
+});
+
+app.post('/api/admin/pricing-entries', requireAdmin, async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!String(body.pricingName || '').trim()) return res.status(400).json({ success: false, error: 'pricingName is required' });
+    if (!String(body.vendorId || '').trim()) return res.status(400).json({ success: false, error: 'vendorId is required' });
+    if (!String(body.productId || '').trim()) return res.status(400).json({ success: false, error: 'productId is required' });
+    const result = await createPricingEntry(body);
+    res.json({ success: true, id: result.id });
+  } catch (e) {
+    console.error(`[${ts()}] admin/pricing-entries create error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to save pricing entry' });
+  }
+});
+
+app.get('/api/admin/pricing-entries', requireAdmin, async (req, res) => {
+  try {
+    const entries = await listPricingEntries();
+    res.json({ success: true, entries });
+  } catch (e) {
+    console.error(`[${ts()}] admin/pricing-entries list error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to fetch pricing entries' });
+  }
+});
+
+/** רשימת סוכנים לטופס צ'ק-אאוט (ללא אימות) */
+app.get('/api/public/agents', async (req, res) => {
+  try {
+    const agents = await listPublicSalesAgents();
+    res.json({ success: true, agents });
+  } catch (e) {
+    console.error(`[${ts()}] public/agents error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to list agents' });
   }
 });
 
@@ -612,25 +699,22 @@ app.post('/api/checkout-draft', async (req, res) => {
 app.post('/api/admin/agents', requireAdmin, async (req, res) => {
   try {
     const body = req.body || {};
-    const p = body.personal || {};
     const b = body.bankDetails || {};
-    const c = body.commissionModel || {};
-    if (!String(p.name || '').trim()) return res.status(400).json({ success: false, error: 'Agent name is required' });
-    if (!String(p.idOrCompanyNum || '').trim()) return res.status(400).json({ success: false, error: 'ID/Company number is required' });
-    if (!String(b.bankName || '').trim()) return res.status(400).json({ success: false, error: 'Bank name is required' });
-    if (!String(c.productName || '').trim()) return res.status(400).json({ success: false, error: 'Product is required' });
-    if (!String(c.productSKU || '').trim()) return res.status(400).json({ success: false, error: 'Product SKU is required' });
-    const result = await createAgent(body);
+    if (!String(body.agentName || '').trim()) return res.status(400).json({ success: false, error: 'agentName is required' });
+    if (!String(body.idNum || '').trim()) return res.status(400).json({ success: false, error: 'idNum is required' });
+    if (!String(b.bankName || '').trim()) return res.status(400).json({ success: false, error: 'bankName is required' });
+    if (!String(b.accountHolder || '').trim()) return res.status(400).json({ success: false, error: 'accountHolder is required' });
+    const result = await createSalesAgent(body);
     res.json({ success: true, id: result.id });
   } catch (e) {
     console.error(`[${ts()}] admin/agents create error:`, e);
-    res.status(500).json({ success: false, error: 'Failed to save agent' });
+    res.status(500).json({ success: false, error: e.message || 'Failed to save agent' });
   }
 });
 
 app.get('/api/admin/agents', requireAdmin, async (req, res) => {
   try {
-    const rows = await listAgents();
+    const rows = await listSalesAgentsWithSales();
     res.json({ success: true, rows });
   } catch (e) {
     console.error(`[${ts()}] admin/agents list error:`, e);

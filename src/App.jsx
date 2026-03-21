@@ -58,6 +58,7 @@ const initialState = {
   id: '',
   phone: '',
   email: '',
+  agentId: '',
   agentName: '',
   organizationName: '',
   beneficiaryCount: 0,
@@ -81,11 +82,21 @@ export default function App() {
   const [submitError, setSubmitError] = useState(null);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [selectedLandingPlanOption, setSelectedLandingPlanOption] = useState('');
+  const [publicAgents, setPublicAgents] = useState([]);
 
   const selectedLandingPlan = useMemo(
     () => LANDING_PLANS.find((p) => p.optionId === selectedLandingPlanOption) || null,
     [selectedLandingPlanOption]
   );
+
+  React.useEffect(() => {
+    fetch(`${API_BASE}/api/public/agents`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.agents)) setPublicAgents(data.agents);
+      })
+      .catch(() => {});
+  }, []);
 
   React.useEffect(() => {
     const hasProgress =
@@ -177,7 +188,11 @@ export default function App() {
     else if (!validatePhone(formState.phone)) e.phone = 'הזן מספר טלפון תקין (9–11 ספרות)';
     if (!formState.email?.trim()) e.email = 'אימייל שדה חובה';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formState.email)) e.email = 'הזן כתובת אימייל תקינה';
-    if (!formState.agentName?.trim()) e.agentName = 'שם הסוכן שדה חובה';
+    if (publicAgents.length > 0) {
+      if (!formState.agentId?.trim()) e.agentName = 'נא לבחור סוכן מהרשימה';
+    } else if (!formState.agentName?.trim()) {
+      e.agentName = 'שם הסוכן שדה חובה';
+    }
     if (!formState.organizationName?.trim()) e.organizationName = 'שם הארגון שדה חובה';
     const count = formState.beneficiaryCount || 0;
     const beneficiaries = formState.beneficiaries || [];
@@ -191,7 +206,7 @@ export default function App() {
     }
     setErrors(e);
     return Object.keys(e).length === 0;
-  }, [formState, acceptedTerms]);
+  }, [formState, acceptedTerms, publicAgents]);
 
   const handleSubmit = useCallback(
     async (event) => {
@@ -425,15 +440,55 @@ export default function App() {
                 />
                 {errors.email && <p className="text-red-600 text-sm mt-1">{errors.email}</p>}
               </div>
-              <div>
-                <label className="block text-sm text-medical-grey-dark mb-1">שם הסוכן *</label>
-                <input
-                  type="text"
-                  value={formState.agentName}
-                  onChange={(e) => update('agentName', e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-medical-blue"
-                  placeholder="שם הסוכן"
-                />
+              <div className="sm:col-span-2">
+                <label className="block text-sm text-medical-grey-dark mb-1">סוכן *</label>
+                {publicAgents.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <select
+                      value={formState.agentId}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        const a = publicAgents.find((x) => x.id === id);
+                        setFormState((prev) => ({
+                          ...prev,
+                          agentId: id,
+                          agentName: a ? a.agentName : '',
+                        }));
+                        setErrors((er) => ({ ...er, agentName: undefined }));
+                        setSubmitError(null);
+                        try {
+                          savePending({ agent: a ? a.agentName : '' });
+                        } catch {
+                          /* ignore */
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-medical-blue focus:border-medical-blue"
+                    >
+                      <option value="">— בחרו סוכן —</option>
+                      {publicAgents.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.agentName}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      readOnly
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-700 font-mono text-sm"
+                      value={formState.agentId ? `${formState.agentName || ''} (id: ${formState.agentId.slice(-6)})` : ''}
+                      placeholder="מזהה ושם — אחרי בחירה"
+                    />
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={formState.agentName}
+                    onChange={(e) => update('agentName', e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-medical-blue"
+                    placeholder="שם הסוכן (הוסיפו סוכנים במסך ניהול)"
+                  />
+                )}
+                <p className="text-xs text-slate-500 mt-1">המזהה נשמר בעסקה לצורך ספירת מכירות.</p>
                 {errors.agentName && <p className="text-red-600 text-sm mt-1">{errors.agentName}</p>}
               </div>
               <div>

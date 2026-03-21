@@ -181,7 +181,7 @@ export default function OrganizationPricing() {
                       <option value="">— בחרו מוצר —</option>
                       {products.map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.name} ({p.sku})
+                          {p.productName || p.name} ({p.sku})
                         </option>
                       ))}
                     </select>
@@ -260,7 +260,7 @@ export default function OrganizationPricing() {
                       <ul className="space-y-1">
                         {(r.relatedProducts || []).map((x, i) => (
                           <li key={i}>
-                            {x.product?.name || x.productId}: קמעוני ₪{x.retailPrice} · ספק ₪{x.vendorCost} · רווח ₪
+                            {x.product?.productName || x.product?.name || x.productId}: קמעוני ₪{x.retailPrice} · ספק ₪{x.vendorCost} · רווח ₪
                             {x.profit}
                           </li>
                         ))}

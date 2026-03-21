@@ -31,10 +31,17 @@ export async function saveDeal(params) {
   if (exists) return { duplicate: true, id: String(exists._id) };
 
   const now = new Date();
+  const fs = params.formState && typeof params.formState === 'object' ? params.formState : {};
+  const agentIdRaw = params.agentId != null ? params.agentId : fs.agentId;
+  const agentId =
+    agentIdRaw != null && String(agentIdRaw).trim() !== '' ? String(agentIdRaw).trim() : null;
+
   const doc = {
     transactionId,
     payerAmount: Number(params.payerAmount || 0),
     formState: params.formState || {},
+    /** מזהה סוכן (מנוי) — לספירת מכירות לפי סוכן */
+    agentId,
     terminalNumber: Number(params.terminalNumber || 0),
     paymentStatus: params.paymentStatus || 'success',
     source: params.source || 'webhook',
@@ -108,11 +115,23 @@ export async function getDeals() {
   return docs.map((d) => ({
     id: String(d._id),
     ...d,
+    agentId: d.agentId != null ? String(d.agentId) : null,
     createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : null,
     updatedAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : null,
     beneficiarySubmittedAt:
       d.beneficiaryUpdate?.submittedAt instanceof Date ? d.beneficiaryUpdate.submittedAt.toISOString() : null,
   }));
+}
+
+/** Count successful/paid subscribers (deals) linked to an agent */
+export async function countDealsByAgentId(agentId) {
+  if (!agentId) return 0;
+  const db = await getDb();
+  const id = String(agentId).trim();
+  return db.collection('deals').countDocuments({
+    agentId: id,
+    paymentStatus: { $regex: /success|paid|test_success/i },
+  });
 }
 
 function serializeDocDates(doc) {

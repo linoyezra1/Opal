@@ -11,6 +11,8 @@ import OrganizationPricing from './pages/OrganizationPricing.jsx';
 import AgentSetup from './pages/AgentSetup.jsx';
 import ProductManagement from './pages/ProductManagement.jsx';
 import AdminControlPanel from './pages/AdminControlPanel.jsx';
+import VendorDashboard from './pages/VendorDashboard.jsx';
+import PricingDashboard from './pages/PricingDashboard.jsx';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -25,6 +27,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/admin/sales-dashboard" element={<SalesDashboard />} />
         <Route path="/admin/pricing" element={<OrganizationPricing />} />
         <Route path="/admin/products" element={<ProductManagement />} />
+        <Route path="/admin/vendors" element={<VendorDashboard />} />
+        <Route path="/admin/price-list" element={<PricingDashboard />} />
         <Route path="/admin/control-panel" element={<AdminControlPanel />} />
         <Route path="/admin/agents" element={<AgentSetup />} />
       </Routes>
