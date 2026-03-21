@@ -15,6 +15,12 @@ import {
   saveDeal,
   saveOrganizationLead,
 } from './mongoService.js';
+import {
+  createAgent,
+  createOrganizationPricing,
+  listAgents,
+  listOrganizationPricings,
+} from './adminMongooseService.js';
 import { resolve } from 'path';
 
 try {
@@ -475,6 +481,61 @@ app.get('/api/admin/deals', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(`[${ts()}] admin/deals error:`, e);
     res.status(500).json({ success: false, error: 'Failed to fetch deals' });
+  }
+});
+
+app.post('/api/admin/org-pricing', requireAdmin, async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!String(body.orgName || '').trim()) return res.status(400).json({ success: false, error: 'orgName is required' });
+    if (!String(body.priceListName || '').trim()) return res.status(400).json({ success: false, error: 'priceListName is required' });
+    if (!String(body.vendorName || '').trim()) return res.status(400).json({ success: false, error: 'vendorName is required' });
+    if (!String(body.productName || '').trim()) return res.status(400).json({ success: false, error: 'productName is required' });
+    if (!String(body.productSKU || '').trim()) return res.status(400).json({ success: false, error: 'productSKU is required' });
+    const result = await createOrganizationPricing(body);
+    res.json({ success: true, id: result.id });
+  } catch (e) {
+    console.error(`[${ts()}] admin/org-pricing create error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to save organization pricing' });
+  }
+});
+
+app.get('/api/admin/org-pricing', requireAdmin, async (req, res) => {
+  try {
+    const rows = await listOrganizationPricings();
+    res.json({ success: true, rows });
+  } catch (e) {
+    console.error(`[${ts()}] admin/org-pricing list error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to fetch organization pricing' });
+  }
+});
+
+app.post('/api/admin/agents', requireAdmin, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const p = body.personal || {};
+    const b = body.bankDetails || {};
+    const c = body.commissionModel || {};
+    if (!String(p.name || '').trim()) return res.status(400).json({ success: false, error: 'Agent name is required' });
+    if (!String(p.idOrCompanyNum || '').trim()) return res.status(400).json({ success: false, error: 'ID/Company number is required' });
+    if (!String(b.bankName || '').trim()) return res.status(400).json({ success: false, error: 'Bank name is required' });
+    if (!String(c.productName || '').trim()) return res.status(400).json({ success: false, error: 'Product is required' });
+    if (!String(c.productSKU || '').trim()) return res.status(400).json({ success: false, error: 'Product SKU is required' });
+    const result = await createAgent(body);
+    res.json({ success: true, id: result.id });
+  } catch (e) {
+    console.error(`[${ts()}] admin/agents create error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to save agent' });
+  }
+});
+
+app.get('/api/admin/agents', requireAdmin, async (req, res) => {
+  try {
+    const rows = await listAgents();
+    res.json({ success: true, rows });
+  } catch (e) {
+    console.error(`[${ts()}] admin/agents list error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to fetch agents' });
   }
 });
 

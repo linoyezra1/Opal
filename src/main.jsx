@@ -7,6 +7,8 @@ import BeneficiaryForm from './pages/BeneficiaryForm.jsx';
 import Error from './pages/Error.jsx';
 import Admin from './pages/Admin.jsx';
 import SalesDashboard from './pages/SalesDashboard.jsx';
+import OrganizationPricing from './pages/OrganizationPricing.jsx';
+import AgentSetup from './pages/AgentSetup.jsx';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -19,6 +21,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/error" element={<Error />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/admin/sales-dashboard" element={<SalesDashboard />} />
+        <Route path="/admin/pricing" element={<OrganizationPricing />} />
+        <Route path="/admin/agents" element={<AgentSetup />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>
