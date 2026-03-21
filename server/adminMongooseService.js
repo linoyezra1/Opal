@@ -39,7 +39,8 @@ const productSchema = new mongoose.Schema(
   { versionKey: false }
 );
 
-productSchema.pre('validate', function productValidate(next) {
+/** Mongoose 8+: avoid `next` callback — use async middleware (next is not always a function). */
+productSchema.pre('validate', async function productValidate() {
   const pn = String(this.productName || this.name || '').trim();
   if (pn) {
     this.productName = pn;
@@ -48,12 +49,10 @@ productSchema.pre('validate', function productValidate(next) {
   if (!String(this.productName || '').trim()) {
     this.invalidate('productName', 'productName is required');
   }
-  next();
 });
 
-productSchema.pre('save', function productPreSave(next) {
+productSchema.pre('save', async function productPreSave() {
   this.updatedAt = new Date();
-  next();
 });
 
 const vendorProductLinkSchema = new mongoose.Schema(
@@ -84,9 +83,8 @@ const vendorSchema = new mongoose.Schema(
   { versionKey: false }
 );
 
-vendorSchema.pre('save', function vendorPreSave(next) {
+vendorSchema.pre('save', async function vendorPreSave() {
   this.updatedAt = new Date();
-  next();
 });
 
 const pricingEntrySchema = new mongoose.Schema(
@@ -103,13 +101,12 @@ const pricingEntrySchema = new mongoose.Schema(
   { versionKey: false }
 );
 
-pricingEntrySchema.pre('save', function pricingEntryPreSave(next) {
+pricingEntrySchema.pre('save', async function pricingEntryPreSave() {
   const r = Number(this.retailPrice || 0);
   const v = Number(this.vendorCost || 0);
   this.retailPrice = r;
   this.vendorCost = v;
   this.profit = r - v;
-  next();
 });
 
 const salesAgentSchema = new mongoose.Schema(
@@ -132,9 +129,8 @@ const salesAgentSchema = new mongoose.Schema(
   { versionKey: false }
 );
 
-salesAgentSchema.pre('save', function salesAgentPreSave(next) {
+salesAgentSchema.pre('save', async function salesAgentPreSave() {
   this.updatedAt = new Date();
-  next();
 });
 
 const relatedProductLineSchema = new mongoose.Schema(
@@ -158,7 +154,7 @@ const orgPricingPolicySchema = new mongoose.Schema(
   { versionKey: false }
 );
 
-orgPricingPolicySchema.pre('save', function orgPricingPreSave(next) {
+orgPricingPolicySchema.pre('save', async function orgPricingPreSave() {
   const lines = this.relatedProducts || [];
   for (const line of lines) {
     const retail = Number(line.retailPrice || 0);
@@ -168,7 +164,6 @@ orgPricingPolicySchema.pre('save', function orgPricingPreSave(next) {
     line.profit = retail - vendor;
   }
   this.updatedAt = new Date();
-  next();
 });
 
 const checkoutDraftSchema = new mongoose.Schema(
@@ -213,12 +208,11 @@ const agentSchema = new mongoose.Schema(
   { versionKey: false }
 );
 
-agentSchema.pre('save', function updateProfit(next) {
+agentSchema.pre('save', async function updateProfit() {
   const retail = Number(this.commissionModel?.retailPrice || 0);
   const vendor = Number(this.commissionModel?.vendorCost || 0);
   this.commissionModel.profitBeforeAgent = retail - vendor;
   this.updatedAt = new Date();
-  next();
 });
 
 const OrganizationPricing =
