@@ -20,24 +20,31 @@ import {
 } from './mongoService.js';
 import {
   createOrgPricingPolicy,
+  createPriceList,
   createPricingEntry,
   createProduct,
   createSalesAgent,
   createVendor,
+  deletePriceList,
   deletePricingEntry,
   deleteProduct,
   deleteSalesAgent,
   deleteVendor,
   getPricingContextByPricingId,
+  getPriceListById,
+  getPublicPriceListById,
   getVendorCostForProduct,
   listIncompleteCheckoutDrafts,
   listOrgPricingPolicies,
+  listPriceLists,
   listPricingEntries,
   listProducts,
   listPublicSalesAgents,
   listSalesAgentsWithSales,
   listVendors,
   resolveAgentIdFromFormState,
+  resolveCheckoutEconomics,
+  updatePriceList,
   updatePricingEntry,
   updateProduct,
   updateSalesAgent,
@@ -101,13 +108,6 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' })); // Cardcom may PO
 const STATIC_DIR = resolve(process.cwd(), 'dist');
 app.use(express.static(STATIC_DIR));
 
-/** Plan id → amount in ILS (for payer row) */
-const PLAN_AMOUNTS = {
-  'plan-a': 59,
-  'plan-b': 29,
-  'plan-fg': 0,
-};
-
 /** Pending deals: lowProfileCode → { formState, payerAmount, createdAt } */
 const pendingDeals = new Map();
 const PENDING_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -170,7 +170,24 @@ app.post('/api/create-checkout-session', async (req, res) => {
       });
     }
 
-    const payerAmount = PLAN_AMOUNTS[formState.selectedPlanId] ?? 0;
+    const econ = await resolveCheckoutEconomics(formState);
+    const payerAmount = Number(econ.payerAmount ?? 0);
+    if (!payerAmount || payerAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid payment amount — choose a valid plan or product.',
+      });
+    }
+
+    const enrichedForm = {
+      ...formState,
+      resolvedVendorCost: econ.resolvedVendorCost,
+      resolvedAgentCommission: econ.resolvedAgentCommission,
+      resolvedNetProfit: econ.resolvedNetProfit,
+      productName: econ.productName || formState.productName,
+      productId: econ.productId || formState.productId,
+      priceListId: econ.priceListId || formState.priceListId,
+    };
 
     const result = await createLowProfileDeal({
       terminalNumber: terminal,
@@ -185,7 +202,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
     });
 
     pendingDeals.set(result.lowProfileCode, {
-      formState,
+      formState: enrichedForm,
       payerAmount,
       createdAt: Date.now(),
     });
@@ -305,11 +322,36 @@ async function handleWebhookSuccess(lowProfileCode) {
     pendingDeals.delete(lowProfileCode);
 
     const transactionId = indicator?.internalDealNumber != null ? String(indicator.internalDealNumber) : lowProfileCode;
-    const payerAmount = typeof pending.payerAmount === 'number' ? pending.payerAmount : 0;
     const agentId = await resolveAgentIdFromFormState(pending.formState);
     const mergedForm = { ...(pending.formState || {}), ...(agentId ? { agentId } : {}) };
 
-    const dealPayload = buildDealPayloadFromFormState(mergedForm);
+    let econ;
+    try {
+      econ = await resolveCheckoutEconomics(mergedForm);
+    } catch (econErr) {
+      console.warn(`[${ts()}] resolveCheckoutEconomics fallback:`, econErr?.message || econErr);
+      econ = {
+        payerAmount: typeof pending.payerAmount === 'number' ? pending.payerAmount : 0,
+        resolvedVendorCost: mergedForm.resolvedVendorCost ?? 0,
+        resolvedAgentCommission: mergedForm.resolvedAgentCommission ?? 0,
+        resolvedNetProfit: mergedForm.resolvedNetProfit ?? 0,
+        productName: mergedForm.productName || '',
+        productId: mergedForm.productId || '',
+        priceListId: mergedForm.priceListId || '',
+      };
+    }
+    const payerAmount = Number(econ.payerAmount ?? pending.payerAmount ?? 0);
+    const finalForm = {
+      ...mergedForm,
+      resolvedVendorCost: econ.resolvedVendorCost,
+      resolvedAgentCommission: econ.resolvedAgentCommission,
+      resolvedNetProfit: econ.resolvedNetProfit,
+      productName: econ.productName || mergedForm.productName,
+      productId: econ.productId || mergedForm.productId,
+      priceListId: econ.priceListId || mergedForm.priceListId,
+    };
+
+    const dealPayload = buildDealPayloadFromFormState(finalForm);
 
     console.log(`[${ts()}] Attempting to write deal to MongoDB...`);
     let result;
@@ -317,7 +359,7 @@ async function handleWebhookSuccess(lowProfileCode) {
       result = await saveDeal({
         transactionId,
         payerAmount,
-        formState: mergedForm,
+        formState: finalForm,
         agentId,
         paymentStatus: paymentStatus === 'TEST' ? 'test_success' : 'paid',
         terminalNumber: terminalNum,
@@ -684,6 +726,70 @@ app.delete('/api/admin/pricing-entries/:id', requireAdmin, async (req, res) => {
   }
 });
 
+/** מחירונים רב-מוצריים (דפי נחיתה) */
+app.get('/api/admin/price-lists', requireAdmin, async (req, res) => {
+  try {
+    const lists = await listPriceLists();
+    res.json({ success: true, lists });
+  } catch (e) {
+    console.error(`[${ts()}] admin/price-lists list error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to list price lists' });
+  }
+});
+
+app.post('/api/admin/price-lists', requireAdmin, async (req, res) => {
+  try {
+    const result = await createPriceList(req.body || {});
+    res.json({ success: true, ...result });
+  } catch (e) {
+    console.error(`[${ts()}] admin/price-lists create error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to create price list' });
+  }
+});
+
+app.get('/api/admin/price-lists/:id', requireAdmin, async (req, res) => {
+  try {
+    const row = await getPriceListById(req.params.id);
+    if (!row) return res.status(404).json({ success: false, error: 'Not found' });
+    res.json({ success: true, list: row });
+  } catch (e) {
+    console.error(`[${ts()}] admin/price-lists get error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to load price list' });
+  }
+});
+
+app.put('/api/admin/price-lists/:id', requireAdmin, async (req, res) => {
+  try {
+    const result = await updatePriceList(req.params.id, req.body || {});
+    res.json({ success: true, ...result });
+  } catch (e) {
+    console.error(`[${ts()}] admin/price-lists update error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to update price list' });
+  }
+});
+
+app.delete('/api/admin/price-lists/:id', requireAdmin, async (req, res) => {
+  try {
+    await deletePriceList(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    console.error(`[${ts()}] admin/price-lists delete error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to delete price list' });
+  }
+});
+
+/** דף נחיתה — מוצרים ומחירים בלבד */
+app.get('/api/public/price-list/:id', async (req, res) => {
+  try {
+    const data = await getPublicPriceListById(req.params.id);
+    if (!data) return res.status(404).json({ success: false, error: 'Price list not found' });
+    res.json({ success: true, ...data });
+  } catch (e) {
+    console.error(`[${ts()}] public/price-list error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to load price list' });
+  }
+});
+
 /** רשימת סוכנים לטופס צ'ק-אאוט (ללא אימות) */
 app.get('/api/public/agents', async (req, res) => {
   try {
@@ -837,26 +943,42 @@ app.delete('/api/admin/agents/:id', requireAdmin, async (req, res) => {
   }
 });
 
+function subscribersDashboardQuery(req) {
+  const summaryCategories = String(req.query.summaryCategories || '')
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+  return {
+    month: req.query.month || '',
+    fromDate: req.query.fromDate || '',
+    toDate: req.query.toDate || '',
+    providerEnabled: String(req.query.providerEnabled || '') === 'true',
+    providerValue: req.query.providerValue || '',
+    agentEnabled: String(req.query.agentEnabled || '') === 'true',
+    agentValue: req.query.agentValue || '',
+    organizationSearch: req.query.organizationSearch || '',
+    customerSearch: req.query.customerSearch || '',
+    idSearch: req.query.idSearch || '',
+    productNameSearch: req.query.productNameSearch || '',
+    agentNameSearch: req.query.agentNameSearch || '',
+    amountDue: req.query.amountDue || '0',
+    summaryCategories,
+  };
+}
+
+app.get('/api/admin/subscribers-dashboard', requireAdmin, async (req, res) => {
+  try {
+    const data = await getSalesDashboardData(subscribersDashboardQuery(req));
+    res.json({ success: true, ...data });
+  } catch (e) {
+    console.error(`[${ts()}] admin/subscribers-dashboard error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to load subscribers' });
+  }
+});
+
 app.get('/api/admin/sales-dashboard', requireAdmin, async (req, res) => {
   try {
-    const summaryCategories = String(req.query.summaryCategories || '')
-      .split(',')
-      .map((x) => x.trim())
-      .filter(Boolean);
-    const data = await getSalesDashboardData({
-      month: req.query.month || '',
-      fromDate: req.query.fromDate || '',
-      toDate: req.query.toDate || '',
-      providerEnabled: String(req.query.providerEnabled || '') === 'true',
-      providerValue: req.query.providerValue || '',
-      agentEnabled: String(req.query.agentEnabled || '') === 'true',
-      agentValue: req.query.agentValue || '',
-      organizationSearch: req.query.organizationSearch || '',
-      customerSearch: req.query.customerSearch || '',
-      idSearch: req.query.idSearch || '',
-      amountDue: req.query.amountDue || '0',
-      summaryCategories,
-    });
+    const data = await getSalesDashboardData(subscribersDashboardQuery(req));
     res.json({ success: true, ...data });
   } catch (e) {
     console.error(`[${ts()}] admin/sales-dashboard error:`, e);

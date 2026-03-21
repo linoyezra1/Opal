@@ -112,7 +112,7 @@ export default function Admin() {
         <div className="flex flex-wrap gap-3 justify-between items-center">
           <h1 className="text-3xl font-bold text-medical-blue-dark">לוח ניהול אופל</h1>
           <div className="flex gap-2">
-            <Link to="/admin/sales-dashboard" className="px-4 py-2 rounded-lg bg-medical-teal text-white">Sales Dashboard</Link>
+            <Link to="/admin/subscribers" className="px-4 py-2 rounded-lg bg-medical-teal text-white">מנויים</Link>
             <Link to="/admin/control-panel" className="px-4 py-2 rounded-lg bg-amber-600 text-white">לוח בקרה</Link>
             <Link to="/admin/products" className="px-4 py-2 rounded-lg bg-emerald-700 text-white">מוצרים</Link>
             <Link to="/admin/vendors" className="px-4 py-2 rounded-lg bg-amber-800 text-white">ספקים</Link>

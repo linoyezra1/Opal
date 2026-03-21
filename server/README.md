@@ -25,7 +25,8 @@ Optional:
 - Organization forms are stored in **organizationLeads**.
 - **products** – catalog (`productName`, unique `sku`, `createdAt`).
 - **vendors** – supplier profile + `productLinks[]` (`productId`, `sku`, `vendorCost`).
-- **pricing_entries** – price-list rows (`pricingName`, `vendorId`, `productId`, optional `orgName`, `retailPrice`, `vendorCost`, `profit`).
+- **pricing_entries** – legacy single-row price lines (`pricingName`, `vendorId`, `productId`, …).
+- **price_lists** – מחירון רב-מוצרי לדפי נחיתה (`listName`, `orgName`, `lines[]` עם `retailPrice`, `vendorCost`, `defaultAgentCommission`).
 - **sales_agents** – agents for checkout (`agentName`, `idNum`, bank details, etc.); deals store `agentId` for sales counts.
 - **org_pricing_policies** – legacy org bulk price lists (`relatedProducts[]`).
 - **deals** – subscribers / payments; includes **`agentId`** when resolved from checkout.
@@ -71,8 +72,12 @@ npm start
 | PUT/DELETE | /api/admin/vendors/:id | Update or delete vendor |
 | GET | /api/admin/vendor-cost | Query `vendorId` + `productId` → auto `vendorCost` / `sku` |
 | GET | /api/vendor-products/:vendorId/:productId | Same as above (path params; requires admin Bearer) |
-| GET/POST | /api/admin/pricing-entries | Price-list rows (retail, vendor cost, profit) |
-| PUT/DELETE | /api/admin/pricing-entries/:id | Update or delete a price-list row |
+| GET/POST | /api/admin/pricing-entries | Legacy single-row pricing entries |
+| PUT/DELETE | /api/admin/pricing-entries/:id | Update or delete a pricing entry |
+| GET/POST | /api/admin/price-lists | Multi-product price lists (landing pages) |
+| GET/PUT/DELETE | /api/admin/price-lists/:id | Get / update / delete a price list |
+| GET | /api/public/price-list/:id | **Public** – product names, descriptions, retail only (no vendor/agent internals) |
+| GET | /api/admin/subscribers-dashboard | Same filters as legacy sales-dashboard + `productNameSearch`, `agentNameSearch`; includes `totalNetProfit` |
 | GET/POST | /api/admin/agents | List / create sales agents |
 | PUT/DELETE | /api/admin/agents/:id | Update or delete agent (delete blocked if deals reference agent) |
 | GET | /api/public/agents | Agents list for checkout dropdown (`id`, `agentName`) |

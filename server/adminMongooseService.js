@@ -117,6 +117,14 @@ pricingEntrySchema.pre('save', async function pricingEntryPreSave() {
   this.profit = this.netProfit;
 });
 
+const agentProductCommissionSchema = new mongoose.Schema(
+  {
+    productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+    commission: { type: Number, required: true, min: 0, default: 0 },
+  },
+  { _id: false }
+);
+
 const salesAgentSchema = new mongoose.Schema(
   {
     agentName: { type: String, required: true, trim: true },
@@ -131,6 +139,8 @@ const salesAgentSchema = new mongoose.Schema(
       branchNum: { type: String, default: '' },
       accountNum: { type: String, default: '' },
     },
+    /** עמלה ייחודית לכל מוצר (משמש בדוחות רווח) */
+    productCommissions: { type: [agentProductCommissionSchema], default: [] },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
   },
@@ -178,6 +188,54 @@ orgPricingPolicySchema.pre('save', async function orgPricingPreSave() {
     line.agentCommission = ac;
     line.profitBeforeAgent = retail - vendor;
     line.netProfit = retail - vendor - ac;
+    line.profit = line.netProfit;
+  }
+  this.updatedAt = new Date();
+});
+
+/** מחירון רב-מוצרי לדפי נחיתה (שורות עם עלות ספק ועמלה ברירת מחדל) */
+const priceListLineSchema = new mongoose.Schema(
+  {
+    vendorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vendor', required: true },
+    productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+    retailPrice: { type: Number, required: true, min: 0, default: 0 },
+    vendorCost: { type: Number, required: true, min: 0, default: 0 },
+    /** כשאין עמלה מוגדרת בפרופיל הסוכן למוצר */
+    defaultAgentCommission: { type: Number, default: 0, min: 0 },
+    profitBeforeAgent: { type: Number, default: 0 },
+    netProfit: { type: Number, default: 0 },
+    profit: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
+const priceListSchema = new mongoose.Schema(
+  {
+    listName: { type: String, required: true, trim: true },
+    orgName: { type: String, default: '' },
+    lines: { type: [priceListLineSchema], default: [] },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+  },
+  { versionKey: false }
+);
+
+priceListSchema.pre('save', async function priceListPreSave() {
+  const lines = this.lines || [];
+  for (const line of lines) {
+    const retail = Number(line.retailPrice || 0);
+    line.retailPrice = retail;
+    let vendor = Number(line.vendorCost ?? NaN);
+    if (Number.isNaN(vendor) && line.vendorId && line.productId) {
+      const vc = await getVendorCostForProduct(line.vendorId, line.productId);
+      vendor = vc ? vc.vendorCost : 0;
+    }
+    if (Number.isNaN(vendor)) vendor = 0;
+    line.vendorCost = vendor;
+    const dac = Number(line.defaultAgentCommission || 0);
+    line.defaultAgentCommission = dac;
+    line.profitBeforeAgent = retail - vendor;
+    line.netProfit = retail - vendor - dac;
     line.profit = line.netProfit;
   }
   this.updatedAt = new Date();
@@ -252,6 +310,8 @@ const Vendor = mongoose.models.Vendor || mongoose.model('Vendor', vendorSchema, 
 const PricingEntry = mongoose.models.PricingEntry || mongoose.model('PricingEntry', pricingEntrySchema, 'pricing_entries');
 
 const SalesAgent = mongoose.models.SalesAgent || mongoose.model('SalesAgent', salesAgentSchema, 'sales_agents');
+
+const PriceList = mongoose.models.PriceList || mongoose.model('PriceList', priceListSchema, 'price_lists');
 
 /** @deprecated — legacy flat pricing row */
 export async function createOrganizationPricing(payload) {
@@ -343,6 +403,9 @@ export async function deleteProduct(id) {
   await ensureConnection();
   if (!mongoose.isValidObjectId(id)) throw new Error('Invalid product id');
   const oid = new mongoose.Types.ObjectId(id);
+  const pl = await PriceList.findOne({ 'lines.productId': oid }).lean();
+  if (pl) throw new Error('לא ניתן למחוק מוצר המשויך למחירון דינמי — עדכנו את המחירון תחילה');
+  await SalesAgent.updateMany({}, { $pull: { productCommissions: { productId: oid } } });
   await Vendor.updateMany({}, { $pull: { productLinks: { productId: oid } } });
   await PricingEntry.deleteMany({ productId: oid });
   await OrgPricingPolicy.updateMany({}, { $pull: { relatedProducts: { productId: oid } } });
@@ -466,6 +529,8 @@ export async function deleteVendor(id) {
   const oid = new mongoose.Types.ObjectId(id);
   const pe = await PricingEntry.findOne({ vendorId: oid }).lean();
   if (pe) throw new Error('לא ניתן למחוק ספק המשויך לשורות מחירון');
+  const pl = await PriceList.findOne({ 'lines.vendorId': oid }).lean();
+  if (pl) throw new Error('לא ניתן למחוק ספק המשויך למחירון דינמי');
   const op = await OrgPricingPolicy.findOne({ 'relatedProducts.vendorId': oid }).lean();
   if (op) throw new Error('לא ניתן למחוק ספק המשויך למחירון ארגון');
   const r = await Vendor.findByIdAndDelete(oid);
@@ -504,6 +569,258 @@ export async function getVendorCostForProduct(vendorId, productId) {
     vendorCost: Number(line.vendorCost || 0),
     sku,
     vendorName: v.vendorName,
+  };
+}
+
+/** סכומי תשלום legacy (דף הבית הישן) */
+const LEGACY_PLAN_AMOUNTS = { 'plan-a': 59, 'plan-b': 29, 'plan-fg': 0 };
+
+/** עמלת סוכן למוצר: אם הוגדרה בפרופיל — משתמשים בה; אחרת ברירת מחירון */
+export async function getAgentCommissionForProduct(agentId, productId, lineDefaultCommission = 0) {
+  await ensureConnection();
+  const def = Number(lineDefaultCommission || 0);
+  if (!mongoose.isValidObjectId(agentId) || !mongoose.isValidObjectId(productId)) return def;
+  const a = await SalesAgent.findById(agentId).select('productCommissions').lean();
+  if (!a) return def;
+  const t = new mongoose.Types.ObjectId(productId).toString();
+  const row = (a.productCommissions || []).find((x) => String(x.productId) === t);
+  if (row) return Number(row.commission ?? 0);
+  return def;
+}
+
+/**
+ * חישוב סכום לחיוב ושדות כלכליים לשמירה ב-deal (עקביות: רווח = קמעוני - ספק - עמלת סוכן)
+ */
+export async function resolveCheckoutEconomics(formState) {
+  await ensureConnection();
+  const fs = formState && typeof formState === 'object' ? formState : {};
+  const priceListId = String(fs.priceListId || '').trim();
+  const productId = String(fs.productId || '').trim();
+
+  if (priceListId && productId && mongoose.isValidObjectId(priceListId) && mongoose.isValidObjectId(productId)) {
+    const pl = await PriceList.findById(priceListId).lean();
+    if (!pl) {
+      return {
+        payerAmount: 0,
+        resolvedVendorCost: 0,
+        resolvedAgentCommission: 0,
+        resolvedNetProfit: 0,
+        productName: '',
+        productId,
+        priceListId,
+      };
+    }
+    const line = (pl.lines || []).find((l) => String(l.productId) === String(productId));
+    if (!line) {
+      return {
+        payerAmount: 0,
+        resolvedVendorCost: 0,
+        resolvedAgentCommission: 0,
+        resolvedNetProfit: 0,
+        productName: '',
+        productId,
+        priceListId,
+      };
+    }
+    const retail = Number(line.retailPrice || 0);
+    const vendorCost = Number(line.vendorCost || 0);
+    const lineDefault = Number(line.defaultAgentCommission || 0);
+    let agentId = String(fs.agentId || '').trim();
+    let agentCommission = lineDefault;
+    if (agentId && mongoose.isValidObjectId(agentId)) {
+      agentCommission = await getAgentCommissionForProduct(agentId, productId, lineDefault);
+    } else {
+      const resolved = await resolveAgentIdFromFormState(fs);
+      if (resolved && mongoose.isValidObjectId(resolved)) {
+        agentId = resolved;
+        agentCommission = await getAgentCommissionForProduct(resolved, productId, lineDefault);
+      }
+    }
+    const net = retail - vendorCost - agentCommission;
+    const p = await Product.findById(productId).select('productName name baseDescription').lean();
+    const productName = p ? String(p.productName || p.name || '').trim() : '';
+    return {
+      payerAmount: retail,
+      resolvedVendorCost: vendorCost,
+      resolvedAgentCommission: agentCommission,
+      resolvedNetProfit: net,
+      productName,
+      productId,
+      priceListId,
+    };
+  }
+
+  const planId = String(fs.selectedPlanId || '');
+  const payerAmount = LEGACY_PLAN_AMOUNTS[planId] ?? 0;
+  const rv = Number(fs.resolvedVendorCost ?? 0);
+  const ra = Number(fs.resolvedAgentCommission ?? 0);
+  return {
+    payerAmount,
+    resolvedVendorCost: Number.isFinite(rv) ? rv : 0,
+    resolvedAgentCommission: Number.isFinite(ra) ? ra : 0,
+    resolvedNetProfit: payerAmount - (Number.isFinite(rv) ? rv : 0) - (Number.isFinite(ra) ? ra : 0),
+    productName: String(fs.productName || ''),
+    productId: fs.productId && mongoose.isValidObjectId(fs.productId) ? String(fs.productId) : '',
+    priceListId: '',
+  };
+}
+
+function serializePriceListDoc(d) {
+  if (!d) return null;
+  const lines = (d.lines || []).map((line) => {
+    const retail = Number(line.retailPrice || 0);
+    const vc = Number(line.vendorCost || 0);
+    const dac = Number(line.defaultAgentCommission || 0);
+    const pba = line.profitBeforeAgent != null ? Number(line.profitBeforeAgent) : retail - vc;
+    const net = line.netProfit != null ? Number(line.netProfit) : pba - dac;
+    return {
+      vendorId: String(line.vendorId),
+      productId: String(line.productId),
+      retailPrice: retail,
+      vendorCost: vc,
+      defaultAgentCommission: dac,
+      profitBeforeAgent: pba,
+      netProfit: net,
+      profit: Number(line.profit ?? net),
+    };
+  });
+  return {
+    id: String(d._id),
+    listName: d.listName,
+    orgName: d.orgName || '',
+    lines,
+    createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
+    updatedAt: d.updatedAt ? new Date(d.updatedAt).toISOString() : null,
+  };
+}
+
+export async function listPriceLists() {
+  await ensureConnection();
+  const docs = await PriceList.find({}).sort({ updatedAt: -1 }).lean();
+  return docs.map((d) => serializePriceListDoc(d));
+}
+
+export async function getPriceListById(id) {
+  await ensureConnection();
+  if (!mongoose.isValidObjectId(id)) return null;
+  const d = await PriceList.findById(id).lean();
+  return serializePriceListDoc(d);
+}
+
+export async function createPriceList(payload) {
+  await ensureConnection();
+  const linesIn = Array.isArray(payload.lines) ? payload.lines : [];
+  const lines = [];
+  for (const row of linesIn) {
+    const vid = row.vendorId;
+    const pid = row.productId;
+    if (!mongoose.isValidObjectId(vid) || !mongoose.isValidObjectId(pid)) continue;
+    let vendorCost = Number(row.vendorCost ?? NaN);
+    if (Number.isNaN(vendorCost)) {
+      const vc = await getVendorCostForProduct(vid, pid);
+      vendorCost = vc ? vc.vendorCost : 0;
+    }
+    const retail = Number(row.retailPrice || 0);
+    const dac = Number(row.defaultAgentCommission || 0);
+    const pba = retail - vendorCost;
+    const net = pba - dac;
+    lines.push({
+      vendorId: vid,
+      productId: pid,
+      retailPrice: retail,
+      vendorCost,
+      defaultAgentCommission: dac,
+      profitBeforeAgent: pba,
+      netProfit: net,
+      profit: net,
+    });
+  }
+  const doc = await PriceList.create({
+    listName: String(payload.listName || '').trim(),
+    orgName: String(payload.orgName || '').trim(),
+    lines,
+  });
+  return { id: String(doc._id) };
+}
+
+export async function updatePriceList(id, payload) {
+  await ensureConnection();
+  if (!mongoose.isValidObjectId(id)) throw new Error('Invalid price list id');
+  const linesIn = Array.isArray(payload.lines) ? payload.lines : [];
+  const lines = [];
+  for (const row of linesIn) {
+    const vid = row.vendorId;
+    const pid = row.productId;
+    if (!mongoose.isValidObjectId(vid) || !mongoose.isValidObjectId(pid)) continue;
+    let vendorCost = Number(row.vendorCost ?? NaN);
+    if (Number.isNaN(vendorCost)) {
+      const vc = await getVendorCostForProduct(vid, pid);
+      vendorCost = vc ? vc.vendorCost : 0;
+    }
+    const retail = Number(row.retailPrice || 0);
+    const dac = Number(row.defaultAgentCommission || 0);
+    const pba = retail - vendorCost;
+    const net = pba - dac;
+    lines.push({
+      vendorId: vid,
+      productId: pid,
+      retailPrice: retail,
+      vendorCost,
+      defaultAgentCommission: dac,
+      profitBeforeAgent: pba,
+      netProfit: net,
+      profit: net,
+    });
+  }
+  const doc = await PriceList.findByIdAndUpdate(
+    id,
+    {
+      $set: {
+        listName: String(payload.listName || '').trim(),
+        orgName: String(payload.orgName || '').trim(),
+        lines,
+        updatedAt: new Date(),
+      },
+    },
+    { new: true, runValidators: true }
+  );
+  if (!doc) throw new Error('Price list not found');
+  return { id: String(doc._id) };
+}
+
+export async function deletePriceList(id) {
+  await ensureConnection();
+  if (!mongoose.isValidObjectId(id)) throw new Error('Invalid id');
+  const r = await PriceList.findByIdAndDelete(id);
+  if (!r) throw new Error('Price list not found');
+  return { ok: true };
+}
+
+/** דף נחיתה ציבורי — ללא עלויות פנימיות */
+export async function getPublicPriceListById(id) {
+  await ensureConnection();
+  if (!mongoose.isValidObjectId(id)) return null;
+  const doc = await PriceList.findById(id).lean();
+  if (!doc) return null;
+  const lines = doc.lines || [];
+  const products = [];
+  for (const line of lines) {
+    const pid = line.productId;
+    const p = await Product.findById(pid).select('productName name baseDescription sku').lean();
+    if (!p) continue;
+    products.push({
+      productId: String(pid),
+      productName: p.productName || p.name || '',
+      baseDescription: p.baseDescription || '',
+      sku: p.sku || '',
+      retailPrice: Number(line.retailPrice || 0),
+    });
+  }
+  return {
+    priceListId: String(doc._id),
+    listName: doc.listName,
+    organizationName: doc.orgName || '',
+    products,
   };
 }
 
@@ -624,6 +941,24 @@ export async function deletePricingEntry(id) {
   return { ok: true };
 }
 
+function normalizeAgentProductCommissions(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const row of raw) {
+    const pid = row?.productId;
+    if (!pid || !mongoose.isValidObjectId(pid)) continue;
+    const key = String(pid);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      productId: new mongoose.Types.ObjectId(pid),
+      commission: Math.max(0, Number(row.commission || 0)),
+    });
+  }
+  return out;
+}
+
 export async function createSalesAgent(payload) {
   await ensureConnection();
   const b = payload.bankDetails || {};
@@ -640,6 +975,7 @@ export async function createSalesAgent(payload) {
       branchNum: String(b.branchNum || '').trim(),
       accountNum: String(b.accountNum || '').trim(),
     },
+    productCommissions: normalizeAgentProductCommissions(payload.productCommissions),
   });
   return { id: String(doc._id) };
 }
@@ -651,6 +987,19 @@ export async function listSalesAgentsWithSales() {
     docs.map(async (d) => {
       const id = String(d._id);
       const totalSales = await countDealsByAgentId(id);
+      const pc = Array.isArray(d.productCommissions) ? d.productCommissions : [];
+      const productCommissions = await Promise.all(
+        pc.map(async (row) => {
+          const pid = row.productId;
+          const p = await Product.findById(pid).select('productName name sku').lean();
+          return {
+            productId: String(pid),
+            commission: Number(row.commission || 0),
+            productName: p ? p.productName || p.name || '' : '',
+            sku: p?.sku || '',
+          };
+        })
+      );
       return {
         id,
         agentName: d.agentName,
@@ -659,6 +1008,7 @@ export async function listSalesAgentsWithSales() {
         email: d.email,
         address: d.address,
         bankDetails: d.bankDetails || {},
+        productCommissions,
         totalSales,
         createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
       };
@@ -687,6 +1037,7 @@ export async function updateSalesAgent(id, payload) {
           branchNum: String(b.branchNum || '').trim(),
           accountNum: String(b.accountNum || '').trim(),
         },
+        productCommissions: normalizeAgentProductCommissions(payload.productCommissions),
         updatedAt: new Date(),
       },
     },

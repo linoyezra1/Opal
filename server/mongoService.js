@@ -244,6 +244,25 @@ function applyCategoryFilters(deals, categories = []) {
   });
 }
 
+/** רווח נקי לפי שדות שנשמרו בעסקה: הכנסה - עלות ספק - עמלת סוכן */
+function economicsFromDeal(d) {
+  const fs = d.formState || {};
+  const rev = Number(d.payerAmount || 0);
+  const vc = Number(fs.resolvedVendorCost ?? 0);
+  const ac = Number(fs.resolvedAgentCommission ?? 0);
+  let net = rev - vc - ac;
+  if (fs.resolvedNetProfit != null && !Number.isNaN(Number(fs.resolvedNetProfit))) {
+    net = Number(fs.resolvedNetProfit);
+  }
+  return {
+    revenue: rev,
+    vendorCost: vc,
+    agentCommission: ac,
+    netProfit: net,
+    productName: String(fs.productName || ''),
+  };
+}
+
 export async function getSalesDashboardData(filters = {}) {
   const db = await getDb();
   const dealsCol = db.collection('deals');
@@ -269,6 +288,12 @@ export async function getSalesDashboardData(filters = {}) {
       { 'formState.id': { $regex: String(filters.idSearch).trim(), $options: 'i' } },
       { 'formState.beneficiaries.id': { $regex: String(filters.idSearch).trim(), $options: 'i' } },
     ];
+  }
+  if (filters.productNameSearch) {
+    match['formState.productName'] = { $regex: String(filters.productNameSearch).trim(), $options: 'i' };
+  }
+  if (filters.agentNameSearch) {
+    match['formState.agentName'] = { $regex: String(filters.agentNameSearch).trim(), $options: 'i' };
   }
 
   const pipeline = [
@@ -296,6 +321,10 @@ export async function getSalesDashboardData(filters = {}) {
 
   const amountDue = Number(filters.amountDue || 0);
   const totalRevenue = shown.reduce((sum, d) => sum + Number(d.payerAmount || 0), 0);
+  const econ = shown.map((d) => economicsFromDeal(d));
+  const totalVendorCost = econ.reduce((s, e) => s + e.vendorCost, 0);
+  const totalAgentCommission = econ.reduce((s, e) => s + e.agentCommission, 0);
+  const totalNetProfitFromDeals = econ.reduce((s, e) => s + e.netProfit, 0);
   const totalPrimary = shown.reduce((sum, d) => sum + Number(d.primaryCount || 0), 0);
   const totalSecondary = shown.reduce((sum, d) => sum + Number(d.secondaryCount || 0), 0);
   const totalActive = shown.reduce((sum, d) => sum + Number(d.activeCustomersCount || 0), 0);
@@ -315,7 +344,12 @@ export async function getSalesDashboardData(filters = {}) {
       centralized_canceled: totalCentralizedCanceled,
       totalRevenue,
       totalExpenses: amountDue,
+      /** legacy: הכנסות פחות "הוצאות ידניות" */
       totalProfit: totalRevenue - amountDue,
+      totalVendorCost,
+      totalAgentCommission,
+      /** רווח אחרי עלות ספק ועמלת סוכן (מומלץ) */
+      totalNetProfit: totalNetProfitFromDeals,
     },
     searchResults: {
       totalTransactions: shown.length,
@@ -327,23 +361,30 @@ export async function getSalesDashboardData(filters = {}) {
       providers: [...new Set(enriched.map((d) => d.provider).filter(Boolean))],
       agents: [...new Set(enriched.map((d) => d.agentName).filter(Boolean))],
     },
-    rows: shown.slice(0, 500).map((d) => ({
-      id: String(d._id),
-      transactionId: d.transactionId || '',
-      status: d.isCanceled ? 'canceled' : 'paid',
-      paymentStatus: d.paymentStatus || '',
-      fullName: d.formState?.fullName || '',
-      idNumber: d.formState?.id || '',
-      organizationName: d.organizationName || '',
-      provider: d.provider || '',
-      agentName: d.agentName || '',
-      planType: d.formState?.selectedPlanId || '',
-      amount: Number(d.payerAmount || 0),
-      primaryCount: d.primaryCount,
-      secondaryCount: d.secondaryCount,
-      activeCustomersCount: d.activeCustomersCount,
-      createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : null,
-      raw: d,
-    })),
+    rows: shown.slice(0, 500).map((d) => {
+      const e = economicsFromDeal(d);
+      return {
+        id: String(d._id),
+        transactionId: d.transactionId || '',
+        status: d.isCanceled ? 'canceled' : 'paid',
+        paymentStatus: d.paymentStatus || '',
+        fullName: d.formState?.fullName || '',
+        idNumber: d.formState?.id || '',
+        organizationName: d.organizationName || '',
+        provider: d.provider || '',
+        agentName: d.agentName || '',
+        planType: d.formState?.selectedPlanId || '',
+        productName: e.productName,
+        vendorCost: e.vendorCost,
+        agentCommission: e.agentCommission,
+        netProfit: e.netProfit,
+        amount: Number(d.payerAmount || 0),
+        primaryCount: d.primaryCount,
+        secondaryCount: d.secondaryCount,
+        activeCustomersCount: d.activeCustomersCount,
+        createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : null,
+        raw: d,
+      };
+    }),
   };
 }

@@ -5,81 +5,43 @@ import ConfirmDialog from '../components/ConfirmDialog.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
+const emptyLine = () => ({
+  vendorId: '',
+  productId: '',
+  retailPrice: '',
+  defaultAgentCommission: '',
+  vendorCost: '',
+});
+
 export default function PricingDashboard() {
   const [token] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [products, setProducts] = useState([]);
   const [vendors, setVendors] = useState([]);
-  const [entries, setEntries] = useState([]);
-  const [pricingName, setPricingName] = useState('');
-  const [vendorId, setVendorId] = useState('');
-  const [productId, setProductId] = useState('');
-  const [orgName, setOrgName] = useState('');
-  const [retailPrice, setRetailPrice] = useState('');
-  const [vendorCost, setVendorCost] = useState('');
-  const [agentCommission, setAgentCommission] = useState('');
-  const [sku, setSku] = useState('');
-  const [costLoading, setCostLoading] = useState(false);
-  const [costError, setCostError] = useState('');
+  const [lists, setLists] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [editEntry, setEditEntry] = useState(null);
-  const [deleteEntry, setDeleteEntry] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [listName, setListName] = useState('');
+  const [orgName, setOrgName] = useState('');
+  const [lines, setLines] = useState([emptyLine()]);
+  const [deleteId, setDeleteId] = useState(null);
 
-  const profitBeforeAgent = useMemo(() => {
-    const r = Number(retailPrice || 0);
-    const v = Number(vendorCost || 0);
-    return r - v;
-  }, [retailPrice, vendorCost]);
-
-  const netProfit = useMemo(() => profitBeforeAgent - Number(agentCommission || 0), [profitBeforeAgent, agentCommission]);
-
-  const editProfitBefore = useMemo(() => {
-    if (!editEntry) return 0;
-    return Number(editEntry.retailPrice || 0) - Number(editEntry.vendorCost || 0);
-  }, [editEntry]);
-
-  const editNetProfit = useMemo(() => editProfitBefore - Number(editEntry?.agentCommission || 0), [editProfitBefore, editEntry]);
-
-  const fetchVendorProductCost = useCallback(
-    async (vid, pid, onSuccess) => {
-      if (!token || !vid || !pid) {
-        onSuccess({ vendorCost: '', sku: '', error: '' });
-        return;
-      }
-      setCostLoading(true);
-      setCostError('');
-      try {
-        const res = await fetch(`${API_BASE}/api/vendor-products/${encodeURIComponent(vid)}/${encodeURIComponent(pid)}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.success) {
-          onSuccess({ vendorCost: '', sku: '', error: data.error || 'לא נמצאה התאמה' });
-          return;
-        }
-        onSuccess({ vendorCost: String(data.vendorCost ?? ''), sku: data.sku || '', error: '' });
-      } catch {
-        onSuccess({ vendorCost: '', sku: '', error: 'שגיאת רשת' });
-      } finally {
-        setCostLoading(false);
-      }
-    },
-    [token]
-  );
+  const landingBase = useMemo(() => `${window.location.origin}/landing`, []);
 
   async function loadAll() {
     if (!token) return;
     setLoading(true);
     setError('');
     try {
-      const [pr, vn, en] = await Promise.all([
+      const [pr, vn, ls] = await Promise.all([
         fetch(`${API_BASE}/api/admin/products`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/vendors`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
-        fetch(`${API_BASE}/api/admin/pricing-entries`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+        fetch(`${API_BASE}/api/admin/price-lists`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
       ]);
       if (pr.success) setProducts(pr.products || []);
       if (vn.success) setVendors(vn.vendors || []);
-      if (en.success) setEntries(en.entries || []);
+      if (ls.success) setLists(ls.lists || []);
     } catch (e) {
       setError(e.message || 'שגיאה');
     } finally {
@@ -91,103 +53,112 @@ export default function PricingDashboard() {
     loadAll();
   }, [token]);
 
-  useEffect(() => {
-    if (!vendorId || !productId) {
-      setVendorCost('');
-      setSku('');
-      setCostError('');
-      return;
-    }
-    fetchVendorProductCost(vendorId, productId, ({ vendorCost: vc, sku: sk, error: err }) => {
-      setVendorCost(vc);
-      setSku(sk);
-      setCostError(err || '');
-    });
-  }, [vendorId, productId, fetchVendorProductCost]);
-
-  useEffect(() => {
-    if (!editEntry?.vendorId || !editEntry?.productId) return;
-    const entryId = editEntry.id;
-    const vid = editEntry.vendorId;
-    const pid = editEntry.productId;
-    let cancelled = false;
-    (async () => {
+  const fetchLineCost = useCallback(
+    async (index, vendorId, productId) => {
+      if (!token || !vendorId || !productId) return;
       try {
-        const res = await fetch(`${API_BASE}/api/vendor-products/${encodeURIComponent(vid)}/${encodeURIComponent(pid)}`, {
+        const res = await fetch(`${API_BASE}/api/vendor-products/${encodeURIComponent(vendorId)}/${encodeURIComponent(productId)}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json().catch(() => ({}));
-        if (cancelled) return;
         if (res.ok && data.success) {
-          setEditEntry((e) =>
-            e && e.id === entryId ? { ...e, vendorCost: String(data.vendorCost ?? e.vendorCost), sku: data.sku || e.sku, costError: '' } : e
-          );
-        } else {
-          setEditEntry((e) => (e && e.id === entryId ? { ...e, costError: data.error || 'לא נמצאה התאמה' } : e));
+          setLines((prev) => {
+            const next = [...prev];
+            if (!next[index]) return prev;
+            next[index] = { ...next[index], vendorCost: String(data.vendorCost ?? '') };
+            return next;
+          });
         }
       } catch {
-        if (!cancelled) setEditEntry((e) => (e && e.id === entryId ? { ...e, costError: 'שגיאת רשת' } : e));
+        /* ignore */
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [editEntry?.id, editEntry?.vendorId, editEntry?.productId, token]);
+    },
+    [token]
+  );
 
-  async function submit(e) {
+  function openNew() {
+    setEditId(null);
+    setListName('');
+    setOrgName('');
+    setLines([emptyLine()]);
+    setShowModal(true);
+  }
+
+  function openEdit(row) {
+    setEditId(row.id);
+    setListName(row.listName || '');
+    setOrgName(row.orgName || '');
+    const mapped =
+      (row.lines || []).length > 0
+        ? row.lines.map((l) => ({
+            vendorId: l.vendorId,
+            productId: l.productId,
+            retailPrice: String(l.retailPrice ?? ''),
+            defaultAgentCommission: String(l.defaultAgentCommission ?? ''),
+            vendorCost: String(l.vendorCost ?? ''),
+          }))
+        : [emptyLine()];
+    setLines(mapped);
+    setShowModal(true);
+    setTimeout(() => {
+      mapped.forEach((l, i) => {
+        if (l.vendorId && l.productId) fetchLineCost(i, l.vendorId, l.productId);
+      });
+    }, 50);
+  }
+
+  function updateLine(i, field, value) {
+    setLines((prev) => {
+      const next = [...prev];
+      const cur = { ...next[i], [field]: value };
+      next[i] = cur;
+      const vid = field === 'vendorId' ? value : cur.vendorId;
+      const pid = field === 'productId' ? value : cur.productId;
+      if (vid && pid) {
+        queueMicrotask(() => fetchLineCost(i, vid, pid));
+      }
+      return next;
+    });
+  }
+
+  function addLine() {
+    setLines((prev) => [...prev, emptyLine()]);
+  }
+
+  function removeLine(i) {
+    setLines((prev) => prev.filter((_, j) => j !== i));
+  }
+
+  async function saveList(e) {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${API_BASE}/api/admin/pricing-entries`, {
-        method: 'POST',
+      const body = {
+        listName,
+        orgName,
+        lines: lines
+          .filter((l) => l.vendorId && l.productId)
+          .map((l) => ({
+            vendorId: l.vendorId,
+            productId: l.productId,
+            retailPrice: Number(l.retailPrice || 0),
+            defaultAgentCommission: Number(l.defaultAgentCommission || 0),
+            vendorCost: l.vendorCost === '' ? undefined : Number(l.vendorCost),
+          })),
+      };
+      if (!body.lines.length) {
+        throw new Error('יש להוסיף לפחות מוצר אחד עם ספק');
+      }
+      const url = editId ? `${API_BASE}/api/admin/price-lists/${editId}` : `${API_BASE}/api/admin/price-lists`;
+      const res = await fetch(url, {
+        method: editId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          pricingName,
-          vendorId,
-          productId,
-          orgName,
-          retailPrice: Number(retailPrice || 0),
-          vendorCost: vendorCost === '' ? undefined : Number(vendorCost),
-          agentCommission: Number(agentCommission || 0),
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.error || 'שמירה נכשלה');
-      setPricingName('');
-      setOrgName('');
-      setRetailPrice('');
-      setAgentCommission('');
-      await loadAll();
-    } catch (e2) {
-      setError(e2.message || 'שגיאה');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function saveEdit(e) {
-    e.preventDefault();
-    if (!editEntry?.id) return;
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/pricing-entries/${editEntry.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          pricingName: editEntry.pricingName,
-          vendorId: editEntry.vendorId,
-          productId: editEntry.productId,
-          orgName: editEntry.orgName,
-          retailPrice: Number(editEntry.retailPrice || 0),
-          vendorCost: Number(editEntry.vendorCost || 0),
-          agentCommission: Number(editEntry.agentCommission || 0),
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) throw new Error(data.error || 'עדכון נכשל');
-      setEditEntry(null);
+      setShowModal(false);
       await loadAll();
     } catch (e2) {
       setError(e2.message || 'שגיאה');
@@ -197,37 +168,22 @@ export default function PricingDashboard() {
   }
 
   async function confirmDelete() {
-    if (!deleteEntry?.id) return;
+    if (!deleteId) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/admin/pricing-entries/${deleteEntry.id}`, {
+      const res = await fetch(`${API_BASE}/api/admin/price-lists/${deleteId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.error || 'מחיקה נכשלה');
-      setDeleteEntry(null);
+      setDeleteId(null);
       await loadAll();
     } catch (e2) {
       setError(e2.message || 'שגיאה');
     } finally {
       setLoading(false);
     }
-  }
-
-  function openEdit(row) {
-    setEditEntry({
-      id: row.id,
-      pricingName: row.pricingName,
-      orgName: row.orgName || '',
-      vendorId: row.vendor?.id || '',
-      productId: row.product?.id || '',
-      retailPrice: String(row.retailPrice ?? ''),
-      vendorCost: String(row.vendorCost ?? ''),
-      agentCommission: String(row.agentCommission ?? 0),
-      sku: row.product?.sku || '',
-      costError: '',
-    });
   }
 
   if (!token) {
@@ -244,106 +200,109 @@ export default function PricingDashboard() {
   return (
     <div dir="rtl" className="min-h-screen bg-slate-50 p-4 sm:p-8">
       <ConfirmDialog
-        open={!!deleteEntry}
-        title="מחיקת שורת מחיר"
-        message={deleteEntry ? `למחוק את "${deleteEntry.pricingName}"?` : ''}
+        open={!!deleteId}
+        title="מחיקת מחירון"
+        message="למחוק מחירון זה? דפי נחיתה שמקשרים אליו יפסיקו לעבוד."
         confirmLabel="מחק"
         danger
         onConfirm={confirmDelete}
-        onCancel={() => setDeleteEntry(null)}
+        onCancel={() => setDeleteId(null)}
       />
 
-      {editEntry ? (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/50 overflow-y-auto" onClick={() => setEditEntry(null)}>
-          <div className="bg-white rounded-xl border max-w-lg w-full p-6 shadow-xl my-8" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-xl font-bold text-medical-blue-dark mb-4">עריכת שורת מחיר</h2>
-            <form onSubmit={saveEdit} className="space-y-3">
-              <div>
-                <label className="text-xs text-slate-500">שם מחירון</label>
-                <input className="w-full border rounded-lg px-3 py-2 mt-1" value={editEntry.pricingName} onChange={(e) => setEditEntry((x) => ({ ...x, pricingName: e.target.value }))} required />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500">ארגון</label>
-                <input className="w-full border rounded-lg px-3 py-2 mt-1" value={editEntry.orgName} onChange={(e) => setEditEntry((x) => ({ ...x, orgName: e.target.value }))} />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500">ספק</label>
-                <select
-                  className="w-full border rounded-lg px-3 py-2 mt-1 bg-white"
-                  value={editEntry.vendorId}
-                  onChange={(e) => setEditEntry((x) => ({ ...x, vendorId: e.target.value }))}
-                  required
-                >
-                  {vendors.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.vendorName}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-slate-500">מוצר</label>
-                <select
-                  className="w-full border rounded-lg px-3 py-2 mt-1 bg-white"
-                  value={editEntry.productId}
-                  onChange={(e) => setEditEntry((x) => ({ ...x, productId: e.target.value }))}
-                  required
-                >
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.productName || p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-slate-500">מק&quot;ט</label>
-                <input className="w-full border rounded-lg px-3 py-2 mt-1 bg-slate-50 font-mono" readOnly value={editEntry.sku} />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500">עלות ספק</label>
-                <input
-                  className="w-full border rounded-lg px-3 py-2 mt-1 bg-white"
-                  value={editEntry.vendorCost}
-                  onChange={(e) => setEditEntry((x) => ({ ...x, vendorCost: e.target.value }))}
-                />
-              </div>
-              {editEntry.costError ? <p className="text-xs text-amber-700">{editEntry.costError}</p> : null}
-              <div>
-                <label className="text-xs text-slate-500">מחיר קמעוני</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  className="w-full border rounded-lg px-3 py-2 mt-1"
-                  value={editEntry.retailPrice}
-                  onChange={(e) => setEditEntry((x) => ({ ...x, retailPrice: e.target.value }))}
-                  required
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500">עמלת סוכן</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  className="w-full border rounded-lg px-3 py-2 mt-1"
-                  value={editEntry.agentCommission}
-                  onChange={(e) => setEditEntry((x) => ({ ...x, agentCommission: e.target.value }))}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
+      {showModal ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/50 overflow-y-auto" onClick={() => setShowModal(false)}>
+          <div className="bg-white rounded-xl border max-w-3xl w-full p-6 shadow-xl my-8 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-xl font-bold text-medical-blue-dark mb-4">{editId ? 'עריכת מחירון' : 'מחירון חדש'}</h2>
+            <form onSubmit={saveList} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-slate-500">רווח לפני סוכן</label>
-                  <input className="w-full border rounded-lg px-3 py-2 bg-blue-50 font-semibold" readOnly value={editProfitBefore} />
+                  <label className="text-xs text-slate-500">שם מחירון *</label>
+                  <input className="w-full border rounded-lg px-3 py-2 mt-1" value={listName} onChange={(e) => setListName(e.target.value)} required />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-500">נקי</label>
-                  <input className="w-full border rounded-lg px-3 py-2 bg-emerald-50 font-bold" readOnly value={editNetProfit} />
+                  <label className="text-xs text-slate-500">שם ארגון (אופציונלי)</label>
+                  <input className="w-full border rounded-lg px-3 py-2 mt-1" value={orgName} onChange={(e) => setOrgName(e.target.value)} />
                 </div>
               </div>
-              <div className="flex gap-2 justify-end pt-2">
-                <button type="button" onClick={() => setEditEntry(null)} className="px-4 py-2 rounded-lg bg-slate-200">
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-semibold">מוצרים במחירון</h3>
+                  <button type="button" onClick={addLine} className="text-sm text-medical-blue font-semibold">
+                    + שורה
+                  </button>
+                </div>
+                {lines.map((line, i) => (
+                  <div key={i} className="border rounded-lg p-3 grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
+                    <div>
+                      <label className="text-xs text-slate-500">ספק</label>
+                      <select
+                        className="w-full border rounded-lg px-2 py-2 mt-1 bg-white text-sm"
+                        value={line.vendorId}
+                        onChange={(e) => updateLine(i, 'vendorId', e.target.value)}
+                        required
+                      >
+                        <option value="">—</option>
+                        {vendors.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.vendorName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500">מוצר</label>
+                      <select
+                        className="w-full border rounded-lg px-2 py-2 mt-1 bg-white text-sm"
+                        value={line.productId}
+                        onChange={(e) => updateLine(i, 'productId', e.target.value)}
+                        required
+                      >
+                        <option value="">—</option>
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.productName || p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500">מחיר קמעוני</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className="w-full border rounded-lg px-2 py-2 mt-1"
+                        value={line.retailPrice}
+                        onChange={(e) => updateLine(i, 'retailPrice', e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500">עמלת סוכן (ברירת מחדל)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className="w-full border rounded-lg px-2 py-2 mt-1"
+                        value={line.defaultAgentCommission}
+                        onChange={(e) => updateLine(i, 'defaultAgentCommission', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500">עלות ספק (מהמסד)</label>
+                      <input className="w-full border rounded-lg px-2 py-2 mt-1 bg-slate-50 text-sm" readOnly value={line.vendorCost} placeholder="—" />
+                    </div>
+                    <div>
+                      <button type="button" onClick={() => removeLine(i)} className="text-red-600 text-sm py-2">
+                        הסר
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {error ? <p className="text-red-600 text-sm">{error}</p> : null}
+              <div className="flex gap-2 justify-end">
+                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 rounded-lg bg-slate-200">
                   ביטול
                 </button>
                 <button type="submit" disabled={loading} className="px-4 py-2 rounded-lg bg-medical-blue text-white">
@@ -357,19 +316,21 @@ export default function PricingDashboard() {
 
       <div className="max-w-5xl mx-auto space-y-6">
         <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-          פיתוח: הגדירי <code className="bg-white px-1">VITE_API_URL=http://localhost:3001</code> ב־<code className="bg-white px-1">.env</code> אם הפרונט והשרת על פורטים שונים.
+          מחירון זה מגדיר מספר מוצרים תחת שם אחד — משמש ליצירת{' '}
+          <strong>דף נחיתה</strong> בכתובת <code className="bg-white px-1">/landing/מזהה-מחירון</code>. ודאי ש־
+          <code className="bg-white px-1">VITE_API_URL</code> מצביע על שרת ה-API.
         </p>
         <div className="flex flex-wrap justify-between gap-2">
-          <h1 className="text-2xl font-bold text-medical-blue-dark">דשבורד מחירון</h1>
+          <h1 className="text-2xl font-bold text-medical-blue-dark">מחירון (דפי נחיתה)</h1>
           <div className="flex gap-2 flex-wrap">
+            <button type="button" onClick={openNew} className="px-4 py-2 rounded-lg bg-medical-blue text-white text-sm">
+              + מחירון חדש
+            </button>
             <Link to="/admin/vendors" className="px-4 py-2 rounded-lg bg-amber-700 text-white text-sm">
               ספקים
             </Link>
             <Link to="/admin/products" className="px-4 py-2 rounded-lg bg-emerald-700 text-white text-sm">
               מוצרים
-            </Link>
-            <Link to="/admin/pricing" className="px-4 py-2 rounded-lg bg-slate-300 text-sm">
-              מחירון ארגונים
             </Link>
             <Link to="/admin" className="px-4 py-2 rounded-lg bg-slate-200 text-sm">
               חזרה
@@ -377,129 +338,49 @@ export default function PricingDashboard() {
           </div>
         </div>
 
-        <form onSubmit={submit} className="bg-white rounded-xl border p-4 sm:p-6 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-slate-500">שם מחירון *</label>
-              <input className="w-full border rounded-lg px-3 py-2" value={pricingName} onChange={(e) => setPricingName(e.target.value)} required />
-            </div>
-            <div>
-              <label className="text-xs text-slate-500">שם ארגון (אופציונלי)</label>
-              <input className="w-full border rounded-lg px-3 py-2" value={orgName} onChange={(e) => setOrgName(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs text-slate-500">ספק *</label>
-              <select className="w-full border rounded-lg px-3 py-2 bg-white" value={vendorId} onChange={(e) => setVendorId(e.target.value)} required>
-                <option value="">— בחרו ספק —</option>
-                {vendors.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.vendorName}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-slate-500">מוצר *</label>
-              <select className="w-full border rounded-lg px-3 py-2 bg-white" value={productId} onChange={(e) => setProductId(e.target.value)} required>
-                <option value="">— בחרו מוצר —</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.productName || p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-slate-500">מק&quot;ט (אוטומטי)</label>
-              <input className="w-full border rounded-lg px-3 py-2 bg-white text-slate-900 font-mono" readOnly value={sku} placeholder={costLoading ? 'טוען…' : '—'} />
-            </div>
-            <div>
-              <label className="text-xs text-slate-500">עלות ספק (₪) — מהמסד</label>
-              <input
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white text-slate-900 font-semibold"
-                readOnly
-                value={costLoading ? 'טוען…' : vendorCost !== '' ? vendorCost : ''}
-                placeholder={costError ? '—' : 'בחרו ספק + מוצר'}
-              />
-              {costError ? <p className="text-xs text-amber-700 mt-1">{costError}</p> : null}
-            </div>
-            <div>
-              <label className="text-xs text-slate-500">מחיר קמעוני (₪) *</label>
-              <input type="number" min="0" step="0.01" className="w-full border rounded-lg px-3 py-2" value={retailPrice} onChange={(e) => setRetailPrice(e.target.value)} required />
-            </div>
-            <div>
-              <label className="text-xs text-slate-500">עמלת סוכן (₪)</label>
-              <input type="number" min="0" step="0.01" className="w-full border rounded-lg px-3 py-2" value={agentCommission} onChange={(e) => setAgentCommission(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs text-slate-500">רווח לפני סוכן</label>
-              <input className="w-full border rounded-lg px-3 py-2 bg-blue-50 font-semibold text-blue-900" readOnly value={Number.isFinite(profitBeforeAgent) ? profitBeforeAgent : ''} />
-            </div>
-            <div>
-              <label className="text-xs text-slate-500">רווח נקי (אחרי סוכן)</label>
-              <input className="w-full border rounded-lg px-3 py-2 bg-emerald-50 font-bold text-emerald-900" readOnly value={Number.isFinite(netProfit) ? netProfit : ''} />
-            </div>
-          </div>
-          {error ? <p className="text-red-600 text-sm">{error}</p> : null}
-          <button type="submit" disabled={loading} className="px-5 py-2 rounded-lg bg-medical-blue text-white">
-            {loading ? 'שומר...' : 'שמירת שורת מחיר'}
-          </button>
-        </form>
+        {error && !showModal ? <p className="text-red-600 text-sm">{error}</p> : null}
 
-        <div className="bg-white rounded-xl border p-4">
-          <h2 className="font-semibold text-lg mb-3">שורות מחיר שמורות</h2>
-          <div className="overflow-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-slate-100">
-                <tr>
-                  <th className="p-2 text-right">מחירון</th>
-                  <th className="p-2 text-right">ארגון</th>
-                  <th className="p-2 text-right">ספק</th>
-                  <th className="p-2 text-right">מוצר</th>
-                  <th className="p-2 text-right">קמעוני</th>
-                  <th className="p-2 text-right">ספק</th>
-                  <th className="p-2 text-right">עמלת סוכן</th>
-                  <th className="p-2 text-right">לפני סוכן</th>
-                  <th className="p-2 text-right">נקי</th>
-                  <th className="p-2 text-right">תאריך</th>
-                  <th className="p-2 text-right">פעולות</th>
+        <div className="bg-white rounded-xl border overflow-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-100">
+              <tr>
+                <th className="p-2 text-right">שם מחירון</th>
+                <th className="p-2 text-right">ארגון</th>
+                <th className="p-2 text-right">מוצרים</th>
+                <th className="p-2 text-right">קישור דף נחיתה</th>
+                <th className="p-2 text-right">פעולות</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lists.map((row) => (
+                <tr key={row.id} className="border-t">
+                  <td className="p-2 font-medium">{row.listName}</td>
+                  <td className="p-2">{row.orgName || '—'}</td>
+                  <td className="p-2">{(row.lines || []).length}</td>
+                  <td className="p-2">
+                    <code className="text-xs bg-slate-100 px-1 rounded break-all">
+                      {landingBase}/{row.id}
+                    </code>
+                  </td>
+                  <td className="p-2 whitespace-nowrap">
+                    <button type="button" onClick={() => openEdit(row)} className="text-medical-blue font-semibold ml-2">
+                      עריכה
+                    </button>
+                    <button type="button" onClick={() => setDeleteId(row.id)} className="text-red-600 font-semibold">
+                      מחק
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {entries.map((row) => (
-                  <tr key={row.id} className="border-t">
-                    <td className="p-2">{row.pricingName}</td>
-                    <td className="p-2">{row.orgName || '—'}</td>
-                    <td className="p-2">{row.vendor?.vendorName}</td>
-                    <td className="p-2">
-                      {row.product?.productName} ({row.product?.sku})
-                    </td>
-                    <td className="p-2">₪{row.retailPrice}</td>
-                    <td className="p-2">₪{row.vendorCost}</td>
-                    <td className="p-2">₪{row.agentCommission ?? 0}</td>
-                    <td className="p-2">₪{row.profitBeforeAgent ?? 0}</td>
-                    <td className="p-2 font-semibold text-emerald-700">₪{row.netProfit ?? row.profit ?? 0}</td>
-                    <td className="p-2 text-xs whitespace-nowrap">{row.createdAt ? new Date(row.createdAt).toLocaleString('he-IL') : '—'}</td>
-                    <td className="p-2 whitespace-nowrap">
-                      <button type="button" onClick={() => openEdit(row)} className="text-medical-blue font-semibold ml-2">
-                        עריכה
-                      </button>
-                      <button type="button" onClick={() => setDeleteEntry(row)} className="text-red-600 font-semibold">
-                        מחק
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {!entries.length ? (
-                  <tr>
-                    <td colSpan={11} className="p-4 text-slate-500">
-                      אין שורות
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
+              ))}
+              {!lists.length ? (
+                <tr>
+                  <td colSpan={5} className="p-6 text-slate-500 text-center">
+                    אין מחירונים — צרי מחירון חדש
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
