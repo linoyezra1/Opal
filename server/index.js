@@ -17,6 +17,9 @@ import {
   getContactLeads,
   getOrganizationLeads,
   getPaymentArrearsDeals,
+  getControlPanelOverviewStats,
+  updateDealAdmin,
+  deleteDealAdmin,
 } from './mongoService.js';
 import {
   createOrgPricingPolicy,
@@ -840,15 +843,16 @@ app.get('/api/admin/org-pricing', requireAdmin, async (req, res) => {
   }
 });
 
-/** Aggregated dashboard: abandoned carts, arrears, leads, registered org pricings */
+/** Aggregated dashboard: abandoned carts, arrears, leads, registered org pricings + MongoDB overview stats */
 app.get('/api/admin/control-panel', requireAdmin, async (req, res) => {
   try {
-    const [abandonedCarts, paymentArrears, privateLeads, corporateLeads, registeredOrganizations] = await Promise.all([
+    const [abandonedCarts, paymentArrears, privateLeads, corporateLeads, registeredOrganizations, overview] = await Promise.all([
       listIncompleteCheckoutDrafts(150),
       getPaymentArrearsDeals(150),
       getContactLeads(150),
       getOrganizationLeads(150),
       listOrgPricingPolicies(),
+      getControlPanelOverviewStats(),
     ]);
     res.json({
       success: true,
@@ -857,10 +861,32 @@ app.get('/api/admin/control-panel', requireAdmin, async (req, res) => {
       privateLeads,
       corporateLeads,
       registeredOrganizations,
+      overview,
     });
   } catch (e) {
     console.error(`[${ts()}] admin/control-panel error:`, e);
     res.status(500).json({ success: false, error: 'Failed to load control panel' });
+  }
+});
+
+/** עדכון עסקה (מנוי) — מיזוג ל־formState */
+app.put('/api/admin/deals/:id', requireAdmin, async (req, res) => {
+  try {
+    await updateDealAdmin(req.params.id, req.body || {});
+    res.json({ success: true });
+  } catch (e) {
+    console.error(`[${ts()}] admin/deals update error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to update deal' });
+  }
+});
+
+app.delete('/api/admin/deals/:id', requireAdmin, async (req, res) => {
+  try {
+    await deleteDealAdmin(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    console.error(`[${ts()}] admin/deals delete error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to delete deal' });
   }
 });
 

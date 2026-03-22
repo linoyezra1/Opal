@@ -1,18 +1,47 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { LayoutDashboard, RefreshCw } from 'lucide-react';
+import {
+  LayoutDashboard,
+  RefreshCw,
+  TrendingUp,
+  Wallet,
+  AlertCircle,
+  Users,
+  Activity,
+  ShoppingCart,
+  Phone,
+  Building2,
+} from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+} from 'recharts';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
+import { StatsCard } from '../components/admin/stats-card.jsx';
 import { Button } from '../components/ui/button.jsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
 import { Badge } from '../components/ui/badge.jsx';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
 function formatCurrency(value) {
   const n = Number(value || 0);
   return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n);
+}
+
+function formatCompact(n) {
+  const v = Number(n || 0);
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
+  return String(Math.round(v));
 }
 
 export default function AdminControlPanel() {
@@ -43,6 +72,68 @@ export default function AdminControlPanel() {
     load();
   }, [token]);
 
+  const abandoned = data?.abandonedCarts || [];
+  const arrears = data?.paymentArrears || [];
+  const privateLeads = data?.privateLeads || [];
+  const corporateLeads = data?.corporateLeads || [];
+  const registered = data?.registeredOrganizations || [];
+  const overview = data?.overview;
+
+  const recentActivity = React.useMemo(() => {
+    const items = [];
+    for (const row of abandoned) {
+      const t = row.updatedAt ? new Date(row.updatedAt).getTime() : 0;
+      const snap = row.formSnapshot || {};
+      items.push({
+        id: `a-${row.id}`,
+        type: 'draft',
+        label: 'עגלה נטושה',
+        detail: [snap.fullName, snap.phone].filter(Boolean).join(' · ') || row.sessionKey,
+        at: t,
+      });
+    }
+    for (const d of arrears) {
+      const t = d.createdAt ? new Date(d.createdAt).getTime() : 0;
+      items.push({
+        id: `p-${d.id}`,
+        type: 'payment',
+        label: 'תשלום / סטטוס',
+        detail: `${d.transactionId} · ${d.paymentStatus}`,
+        at: t,
+      });
+    }
+    for (const l of privateLeads) {
+      const t = l.createdAt ? new Date(l.createdAt).getTime() : 0;
+      items.push({
+        id: `lp-${l.id}`,
+        type: 'lead',
+        label: 'פנייה פרטית',
+        detail: `${l.name} · ${l.phone}`,
+        at: t,
+      });
+    }
+    for (const l of corporateLeads) {
+      const t = l.createdAt ? new Date(l.createdAt).getTime() : 0;
+      items.push({
+        id: `lb-${l.id}`,
+        type: 'corp',
+        label: 'פנייה B2B',
+        detail: `${l.organizationName} · ${l.contactName}`,
+        at: t,
+      });
+    }
+    return items.filter((x) => x.at).sort((a, b) => b.at - a.at).slice(0, 16);
+  }, [abandoned, arrears, privateLeads, corporateLeads]);
+
+  const chartData = React.useMemo(() => {
+    const s = overview?.chartSeries;
+    if (!Array.isArray(s) || !s.length) return [];
+    return s.map((d) => ({
+      ...d,
+      revenueShort: Math.round(Number(d.revenue || 0)),
+    }));
+  }, [overview]);
+
   if (!token) {
     return (
       <div dir="rtl" className="min-h-screen bg-background p-6">
@@ -54,258 +145,381 @@ export default function AdminControlPanel() {
     );
   }
 
-  const abandoned = data?.abandonedCarts || [];
-  const arrears = data?.paymentArrears || [];
-  const privateLeads = data?.privateLeads || [];
-  const corporateLeads = data?.corporateLeads || [];
-  const registered = data?.registeredOrganizations || [];
-
   return (
-    <AdminPageShell>
-      <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-              <LayoutDashboard className="size-7 text-primary" />
-              לוח בקרה ראשי
-            </h1>
-            <p className="text-muted-foreground">עגלות נטושות, תשלומים, פניות וארגונים רשומים</p>
-          </div>
-          <Button type="button" onClick={load} disabled={loading}>
-            <RefreshCw className={`size-4 me-2 ${loading ? 'animate-spin' : ''}`} />
-            {loading ? 'טוען...' : 'רענון'}
-          </Button>
-        </div>
-
-        {error ? <p className="text-destructive text-sm">{error}</p> : null}
-
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>עגלות נטושות</CardTitle>
-              <CardDescription>משתמשים שהתחילו מילוי טופס ולא השלמו (מעקב מהשרת)</CardDescription>
-            </CardHeader>
-            <CardContent className="overflow-auto max-h-80">
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[100px]">סשן</TableHead>
-                      <TableHead>עדכון</TableHead>
-                      <TableHead>תקציר</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {abandoned.map((row) => {
-                      const snap = row.formSnapshot || {};
-                      const hint = [snap.fullName, snap.phone, snap.email].filter(Boolean).join(' · ') || '—';
-                      return (
-                        <TableRow key={row.id}>
-                          <TableCell className="font-mono text-xs max-w-[100px] truncate">{row.sessionKey}</TableCell>
-                          <TableCell className="whitespace-nowrap text-xs">
-                            {row.updatedAt ? new Date(row.updatedAt).toLocaleString('he-IL') : '—'}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground text-xs">{hint}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                    {!abandoned.length ? (
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-center text-muted-foreground">
-                          אין טיוטות פתוחות
-                        </TableCell>
-                      </TableRow>
-                    ) : null}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>פיגור תשלום / תשלום לא הושלם</CardTitle>
-              <CardDescription>עסקאות במצב pending או כשלון תשלום</CardDescription>
-            </CardHeader>
-            <CardContent className="overflow-auto max-h-80">
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>הזמנה</TableHead>
-                      <TableHead>סטטוס</TableHead>
-                      <TableHead>סכום</TableHead>
-                      <TableHead>שם</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {arrears.map((d) => (
-                      <TableRow key={d.id}>
-                        <TableCell className="font-mono text-xs">{d.transactionId}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{d.paymentStatus}</Badge>
-                        </TableCell>
-                        <TableCell>{formatCurrency(d.payerAmount)}</TableCell>
-                        <TableCell>{d.formState?.fullName || '—'}</TableCell>
-                      </TableRow>
-                    ))}
-                    {!arrears.length ? (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground">
-                          אין רשומות
-                        </TableCell>
-                      </TableRow>
-                    ) : null}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>צור קשר — פרטיים</CardTitle>
-              <CardDescription>פניות מאתר</CardDescription>
-            </CardHeader>
-            <CardContent className="overflow-auto max-h-80">
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>שם</TableHead>
-                      <TableHead>טלפון</TableHead>
-                      <TableHead>הודעה</TableHead>
-                      <TableHead>תאריך</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {privateLeads.map((l) => (
-                      <TableRow key={l.id}>
-                        <TableCell>{l.name}</TableCell>
-                        <TableCell dir="ltr" className="text-start">
-                          {l.phone}
-                        </TableCell>
-                        <TableCell className="max-w-[200px] truncate text-xs">{l.message}</TableCell>
-                        <TableCell className="whitespace-nowrap text-xs">
-                          {l.createdAt ? new Date(l.createdAt).toLocaleString('he-IL') : '—'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {!privateLeads.length ? (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground">
-                          אין פניות
-                        </TableCell>
-                      </TableRow>
-                    ) : null}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>צור קשר — חברות (B2B)</CardTitle>
-              <CardDescription>פניות ארגוניות</CardDescription>
-            </CardHeader>
-            <CardContent className="overflow-auto max-h-80">
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ארגון</TableHead>
-                      <TableHead>איש קשר</TableHead>
-                      <TableHead>טלפון</TableHead>
-                      <TableHead>תאריך</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {corporateLeads.map((l) => (
-                      <TableRow key={l.id}>
-                        <TableCell>{l.organizationName}</TableCell>
-                        <TableCell>{l.contactName}</TableCell>
-                        <TableCell dir="ltr" className="text-start">
-                          {l.phone}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-xs">
-                          {l.createdAt ? new Date(l.createdAt).toLocaleString('he-IL') : '—'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {!corporateLeads.length ? (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground">
-                          אין פניות
-                        </TableCell>
-                      </TableRow>
-                    ) : null}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>ארגונים רשומים (מחירונים)</CardTitle>
-            <CardDescription>
-              רשומות ממסך &quot;מחירוני ארגונים&quot;. מזהה לדף נחיתה:{' '}
-              <code className="rounded bg-muted px-1 text-xs">pricingId</code> ב־API{' '}
-              <code className="rounded bg-muted px-1 text-xs">/api/pricing-context?pricingId=...</code>
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="overflow-auto">
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="max-w-[120px]">מזהה</TableHead>
-                    <TableHead>ארגון</TableHead>
-                    <TableHead>שם מחירון</TableHead>
-                    <TableHead>שורות מחיר</TableHead>
-                    <TableHead>נוצר</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {registered.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="font-mono text-xs break-all max-w-[120px]">{r.id}</TableCell>
-                      <TableCell>{r.organizationName}</TableCell>
-                      <TableCell>{r.pricingListName}</TableCell>
-                      <TableCell className="text-xs">
-                        {(r.relatedProducts || []).length ? (
-                          <ul className="space-y-1 list-none p-0 m-0">
-                            {r.relatedProducts.map((line, i) => (
-                              <li key={i}>
-                                {line.product?.name || line.productId}: קמעוני {formatCurrency(line.retailPrice)} · ספק{' '}
-                                {formatCurrency(line.vendorCost)} · רווח {formatCurrency(line.profit)}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          '—'
-                        )}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-xs">
-                        {r.createdAt ? new Date(r.createdAt).toLocaleString('he-IL') : '—'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {!registered.length ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground">
-                        אין ארגונים רשומים — הגדירו מחירון במסך מחירוני ארגונים.
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
-                </TableBody>
-              </Table>
+    <TooltipProvider delayDuration={300}>
+      <AdminPageShell>
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                <LayoutDashboard className="size-7 text-primary" />
+                לוח בקרה — סקירה כללית
+              </h1>
+              <p className="text-muted-foreground">מדדים ממסד הנתונים, פעילות אחרונה ופירוט תפעולי</p>
             </div>
-          </CardContent>
-        </Card>
-      </div>
-    </AdminPageShell>
+            <Button type="button" onClick={load} disabled={loading}>
+              <RefreshCw className={`size-4 me-2 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? 'טוען...' : 'רענון'}
+            </Button>
+          </div>
+
+          {error ? <p className="text-destructive text-sm">{error}</p> : null}
+
+          {/* Overview — נתוני MongoDB אמיתיים */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatsCard
+              title="סה״כ הכנסות (עסקאות ששולמו)"
+              value={overview ? formatCurrency(overview.totalRevenue) : '—'}
+              icon={TrendingUp}
+              loading={loading && !overview}
+            />
+            <StatsCard
+              title="רווח נקי (מצטבר)"
+              value={overview ? formatCurrency(overview.totalNetProfit) : '—'}
+              icon={Wallet}
+              loading={loading && !overview}
+            />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="outline-none rounded-lg">
+                  <StatsCard
+                    title="עסקאות הושלמו"
+                    value={overview ? formatCompact(overview.completedSales) : '—'}
+                    icon={Users}
+                    loading={loading && !overview}
+                  />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs">
+                מספר עסקאות ללא סטטוס ביטול/כשלון (לפי paymentStatus)
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="outline-none rounded-lg">
+                  <StatsCard
+                    title="תשלומים תקועים / ממתינים"
+                    value={overview != null ? formatCompact(overview.pendingPayments) : '—'}
+                    icon={AlertCircle}
+                    loading={loading && !overview}
+                  />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs">
+                ספירת עסקאות עם pending או סטטוס כשלון (כמו בטבלת &quot;פיגור תשלום&quot;)
+              </TooltipContent>
+            </Tooltip>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="size-5" />
+                  הכנסות לפי יום (14 ימים אחרונים)
+                </CardTitle>
+                <CardDescription>סכום מחיר עסקה (payerAmount) לעסקאות ששולמו, לפי תאריך יצירה</CardDescription>
+              </CardHeader>
+              <CardContent className="h-[280px] w-full" dir="ltr">
+                {chartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} angle={-35} textAnchor="end" height={70} />
+                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `₪${formatCompact(v)}`} />
+                      <RechartsTooltip
+                        formatter={(value) => [formatCurrency(value), 'הכנסות']}
+                        labelFormatter={(_, payload) => payload?.[0]?.payload?.date || ''}
+                      />
+                      <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="הכנסות" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
+                    {loading ? 'טוען נתונים לתרשים…' : 'אין עדיין עסקאות לתרשים'}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ShoppingCart className="size-5" />
+                  פעילות אחרונה
+                </CardTitle>
+                <CardDescription>עגלות, תשלומים ופניות — ממוין לפי זמן</CardDescription>
+              </CardHeader>
+              <CardContent className="max-h-[280px] overflow-y-auto space-y-2">
+                {recentActivity.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{loading ? 'טוען…' : 'אין פעילות להצגה'}</p>
+                ) : (
+                  recentActivity.map((item) => (
+                    <div key={item.id} className="rounded-lg border p-2 text-sm">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="font-medium truncate">{item.label}</span>
+                        <Badge variant="secondary" className="shrink-0 text-[10px]">
+                          {new Date(item.at).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' })}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground line-clamp-2">{item.detail}</p>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {overview ? (
+            <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+              <span>
+                פניות חדשות (7 ימים): <strong className="text-foreground">{overview.newLeads7d}</strong>
+              </span>
+              <span>·</span>
+              <span>
+                עסקאות במסד: <strong className="text-foreground">{overview.totalDealsInDb}</strong>
+              </span>
+              <span>·</span>
+              <span>
+                מבוטלים/כשלון (מספר רשומות): <strong className="text-foreground">{overview.canceledDeals}</strong>
+              </span>
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>עגלות נטושות</CardTitle>
+                <CardDescription>משתמשים שהתחילו מילוי טופס ולא השלמו (מעקב מהשרת)</CardDescription>
+              </CardHeader>
+              <CardContent className="overflow-auto max-h-80">
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[100px]">סשן</TableHead>
+                        <TableHead>עדכון</TableHead>
+                        <TableHead>תקציר</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {abandoned.map((row) => {
+                        const snap = row.formSnapshot || {};
+                        const hint = [snap.fullName, snap.phone, snap.email].filter(Boolean).join(' · ') || '—';
+                        return (
+                          <TableRow key={row.id}>
+                            <TableCell className="font-mono text-xs max-w-[100px] truncate">{row.sessionKey}</TableCell>
+                            <TableCell className="whitespace-nowrap text-xs">
+                              {row.updatedAt ? new Date(row.updatedAt).toLocaleString('he-IL') : '—'}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground text-xs">{hint}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      {!abandoned.length ? (
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-center text-muted-foreground">
+                            אין טיוטות פתוחות
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>פיגור תשלום / תשלום לא הושלם</CardTitle>
+                <CardDescription>עסקאות במצב pending או כשלון תשלום</CardDescription>
+              </CardHeader>
+              <CardContent className="overflow-auto max-h-80">
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>הזמנה</TableHead>
+                        <TableHead>סטטוס</TableHead>
+                        <TableHead>סכום</TableHead>
+                        <TableHead>שם</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {arrears.map((d) => (
+                        <TableRow key={d.id}>
+                          <TableCell className="font-mono text-xs">{d.transactionId}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{d.paymentStatus}</Badge>
+                          </TableCell>
+                          <TableCell>{formatCurrency(d.payerAmount)}</TableCell>
+                          <TableCell>{d.formState?.fullName || '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                      {!arrears.length ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center text-muted-foreground">
+                            אין רשומות
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Phone className="size-4" />
+                  צור קשר — פרטיים
+                </CardTitle>
+                <CardDescription>פניות מאתר</CardDescription>
+              </CardHeader>
+              <CardContent className="overflow-auto max-h-80">
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>שם</TableHead>
+                        <TableHead>טלפון</TableHead>
+                        <TableHead>הודעה</TableHead>
+                        <TableHead>תאריך</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {privateLeads.map((l) => (
+                        <TableRow key={l.id}>
+                          <TableCell>{l.name}</TableCell>
+                          <TableCell dir="ltr" className="text-start">
+                            {l.phone}
+                          </TableCell>
+                          <TableCell className="max-w-[200px] truncate text-xs">{l.message}</TableCell>
+                          <TableCell className="whitespace-nowrap text-xs">
+                            {l.createdAt ? new Date(l.createdAt).toLocaleString('he-IL') : '—'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {!privateLeads.length ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center text-muted-foreground">
+                            אין פניות
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="size-4" />
+                  צור קשר — חברות (B2B)
+                </CardTitle>
+                <CardDescription>פניות ארגוניות</CardDescription>
+              </CardHeader>
+              <CardContent className="overflow-auto max-h-80">
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>ארגון</TableHead>
+                        <TableHead>איש קשר</TableHead>
+                        <TableHead>טלפון</TableHead>
+                        <TableHead>תאריך</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {corporateLeads.map((l) => (
+                        <TableRow key={l.id}>
+                          <TableCell>{l.organizationName}</TableCell>
+                          <TableCell>{l.contactName}</TableCell>
+                          <TableCell dir="ltr" className="text-start">
+                            {l.phone}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-xs">
+                            {l.createdAt ? new Date(l.createdAt).toLocaleString('he-IL') : '—'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {!corporateLeads.length ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center text-muted-foreground">
+                            אין פניות
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>ארגונים רשומים (מחירונים)</CardTitle>
+              <CardDescription>
+                רשומות ממסך &quot;מחירוני ארגונים&quot;. מזהה לדף נחיתה:{' '}
+                <code className="rounded bg-muted px-1 text-xs">pricingId</code> ב־API{' '}
+                <code className="rounded bg-muted px-1 text-xs">/api/pricing-context?pricingId=...</code>
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="overflow-auto">
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="max-w-[120px]">מזהה</TableHead>
+                      <TableHead>ארגון</TableHead>
+                      <TableHead>שם מחירון</TableHead>
+                      <TableHead>שורות מחיר</TableHead>
+                      <TableHead>נוצר</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {registered.map((r) => (
+                      <TableRow key={r.id}>
+                        <TableCell className="font-mono text-xs break-all max-w-[120px]">{r.id}</TableCell>
+                        <TableCell>{r.organizationName}</TableCell>
+                        <TableCell>{r.pricingListName}</TableCell>
+                        <TableCell className="text-xs">
+                          {(r.relatedProducts || []).length ? (
+                            <ul className="space-y-1 list-none p-0 m-0">
+                              {r.relatedProducts.map((line, i) => (
+                                <li key={i}>
+                                  {line.product?.name || line.productId}: קמעוני {formatCurrency(line.retailPrice)} · ספק{' '}
+                                  {formatCurrency(line.vendorCost)} · רווח {formatCurrency(line.profit)}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            '—'
+                          )}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-xs">
+                          {r.createdAt ? new Date(r.createdAt).toLocaleString('he-IL') : '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {!registered.length ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground">
+                          אין ארגונים רשומים — הגדירו מחירון במסך מחירוני ארגונים.
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </AdminPageShell>
+    </TooltipProvider>
   );
 }

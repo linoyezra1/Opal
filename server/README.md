@@ -66,6 +66,8 @@ npm start
 | POST/GET | /api/cardcom-webhook | Cardcom callback (LowProfileCode in query or body) |
 | POST | /api/admin/login | Admin login (temporary username/password) |
 | GET | /api/admin/deals | Get deals for dashboard (requires Bearer token) |
+| PUT | /api/admin/deals/:id | Update deal — merges `formState`, optional `payerAmount`, `paymentStatus` (admin) |
+| DELETE | /api/admin/deals/:id | Delete deal document (admin) |
 | GET/POST | /api/admin/products | Product catalog (admin) |
 | PUT/DELETE | /api/admin/products/:id | Update or delete product (delete cascades links & pricing rows) |
 | GET/POST | /api/admin/vendors | Vendors + product cost links |
@@ -82,7 +84,7 @@ npm start
 | PUT/DELETE | /api/admin/agents/:id | Update or delete agent (delete blocked if deals reference agent) |
 | GET | /api/public/agents | Agents list for checkout dropdown (`id`, `agentName`) |
 | GET/POST | /api/admin/org-pricing | Legacy organization pricing policies |
-| GET | /api/admin/control-panel | Aggregated: abandoned carts, payment issues, leads, registered org pricings |
+| GET | /api/admin/control-panel | Aggregated: abandoned carts, payment issues, leads, registered org pricings, plus **`overview`** (Mongo: revenue, net profit, counts, 14-day chart series, new leads 7d) |
 | GET | /api/pricing-context?pricingId= | **Public** – resolve product names + prices for a landing page (Mongo `_id` of org pricing policy) |
 | POST | /api/checkout-draft | Save anonymous checkout draft (`sessionKey`, `formSnapshot`, `completed`) |
 | GET | /api/health | Health and config check |

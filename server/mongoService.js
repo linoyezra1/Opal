@@ -1,4 +1,4 @@
-import { MongoClient } from 'mongodb';
+import { MongoClient, ObjectId } from 'mongodb';
 
 const MONGO_URL = process.env.MONGO_URL || '';
 const DB_NAME = process.env.MONGO_DB_NAME || 'opal';
@@ -387,4 +387,116 @@ export async function getSalesDashboardData(filters = {}) {
       };
     }),
   };
+}
+
+/** סטטיסטיקות אמיתיות ללוח בקרה (MongoDB) */
+export async function getControlPanelOverviewStats() {
+  const db = await getDb();
+  const dealsCol = db.collection('deals');
+
+  const docs = await dealsCol
+    .find({})
+    .project({ paymentStatus: 1, payerAmount: 1, formState: 1, createdAt: 1 })
+    .toArray();
+
+  let totalRevenue = 0;
+  let totalNetProfit = 0;
+  let paidDealsCount = 0;
+  let canceledDealsCount = 0;
+
+  const dayKey = (d) => {
+    const dt = d.createdAt instanceof Date ? d.createdAt : new Date(d.createdAt);
+    if (Number.isNaN(dt.getTime())) return null;
+    return dt.toISOString().slice(0, 10);
+  };
+
+  const chartBuckets = new Map();
+  const now = new Date();
+  for (let i = 13; i >= 0; i--) {
+    const day = new Date(now);
+    day.setDate(day.getDate() - i);
+    day.setHours(0, 0, 0, 0);
+    const key = day.toISOString().slice(0, 10);
+    chartBuckets.set(key, { date: key, revenue: 0, count: 0, label: day.toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'short' }) });
+  }
+
+  for (const d of docs) {
+    const e = enrichDeal(d);
+    const econ = economicsFromDeal(d);
+    if (!e.isCanceled) {
+      totalRevenue += Number(d.payerAmount || 0);
+      totalNetProfit += econ.netProfit;
+      paidDealsCount += 1;
+      const k = dayKey(d);
+      if (k && chartBuckets.has(k)) {
+        const b = chartBuckets.get(k);
+        b.revenue += Number(d.payerAmount || 0);
+        b.count += 1;
+      }
+    } else {
+      canceledDealsCount += 1;
+    }
+  }
+
+  const pendingPayments = await dealsCol.countDocuments({
+    $or: [
+      { paymentStatus: { $regex: /fail|cancel|declin|error|void|refund|בוטל|נכשל|denied/i } },
+      { paymentStatus: 'pending' },
+    ],
+  });
+
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const [newContactLeads, newOrgLeads] = await Promise.all([
+    db.collection('contactLeads').countDocuments({ createdAt: { $gte: weekAgo } }),
+    db.collection('organizationLeads').countDocuments({ createdAt: { $gte: weekAgo } }),
+  ]);
+
+  return {
+    totalRevenue,
+    totalNetProfit,
+    completedSales: paidDealsCount,
+    canceledDeals: canceledDealsCount,
+    pendingPayments,
+    totalDealsInDb: docs.length,
+    newLeads7d: newContactLeads + newOrgLeads,
+    chartSeries: Array.from(chartBuckets.values()),
+  };
+}
+
+export async function updateDealAdmin(dealId, body = {}) {
+  const db = await getDb();
+  const deals = db.collection('deals');
+  let oid;
+  try {
+    oid = new ObjectId(String(dealId));
+  } catch {
+    throw new Error('מזהה עסקה לא תקין');
+  }
+  const existing = await deals.findOne({ _id: oid });
+  if (!existing) throw new Error('עסקה לא נמצאה');
+
+  const fs = { ...(existing.formState || {}), ...(body.formState && typeof body.formState === 'object' ? body.formState : {}) };
+  const set = {
+    formState: fs,
+    updatedAt: new Date(),
+  };
+  if (body.payerAmount != null && body.payerAmount !== '') set.payerAmount = Number(body.payerAmount);
+  if (body.paymentStatus != null && String(body.paymentStatus).trim() !== '') set.paymentStatus = String(body.paymentStatus).trim();
+
+  await deals.updateOne({ _id: oid }, { $set: set });
+  return { success: true };
+}
+
+export async function deleteDealAdmin(dealId) {
+  const db = await getDb();
+  const deals = db.collection('deals');
+  let oid;
+  try {
+    oid = new ObjectId(String(dealId));
+  } catch {
+    throw new Error('מזהה עסקה לא תקין');
+  }
+  const r = await deals.deleteOne({ _id: oid });
+  if (r.deletedCount === 0) throw new Error('עסקה לא נמצאה');
+  return { success: true };
 }
