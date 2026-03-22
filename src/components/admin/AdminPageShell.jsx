@@ -11,6 +11,7 @@ import {
   LogOut,
   PanelRightClose,
   PanelRightOpen,
+  LayoutTemplate,
 } from 'lucide-react';
 import { cn } from '../../lib/cn.js';
 import { Button } from '../ui/button.jsx';
@@ -26,6 +27,7 @@ const groups = [
       { label: 'ספקים', to: '/admin/vendors', icon: Building2 },
       { label: 'סוכנים', to: '/admin/agents', icon: Users },
       { label: 'מחירונים', to: '/admin/price-list', icon: Receipt },
+      { label: 'דפי נחיתה', to: '/admin/landing-pages', icon: LayoutTemplate },
       { label: 'מחירון ארגונים', to: '/admin/pricing', icon: Receipt },
     ],
   },

@@ -22,21 +22,26 @@ import {
   deleteDealAdmin,
 } from './mongoService.js';
 import {
+  createLandingPage,
   createOrgPricingPolicy,
   createPriceList,
   createPricingEntry,
   createProduct,
   createSalesAgent,
   createVendor,
+  deleteLandingPage,
   deletePriceList,
   deletePricingEntry,
   deleteProduct,
   deleteSalesAgent,
   deleteVendor,
+  getAgentCommissionForProduct,
   getPricingContextByPricingId,
   getPriceListById,
+  getPublicLandingPageBySlug,
   getPublicPriceListById,
   getVendorCostForProduct,
+  listLandingPages,
   listIncompleteCheckoutDrafts,
   listOrgPricingPolicies,
   listPriceLists,
@@ -47,6 +52,7 @@ import {
   listVendors,
   resolveAgentIdFromFormState,
   resolveCheckoutEconomics,
+  updateLandingPage,
   updatePriceList,
   updatePricingEntry,
   updateProduct,
@@ -781,6 +787,59 @@ app.delete('/api/admin/price-lists/:id', requireAdmin, async (req, res) => {
   }
 });
 
+/** תצוגה מקדימה: עמלת סוכן למוצר (למחירון) */
+app.get('/api/admin/agent-commission-preview', requireAdmin, async (req, res) => {
+  try {
+    const fallback = Number(req.query.fallback || 0);
+    const c = await getAgentCommissionForProduct(req.query.agentId, req.query.productId, fallback);
+    res.json({ success: true, commission: c });
+  } catch (e) {
+    console.error(`[${ts()}] admin/agent-commission-preview error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed' });
+  }
+});
+
+/** דפי נחיתה מעוצבים (בונה דפים) */
+app.get('/api/admin/landing-pages', requireAdmin, async (req, res) => {
+  try {
+    const pages = await listLandingPages();
+    res.json({ success: true, pages });
+  } catch (e) {
+    console.error(`[${ts()}] admin/landing-pages list error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed' });
+  }
+});
+
+app.post('/api/admin/landing-pages', requireAdmin, async (req, res) => {
+  try {
+    const result = await createLandingPage(req.body || {});
+    res.json({ success: true, ...result });
+  } catch (e) {
+    console.error(`[${ts()}] admin/landing-pages create error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed' });
+  }
+});
+
+app.put('/api/admin/landing-pages/:id', requireAdmin, async (req, res) => {
+  try {
+    const page = await updateLandingPage(req.params.id, req.body || {});
+    res.json({ success: true, page });
+  } catch (e) {
+    console.error(`[${ts()}] admin/landing-pages update error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed' });
+  }
+});
+
+app.delete('/api/admin/landing-pages/:id', requireAdmin, async (req, res) => {
+  try {
+    await deleteLandingPage(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    console.error(`[${ts()}] admin/landing-pages delete error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed' });
+  }
+});
+
 /** דף נחיתה — מוצרים ומחירים בלבד */
 app.get('/api/public/price-list/:id', async (req, res) => {
   try {
@@ -790,6 +849,18 @@ app.get('/api/public/price-list/:id', async (req, res) => {
   } catch (e) {
     console.error(`[${ts()}] public/price-list error:`, e);
     res.status(500).json({ success: false, error: 'Failed to load price list' });
+  }
+});
+
+/** דף נחיתה מלא: תוכן + מחירון לפי slug (אנגלית קטנה) */
+app.get('/api/public/landing/:slug', async (req, res) => {
+  try {
+    const data = await getPublicLandingPageBySlug(req.params.slug);
+    if (!data) return res.status(404).json({ success: false, error: 'Landing page not found' });
+    res.json({ success: true, ...data });
+  } catch (e) {
+    console.error(`[${ts()}] public/landing error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to load landing page' });
   }
 });
 

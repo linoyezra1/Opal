@@ -1,5 +1,9 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import BeneficiaryFields from './components/BeneficiaryFields';
+import { PublicLandingView } from './pages/LandingPage.jsx';
+
+/** אם מוגדר — דף הבית (/) מציג דף נחיתה דינמי לפי slug מבונה הדפים (תוכן + מחירון) */
+const HOME_LANDING_SLUG = (import.meta.env.VITE_PUBLIC_HOME_LANDING_SLUG || '').trim();
 
 const API_BASE = window.location.origin;
 const PENDING_KEY = 'opal_pending_data';
@@ -76,6 +80,14 @@ function validatePhone(value) {
 }
 
 export default function App() {
+  if (HOME_LANDING_SLUG) {
+    return <PublicLandingView slug={HOME_LANDING_SLUG} />;
+  }
+
+  return <LegacyHomeCheckout />;
+}
+
+function LegacyHomeCheckout() {
   const [formState, setFormState] = useState(initialState);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -556,3 +568,4 @@ export default function App() {
     </div>
   );
 }
+

@@ -213,14 +213,14 @@ export default function SubscribersPage() {
                   <Field>
                     <FieldLabel>מוצר</FieldLabel>
                     <Select
-                      value={filters.productId}
-                      onValueChange={(value) => setFilters({ ...filters, productId: value })}
+                      value={filters.productId || 'all'}
+                      onValueChange={(value) => setFilters({ ...filters, productId: value === 'all' ? '' : value })}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="כל המוצרים" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">כל המוצרים</SelectItem>
+                        <SelectItem value="all">כל המוצרים</SelectItem>
                         {mockProducts.map((product) => (
                           <SelectItem key={product.id} value={product.id}>
                             {product.name}
@@ -233,14 +233,14 @@ export default function SubscribersPage() {
                   <Field>
                     <FieldLabel>סוכן</FieldLabel>
                     <Select
-                      value={filters.agentId}
-                      onValueChange={(value) => setFilters({ ...filters, agentId: value })}
+                      value={filters.agentId || 'all'}
+                      onValueChange={(value) => setFilters({ ...filters, agentId: value === 'all' ? '' : value })}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="כל הסוכנים" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">כל הסוכנים</SelectItem>
+                        <SelectItem value="all">כל הסוכנים</SelectItem>
                         {mockAgents.map((agent) => (
                           <SelectItem key={agent.id} value={agent.id}>
                             {agent.name}
@@ -253,14 +253,14 @@ export default function SubscribersPage() {
                   <Field>
                     <FieldLabel>ארגון</FieldLabel>
                     <Select
-                      value={filters.organizationName}
-                      onValueChange={(value) => setFilters({ ...filters, organizationName: value })}
+                      value={filters.organizationName || 'all'}
+                      onValueChange={(value) => setFilters({ ...filters, organizationName: value === 'all' ? '' : value })}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="כל הארגונים" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">כל הארגונים</SelectItem>
+                        <SelectItem value="all">כל הארגונים</SelectItem>
                         {mockOrganizations.map((org) => (
                           <SelectItem key={org} value={org}>
                             {org}

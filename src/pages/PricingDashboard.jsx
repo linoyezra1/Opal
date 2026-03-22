@@ -26,6 +26,7 @@ const TOKEN_KEY = 'opal_admin_token';
 const emptyLine = () => ({
   vendorId: '',
   productId: '',
+  agentId: '',
   retailPrice: '',
   defaultAgentCommission: '',
   vendorCost: '',
@@ -36,6 +37,7 @@ export default function PricingDashboard() {
   const [products, setProducts] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [lists, setLists] = useState([]);
+  const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -53,14 +55,16 @@ export default function PricingDashboard() {
     setLoading(true);
     setError('');
     try {
-      const [pr, vn, ls] = await Promise.all([
+      const [pr, vn, ls, ag] = await Promise.all([
         fetch(`${API_BASE}/api/admin/products`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/vendors`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/price-lists`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+        fetch(`${API_BASE}/api/admin/agents`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
       ]);
       if (pr.success) setProducts(pr.products || []);
       if (vn.success) setVendors(vn.vendors || []);
       if (ls.success) setLists(ls.lists || []);
+      if (ag.success) setAgents(ag.rows || []);
     } catch (e) {
       setError(e.message || 'שגיאה');
     } finally {
@@ -95,6 +99,30 @@ export default function PricingDashboard() {
     [token]
   );
 
+  const fetchAgentCommission = useCallback(
+    async (index, agentId, productId) => {
+      if (!token || !agentId || !productId) return;
+      try {
+        const params = new URLSearchParams({ agentId, productId, fallback: '0' });
+        const res = await fetch(`${API_BASE}/api/admin/agent-commission-preview?${params}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success) {
+          setLines((prev) => {
+            const next = [...prev];
+            if (!next[index]) return prev;
+            next[index] = { ...next[index], defaultAgentCommission: String(data.commission ?? 0) };
+            return next;
+          });
+        }
+      } catch {
+        /* ignore */
+      }
+    },
+    [token]
+  );
+
   function openNew() {
     setEditId(null);
     setListName('');
@@ -113,6 +141,7 @@ export default function PricingDashboard() {
         ? row.lines.map((l) => ({
             vendorId: l.vendorId,
             productId: l.productId,
+            agentId: l.agentId || '',
             retailPrice: String(l.retailPrice ?? ''),
             defaultAgentCommission: String(l.defaultAgentCommission ?? ''),
             vendorCost: String(l.vendorCost ?? ''),
@@ -124,6 +153,7 @@ export default function PricingDashboard() {
     setTimeout(() => {
       mapped.forEach((l, i) => {
         if (l.vendorId && l.productId) fetchLineCost(i, l.vendorId, l.productId);
+        if (l.agentId && l.productId) fetchAgentCommission(i, l.agentId, l.productId);
       });
     }, 50);
   }
@@ -135,8 +165,12 @@ export default function PricingDashboard() {
       next[i] = cur;
       const vid = field === 'vendorId' ? value : cur.vendorId;
       const pid = field === 'productId' ? value : cur.productId;
+      const aid = field === 'agentId' ? value : cur.agentId;
       if (vid && pid) {
         queueMicrotask(() => fetchLineCost(i, vid, pid));
+      }
+      if (aid && pid) {
+        queueMicrotask(() => fetchAgentCommission(i, aid, pid));
       }
       return next;
     });
@@ -163,6 +197,7 @@ export default function PricingDashboard() {
           .map((l) => ({
             vendorId: l.vendorId,
             productId: l.productId,
+            agentId: l.agentId || undefined,
             retailPrice: Number(l.retailPrice || 0),
             defaultAgentCommission: Number(l.defaultAgentCommission || 0),
             vendorCost: l.vendorCost === '' ? undefined : Number(l.vendorCost),
@@ -252,7 +287,10 @@ export default function PricingDashboard() {
         <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editId ? 'עריכת מחירון' : 'מחירון חדש'}</DialogTitle>
-            <DialogDescription>הגדירו שם, ארגון (אופציונלי) ושורות מוצר–ספק–מחיר</DialogDescription>
+            <DialogDescription>
+              לכל שורה: ספק, מוצר, ואופציונלית סוכן — העמלה תימשך אוטומטית מפרופיל הסוכן (productCommissions). בלי סוכן ניתן להזין
+              עמלה ידנית.
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={saveList} className="space-y-4">
             <FieldGroup>
@@ -276,73 +314,93 @@ export default function PricingDashboard() {
                 </Button>
               </div>
               {lines.map((line, i) => (
-                <div
-                  key={i}
-                  className="border rounded-lg p-3 grid grid-cols-1 md:grid-cols-6 gap-2 items-end bg-card"
-                >
-                  <Field className="gap-1.5">
-                    <FieldLabel className="text-xs">ספק</FieldLabel>
-                    <select
-                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                      value={line.vendorId}
-                      onChange={(e) => updateLine(i, 'vendorId', e.target.value)}
-                      required
-                    >
-                      <option value="">—</option>
-                      {vendors.map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {v.vendorName}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field className="gap-1.5">
-                    <FieldLabel className="text-xs">מוצר</FieldLabel>
-                    <select
-                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                      value={line.productId}
-                      onChange={(e) => updateLine(i, 'productId', e.target.value)}
-                      required
-                    >
-                      <option value="">—</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.productName || p.name}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field className="gap-1.5">
-                    <FieldLabel className="text-xs">מחיר קמעוני</FieldLabel>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      dir="ltr"
-                      value={line.retailPrice}
-                      onChange={(e) => updateLine(i, 'retailPrice', e.target.value)}
-                      required
-                    />
-                  </Field>
-                  <Field className="gap-1.5">
-                    <FieldLabel className="text-xs">עמלת סוכן (ברירת מחדל)</FieldLabel>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      dir="ltr"
-                      value={line.defaultAgentCommission}
-                      onChange={(e) => updateLine(i, 'defaultAgentCommission', e.target.value)}
-                    />
-                  </Field>
-                  <Field className="gap-1.5">
-                    <FieldLabel className="text-xs">עלות ספק (מהמסד)</FieldLabel>
-                    <Input className="bg-muted" readOnly value={line.vendorCost} placeholder="—" dir="ltr" />
-                  </Field>
-                  <div className="flex pb-2">
-                    <Button type="button" variant="ghost" className="text-destructive" onClick={() => removeLine(i)}>
-                      הסר
-                    </Button>
+                <div key={i} className="border rounded-lg p-3 space-y-3 bg-card">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 items-end">
+                    <Field className="gap-1.5">
+                      <FieldLabel className="text-xs">ספק</FieldLabel>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                        value={line.vendorId}
+                        onChange={(e) => updateLine(i, 'vendorId', e.target.value)}
+                        required
+                      >
+                        <option value="">—</option>
+                        {vendors.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.vendorName}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field className="gap-1.5">
+                      <FieldLabel className="text-xs">מוצר</FieldLabel>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                        value={line.productId}
+                        onChange={(e) => updateLine(i, 'productId', e.target.value)}
+                        required
+                      >
+                        <option value="">—</option>
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.productName || p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field className="gap-1.5">
+                      <FieldLabel className="text-xs">סוכן (אופציונלי — עמלה אוטומטית)</FieldLabel>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                        value={line.agentId}
+                        onChange={(e) => updateLine(i, 'agentId', e.target.value)}
+                      >
+                        <option value="">— ללא — (עמלה ידנית)</option>
+                        {agents.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.agentName}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field className="gap-1.5">
+                      <FieldLabel className="text-xs">מחיר קמעוני (₪)</FieldLabel>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        dir="ltr"
+                        value={line.retailPrice}
+                        onChange={(e) => updateLine(i, 'retailPrice', e.target.value)}
+                        required
+                      />
+                    </Field>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
+                    <Field className="gap-1.5">
+                      <FieldLabel className="text-xs">
+                        עמלת סוכן {line.agentId ? '(מחושבת מפרופיל)' : '(ידנית)'}
+                      </FieldLabel>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        dir="ltr"
+                        className={line.agentId ? 'bg-muted' : ''}
+                        readOnly={!!line.agentId}
+                        value={line.defaultAgentCommission}
+                        onChange={(e) => updateLine(i, 'defaultAgentCommission', e.target.value)}
+                      />
+                    </Field>
+                    <Field className="gap-1.5">
+                      <FieldLabel className="text-xs">עלות ספק (מהמסד)</FieldLabel>
+                      <Input className="bg-muted" readOnly value={line.vendorCost} placeholder="—" dir="ltr" />
+                    </Field>
+                    <div className="flex justify-end pb-2">
+                      <Button type="button" variant="ghost" className="text-destructive" onClick={() => removeLine(i)}>
+                        הסר שורה
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}

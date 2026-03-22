@@ -193,14 +193,16 @@ orgPricingPolicySchema.pre('save', async function orgPricingPreSave() {
   this.updatedAt = new Date();
 });
 
-/** מחירון רב-מוצרי לדפי נחיתה (שורות עם עלות ספק ועמלה ברירת מחדל) */
+/** מחירון רב-מוצרי לדפי נחיתה (שורות עם עלות ספק ועמלה — אוטומטית מפרופיל סוכן אם נבחר) */
 const priceListLineSchema = new mongoose.Schema(
   {
     vendorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vendor', required: true },
     productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+    /** סוכן לשורה — אם מוגדר, עמלת ברירת המחדל נגזרת מ־productCommissions */
+    agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'SalesAgent', required: false },
     retailPrice: { type: Number, required: true, min: 0, default: 0 },
     vendorCost: { type: Number, required: true, min: 0, default: 0 },
-    /** כשאין עמלה מוגדרת בפרופיל הסוכן למוצר */
+    /** ברירת מחדל לעסקה: מחושב מסוכן או ידני אם אין סוכן */
     defaultAgentCommission: { type: Number, default: 0, min: 0 },
     profitBeforeAgent: { type: Number, default: 0 },
     netProfit: { type: Number, default: 0 },
@@ -232,12 +234,35 @@ priceListSchema.pre('save', async function priceListPreSave() {
     }
     if (Number.isNaN(vendor)) vendor = 0;
     line.vendorCost = vendor;
-    const dac = Number(line.defaultAgentCommission || 0);
+    let dac = Number(line.defaultAgentCommission || 0);
+    if (line.agentId && line.productId && mongoose.isValidObjectId(line.agentId)) {
+      dac = await getAgentCommissionForProduct(line.agentId, line.productId, dac);
+    }
     line.defaultAgentCommission = dac;
     line.profitBeforeAgent = retail - vendor;
     line.netProfit = retail - vendor - dac;
     line.profit = line.netProfit;
   }
+  this.updatedAt = new Date();
+});
+
+/** דף נחיתה מעוצב — מקושר למחירון */
+const landingPageSchema = new mongoose.Schema(
+  {
+    slug: { type: String, required: true, unique: true, trim: true, lowercase: true },
+    pageTitle: { type: String, default: '' },
+    subTitle: { type: String, default: '' },
+    mainContent: { type: String, default: '' },
+    subContent: { type: String, default: '' },
+    imageUrl: { type: String, default: '' },
+    priceListId: { type: mongoose.Schema.Types.ObjectId, ref: 'PriceList', required: true },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+  },
+  { versionKey: false }
+);
+
+landingPageSchema.pre('save', async function landingPagePreSave() {
   this.updatedAt = new Date();
 });
 
@@ -312,6 +337,8 @@ const PricingEntry = mongoose.models.PricingEntry || mongoose.model('PricingEntr
 const SalesAgent = mongoose.models.SalesAgent || mongoose.model('SalesAgent', salesAgentSchema, 'sales_agents');
 
 const PriceList = mongoose.models.PriceList || mongoose.model('PriceList', priceListSchema, 'price_lists');
+
+const LandingPage = mongoose.models.LandingPage || mongoose.model('LandingPage', landingPageSchema, 'landing_pages');
 
 /** @deprecated — legacy flat pricing row */
 export async function createOrganizationPricing(payload) {
@@ -676,6 +703,7 @@ function serializePriceListDoc(d) {
     return {
       vendorId: String(line.vendorId),
       productId: String(line.productId),
+      agentId: line.agentId ? String(line.agentId) : '',
       retailPrice: retail,
       vendorCost: vc,
       defaultAgentCommission: dac,
@@ -721,10 +749,14 @@ export async function createPriceList(payload) {
       vendorCost = vc ? vc.vendorCost : 0;
     }
     const retail = Number(row.retailPrice || 0);
-    const dac = Number(row.defaultAgentCommission || 0);
+    const agentId = row.agentId && mongoose.isValidObjectId(row.agentId) ? row.agentId : null;
+    let dac = Number(row.defaultAgentCommission || 0);
+    if (agentId) {
+      dac = await getAgentCommissionForProduct(agentId, pid, dac);
+    }
     const pba = retail - vendorCost;
     const net = pba - dac;
-    lines.push({
+    const lineDoc = {
       vendorId: vid,
       productId: pid,
       retailPrice: retail,
@@ -733,7 +765,9 @@ export async function createPriceList(payload) {
       profitBeforeAgent: pba,
       netProfit: net,
       profit: net,
-    });
+    };
+    if (agentId) lineDoc.agentId = agentId;
+    lines.push(lineDoc);
   }
   const doc = await PriceList.create({
     listName: String(payload.listName || '').trim(),
@@ -758,10 +792,14 @@ export async function updatePriceList(id, payload) {
       vendorCost = vc ? vc.vendorCost : 0;
     }
     const retail = Number(row.retailPrice || 0);
-    const dac = Number(row.defaultAgentCommission || 0);
+    const agentId = row.agentId && mongoose.isValidObjectId(row.agentId) ? row.agentId : null;
+    let dac = Number(row.defaultAgentCommission || 0);
+    if (agentId) {
+      dac = await getAgentCommissionForProduct(agentId, pid, dac);
+    }
     const pba = retail - vendorCost;
     const net = pba - dac;
-    lines.push({
+    const lineDoc = {
       vendorId: vid,
       productId: pid,
       retailPrice: retail,
@@ -770,7 +808,9 @@ export async function updatePriceList(id, payload) {
       profitBeforeAgent: pba,
       netProfit: net,
       profit: net,
-    });
+    };
+    if (agentId) lineDoc.agentId = agentId;
+    lines.push(lineDoc);
   }
   const doc = await PriceList.findByIdAndUpdate(
     id,
@@ -794,6 +834,113 @@ export async function deletePriceList(id) {
   const r = await PriceList.findByIdAndDelete(id);
   if (!r) throw new Error('Price list not found');
   return { ok: true };
+}
+
+function assertValidLandingSlug(slug) {
+  const s = String(slug || '').trim().toLowerCase();
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s) || s.length < 2 || s.length > 80) {
+    throw new Error(
+      'מזהה URL (slug) חייב להיות באנגלית קטנה, מספרים ומקפים בלבד — לדוגמה: doctor-plan-2025'
+    );
+  }
+  return s;
+}
+
+function serializeLandingPageDoc(d) {
+  if (!d) return null;
+  return {
+    id: String(d._id),
+    slug: d.slug,
+    pageTitle: d.pageTitle || '',
+    subTitle: d.subTitle || '',
+    mainContent: d.mainContent || '',
+    subContent: d.subContent || '',
+    imageUrl: d.imageUrl || '',
+    priceListId: String(d.priceListId),
+    createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
+    updatedAt: d.updatedAt ? new Date(d.updatedAt).toISOString() : null,
+  };
+}
+
+export async function listLandingPages() {
+  await ensureConnection();
+  const docs = await LandingPage.find({}).sort({ updatedAt: -1 }).lean();
+  return docs.map(serializeLandingPageDoc);
+}
+
+export async function createLandingPage(payload) {
+  await ensureConnection();
+  const slug = assertValidLandingSlug(payload.slug);
+  const priceListId = payload.priceListId;
+  if (!mongoose.isValidObjectId(priceListId)) throw new Error('נדרש מחירון תקין');
+  const exists = await LandingPage.findOne({ slug }).lean();
+  if (exists) throw new Error('מזהה URL כבר בשימוש');
+  const pl = await PriceList.findById(priceListId).lean();
+  if (!pl) throw new Error('מחירון לא נמצא');
+  const doc = await LandingPage.create({
+    slug,
+    pageTitle: String(payload.pageTitle || '').trim(),
+    subTitle: String(payload.subTitle || '').trim(),
+    mainContent: String(payload.mainContent || ''),
+    subContent: String(payload.subContent || ''),
+    imageUrl: String(payload.imageUrl || '').trim(),
+    priceListId,
+  });
+  return { id: String(doc._id), slug };
+}
+
+export async function updateLandingPage(id, payload) {
+  await ensureConnection();
+  if (!mongoose.isValidObjectId(id)) throw new Error('Invalid id');
+  const set = { updatedAt: new Date() };
+  if (payload.slug != null) {
+    const newSlug = assertValidLandingSlug(payload.slug);
+    const clash = await LandingPage.findOne({ slug: newSlug, _id: { $ne: id } }).lean();
+    if (clash) throw new Error('מזהה URL כבר בשימוש');
+    set.slug = newSlug;
+  }
+  if (payload.pageTitle != null) set.pageTitle = String(payload.pageTitle).trim();
+  if (payload.subTitle != null) set.subTitle = String(payload.subTitle).trim();
+  if (payload.mainContent != null) set.mainContent = String(payload.mainContent);
+  if (payload.subContent != null) set.subContent = String(payload.subContent);
+  if (payload.imageUrl != null) set.imageUrl = String(payload.imageUrl).trim();
+  if (payload.priceListId != null) {
+    if (!mongoose.isValidObjectId(payload.priceListId)) throw new Error('מחירון לא תקין');
+    const pl = await PriceList.findById(payload.priceListId).lean();
+    if (!pl) throw new Error('מחירון לא נמצא');
+    set.priceListId = payload.priceListId;
+  }
+  const doc = await LandingPage.findByIdAndUpdate(id, { $set: set }, { new: true }).lean();
+  if (!doc) throw new Error('דף לא נמצא');
+  return serializeLandingPageDoc(doc);
+}
+
+export async function deleteLandingPage(id) {
+  await ensureConnection();
+  if (!mongoose.isValidObjectId(id)) throw new Error('Invalid id');
+  const r = await LandingPage.findByIdAndDelete(id);
+  if (!r) throw new Error('דף לא נמצא');
+  return { ok: true };
+}
+
+/** דף נחיתה ציבורי — תוכן + מחירון (ללא עלויות פנימיות) */
+export async function getPublicLandingPageBySlug(slug) {
+  await ensureConnection();
+  const s = String(slug || '').trim().toLowerCase();
+  if (!s) return null;
+  const doc = await LandingPage.findOne({ slug: s }).lean();
+  if (!doc) return null;
+  const pl = await getPublicPriceListById(String(doc.priceListId));
+  if (!pl) return null;
+  return {
+    slug: doc.slug,
+    pageTitle: doc.pageTitle || '',
+    subTitle: doc.subTitle || '',
+    mainContent: doc.mainContent || '',
+    subContent: doc.subContent || '',
+    imageUrl: doc.imageUrl || '',
+    priceList: pl,
+  };
 }
 
 /** דף נחיתה ציבורי — ללא עלויות פנימיות */

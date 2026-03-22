@@ -98,12 +98,21 @@ export interface PriceListLine {
   netProfit?: number;
 }
 
+export interface LandingPageContent {
+  title: string;
+  subtitle: string;
+  content: string;
+  subContent: string;
+  imageUrl?: string;
+}
+
 export interface PriceList {
   id: string;
   name: string;
   organizationName?: string;
   lines: PriceListLine[];
   landingUrl?: string;
+  landingPageContent?: LandingPageContent;
   createdAt?: string;
   updatedAt?: string;
 }

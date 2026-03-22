@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { Plus, Edit2, Trash2, Building2, CreditCard, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -228,8 +228,8 @@ export default function VendorsPage() {
                 </TableHeader>
                 <TableBody>
                   {vendors.map((vendor) => (
-                    <>
-                      <TableRow key={vendor.id} className="group">
+                    <React.Fragment key={vendor.id}>
+                      <TableRow className="group">
                         <TableCell>
                           <Button
                             variant="ghost"
@@ -272,7 +272,7 @@ export default function VendorsPage() {
                         </TableCell>
                       </TableRow>
                       {expandedVendor === vendor.id && (
-                        <TableRow>
+                        <TableRow key={`${vendor.id}-expanded`}>
                           <TableCell colSpan={6} className="bg-muted/50 p-4">
                             <div className="grid gap-4 md:grid-cols-2">
                               {/* Contact Info */}
@@ -301,7 +301,7 @@ export default function VendorsPage() {
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </React.Fragment>
                   ))}
                 </TableBody>
               </Table>

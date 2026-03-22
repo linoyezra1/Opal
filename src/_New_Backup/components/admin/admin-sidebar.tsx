@@ -13,6 +13,7 @@ import {
   LogOut,
   ChevronLeft,
   Gem,
+  FileText,
 } from 'lucide-react'
 
 import {
@@ -41,6 +42,7 @@ const navigationItems = [
       { label: 'ספקים', href: '/admin/vendors', icon: Building2 },
       { label: 'סוכנים', href: '/admin/agents', icon: Users },
       { label: 'מחירונים', href: '/admin/price-lists', icon: Receipt },
+      { label: 'דפי נחיתה', href: '/admin/landing-pages', icon: FileText },
     ],
   },
   {

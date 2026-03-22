@@ -14,6 +14,7 @@ import ProductManagement from './pages/ProductManagement.jsx';
 import AdminControlPanel from './pages/AdminControlPanel.jsx';
 import VendorDashboard from './pages/VendorDashboard.jsx';
 import PricingDashboard from './pages/PricingDashboard.jsx';
+import LandingPagesManagement from './pages/LandingPagesManagement.jsx';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -21,6 +22,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<App />} />
+        <Route path="/p/:slug" element={<LandingPage />} />
         <Route path="/landing/:priceListId" element={<LandingPage />} />
         <Route path="/success" element={<Success />} />
         <Route path="/beneficiary-form" element={<BeneficiaryForm />} />
@@ -34,6 +36,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/admin/price-list" element={<PricingDashboard />} />
         <Route path="/admin/control-panel" element={<AdminControlPanel />} />
         <Route path="/admin/agents" element={<AgentSetup />} />
+        <Route path="/admin/landing-pages" element={<LandingPagesManagement />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>

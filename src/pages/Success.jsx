@@ -1,64 +1,93 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { CheckCircle2, Phone, Mail, ArrowRight } from 'lucide-react';
+import { Button } from '../components/ui/button.jsx';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
 
 const DOCUMENTS_LINK = '#';
 
 export default function Success() {
   return (
-    <div dir="rtl" className="min-h-screen flex flex-col bg-slate-50 font-sans">
-      <header className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-2xl mx-auto px-4 py-6 flex justify-center">
-          <div className="h-10 w-40 bg-medical-teal/10 rounded-lg flex items-center justify-center text-medical-teal-dark font-bold text-lg">
-            לוגו אופל
+    <div dir="rtl" className="min-h-screen flex flex-col bg-gradient-to-b from-primary/5 via-background to-muted/30 font-sans">
+      <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-10">
+        <div className="container max-w-3xl mx-auto px-4 py-5 flex justify-center">
+          <div className="h-11 px-6 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-lg">
+            אופל
           </div>
         </div>
       </header>
 
-      <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-8 text-right">
-        <h1 className="text-xl sm:text-2xl font-bold text-medical-blue-dark mb-4 text-center">
-          שמחים על הצטרפותך למנוי רופא עד הבית
-        </h1>
-        <p className="text-medical-grey-dark mb-8 text-center leading-relaxed">
-          הזמנתך בצירוף כתב השירות ישלחו אליך בדקות הקרובות למייל.
-        </p>
-
-        <section className="bg-amber-50 border-2 border-amber-400 rounded-xl p-5 sm:p-6 mb-8 shadow-sm">
-          <p className="text-medical-grey-dark font-semibold mb-4 leading-relaxed">
-            חשוב מאוד - בכדי להפעיל את השירות יש למלא את פרטי המוטבים בלינק המצורף
+      <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-10 md:py-14 text-right">
+        <div className="flex flex-col items-center text-center mb-10">
+          <div className="flex size-16 items-center justify-center rounded-full bg-green-500/15 text-green-600 mb-6">
+            <CheckCircle2 className="size-10" strokeWidth={2} />
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-balance">
+            שמחים על הצטרפותך למנוי רופא עד הבית
+          </h1>
+          <p className="text-muted-foreground max-w-xl leading-relaxed text-pretty">
+            הזמנתך בצירוף כתב השירות יישלחו אליך בדקות הקרובות למייל.
           </p>
-          <div className="flex flex-col items-center gap-3">
-            <Link
-              to="/beneficiary-form"
-              className="w-full sm:w-auto min-w-[220px] px-8 py-4 bg-medical-blue hover:bg-medical-blue-dark text-white font-bold text-lg rounded-xl shadow-md transition-colors text-center"
-            >
-              עדכון מוטבים
-            </Link>
-            <p className="text-sm text-amber-800 font-medium">
+        </div>
+
+        <Card className="mb-8 border-amber-500/40 shadow-md bg-amber-50/50 dark:bg-amber-950/20">
+          <CardHeader>
+            <CardTitle className="text-lg text-amber-900 dark:text-amber-100">חשוב מאוד</CardTitle>
+            <CardDescription className="text-amber-900/80 dark:text-amber-200/90 text-base leading-relaxed">
+              בכדי להפעיל את השירות יש למלא את פרטי המוטבים בלינק המצורף
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Button asChild size="lg" className="w-full sm:w-auto min-w-[240px]">
+              <Link to="/beneficiary-form">
+                עדכון מוטבים
+                <ArrowRight className="size-4 me-2 rotate-180" />
+              </Link>
+            </Button>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
               ללא קבלת פרטי המוטבים לא יהיה ניתן לקבל את השירות
             </p>
-          </div>
-        </section>
+          </CardContent>
+        </Card>
 
-        <section className="space-y-2 mb-6 text-medical-grey-dark text-sm sm:text-base">
-          <p>טלפונים להזמנת שירותים רפואיים: 00-00000</p>
-          <p>
-            לינק להגשת מסמכים רפואיים - תביעה און ליין:{' '}
-            <a href={DOCUMENTS_LINK} className="text-medical-blue hover:underline" target="_blank" rel="noopener noreferrer">
-              לינק
-            </a>
-          </p>
-        </section>
+        <Card className="mb-6">
+          <CardContent className="pt-6 space-y-3 text-muted-foreground text-sm sm:text-base">
+            <p>טלפונים להזמנת שירותים רפואיים: 00-00000</p>
+            <p>
+              לינק להגשת מסמכים רפואיים — תביעה און ליין:{' '}
+              <a href={DOCUMENTS_LINK} className="text-primary hover:underline font-medium" target="_blank" rel="noopener noreferrer">
+                לינק
+              </a>
+            </p>
+          </CardContent>
+        </Card>
 
-        <section className="bg-white rounded-xl border border-slate-200 p-5 mb-6 space-y-2 text-medical-grey-dark text-sm">
-          <p className="font-semibold text-medical-teal-dark">מחלקת מכירות: 054-4261369</p>
-          <p className="text-amber-800 font-medium">שים לב: החיוב החודשי של המנוי דרך חברת אופאל תקשורת בע&quot;מ</p>
-          <p>
-            לפניות ובירורים: 054-4261369 | דוא&quot;ל:{' '}
-            <a href="mailto:opal2000@zahav.net.il" className="text-medical-blue hover:underline">opal2000@zahav.net.il</a>
-          </p>
-        </section>
+        <Card>
+          <CardContent className="pt-6 space-y-3">
+            <p className="font-semibold text-primary">מחלקת מכירות: 054-4261369</p>
+            <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+              שים לב: החיוב החודשי של המנוי דרך חברת אופאל תקשורת בע&quot;מ
+            </p>
+            <div className="flex flex-wrap gap-4 pt-2">
+              <a
+                href="tel:0544261369"
+                className="inline-flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
+              >
+                <Phone className="size-4" />
+                <span dir="ltr">054-4261369</span>
+              </a>
+              <a
+                href="mailto:opal2000@zahav.net.il"
+                className="inline-flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
+              >
+                <Mail className="size-4" />
+                <span dir="ltr">opal2000@zahav.net.il</span>
+              </a>
+            </div>
+          </CardContent>
+        </Card>
 
-        <footer className="text-center text-slate-500 text-sm">
+        <footer className="text-center text-muted-foreground text-sm mt-12 pt-8 border-t">
           המנוי כפוף לכתב השירות ולגילוי נאות
         </footer>
       </main>
