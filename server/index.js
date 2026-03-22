@@ -17,6 +17,7 @@ import {
   getPublicDealContext,
   saveOrganizationLead,
   getContactLeads,
+  getDealsPendingBeneficiaryCompletion,
   getOrganizationLeads,
   getPaymentArrearsDeals,
   getControlPanelOverviewStats,
@@ -418,6 +419,8 @@ app.post('/api/contact', async (req, res) => {
       email: String(email).trim(),
       phone: String(phone).trim(),
       message: String(message).trim(),
+      source: 'site',
+      landingSlug: '',
       opalEmail: OPAL_EMAIL,
     });
     console.log(`[${ts()}] Contact form saved to MongoDB`);
@@ -425,6 +428,28 @@ app.post('/api/contact', async (req, res) => {
   } catch (err) {
     console.error(`[${ts()}] Contact form error:`, err);
     res.status(500).json({ success: false, error: err.message || 'שגיאה בשליחה' });
+  }
+});
+
+/** צור קשר מדף נחיתה ייעודי — נשמר ב-contactLeads עם מקור */
+app.post('/api/public/contact-lead', async (req, res) => {
+  try {
+    const { name = '', phone = '', message = '', landingSlug = '' } = req.body || {};
+    if (!String(name).trim() || !String(phone).trim()) {
+      return res.status(400).json({ success: false, error: 'נא למלא שם וטלפון' });
+    }
+    await saveContactLead({
+      name: String(name).trim(),
+      email: '',
+      phone: String(phone).trim(),
+      message: String(message).trim(),
+      source: 'landing_contact',
+      landingSlug: String(landingSlug).trim().toLowerCase(),
+    });
+    res.json({ success: true, message: 'נשלח בהצלחה' });
+  } catch (err) {
+    console.error(`[${ts()}] public/contact-lead error:`, err);
+    res.status(500).json({ success: false, error: err.message || 'שגיאה' });
   }
 });
 
@@ -958,20 +983,23 @@ app.get('/api/admin/org-pricing', requireAdmin, async (req, res) => {
   }
 });
 
-/** Aggregated dashboard: abandoned carts, arrears, leads, registered org pricings + MongoDB overview stats */
+/** Aggregated dashboard: לקוחות ללא טופס מוטבים, פיגור תשלום, פניות, וכו׳ */
 app.get('/api/admin/control-panel', requireAdmin, async (req, res) => {
   try {
-    const [abandonedCarts, paymentArrears, privateLeads, corporateLeads, registeredOrganizations, overview] = await Promise.all([
-      listIncompleteCheckoutDrafts(150),
-      getPaymentArrearsDeals(150),
-      getContactLeads(150),
-      getOrganizationLeads(150),
-      listOrgPricingPolicies(),
-      getControlPanelOverviewStats(),
-    ]);
+    const [pendingBeneficiaryCustomers, checkoutDrafts, paymentArrears, privateLeads, corporateLeads, registeredOrganizations, overview] =
+      await Promise.all([
+        getDealsPendingBeneficiaryCompletion(150),
+        listIncompleteCheckoutDrafts(80),
+        getPaymentArrearsDeals(150),
+        getContactLeads(150),
+        getOrganizationLeads(150),
+        listOrgPricingPolicies(),
+        getControlPanelOverviewStats(),
+      ]);
     res.json({
       success: true,
-      abandonedCarts,
+      pendingBeneficiaryCustomers,
+      checkoutDrafts,
       paymentArrears,
       privateLeads,
       corporateLeads,

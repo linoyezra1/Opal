@@ -72,7 +72,8 @@ export default function AdminControlPanel() {
     load();
   }, [token]);
 
-  const abandoned = data?.abandonedCarts || [];
+  const pendingBeneficiaryCustomers = data?.pendingBeneficiaryCustomers || [];
+  const checkoutDrafts = data?.checkoutDrafts || [];
   const arrears = data?.paymentArrears || [];
   const privateLeads = data?.privateLeads || [];
   const corporateLeads = data?.corporateLeads || [];
@@ -81,13 +82,23 @@ export default function AdminControlPanel() {
 
   const recentActivity = React.useMemo(() => {
     const items = [];
-    for (const row of abandoned) {
+    for (const row of pendingBeneficiaryCustomers) {
+      const t = row.createdAt ? new Date(row.createdAt).getTime() : 0;
+      items.push({
+        id: `pb-${row.id}`,
+        type: 'pending_beneficiary',
+        label: 'ממתין להשלמת מוטבים',
+        detail: [row.fullName, row.phone, row.transactionId].filter(Boolean).join(' · ') || '—',
+        at: t,
+      });
+    }
+    for (const row of checkoutDrafts) {
       const t = row.updatedAt ? new Date(row.updatedAt).getTime() : 0;
       const snap = row.formSnapshot || {};
       items.push({
         id: `a-${row.id}`,
         type: 'draft',
-        label: 'עגלה נטושה',
+        label: 'טיוטת צ׳ק-אאוט',
         detail: [snap.fullName, snap.phone].filter(Boolean).join(' · ') || row.sessionKey,
         at: t,
       });
@@ -123,7 +134,7 @@ export default function AdminControlPanel() {
       });
     }
     return items.filter((x) => x.at).sort((a, b) => b.at - a.at).slice(0, 16);
-  }, [abandoned, arrears, privateLeads, corporateLeads]);
+  }, [pendingBeneficiaryCustomers, checkoutDrafts, arrears, privateLeads, corporateLeads]);
 
   const chartData = React.useMemo(() => {
     const s = overview?.chartSeries;
@@ -289,37 +300,41 @@ export default function AdminControlPanel() {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
-                <CardTitle>עגלות נטושות</CardTitle>
-                <CardDescription>משתמשים שהתחילו מילוי טופס ולא השלמו (מעקב מהשרת)</CardDescription>
+                <CardTitle>לקוחות שלא מילאו טופס מוטבים</CardTitle>
+                <CardDescription>
+                  תשלום הושלם — סטטוס &quot;ממתין להשלמה&quot; עד לשליחת טופס המוטבים במערכת
+                </CardDescription>
               </CardHeader>
               <CardContent className="overflow-auto max-h-80">
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[100px]">סשן</TableHead>
-                        <TableHead>עדכון</TableHead>
-                        <TableHead>תקציר</TableHead>
+                        <TableHead>מס׳ הזמנה</TableHead>
+                        <TableHead>לקוח</TableHead>
+                        <TableHead>טלפון</TableHead>
+                        <TableHead>סכום</TableHead>
+                        <TableHead>תאריך</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {abandoned.map((row) => {
-                        const snap = row.formSnapshot || {};
-                        const hint = [snap.fullName, snap.phone, snap.email].filter(Boolean).join(' · ') || '—';
-                        return (
-                          <TableRow key={row.id}>
-                            <TableCell className="font-mono text-xs max-w-[100px] truncate">{row.sessionKey}</TableCell>
-                            <TableCell className="whitespace-nowrap text-xs">
-                              {row.updatedAt ? new Date(row.updatedAt).toLocaleString('he-IL') : '—'}
-                            </TableCell>
-                            <TableCell className="text-muted-foreground text-xs">{hint}</TableCell>
-                          </TableRow>
-                        );
-                      })}
-                      {!abandoned.length ? (
+                      {pendingBeneficiaryCustomers.map((row) => (
+                        <TableRow key={row.id} className="bg-orange-50/80 dark:bg-orange-950/30 border-orange-200/60">
+                          <TableCell className="font-mono text-xs">{row.transactionId}</TableCell>
+                          <TableCell className="text-sm">{row.fullName || '—'}</TableCell>
+                          <TableCell dir="ltr" className="text-start text-xs">
+                            {row.phone || '—'}
+                          </TableCell>
+                          <TableCell>{formatCurrency(row.payerAmount)}</TableCell>
+                          <TableCell className="whitespace-nowrap text-xs">
+                            {row.createdAt ? new Date(row.createdAt).toLocaleString('he-IL') : '—'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {!pendingBeneficiaryCustomers.length ? (
                         <TableRow>
-                          <TableCell colSpan={3} className="text-center text-muted-foreground">
-                            אין טיוטות פתוחות
+                          <TableCell colSpan={5} className="text-center text-muted-foreground">
+                            אין רשומות — כל העסקאות הושלמו או נשלח טופס מוטבים
                           </TableCell>
                         </TableRow>
                       ) : null}
@@ -375,7 +390,7 @@ export default function AdminControlPanel() {
                   <Phone className="size-4" />
                   צור קשר — פרטיים
                 </CardTitle>
-                <CardDescription>פניות מאתר</CardDescription>
+                <CardDescription>פניות מאתר ומדפי &quot;צור קשר&quot; בנחיתה</CardDescription>
               </CardHeader>
               <CardContent className="overflow-auto max-h-80">
                 <div className="rounded-md border">
@@ -385,6 +400,7 @@ export default function AdminControlPanel() {
                         <TableHead>שם</TableHead>
                         <TableHead>טלפון</TableHead>
                         <TableHead>הודעה</TableHead>
+                        <TableHead>מקור</TableHead>
                         <TableHead>תאריך</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -396,6 +412,9 @@ export default function AdminControlPanel() {
                             {l.phone}
                           </TableCell>
                           <TableCell className="max-w-[200px] truncate text-xs">{l.message}</TableCell>
+                          <TableCell className="text-xs font-mono">
+                            {l.source === 'landing_contact' && l.landingSlug ? `דף: ${l.landingSlug}` : l.source || 'site'}
+                          </TableCell>
                           <TableCell className="whitespace-nowrap text-xs">
                             {l.createdAt ? new Date(l.createdAt).toLocaleString('he-IL') : '—'}
                           </TableCell>
@@ -403,7 +422,7 @@ export default function AdminControlPanel() {
                       ))}
                       {!privateLeads.length ? (
                         <TableRow>
-                          <TableCell colSpan={4} className="text-center text-muted-foreground">
+                          <TableCell colSpan={5} className="text-center text-muted-foreground">
                             אין פניות
                           </TableCell>
                         </TableRow>

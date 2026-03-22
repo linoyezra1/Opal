@@ -130,6 +130,8 @@ export async function saveContactLead(params) {
     email: params.email || '',
     phone: params.phone || '',
     message: params.message || '',
+    source: params.source || 'site',
+    landingSlug: params.landingSlug || '',
     createdAt: new Date(),
   });
   return { id: String(result.insertedId) };
@@ -195,6 +197,35 @@ export async function getOrganizationLeads(limit = 200) {
 }
 
 /** Deals with failed / problematic payment (פיגור תשלום / כשלון) */
+/** עסקאות ששולמו ועדיין לא הוגש טופס מוטבים */
+export async function getDealsPendingBeneficiaryCompletion(limit = 150) {
+  const db = await getDb();
+  const docs = await db
+    .collection('deals')
+    .find({
+      paymentStatus: { $regex: /success|paid|test_success/i },
+      $or: [
+        { beneficiaryUpdate: { $exists: false } },
+        { 'beneficiaryUpdate.submittedAt': { $exists: false } },
+        { 'beneficiaryUpdate.submittedAt': null },
+      ],
+    })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .toArray();
+
+  return docs.map((d) => ({
+    id: String(d._id),
+    transactionId: d.transactionId || '',
+    fullName: d.formState?.fullName || '',
+    phone: d.formState?.phone || '',
+    email: d.formState?.email || '',
+    payerAmount: Number(d.payerAmount || 0),
+    createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : null,
+    completionStatus: 'Pending Completion',
+  }));
+}
+
 export async function getPaymentArrearsDeals(limit = 200) {
   const db = await getDb();
   const docs = await db
@@ -253,6 +284,15 @@ function enrichDeal(d) {
   const isCanceled = /cancel|fail|error|declin|void|refund|בוטל|נכשל/i.test(String(d?.paymentStatus || ''));
   const provider = d?.provider || 'Cardcom';
   const agentName = String(d?.formState?.agentName || '').trim();
+  const isPaidSuccess = /success|paid|test_success/i.test(String(d?.paymentStatus || ''));
+  const benSub = d?.beneficiaryUpdate?.submittedAt;
+  const beneficiarySubmitted =
+    benSub instanceof Date || (benSub != null && !Number.isNaN(new Date(benSub).getTime()));
+  const pendingBeneficiaryCompletion = isPaidSuccess && !isCanceled && !beneficiarySubmitted;
+  let completionStatus = '—';
+  if (isCanceled) completionStatus = 'בוטל';
+  else if (isPaidSuccess && beneficiarySubmitted) completionStatus = 'הושלם';
+  else if (pendingBeneficiaryCompletion) completionStatus = 'ממתין להשלמת מוטבים';
   return {
     ...d,
     provider,
@@ -264,6 +304,9 @@ function enrichDeal(d) {
     isCanceled,
     isPrivateOrg: !orgName,
     isCentralizedOrg: !!orgName,
+    beneficiarySubmitted,
+    pendingBeneficiaryCompletion,
+    completionStatus,
   };
 }
 
@@ -422,6 +465,9 @@ export async function getSalesDashboardData(filters = {}) {
         secondaryCount: d.secondaryCount,
         activeCustomersCount: d.activeCustomersCount,
         createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : null,
+        beneficiarySubmitted: !!d.beneficiarySubmitted,
+        pendingBeneficiaryCompletion: !!d.pendingBeneficiaryCompletion,
+        completionStatus: d.completionStatus || '—',
         raw: d,
       };
     }),

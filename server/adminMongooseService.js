@@ -260,12 +260,14 @@ const whatYouGetItemSchema = new mongoose.Schema(
 const landingPageSchema = new mongoose.Schema(
   {
     slug: { type: String, required: true, unique: true, trim: true, lowercase: true },
+    /** sales = מחירון + צ׳ק-אאוט; contact = דף צור קשר בלבד */
+    pageType: { type: String, enum: ['sales', 'contact'], default: 'sales' },
     pageTitle: { type: String, default: '' },
     subTitle: { type: String, default: '' },
     mainContent: { type: String, default: '' },
     subContent: { type: String, default: '' },
     imageUrl: { type: String, default: '' },
-    priceListId: { type: mongoose.Schema.Types.ObjectId, ref: 'PriceList', required: true },
+    priceListId: { type: mongoose.Schema.Types.ObjectId, ref: 'PriceList', default: null },
     whatYouGetTitle: { type: String, default: '' },
     whatYouGetSubtitle: { type: String, default: '' },
     whatYouGetItems: { type: [whatYouGetItemSchema], default: [] },
@@ -878,7 +880,8 @@ function serializeLandingPageDoc(d) {
     mainContent: d.mainContent || '',
     subContent: d.subContent || '',
     imageUrl: d.imageUrl || '',
-    priceListId: String(d.priceListId),
+    pageType: d.pageType === 'contact' ? 'contact' : 'sales',
+    priceListId: d.priceListId ? String(d.priceListId) : '',
     whatYouGetTitle: d.whatYouGetTitle || '',
     whatYouGetSubtitle: d.whatYouGetSubtitle || '',
     whatYouGetItems: items,
@@ -922,15 +925,23 @@ function normalizeWhatYouGetItems(raw) {
 export async function createLandingPage(payload) {
   await ensureConnection();
   const slug = assertValidLandingSlug(payload.slug);
-  const priceListId = payload.priceListId;
-  if (!mongoose.isValidObjectId(priceListId)) throw new Error('נדרש מחירון תקין');
+  const pageType = payload.pageType === 'contact' ? 'contact' : 'sales';
   const exists = await LandingPage.findOne({ slug }).lean();
   if (exists) throw new Error('מזהה URL כבר בשימוש');
-  const pl = await PriceList.findById(priceListId).lean();
-  if (!pl) throw new Error('מחירון לא נמצא');
+
+  let priceListId = null;
+  if (pageType === 'sales') {
+    const pid = payload.priceListId;
+    if (!mongoose.isValidObjectId(pid)) throw new Error('נדרש מחירון תקין');
+    const pl = await PriceList.findById(pid).lean();
+    if (!pl) throw new Error('מחירון לא נמצא');
+    priceListId = pid;
+  }
+
   const wItems = normalizeWhatYouGetItems(payload.whatYouGetItems);
   const doc = await LandingPage.create({
     slug,
+    pageType,
     pageTitle: String(payload.pageTitle || '').trim(),
     subTitle: String(payload.subTitle || '').trim(),
     mainContent: String(payload.mainContent || ''),
@@ -966,11 +977,20 @@ export async function updateLandingPage(id, payload) {
   if (payload.whatYouGetItems != null) set.whatYouGetItems = normalizeWhatYouGetItems(payload.whatYouGetItems);
   if (payload.registrationTitle != null) set.registrationTitle = String(payload.registrationTitle).trim();
   if (payload.registrationSubtitle != null) set.registrationSubtitle = String(payload.registrationSubtitle).trim();
+  if (payload.pageType != null) {
+    const pt = payload.pageType === 'contact' ? 'contact' : 'sales';
+    set.pageType = pt;
+    if (pt === 'contact') set.priceListId = null;
+  }
   if (payload.priceListId != null) {
-    if (!mongoose.isValidObjectId(payload.priceListId)) throw new Error('מחירון לא תקין');
-    const pl = await PriceList.findById(payload.priceListId).lean();
-    if (!pl) throw new Error('מחירון לא נמצא');
-    set.priceListId = payload.priceListId;
+    if (payload.priceListId === '' || payload.priceListId === null) {
+      set.priceListId = null;
+    } else {
+      if (!mongoose.isValidObjectId(payload.priceListId)) throw new Error('מחירון לא תקין');
+      const pl = await PriceList.findById(payload.priceListId).lean();
+      if (!pl) throw new Error('מחירון לא נמצא');
+      set.priceListId = payload.priceListId;
+    }
   }
   const doc = await LandingPage.findByIdAndUpdate(id, { $set: set }, { new: true }).lean();
   if (!doc) throw new Error('דף לא נמצא');
@@ -985,15 +1005,14 @@ export async function deleteLandingPage(id) {
   return { ok: true };
 }
 
-/** דף נחיתה ציבורי — תוכן + מחירון (ללא עלויות פנימיות) */
+/** דף נחיתה ציבורי — תוכן + מחירון (מכירות) או דף צור קשר */
 export async function getPublicLandingPageBySlug(slug) {
   await ensureConnection();
   const s = String(slug || '').trim().toLowerCase();
   if (!s) return null;
   const doc = await LandingPage.findOne({ slug: s }).lean();
   if (!doc) return null;
-  const pl = await getPublicPriceListById(String(doc.priceListId));
-  if (!pl) return null;
+  const pageType = doc.pageType === 'contact' ? 'contact' : 'sales';
   const items = Array.isArray(doc.whatYouGetItems)
     ? doc.whatYouGetItems.map((it) => ({
         title: String(it?.title || '').trim(),
@@ -1001,7 +1020,30 @@ export async function getPublicLandingPageBySlug(slug) {
         icon: String(it?.icon || 'phone').trim() || 'phone',
       }))
     : [];
+
+  if (pageType === 'contact') {
+    return {
+      pageType: 'contact',
+      slug: doc.slug,
+      pageTitle: doc.pageTitle || '',
+      subTitle: doc.subTitle || '',
+      mainContent: doc.mainContent || '',
+      subContent: doc.subContent || '',
+      imageUrl: doc.imageUrl || '',
+      whatYouGetTitle: doc.whatYouGetTitle || '',
+      whatYouGetSubtitle: doc.whatYouGetSubtitle || '',
+      whatYouGetItems: items,
+      registrationTitle: doc.registrationTitle || '',
+      registrationSubtitle: doc.registrationSubtitle || '',
+      priceList: null,
+    };
+  }
+
+  if (!doc.priceListId) return null;
+  const pl = await getPublicPriceListById(String(doc.priceListId));
+  if (!pl) return null;
   return {
+    pageType: 'sales',
     slug: doc.slug,
     pageTitle: doc.pageTitle || '',
     subTitle: doc.subTitle || '',

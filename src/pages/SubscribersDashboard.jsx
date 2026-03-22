@@ -732,11 +732,24 @@ export default function SubscribersDashboard() {
                     </TableHeader>
                     <TableBody>
                       {data.rows.map((r) => (
-                        <TableRow key={r.id}>
+                        <TableRow
+                          key={r.id}
+                          className={
+                            r.pendingBeneficiaryCompletion
+                              ? 'bg-orange-50/90 dark:bg-orange-950/35 border-orange-200/80'
+                              : undefined
+                          }
+                        >
                           <TableCell>
-                            <Badge variant={r.status === 'canceled' ? 'destructive' : 'default'}>
-                              {r.status === 'canceled' ? 'מבוטל' : 'שולם'}
-                            </Badge>
+                            {r.pendingBeneficiaryCompletion ? (
+                              <Badge className="bg-orange-500 hover:bg-orange-500 text-white border-0">
+                                ממתין להשלמת מוטבים
+                              </Badge>
+                            ) : (
+                              <Badge variant={r.status === 'canceled' ? 'destructive' : 'default'}>
+                                {r.status === 'canceled' ? 'מבוטל' : 'שולם'}
+                              </Badge>
+                            )}
                           </TableCell>
                           <TableCell className="font-mono text-xs">{r.transactionId}</TableCell>
                           <TableCell>{r.fullName || '-'}</TableCell>

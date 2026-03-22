@@ -25,6 +25,7 @@ const TOKEN_KEY = 'opal_admin_token';
 
 const emptyForm = () => ({
   slug: '',
+  pageType: 'sales',
   pageTitle: '',
   subTitle: '',
   mainContent: '',
@@ -84,6 +85,7 @@ export default function LandingPagesManagement() {
     setEditingId(row.id);
     setForm({
       slug: row.slug || '',
+      pageType: row.pageType === 'contact' ? 'contact' : 'sales',
       pageTitle: row.pageTitle || '',
       subTitle: row.subTitle || '',
       mainContent: row.mainContent || '',
@@ -119,14 +121,21 @@ export default function LandingPagesManagement() {
           return;
         }
       }
+      const isContact = form.pageType === 'contact';
+      if (!isContact && !String(form.priceListId || '').trim()) {
+        setError('בדף מכירות יש לבחור מחירון.');
+        setLoading(false);
+        return;
+      }
       const body = {
         slug: form.slug.trim().toLowerCase(),
+        pageType: form.pageType,
         pageTitle: form.pageTitle,
         subTitle: form.subTitle,
         mainContent: form.mainContent,
         subContent: form.subContent,
         imageUrl: form.imageUrl,
-        priceListId: form.priceListId,
+        priceListId: isContact ? '' : form.priceListId,
         whatYouGetTitle: form.whatYouGetTitle,
         whatYouGetSubtitle: form.whatYouGetSubtitle,
         whatYouGetItems,
@@ -205,11 +214,23 @@ export default function LandingPagesManagement() {
           <DialogHeader>
             <DialogTitle>{editingId ? 'עריכת דף נחיתה' : 'דף נחיתה חדש'}</DialogTitle>
             <DialogDescription>
-              מזהה URL באנגלית קטנה (slug), תוכן ומחירון. הקישור יהיה: <code className="text-xs bg-muted px-1 rounded">/p/slug</code>
+              מזהה URL באנגלית קטנה (slug), תוכן, ובדף מכירות — מחירון. הקישור:{' '}
+              <code className="text-xs bg-muted px-1 rounded">/p/slug</code>
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={save} className="space-y-4">
             <FieldGroup>
+              <Field>
+                <FieldLabel>סוג דף *</FieldLabel>
+                <select
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                  value={form.pageType}
+                  onChange={(e) => setForm((p) => ({ ...p, pageType: e.target.value }))}
+                >
+                  <option value="sales">דף מכירות (מחירון + הרשמה)</option>
+                  <option value="contact">דף צור קשר (טופס פניות)</option>
+                </select>
+              </Field>
               <Field>
                 <FieldLabel>מזהה URL (slug) * — אנגלית קטנה, מקפים</FieldLabel>
                 <Input
@@ -284,22 +305,28 @@ export default function LandingPagesManagement() {
                   placeholder="מלאו את הפרטים…"
                 />
               </Field>
-              <Field>
-                <FieldLabel>מחירון מקושר *</FieldLabel>
-                <select
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
-                  value={form.priceListId}
-                  onChange={(e) => setForm((p) => ({ ...p, priceListId: e.target.value }))}
-                  required
-                >
-                  <option value="">— בחרו מחירון —</option>
-                  {priceLists.map((pl) => (
-                    <option key={pl.id} value={pl.id}>
-                      {pl.listName} ({(pl.lines || []).length} מוצרים)
-                    </option>
-                  ))}
-                </select>
-              </Field>
+              {form.pageType === 'sales' ? (
+                <Field>
+                  <FieldLabel>מחירון מקושר *</FieldLabel>
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                    value={form.priceListId}
+                    onChange={(e) => setForm((p) => ({ ...p, priceListId: e.target.value }))}
+                    required
+                  >
+                    <option value="">— בחרו מחירון —</option>
+                    {priceLists.map((pl) => (
+                      <option key={pl.id} value={pl.id}>
+                        {pl.listName} ({(pl.lines || []).length} מוצרים)
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              ) : (
+                <p className="text-sm text-muted-foreground rounded-md border border-dashed p-3">
+                  דף צור קשר: לא נדרש מחירון. הלידים יופיעו בלוח הבקרה תחת &quot;צור קשר&quot;.
+                </p>
+              )}
             </FieldGroup>
             {error ? <p className="text-destructive text-sm">{error}</p> : null}
             <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
@@ -354,6 +381,7 @@ export default function LandingPagesManagement() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>slug</TableHead>
+                      <TableHead>סוג</TableHead>
                       <TableHead>כותרת</TableHead>
                       <TableHead>מחירון</TableHead>
                       <TableHead>קישור</TableHead>
@@ -366,8 +394,19 @@ export default function LandingPagesManagement() {
                         <TableCell className="font-mono text-xs" dir="ltr">
                           {pg.slug}
                         </TableCell>
+                        <TableCell className="text-xs">
+                          {pg.pageType === 'contact' ? (
+                            <span className="rounded bg-sky-100 px-2 py-0.5 text-sky-900 dark:bg-sky-950 dark:text-sky-100">
+                              צור קשר
+                            </span>
+                          ) : (
+                            <span className="rounded bg-emerald-100 px-2 py-0.5 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
+                              מכירות
+                            </span>
+                          )}
+                        </TableCell>
                         <TableCell className="font-medium">{pg.pageTitle || '—'}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{pg.priceListId}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{pg.priceListId || '—'}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <code className="text-[10px] bg-muted px-1 rounded truncate max-w-[140px]">

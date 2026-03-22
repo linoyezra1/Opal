@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  CheckCircle,
   Phone,
   Mail,
   Clock,
@@ -88,6 +87,195 @@ function mapWhatYouGetItems(items) {
   }));
 }
 
+/** נורמליזציה ל-src של תמונה (URL מלא או יחסי) */
+function resolveImageSrc(url) {
+  const u = String(url || '').trim();
+  if (!u) return '';
+  if (/^https?:\/\//i.test(u)) return u;
+  if (u.startsWith('//')) return `https:${u}`;
+  if (u.startsWith('/')) return `${typeof window !== 'undefined' ? window.location.origin : ''}${u}`;
+  return u;
+}
+
+function HeroImageBox({ src, minClass = 'min-h-[240px] md:min-h-[380px] lg:min-h-[420px]' }) {
+  const [failed, setFailed] = useState(false);
+  const resolved = resolveImageSrc(src);
+  return (
+    <div
+      className={cn(
+        'relative w-full rounded-2xl overflow-hidden border-2 border-primary/15 shadow-xl bg-muted',
+        minClass
+      )}
+    >
+      {resolved && !failed ? (
+        <img
+          src={resolved}
+          alt=""
+          className="absolute inset-0 size-full min-h-[inherit] object-cover object-center"
+          onError={() => setFailed(true)}
+          loading="eager"
+          decoding="async"
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm p-6 text-center">
+          {failed ? 'לא ניתן לטעון את התמונה — בדקו את כתובת הקובץ' : 'ניתן להוסיף תמונת מוצר בניהול המוצר או תמונת דף בבונה דפי הנחיתה'}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ContactLandingView({ slug, content, whatYouGetRows, whatYouGetTitle, whatYouGetSubtitle }) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+  const [done, setDone] = useState(false);
+  const [formErr, setFormErr] = useState('');
+
+  async function submitContact(e) {
+    e.preventDefault();
+    setFormErr('');
+    if (!name.trim() || !phone.trim()) {
+      setFormErr('נא למלא שם וטלפון');
+      return;
+    }
+    setSending(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/public/contact-lead`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          phone: phone.trim(),
+          message: message.trim(),
+          landingSlug: slug || '',
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || 'שגיאה בשליחה');
+      setDone(true);
+    } catch (err) {
+      setFormErr(err.message || 'שגיאה');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div dir="rtl" className="min-h-screen bg-background text-right">
+      <section className="relative py-10 md:py-16 overflow-hidden bg-gradient-to-b from-[#D9EAF3]/40 via-background to-background">
+        <div className="container relative max-w-6xl mx-auto px-4">
+          <div className="grid md:grid-cols-2 gap-8 md:gap-12 items-center">
+            <div className="order-2 md:order-1 space-y-5 text-center md:text-right">
+              {content.subtitle ? (
+                <Badge className="inline-flex bg-primary/10 text-primary border-primary/20">{content.subtitle}</Badge>
+              ) : null}
+              <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-balance leading-tight text-foreground">
+                {content.title || 'צור קשר'}
+              </h1>
+              <p className="text-lg text-muted-foreground leading-relaxed whitespace-pre-line max-w-xl mx-auto md:mx-0 md:ms-0 md:me-auto">
+                {content.main || 'נשמח לעמוד לשירותכם.'}
+              </p>
+            </div>
+            <div className="order-1 md:order-2 w-full">
+              <HeroImageBox src={content.imageUrl} />
+              <p className="text-xs text-center text-muted-foreground mt-2">לוגו / תמונה מדף הנחיתה</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {whatYouGetRows?.length ? (
+        <section className="py-16 md:py-20">
+          <div className="container mx-auto max-w-6xl px-4">
+            <div className="mb-12 text-center">
+              <h2 className="mb-4 text-3xl font-bold text-foreground md:text-4xl">{whatYouGetTitle}</h2>
+              <p className="mx-auto max-w-2xl text-lg text-muted-foreground">{whatYouGetSubtitle}</p>
+            </div>
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {whatYouGetRows.map((service, index) => {
+                const Ico = ICON_MAP[service.icon] || Phone;
+                return (
+                  <Card key={`${service.title}-${index}`} className="group border-border bg-card">
+                    <CardContent className="p-6">
+                      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[#D9EAF3]">
+                        <Ico className="h-6 w-6 text-primary" />
+                      </div>
+                      <h3 className="mb-2 text-lg font-semibold">{service.title}</h3>
+                      <p className="text-sm text-muted-foreground">{service.description}</p>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      <section id="contact-form" className="py-16 bg-muted/30 scroll-mt-20">
+        <div className="container max-w-xl mx-auto px-4">
+          <Card className="shadow-lg border-border">
+            <CardHeader className="border-b bg-[#D9EAF3]/30">
+              <CardTitle className="text-xl">שליחת פנייה</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              {done ? (
+                <p className="text-center text-green-700 font-medium py-6">הפנייה נשלחה בהצלחה. נחזור אליכם בהקדם.</p>
+              ) : (
+                <form onSubmit={submitContact} className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium">שם מלא *</label>
+                    <input
+                      className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">טלפון *</label>
+                    <input
+                      type="tel"
+                      dir="ltr"
+                      className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">הודעה</label>
+                    <textarea
+                      rows={4}
+                      className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                    />
+                  </div>
+                  {formErr ? <p className="text-destructive text-sm">{formErr}</p> : null}
+                  <Button type="submit" className="w-full" size="lg" disabled={sending}>
+                    {sending ? 'שולח…' : 'שליחה'}
+                  </Button>
+                </form>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      <footer className="py-8 border-t bg-muted/30">
+        <div className="container text-center max-w-5xl mx-auto px-4">
+          <p className="text-sm text-muted-foreground">כל הזכויות שמורות לאופאל - בית ליזמות רפואית</p>
+          <Link to="/" className="text-sm text-primary underline mt-4 inline-block">
+            דף הבית
+          </Link>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
 /**
  * דף נחיתה ציבורי — /p/:slug או /landing/:priceListId
  */
@@ -122,6 +310,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [pageType, setPageType] = useState('sales');
 
   useEffect(() => {
     if (!slug && !priceListId) {
@@ -134,12 +323,30 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
     setError('');
     const run = async () => {
       try {
-        const agRes = await fetch(`${API_BASE}/api/public/agents`).then((r) => r.json());
-        if (agRes.success && Array.isArray(agRes.agents)) setPublicAgents(agRes.agents);
-
         if (slug) {
           const r = await fetch(`${API_BASE}/api/public/landing/${encodeURIComponent(slug)}`).then((x) => x.json());
           if (!r.success) throw new Error(r.error || 'דף לא נמצא');
+          if (r.pageType === 'contact') {
+            setPageType('contact');
+            setCtx(null);
+            setPublicAgents([]);
+            setContent({
+              title: r.pageTitle || 'צור קשר',
+              subtitle: r.subTitle || '',
+              main: r.mainContent || '',
+              subContentRaw: r.subContent || '',
+              imageUrl: r.imageUrl || '',
+              whatYouGetTitle: r.whatYouGetTitle || '',
+              whatYouGetSubtitle: r.whatYouGetSubtitle || '',
+              whatYouGetItems: Array.isArray(r.whatYouGetItems) ? r.whatYouGetItems : [],
+              registrationTitle: r.registrationTitle || '',
+              registrationSubtitle: r.registrationSubtitle || '',
+            });
+            return;
+          }
+          setPageType('sales');
+          const agRes = await fetch(`${API_BASE}/api/public/agents`).then((res) => res.json());
+          if (agRes.success && Array.isArray(agRes.agents)) setPublicAgents(agRes.agents);
           const pl = r.priceList;
           if (!pl) throw new Error('מחירון לא נמצא');
           setCtx(pl);
@@ -156,6 +363,9 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
             registrationSubtitle: r.registrationSubtitle || '',
           });
         } else {
+          setPageType('sales');
+          const agRes = await fetch(`${API_BASE}/api/public/agents`).then((res) => res.json());
+          if (agRes.success && Array.isArray(agRes.agents)) setPublicAgents(agRes.agents);
           const pl = await fetch(`${API_BASE}/api/public/price-list/${encodeURIComponent(priceListId)}`).then((x) => x.json());
           if (!pl.success) throw new Error(pl.error || 'מחירון לא נמצא');
           setCtx(pl);
@@ -180,11 +390,6 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
     };
     run();
   }, [slug, priceListId]);
-
-  const servicesList = useMemo(
-    () => content.subContentRaw.split('\n').filter((line) => line.trim()),
-    [content.subContentRaw]
-  );
 
   const whatYouGetRows = useMemo(
     () => mapWhatYouGetItems(content.whatYouGetItems),
@@ -307,11 +512,36 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
     );
   }
 
-  if (error || !ctx) {
+  if (error) {
     return (
       <div dir="rtl" className="min-h-screen bg-background p-6">
         <div className="max-w-lg mx-auto rounded-xl border bg-card p-8 text-center space-y-4">
-          <p className="text-destructive font-medium">{error || 'לא נמצא'}</p>
+          <p className="text-destructive font-medium">{error}</p>
+          <Button asChild variant="outline">
+            <Link to="/">חזרה לדף הבית</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (pageType === 'contact') {
+    return (
+      <ContactLandingView
+        slug={slug || ''}
+        content={content}
+        whatYouGetRows={whatYouGetRows}
+        whatYouGetTitle={whatYouGetTitle}
+        whatYouGetSubtitle={whatYouGetSubtitle}
+      />
+    );
+  }
+
+  if (!ctx) {
+    return (
+      <div dir="rtl" className="min-h-screen bg-background p-6">
+        <div className="max-w-lg mx-auto rounded-xl border bg-card p-8 text-center space-y-4">
+          <p className="text-destructive font-medium">לא נמצא</p>
           <Button asChild variant="outline">
             <Link to="/">חזרה לדף הבית</Link>
           </Button>
@@ -366,20 +596,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
               </div>
             </div>
             <div className="order-1 md:order-2 w-full">
-              <div
-                className={cn(
-                  'relative w-full rounded-2xl overflow-hidden border-2 border-primary/15 shadow-xl bg-muted',
-                  'min-h-[240px] md:min-h-[380px] lg:min-h-[420px]'
-                )}
-              >
-                {heroImageUrl ? (
-                  <img src={heroImageUrl} alt="" className="absolute inset-0 size-full object-cover" />
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm p-6">
-                    ניתן להוסיף תמונת מוצר בניהול המוצר או תמונת דף בבונה דפי הנחיתה
-                  </div>
-                )}
-              </div>
+              <HeroImageBox src={heroImageUrl} />
             </div>
           </div>
         </div>
@@ -432,26 +649,6 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
         </div>
       </section>
 
-      <section className="py-16">
-        <div className="container max-w-5xl mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">מה כולל השירות?</h2>
-            <p className="text-muted-foreground max-w-xl mx-auto">כל מה שאתם צריכים לבריאות המשפחה, במקום אחד</p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2 max-w-3xl mx-auto">
-            {servicesList.map((service, i) => (
-              <div
-                key={i}
-                className="flex items-start gap-3 p-4 rounded-lg border bg-card hover:shadow-sm transition-shadow"
-              >
-                <CheckCircle className="size-5 text-green-600 shrink-0 mt-0.5" />
-                <span className="text-sm leading-relaxed">{service.trim()}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       <section id="plans" className="py-16 bg-muted/30 scroll-mt-20">
         <div className="container max-w-6xl mx-auto px-4">
           <div className="text-center mb-12">
@@ -493,8 +690,17 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                   }}
                 >
                   {product.imageUrl ? (
-                    <div className="relative w-full aspect-[16/10] bg-muted border-b">
-                      <img src={product.imageUrl} alt="" className="absolute inset-0 size-full object-cover" />
+                    <div className="relative w-full min-h-[160px] aspect-[16/10] bg-muted border-b">
+                      <img
+                        src={resolveImageSrc(product.imageUrl)}
+                        alt=""
+                        className="absolute inset-0 size-full object-cover object-center min-h-[160px]"
+                        loading="lazy"
+                        decoding="async"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                        }}
+                      />
                     </div>
                   ) : null}
                   {popular ? (
@@ -684,11 +890,15 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                     className="mt-1 size-4 rounded border-input"
                   />
                   <label htmlFor="terms-landing" className="text-sm leading-relaxed text-muted-foreground cursor-pointer">
-                    אני מסכים/ה ל{' '}
-                    <a href="#" className="text-primary underline hover:no-underline" onClick={(e) => e.preventDefault()}>
-                      תנאי השירות
+                    הנני מאשר את{' '}
+                    <a href="#" className="text-primary underline hover:no-underline font-medium" onClick={(e) => e.preventDefault()}>
+                      כתב השרות
                     </a>{' '}
-                    ומאשר/ת את קבלת השירות הרפואי
+                    וה
+                    <a href="#" className="text-primary underline hover:no-underline font-medium" onClick={(e) => e.preventDefault()}>
+                      גילוי נאות
+                    </a>
+                    .
                   </label>
                 </div>
 
