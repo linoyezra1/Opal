@@ -1,11 +1,29 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { Plus, Edit2, Trash2, Package } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
+import AdminPageShell from '../components/admin/AdminPageShell.jsx';
+import { Button } from '../components/ui/button.jsx';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog.jsx';
+import { Input } from '../components/ui/input.jsx';
+import { Textarea } from '../components/ui/textarea.jsx';
+import { FieldGroup, Field, FieldLabel } from '../components/ui/field.jsx';
+import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '../components/ui/empty.jsx';
+import { Spinner } from '../components/ui/spinner.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
-const EMPTY_FORM = { productName: '', sku: '' };
+const EMPTY_FORM = { productName: '', sku: '', baseDescription: '' };
 
 export default function ProductManagement() {
   const [token] = React.useState(() => localStorage.getItem(TOKEN_KEY) || '');
@@ -15,6 +33,7 @@ export default function ProductManagement() {
   const [error, setError] = React.useState('');
   const [editProduct, setEditProduct] = React.useState(null);
   const [deleteTarget, setDeleteTarget] = React.useState(null);
+  const [createOpen, setCreateOpen] = React.useState(false);
 
   async function loadProducts() {
     if (!token) return;
@@ -49,11 +68,16 @@ export default function ProductManagement() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          productName: form.productName,
+          sku: form.sku,
+          baseDescription: form.baseDescription,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.error || 'שמירה נכשלה');
       setForm(EMPTY_FORM);
+      setCreateOpen(false);
       await loadProducts();
     } catch (e2) {
       setError(e2.message || 'שגיאה');
@@ -77,6 +101,7 @@ export default function ProductManagement() {
         body: JSON.stringify({
           productName: editProduct.productName,
           sku: editProduct.sku,
+          baseDescription: editProduct.baseDescription ?? '',
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -110,6 +135,15 @@ export default function ProductManagement() {
     }
   }
 
+  function openEdit(p) {
+    setEditProduct({
+      id: p.id,
+      productName: p.productName || p.name,
+      sku: p.sku,
+      baseDescription: p.baseDescription || '',
+    });
+  }
+
   if (!token) {
     return (
       <div dir="rtl" className="min-h-screen bg-slate-50 p-6">
@@ -122,153 +156,212 @@ export default function ProductManagement() {
   }
 
   return (
-    <div dir="rtl" className="min-h-screen bg-slate-50 p-4 sm:p-8">
+    <AdminPageShell>
       <ConfirmDialog
         open={!!deleteTarget}
         title="מחיקת מוצר"
-        message={deleteTarget ? `האם למחוק את "${deleteTarget.productName || deleteTarget.name}" (${deleteTarget.sku})? פעולה זו תסיר קישורים מספקים וממחירונים.` : ''}
+        message={
+          deleteTarget
+            ? `האם למחוק את "${deleteTarget.productName || deleteTarget.name}" (${deleteTarget.sku})? פעולה זו תסיר קישורים מספקים וממחירונים.`
+            : ''
+        }
         confirmLabel="מחק"
         danger
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
+        isLoading={loading}
       />
 
-      {editProduct ? (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/50" onClick={() => setEditProduct(null)}>
-          <div className="bg-white rounded-xl border max-w-lg w-full p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-xl font-bold text-medical-blue-dark mb-4">עריכת מוצר</h2>
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>הוספת מוצר חדש</DialogTitle>
+            <DialogDescription>הזן את פרטי המוצר החדש</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submit} className="space-y-4">
+            <FieldGroup>
+              <Field>
+                <FieldLabel>שם מוצר *</FieldLabel>
+                <Input
+                  value={form.productName}
+                  onChange={(e) => setForm((p) => ({ ...p, productName: e.target.value }))}
+                  placeholder="שם המוצר"
+                  required
+                />
+              </Field>
+              <Field>
+                <FieldLabel>מק&quot;ט *</FieldLabel>
+                <Input
+                  value={form.sku}
+                  onChange={(e) => setForm((p) => ({ ...p, sku: e.target.value }))}
+                  placeholder="SKU ייחודי"
+                  className="font-mono"
+                  required
+                />
+              </Field>
+              <Field>
+                <FieldLabel>תיאור</FieldLabel>
+                <Textarea
+                  value={form.baseDescription}
+                  onChange={(e) => setForm((p) => ({ ...p, baseDescription: e.target.value }))}
+                  placeholder="תיאור קצר (לדפי נחיתה)"
+                  rows={3}
+                />
+              </Field>
+            </FieldGroup>
+            {error ? <p className="text-destructive text-sm">{error}</p> : null}
+            <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
+              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
+                ביטול
+              </Button>
+              <Button type="submit" disabled={loading || !form.productName.trim() || !form.sku.trim()}>
+                {loading && <Spinner className="me-2" />}
+                הוסף
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editProduct} onOpenChange={(o) => !o && setEditProduct(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>עריכת מוצר</DialogTitle>
+            <DialogDescription>עדכן את פרטי המוצר</DialogDescription>
+          </DialogHeader>
+          {editProduct ? (
             <form onSubmit={saveEdit} className="space-y-4">
-              <div>
-                <label className="text-xs text-slate-500">שם מוצר</label>
-                <input
-                  className="w-full border rounded-lg px-3 py-2 mt-1"
-                  value={editProduct.productName}
-                  onChange={(e) => setEditProduct((p) => ({ ...p, productName: e.target.value }))}
-                  required
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500">מק&quot;ט</label>
-                <input
-                  className="w-full border rounded-lg px-3 py-2 mt-1 font-mono"
-                  value={editProduct.sku}
-                  onChange={(e) => setEditProduct((p) => ({ ...p, sku: e.target.value }))}
-                  required
-                />
-              </div>
-              <div className="flex gap-2 justify-end">
-                <button type="button" onClick={() => setEditProduct(null)} className="px-4 py-2 rounded-lg bg-slate-200">
+              <FieldGroup>
+                <Field>
+                  <FieldLabel>שם מוצר *</FieldLabel>
+                  <Input
+                    value={editProduct.productName}
+                    onChange={(e) => setEditProduct((p) => ({ ...p, productName: e.target.value }))}
+                    required
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>מק&quot;ט *</FieldLabel>
+                  <Input
+                    value={editProduct.sku}
+                    onChange={(e) => setEditProduct((p) => ({ ...p, sku: e.target.value }))}
+                    className="font-mono"
+                    required
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>תיאור</FieldLabel>
+                  <Textarea
+                    value={editProduct.baseDescription}
+                    onChange={(e) => setEditProduct((p) => ({ ...p, baseDescription: e.target.value }))}
+                    rows={3}
+                  />
+                </Field>
+              </FieldGroup>
+              {error ? <p className="text-destructive text-sm">{error}</p> : null}
+              <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
+                <Button type="button" variant="outline" onClick={() => setEditProduct(null)}>
                   ביטול
-                </button>
-                <button type="submit" disabled={loading} className="px-4 py-2 rounded-lg bg-medical-blue text-white">
-                  {loading ? 'שומר...' : 'שמירה'}
-                </button>
-              </div>
+                </Button>
+                <Button type="submit" disabled={loading}>
+                  {loading && <Spinner className="me-2" />}
+                  שמירה
+                </Button>
+              </DialogFooter>
             </form>
-          </div>
-        </div>
-      ) : null}
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
-      <div className="max-w-5xl mx-auto space-y-6">
-        <div className="flex justify-between items-center flex-wrap gap-2">
-          <h1 className="text-2xl font-bold text-medical-blue-dark">הקמת מוצר</h1>
-          <div className="flex gap-2 flex-wrap">
-            <Link to="/admin/vendors" className="px-4 py-2 rounded-lg bg-amber-700 text-white text-sm">
-              ספקים
-            </Link>
-            <Link to="/admin/price-list" className="px-4 py-2 rounded-lg bg-medical-blue-dark text-white text-sm">
-              מחירון
-            </Link>
-            <Link to="/admin/control-panel" className="px-4 py-2 rounded-lg bg-medical-teal text-white text-sm">
-              לוח בקרה
-            </Link>
-            <Link to="/admin" className="px-4 py-2 rounded-lg bg-slate-200 text-sm">
-              חזרה לניהול
-            </Link>
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">מוצרים</h1>
+            <p className="text-muted-foreground">ניהול מוצרים וקטלוג</p>
           </div>
+          <Button
+            onClick={() => {
+              setForm(EMPTY_FORM);
+              setCreateOpen(true);
+            }}
+          >
+            <Plus className="size-4 me-2" />
+            הוסף מוצר
+          </Button>
         </div>
 
-        <form onSubmit={submit} className="bg-white rounded-xl border p-4 sm:p-6 space-y-4">
-          <h2 className="font-semibold text-lg">הוספת מוצר</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input
-              className="border rounded-lg px-3 py-2"
-              placeholder="שם מוצר *"
-              value={form.productName}
-              onChange={(e) => setForm((p) => ({ ...p, productName: e.target.value }))}
-              required
-            />
-            <input
-              className="border rounded-lg px-3 py-2"
-              placeholder='מק"ט (SKU) ייחודי *'
-              value={form.sku}
-              onChange={(e) => setForm((p) => ({ ...p, sku: e.target.value }))}
-              required
-            />
-          </div>
-          {error ? <p className="text-red-600 text-sm">{error}</p> : null}
-          <button disabled={loading} type="submit" className="px-5 py-2 rounded-lg bg-medical-blue text-white">
-            {loading ? 'שומר...' : 'שמירת מוצר'}
-          </button>
-        </form>
-
-        <div className="bg-white rounded-xl border p-4">
-          <div className="flex justify-between items-center mb-3">
-            <h2 className="font-semibold text-lg">רשימת מוצרים</h2>
-            <button type="button" onClick={() => loadProducts()} className="text-sm text-medical-blue underline">
-              רענון
-            </button>
-          </div>
-          <div className="overflow-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-slate-100">
-                <tr>
-                  <th className="p-2 text-right">שם מוצר</th>
-                  <th className="p-2 text-right">מק&quot;ט</th>
-                  <th className="p-2 text-right">נוצר</th>
-                  <th className="p-2 text-right">פעולות</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((p) => (
-                  <tr key={p.id} className="border-t">
-                    <td className="p-2">{p.productName || p.name}</td>
-                    <td className="p-2 font-mono">{p.sku}</td>
-                    <td className="p-2 text-slate-500 whitespace-nowrap">
-                      {p.createdAt ? new Date(p.createdAt).toLocaleString('he-IL') : '—'}
-                    </td>
-                    <td className="p-2 whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setEditProduct({
-                            id: p.id,
-                            productName: p.productName || p.name,
-                            sku: p.sku,
-                          })
-                        }
-                        className="text-medical-blue text-sm font-semibold ml-2"
-                      >
-                        עריכה
-                      </button>
-                      <button type="button" onClick={() => setDeleteTarget(p)} className="text-red-600 text-sm font-semibold">
-                        מחק
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {!products.length ? (
-                  <tr>
-                    <td colSpan={4} className="p-4 text-slate-500">
-                      אין מוצרים — הוסיפו מוצרים לבסיס הנתונים.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>רשימת מוצרים</CardTitle>
+            <CardDescription>
+              {products.length} מוצרים במערכת
+              <Button variant="link" className="px-2 h-auto font-normal text-primary" type="button" onClick={() => loadProducts()}>
+                רענון
+              </Button>
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {products.length === 0 && !loading ? (
+              <Empty>
+                <EmptyMedia variant="icon">
+                  <Package className="size-8" />
+                </EmptyMedia>
+                <EmptyTitle>אין מוצרים עדיין</EmptyTitle>
+                <EmptyDescription>התחל בהוספת מוצר ראשון למערכת</EmptyDescription>
+                <Button className="mt-4" onClick={() => setCreateOpen(true)}>
+                  <Plus className="size-4 me-2" />
+                  הוסף מוצר חדש
+                </Button>
+              </Empty>
+            ) : (
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>שם מוצר</TableHead>
+                      <TableHead>מק&quot;ט</TableHead>
+                      <TableHead>תיאור</TableHead>
+                      <TableHead>נוצר</TableHead>
+                      <TableHead className="w-28">פעולות</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {products.map((p) => (
+                      <TableRow key={p.id}>
+                        <TableCell className="font-medium">{p.productName || p.name}</TableCell>
+                        <TableCell className="font-mono text-sm">{p.sku}</TableCell>
+                        <TableCell className="max-w-xs truncate text-muted-foreground">
+                          {p.baseDescription || '—'}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground whitespace-nowrap text-sm">
+                          {p.createdAt ? new Date(p.createdAt).toLocaleString('he-IL') : '—'}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="icon" type="button" onClick={() => openEdit(p)} aria-label="ערוך">
+                              <Edit2 className="size-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              type="button"
+                              onClick={() => setDeleteTarget(p)}
+                              aria-label="מחק"
+                            >
+                              <Trash2 className="size-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+            {loading && products.length > 0 ? <p className="text-sm text-muted-foreground mt-2">טוען…</p> : null}
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </AdminPageShell>
   );
 }

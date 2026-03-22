@@ -1,7 +1,25 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { Plus, Edit2, Trash2, Receipt, Copy, ExternalLink } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
+import AdminPageShell from '../components/admin/AdminPageShell.jsx';
+import { Button } from '../components/ui/button.jsx';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog.jsx';
+import { Input } from '../components/ui/input.jsx';
+import { FieldGroup, Field, FieldLabel } from '../components/ui/field.jsx';
+import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '../components/ui/empty.jsx';
+import { Badge } from '../components/ui/badge.jsx';
+import { Spinner } from '../components/ui/spinner.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -26,6 +44,7 @@ export default function PricingDashboard() {
   const [orgName, setOrgName] = useState('');
   const [lines, setLines] = useState([emptyLine()]);
   const [deleteId, setDeleteId] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
 
   const landingBase = useMemo(() => `${window.location.origin}/landing`, []);
 
@@ -81,6 +100,7 @@ export default function PricingDashboard() {
     setListName('');
     setOrgName('');
     setLines([emptyLine()]);
+    setError('');
     setShowModal(true);
   }
 
@@ -99,6 +119,7 @@ export default function PricingDashboard() {
           }))
         : [emptyLine()];
     setLines(mapped);
+    setError('');
     setShowModal(true);
     setTimeout(() => {
       mapped.forEach((l, i) => {
@@ -186,11 +207,22 @@ export default function PricingDashboard() {
     }
   }
 
+  async function copyLandingUrl(id) {
+    const url = `${landingBase}/${id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      /* ignore */
+    }
+  }
+
   if (!token) {
     return (
       <div dir="rtl" className="min-h-screen bg-slate-50 p-6">
         <p>יש להתחבר דרך מסך המנהל.</p>
-        <Link to="/admin" className="text-medical-blue underline">
+        <Link to="/admin" className="text-primary underline">
           כניסת מנהל
         </Link>
       </div>
@@ -198,7 +230,7 @@ export default function PricingDashboard() {
   }
 
   return (
-    <div dir="rtl" className="min-h-screen bg-slate-50 p-4 sm:p-8">
+    <AdminPageShell>
       <ConfirmDialog
         open={!!deleteId}
         title="מחיקת מחירון"
@@ -207,182 +239,247 @@ export default function PricingDashboard() {
         danger
         onConfirm={confirmDelete}
         onCancel={() => setDeleteId(null)}
+        isLoading={loading}
       />
 
-      {showModal ? (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/50 overflow-y-auto" onClick={() => setShowModal(false)}>
-          <div className="bg-white rounded-xl border max-w-3xl w-full p-6 shadow-xl my-8 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-xl font-bold text-medical-blue-dark mb-4">{editId ? 'עריכת מחירון' : 'מחירון חדש'}</h2>
-            <form onSubmit={saveList} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-slate-500">שם מחירון *</label>
-                  <input className="w-full border rounded-lg px-3 py-2 mt-1" value={listName} onChange={(e) => setListName(e.target.value)} required />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-500">שם ארגון (אופציונלי)</label>
-                  <input className="w-full border rounded-lg px-3 py-2 mt-1" value={orgName} onChange={(e) => setOrgName(e.target.value)} />
-                </div>
+      <Dialog
+        open={showModal}
+        onOpenChange={(o) => {
+          setShowModal(o);
+          if (!o) setError('');
+        }}
+      >
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editId ? 'עריכת מחירון' : 'מחירון חדש'}</DialogTitle>
+            <DialogDescription>הגדירו שם, ארגון (אופציונלי) ושורות מוצר–ספק–מחיר</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={saveList} className="space-y-4">
+            <FieldGroup>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel>שם מחירון *</FieldLabel>
+                  <Input value={listName} onChange={(e) => setListName(e.target.value)} required />
+                </Field>
+                <Field>
+                  <FieldLabel>שם ארגון (אופציונלי)</FieldLabel>
+                  <Input value={orgName} onChange={(e) => setOrgName(e.target.value)} />
+                </Field>
               </div>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <h3 className="font-semibold">מוצרים במחירון</h3>
-                  <button type="button" onClick={addLine} className="text-sm text-medical-blue font-semibold">
-                    + שורה
-                  </button>
-                </div>
-                {lines.map((line, i) => (
-                  <div key={i} className="border rounded-lg p-3 grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
-                    <div>
-                      <label className="text-xs text-slate-500">ספק</label>
-                      <select
-                        className="w-full border rounded-lg px-2 py-2 mt-1 bg-white text-sm"
-                        value={line.vendorId}
-                        onChange={(e) => updateLine(i, 'vendorId', e.target.value)}
-                        required
-                      >
-                        <option value="">—</option>
-                        {vendors.map((v) => (
-                          <option key={v.id} value={v.id}>
-                            {v.vendorName}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500">מוצר</label>
-                      <select
-                        className="w-full border rounded-lg px-2 py-2 mt-1 bg-white text-sm"
-                        value={line.productId}
-                        onChange={(e) => updateLine(i, 'productId', e.target.value)}
-                        required
-                      >
-                        <option value="">—</option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.productName || p.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500">מחיר קמעוני</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        className="w-full border rounded-lg px-2 py-2 mt-1"
-                        value={line.retailPrice}
-                        onChange={(e) => updateLine(i, 'retailPrice', e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500">עמלת סוכן (ברירת מחדל)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        className="w-full border rounded-lg px-2 py-2 mt-1"
-                        value={line.defaultAgentCommission}
-                        onChange={(e) => updateLine(i, 'defaultAgentCommission', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500">עלות ספק (מהמסד)</label>
-                      <input className="w-full border rounded-lg px-2 py-2 mt-1 bg-slate-50 text-sm" readOnly value={line.vendorCost} placeholder="—" />
-                    </div>
-                    <div>
-                      <button type="button" onClick={() => removeLine(i)} className="text-red-600 text-sm py-2">
-                        הסר
-                      </button>
-                    </div>
+            </FieldGroup>
+
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <h3 className="font-semibold text-sm">מוצרים במחירון</h3>
+                <Button type="button" variant="link" className="h-auto p-0" onClick={addLine}>
+                  + שורה
+                </Button>
+              </div>
+              {lines.map((line, i) => (
+                <div
+                  key={i}
+                  className="border rounded-lg p-3 grid grid-cols-1 md:grid-cols-6 gap-2 items-end bg-card"
+                >
+                  <Field className="gap-1.5">
+                    <FieldLabel className="text-xs">ספק</FieldLabel>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                      value={line.vendorId}
+                      onChange={(e) => updateLine(i, 'vendorId', e.target.value)}
+                      required
+                    >
+                      <option value="">—</option>
+                      {vendors.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.vendorName}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field className="gap-1.5">
+                    <FieldLabel className="text-xs">מוצר</FieldLabel>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                      value={line.productId}
+                      onChange={(e) => updateLine(i, 'productId', e.target.value)}
+                      required
+                    >
+                      <option value="">—</option>
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.productName || p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field className="gap-1.5">
+                    <FieldLabel className="text-xs">מחיר קמעוני</FieldLabel>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      dir="ltr"
+                      value={line.retailPrice}
+                      onChange={(e) => updateLine(i, 'retailPrice', e.target.value)}
+                      required
+                    />
+                  </Field>
+                  <Field className="gap-1.5">
+                    <FieldLabel className="text-xs">עמלת סוכן (ברירת מחדל)</FieldLabel>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      dir="ltr"
+                      value={line.defaultAgentCommission}
+                      onChange={(e) => updateLine(i, 'defaultAgentCommission', e.target.value)}
+                    />
+                  </Field>
+                  <Field className="gap-1.5">
+                    <FieldLabel className="text-xs">עלות ספק (מהמסד)</FieldLabel>
+                    <Input className="bg-muted" readOnly value={line.vendorCost} placeholder="—" dir="ltr" />
+                  </Field>
+                  <div className="flex pb-2">
+                    <Button type="button" variant="ghost" className="text-destructive" onClick={() => removeLine(i)}>
+                      הסר
+                    </Button>
                   </div>
-                ))}
-              </div>
-              {error ? <p className="text-red-600 text-sm">{error}</p> : null}
-              <div className="flex gap-2 justify-end">
-                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 rounded-lg bg-slate-200">
-                  ביטול
-                </button>
-                <button type="submit" disabled={loading} className="px-4 py-2 rounded-lg bg-medical-blue text-white">
-                  {loading ? 'שומר...' : 'שמירה'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
-
-      <div className="max-w-5xl mx-auto space-y-6">
-        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-          מחירון זה מגדיר מספר מוצרים תחת שם אחד — משמש ליצירת{' '}
-          <strong>דף נחיתה</strong> בכתובת <code className="bg-white px-1">/landing/מזהה-מחירון</code>. ודאי ש־
-          <code className="bg-white px-1">VITE_API_URL</code> מצביע על שרת ה-API.
-        </p>
-        <div className="flex flex-wrap justify-between gap-2">
-          <h1 className="text-2xl font-bold text-medical-blue-dark">מחירון (דפי נחיתה)</h1>
-          <div className="flex gap-2 flex-wrap">
-            <button type="button" onClick={openNew} className="px-4 py-2 rounded-lg bg-medical-blue text-white text-sm">
-              + מחירון חדש
-            </button>
-            <Link to="/admin/vendors" className="px-4 py-2 rounded-lg bg-amber-700 text-white text-sm">
-              ספקים
-            </Link>
-            <Link to="/admin/products" className="px-4 py-2 rounded-lg bg-emerald-700 text-white text-sm">
-              מוצרים
-            </Link>
-            <Link to="/admin" className="px-4 py-2 rounded-lg bg-slate-200 text-sm">
-              חזרה
-            </Link>
-          </div>
-        </div>
-
-        {error && !showModal ? <p className="text-red-600 text-sm">{error}</p> : null}
-
-        <div className="bg-white rounded-xl border overflow-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-100">
-              <tr>
-                <th className="p-2 text-right">שם מחירון</th>
-                <th className="p-2 text-right">ארגון</th>
-                <th className="p-2 text-right">מוצרים</th>
-                <th className="p-2 text-right">קישור דף נחיתה</th>
-                <th className="p-2 text-right">פעולות</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lists.map((row) => (
-                <tr key={row.id} className="border-t">
-                  <td className="p-2 font-medium">{row.listName}</td>
-                  <td className="p-2">{row.orgName || '—'}</td>
-                  <td className="p-2">{(row.lines || []).length}</td>
-                  <td className="p-2">
-                    <code className="text-xs bg-slate-100 px-1 rounded break-all">
-                      {landingBase}/{row.id}
-                    </code>
-                  </td>
-                  <td className="p-2 whitespace-nowrap">
-                    <button type="button" onClick={() => openEdit(row)} className="text-medical-blue font-semibold ml-2">
-                      עריכה
-                    </button>
-                    <button type="button" onClick={() => setDeleteId(row.id)} className="text-red-600 font-semibold">
-                      מחק
-                    </button>
-                  </td>
-                </tr>
+                </div>
               ))}
-              {!lists.length ? (
-                <tr>
-                  <td colSpan={5} className="p-6 text-slate-500 text-center">
-                    אין מחירונים — צרי מחירון חדש
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
+            </div>
+            {error ? <p className="text-destructive text-sm">{error}</p> : null}
+            <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
+              <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
+                ביטול
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading && <Spinner className="me-2" />}
+                שמירה
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <div className="space-y-6">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          מחירון מגדיר מספר מוצרים תחת שם אחד — משמש ליצירת <strong>דף נחיתה</strong> בכתובת{' '}
+          <code className="rounded bg-background px-1">/landing/מזהה-מחירון</code>. ודאי ש־
+          <code className="rounded bg-background px-1">VITE_API_URL</code> מצביע על שרת ה-API.
         </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">מחירונים (דפי נחיתה)</h1>
+            <p className="text-muted-foreground">ניהול מחירונים וקישורי נחיתה</p>
+          </div>
+          <Button type="button" onClick={openNew}>
+            <Plus className="size-4 me-2" />
+            מחירון חדש
+          </Button>
+        </div>
+
+        {error && !showModal ? <p className="text-destructive text-sm">{error}</p> : null}
+
+        <Card>
+          <CardHeader>
+            <CardTitle>רשימת מחירונים</CardTitle>
+            <CardDescription>
+              {lists.length} מחירונים
+              <Button variant="link" className="px-2 h-auto font-normal text-primary" type="button" onClick={() => loadAll()}>
+                רענון
+              </Button>
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {lists.length === 0 && !loading ? (
+              <Empty>
+                <EmptyMedia variant="icon">
+                  <Receipt className="size-8" />
+                </EmptyMedia>
+                <EmptyTitle>אין מחירונים</EmptyTitle>
+                <EmptyDescription>צרו מחירון חדש כדי לקבל קישור לדף נחיתה</EmptyDescription>
+                <Button className="mt-4" type="button" onClick={openNew}>
+                  <Plus className="size-4 me-2" />
+                  מחירון חדש
+                </Button>
+              </Empty>
+            ) : (
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>שם מחירון</TableHead>
+                      <TableHead>ארגון</TableHead>
+                      <TableHead>מוצרים</TableHead>
+                      <TableHead>קישור דף נחיתה</TableHead>
+                      <TableHead className="w-36">פעולות</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {lists.map((row) => {
+                      const fullUrl = `${landingBase}/${row.id}`;
+                      return (
+                        <TableRow key={row.id}>
+                          <TableCell className="font-medium">{row.listName}</TableCell>
+                          <TableCell>{row.orgName || '—'}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">{(row.lines || []).length}</Badge>
+                          </TableCell>
+                          <TableCell className="max-w-[220px]">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <code className="text-xs bg-muted px-1 rounded break-all">{fullUrl}</code>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="shrink-0"
+                                title="העתק קישור"
+                                onClick={() => copyLandingUrl(row.id)}
+                              >
+                                <Copy className="size-4" />
+                              </Button>
+                              {copiedId === row.id ? (
+                                <span className="text-xs text-muted-foreground">הועתק</span>
+                              ) : null}
+                              <a
+                                href={fullUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="shrink-0 text-primary"
+                                title="פתח בלשונית חדשה"
+                              >
+                                <ExternalLink className="size-4" />
+                              </a>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="icon" type="button" onClick={() => openEdit(row)} aria-label="ערוך">
+                                <Edit2 className="size-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                type="button"
+                                onClick={() => setDeleteId(row.id)}
+                                aria-label="מחק"
+                              >
+                                <Trash2 className="size-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+            {loading && lists.length > 0 ? <p className="text-sm text-muted-foreground mt-2">טוען…</p> : null}
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </AdminPageShell>
   );
 }

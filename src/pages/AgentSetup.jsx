@@ -1,7 +1,26 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { Plus, Edit2, Trash2, Users, Percent } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
+import AdminPageShell from '../components/admin/AdminPageShell.jsx';
+import { Button } from '../components/ui/button.jsx';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog.jsx';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs.jsx';
+import { Input } from '../components/ui/input.jsx';
+import { FieldGroup, Field, FieldLabel } from '../components/ui/field.jsx';
+import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '../components/ui/empty.jsx';
+import { Badge } from '../components/ui/badge.jsx';
+import { Spinner } from '../components/ui/spinner.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -56,6 +75,74 @@ function buildPayload(body) {
   return { ...rest, productCommissions: rows };
 }
 
+function CommissionMatrix({ target, data, products, setAddForm, setEditAgent }) {
+  const apply =
+    target === 'add'
+      ? (fn) => setAddForm(fn)
+      : (fn) => setEditAgent((p) => (p ? fn(p) : null));
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-md border overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>מוצר</TableHead>
+              <TableHead className="w-40">עמלה (₪)</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {products.map((pr) => {
+              const row = (data.productCommissions || []).find((c) => c.productId === pr.id);
+              return (
+                <TableRow key={pr.id}>
+                  <TableCell className="font-medium">
+                    {pr.productName || pr.name}{' '}
+                    <span className="text-muted-foreground text-sm font-mono">({pr.sku})</span>
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      dir="ltr"
+                      className="w-28"
+                      value={row?.commission ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        apply((p) => {
+                          const list = [...(p.productCommissions || [])];
+                          const i = list.findIndex((c) => c.productId === pr.id);
+                          if (v === '') {
+                            if (i >= 0) list.splice(i, 1);
+                          } else if (i >= 0) {
+                            list[i] = { ...list[i], productId: pr.id, commission: v };
+                          } else {
+                            list.push({ productId: pr.id, commission: v, productName: '' });
+                          }
+                          return { ...p, productCommissions: list };
+                        });
+                      }}
+                      placeholder="0"
+                    />
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+      {!products.length ? (
+        <p className="text-sm text-muted-foreground">אין מוצרים במערכת — הוסיפו מוצרים תחילה.</p>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          עמלה ייחודית לכל מוצר — משמשת בדוחות רווח כשהמנוי קשור לסוכן ולמוצר. עמלה 0 או ריק מתעלמת מהמיפוי.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function AgentSetup() {
   const [token] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [products, setProducts] = useState([]);
@@ -95,35 +182,8 @@ export default function AgentSetup() {
   function openAdd() {
     setAddForm(emptyForm());
     setAddTab('details');
+    setError('');
     setShowAddModal(true);
-  }
-
-  function addCommissionRow(target) {
-    if (target === 'add') {
-      setAddForm((p) => ({ ...p, productCommissions: [...(p.productCommissions || []), { productId: '', commission: '' }] }));
-    } else {
-      setEditAgent((p) =>
-        p ? { ...p, productCommissions: [...(p.productCommissions || []), { productId: '', commission: '' }] } : null
-      );
-    }
-  }
-
-  function removeCommissionRow(target, index) {
-    if (target === 'add') {
-      setAddForm((p) => ({
-        ...p,
-        productCommissions: (p.productCommissions || []).filter((_, i) => i !== index),
-      }));
-    } else {
-      setEditAgent((p) =>
-        p
-          ? {
-              ...p,
-              productCommissions: (p.productCommissions || []).filter((_, i) => i !== index),
-            }
-          : null
-      );
-    }
   }
 
   async function submitAdd(e) {
@@ -207,91 +267,16 @@ export default function AgentSetup() {
     }
   }
 
-  function CommissionSection({ target, data }) {
-    const list = data.productCommissions || [];
-    return (
-      <div className="space-y-3">
-        <div className="flex justify-between items-center">
-          <p className="text-sm text-slate-600">עמלה ייחודית לכל מוצר — משמשת בדוחות רווח כשהמנוי קשור לסוכן ולמוצר.</p>
-          <button type="button" onClick={() => addCommissionRow(target)} className="text-sm text-medical-blue font-semibold">
-            + מוצר
-          </button>
-        </div>
-        {list.map((row, i) => (
-          <div key={i} className="flex flex-wrap gap-2 items-end border rounded-lg p-3">
-            <div className="flex-1 min-w-[200px]">
-              <label className="text-xs text-slate-500">מוצר</label>
-              <select
-                className="w-full border rounded-lg px-3 py-2 mt-1 bg-white"
-                value={row.productId}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (target === 'add') {
-                    setAddForm((p) => {
-                      const next = [...(p.productCommissions || [])];
-                      next[i] = { ...next[i], productId: v };
-                      return { ...p, productCommissions: next };
-                    });
-                  } else {
-                    setEditAgent((p) => {
-                      if (!p) return null;
-                      const next = [...(p.productCommissions || [])];
-                      next[i] = { ...next[i], productId: v };
-                      return { ...p, productCommissions: next };
-                    });
-                  }
-                }}
-              >
-                <option value="">— בחרו מוצר —</option>
-                {products.map((pr) => (
-                  <option key={pr.id} value={pr.id}>
-                    {pr.productName || pr.name} ({pr.sku})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="w-32">
-              <label className="text-xs text-slate-500">עמלה (₪)</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                className="w-full border rounded-lg px-3 py-2 mt-1"
-                value={row.commission}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (target === 'add') {
-                    setAddForm((p) => {
-                      const next = [...(p.productCommissions || [])];
-                      next[i] = { ...next[i], commission: v };
-                      return { ...p, productCommissions: next };
-                    });
-                  } else {
-                    setEditAgent((p) => {
-                      if (!p) return null;
-                      const next = [...(p.productCommissions || [])];
-                      next[i] = { ...next[i], commission: v };
-                      return { ...p, productCommissions: next };
-                    });
-                  }
-                }}
-              />
-            </div>
-            <button type="button" onClick={() => removeCommissionRow(target, i)} className="text-red-600 text-sm py-2">
-              הסר
-            </button>
-          </div>
-        ))}
-        {!list.length ? <p className="text-sm text-slate-400">אין מוצרים — ניתן להסתמך על עמלה ברירת מחדל במחירון</p> : null}
-      </div>
-    );
+  function getProductLabel(productId) {
+    const p = products.find((x) => x.id === productId);
+    return p ? p.productName || p.name : productId;
   }
 
   if (!token) {
     return (
       <div dir="rtl" className="min-h-screen bg-slate-50 p-6">
         <p className="text-slate-700">יש להתחבר דרך מסך המנהל.</p>
-        <Link to="/admin" className="text-medical-blue underline">
+        <Link to="/admin" className="text-primary underline">
           מעבר לכניסת מנהל
         </Link>
       </div>
@@ -299,317 +284,437 @@ export default function AgentSetup() {
   }
 
   return (
-    <div dir="rtl" className="min-h-screen bg-slate-50 p-4 sm:p-8">
+    <AdminPageShell>
       <ConfirmDialog
         open={!!deleteAgent}
         title="מחיקת סוכן"
-        message={deleteAgent ? `למחוק את "${deleteAgent.agentName}"?${deleteAgent.totalSales > 0 ? ' (לא ניתן אם יש עסקאות מקושרות)' : ''}` : ''}
+        message={
+          deleteAgent
+            ? `למחוק את "${deleteAgent.agentName}"?${deleteAgent.totalSales > 0 ? ' (לא ניתן אם יש עסקאות מקושרות)' : ''}`
+            : ''
+        }
         confirmLabel="מחק"
         danger
         onConfirm={confirmDelete}
         onCancel={() => setDeleteAgent(null)}
+        isLoading={loading}
       />
 
-      {showAddModal ? (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/50 overflow-y-auto" onClick={() => setShowAddModal(false)}>
-          <div className="bg-white rounded-xl border max-w-2xl w-full p-6 shadow-xl my-8 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-xl font-bold text-medical-blue-dark mb-4">הוספת סוכן</h2>
-            <div className="flex gap-2 border-b mb-4">
-              <button
-                type="button"
-                className={`px-4 py-2 font-semibold ${addTab === 'details' ? 'border-b-2 border-medical-blue text-medical-blue' : 'text-slate-500'}`}
-                onClick={() => setAddTab('details')}
-              >
-                פרטים ובנק
-              </button>
-              <button
-                type="button"
-                className={`px-4 py-2 font-semibold ${addTab === 'products' ? 'border-b-2 border-medical-blue text-medical-blue' : 'text-slate-500'}`}
-                onClick={() => setAddTab('products')}
-              >
-                מוצרים ועמלות
-              </button>
-            </div>
-            <form onSubmit={submitAdd} className="space-y-4">
-              {addTab === 'details' ? (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <input
-                      className="border rounded-lg px-3 py-2"
-                      placeholder="שם סוכן *"
-                      value={addForm.agentName}
-                      onChange={(e) => setAddForm((p) => ({ ...p, agentName: e.target.value }))}
-                      required
-                    />
-                    <input
-                      className="border rounded-lg px-3 py-2"
-                      placeholder="תעודת זהות / ח.פ *"
-                      value={addForm.idNum}
-                      onChange={(e) => setAddForm((p) => ({ ...p, idNum: e.target.value }))}
-                      required
-                    />
-                    <input
-                      className="border rounded-lg px-3 py-2"
-                      placeholder="טלפון"
-                      value={addForm.phone}
-                      onChange={(e) => setAddForm((p) => ({ ...p, phone: e.target.value }))}
-                    />
-                    <input
-                      className="border rounded-lg px-3 py-2"
-                      type="email"
-                      placeholder="אימייל"
-                      value={addForm.email}
-                      onChange={(e) => setAddForm((p) => ({ ...p, email: e.target.value }))}
-                    />
-                    <input
-                      className="border rounded-lg px-3 py-2 md:col-span-2"
-                      placeholder="כתובת"
+      <Dialog
+        open={showAddModal}
+        onOpenChange={(o) => {
+          setShowAddModal(o);
+          if (!o) setError('');
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>הוספת סוכן</DialogTitle>
+            <DialogDescription>הזינו פרטי סוכן, בנק ועמלות למוצרים</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submitAdd} className="space-y-4">
+            <Tabs value={addTab} onValueChange={setAddTab} className="mt-0">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="details">פרטים אישיים</TabsTrigger>
+                <TabsTrigger value="bank">פרטי בנק</TabsTrigger>
+                <TabsTrigger value="commissions">עמלות</TabsTrigger>
+              </TabsList>
+              <TabsContent value="details" className="space-y-4 mt-4">
+                <FieldGroup>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel>שם סוכן *</FieldLabel>
+                      <Input
+                        value={addForm.agentName}
+                        onChange={(e) => setAddForm((p) => ({ ...p, agentName: e.target.value }))}
+                        placeholder="שם מלא"
+                        required
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>תעודת זהות / ח.פ *</FieldLabel>
+                      <Input
+                        value={addForm.idNum}
+                        onChange={(e) => setAddForm((p) => ({ ...p, idNum: e.target.value }))}
+                        placeholder="מספר זיהוי"
+                        dir="ltr"
+                        required
+                      />
+                    </Field>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel>טלפון</FieldLabel>
+                      <Input
+                        value={addForm.phone}
+                        onChange={(e) => setAddForm((p) => ({ ...p, phone: e.target.value }))}
+                        placeholder="050-0000000"
+                        dir="ltr"
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>אימייל</FieldLabel>
+                      <Input
+                        type="email"
+                        value={addForm.email}
+                        onChange={(e) => setAddForm((p) => ({ ...p, email: e.target.value }))}
+                        placeholder="email@example.com"
+                        dir="ltr"
+                      />
+                    </Field>
+                  </div>
+                  <Field>
+                    <FieldLabel>כתובת</FieldLabel>
+                    <Input
                       value={addForm.address}
                       onChange={(e) => setAddForm((p) => ({ ...p, address: e.target.value }))}
+                      placeholder="רחוב, עיר"
                     />
+                  </Field>
+                </FieldGroup>
+              </TabsContent>
+              <TabsContent value="bank" className="space-y-4 mt-4">
+                <FieldGroup>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel>שם בנק *</FieldLabel>
+                      <Input
+                        value={addForm.bankDetails.bankName}
+                        onChange={(e) => setBank('add', 'bankName', e.target.value)}
+                        placeholder="למשל: בנק הפועלים"
+                        required
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>מספר בנק</FieldLabel>
+                      <Input
+                        value={addForm.bankDetails.bankNum}
+                        onChange={(e) => setBank('add', 'bankNum', e.target.value)}
+                        dir="ltr"
+                      />
+                    </Field>
                   </div>
-                  <h3 className="font-semibold">פרטי בנק</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <input
-                      className="border rounded-lg px-3 py-2"
-                      placeholder="שם בנק *"
-                      value={addForm.bankDetails.bankName}
-                      onChange={(e) => setBank('add', 'bankName', e.target.value)}
-                      required
-                    />
-                    <input
-                      className="border rounded-lg px-3 py-2"
-                      placeholder="מספר בנק"
-                      value={addForm.bankDetails.bankNum}
-                      onChange={(e) => setBank('add', 'bankNum', e.target.value)}
-                    />
-                    <input
-                      className="border rounded-lg px-3 py-2"
-                      placeholder="שם בעל חשבון *"
-                      value={addForm.bankDetails.accountHolder}
-                      onChange={(e) => setBank('add', 'accountHolder', e.target.value)}
-                      required
-                    />
-                    <input
-                      className="border rounded-lg px-3 py-2"
-                      placeholder="מספר סניף"
-                      value={addForm.bankDetails.branchNum}
-                      onChange={(e) => setBank('add', 'branchNum', e.target.value)}
-                    />
-                    <input
-                      className="border rounded-lg px-3 py-2 md:col-span-2"
-                      placeholder="מספר חשבון"
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel>שם בעל חשבון *</FieldLabel>
+                      <Input
+                        value={addForm.bankDetails.accountHolder}
+                        onChange={(e) => setBank('add', 'accountHolder', e.target.value)}
+                        required
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>מספר סניף</FieldLabel>
+                      <Input
+                        value={addForm.bankDetails.branchNum}
+                        onChange={(e) => setBank('add', 'branchNum', e.target.value)}
+                        dir="ltr"
+                      />
+                    </Field>
+                  </div>
+                  <Field>
+                    <FieldLabel>מספר חשבון</FieldLabel>
+                    <Input
                       value={addForm.bankDetails.accountNum}
                       onChange={(e) => setBank('add', 'accountNum', e.target.value)}
+                      dir="ltr"
                     />
-                  </div>
-                </>
-              ) : (
-                <CommissionSection target="add" data={addForm} />
-              )}
-              {error ? <p className="text-red-600 text-sm">{error}</p> : null}
-              <div className="flex gap-2 justify-end pt-2">
-                <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 rounded-lg bg-slate-200">
-                  ביטול
-                </button>
-                <button type="submit" disabled={loading} className="px-4 py-2 rounded-lg bg-medical-blue text-white">
-                  {loading ? 'שומר...' : 'שמירה'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
+                  </Field>
+                </FieldGroup>
+              </TabsContent>
+              <TabsContent value="commissions" className="mt-4">
+                <CommissionMatrix
+                  target="add"
+                  data={addForm}
+                  products={products}
+                  setAddForm={setAddForm}
+                  setEditAgent={setEditAgent}
+                />
+              </TabsContent>
+            </Tabs>
+            {error ? <p className="text-destructive text-sm">{error}</p> : null}
+            <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
+              <Button type="button" variant="outline" onClick={() => setShowAddModal(false)}>
+                ביטול
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading && <Spinner className="me-2" />}
+                שמירה
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      {editAgent ? (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/50 overflow-y-auto" onClick={() => setEditAgent(null)}>
-          <div className="bg-white rounded-xl border max-w-2xl w-full p-6 shadow-xl my-8 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-xl font-bold text-medical-blue-dark mb-4">עריכת סוכן</h2>
-            <div className="flex gap-2 border-b mb-4">
-              <button
-                type="button"
-                className={`px-4 py-2 font-semibold ${editTab === 'details' ? 'border-b-2 border-medical-blue text-medical-blue' : 'text-slate-500'}`}
-                onClick={() => setEditTab('details')}
-              >
-                פרטים ובנק
-              </button>
-              <button
-                type="button"
-                className={`px-4 py-2 font-semibold ${editTab === 'products' ? 'border-b-2 border-medical-blue text-medical-blue' : 'text-slate-500'}`}
-                onClick={() => setEditTab('products')}
-              >
-                מוצרים ועמלות
-              </button>
-            </div>
+      <Dialog
+        open={!!editAgent}
+        onOpenChange={(o) => {
+          if (!o) {
+            setEditAgent(null);
+            setError('');
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>עריכת סוכן</DialogTitle>
+            <DialogDescription>עדכנו פרטי סוכן, בנק ועמלות</DialogDescription>
+          </DialogHeader>
+          {editAgent ? (
             <form onSubmit={saveEdit} className="space-y-4">
-              {editTab === 'details' ? (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <input
-                      className="border rounded-lg px-3 py-2"
-                      placeholder="שם סוכן *"
-                      value={editAgent.agentName}
-                      onChange={(e) => setEditAgent((p) => ({ ...p, agentName: e.target.value }))}
-                      required
-                    />
-                    <input
-                      className="border rounded-lg px-3 py-2"
-                      placeholder="תעודת זהות / ח.פ *"
-                      value={editAgent.idNum}
-                      onChange={(e) => setEditAgent((p) => ({ ...p, idNum: e.target.value }))}
-                      required
-                    />
-                    <input
-                      className="border rounded-lg px-3 py-2"
-                      placeholder="טלפון"
-                      value={editAgent.phone}
-                      onChange={(e) => setEditAgent((p) => ({ ...p, phone: e.target.value }))}
-                    />
-                    <input
-                      className="border rounded-lg px-3 py-2"
-                      type="email"
-                      placeholder="אימייל"
-                      value={editAgent.email}
-                      onChange={(e) => setEditAgent((p) => ({ ...p, email: e.target.value }))}
-                    />
-                    <input
-                      className="border rounded-lg px-3 py-2 md:col-span-2"
-                      placeholder="כתובת"
-                      value={editAgent.address}
-                      onChange={(e) => setEditAgent((p) => ({ ...p, address: e.target.value }))}
-                    />
-                  </div>
-                  <h3 className="font-semibold">פרטי בנק</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <input
-                      className="border rounded-lg px-3 py-2"
-                      placeholder="שם בנק *"
-                      value={editAgent.bankDetails.bankName}
-                      onChange={(e) => setBank('edit', 'bankName', e.target.value)}
-                      required
-                    />
-                    <input
-                      className="border rounded-lg px-3 py-2"
-                      placeholder="מספר בנק"
-                      value={editAgent.bankDetails.bankNum}
-                      onChange={(e) => setBank('edit', 'bankNum', e.target.value)}
-                    />
-                    <input
-                      className="border rounded-lg px-3 py-2"
-                      placeholder="שם בעל חשבון *"
-                      value={editAgent.bankDetails.accountHolder}
-                      onChange={(e) => setBank('edit', 'accountHolder', e.target.value)}
-                      required
-                    />
-                    <input
-                      className="border rounded-lg px-3 py-2"
-                      placeholder="מספר סניף"
-                      value={editAgent.bankDetails.branchNum}
-                      onChange={(e) => setBank('edit', 'branchNum', e.target.value)}
-                    />
-                    <input
-                      className="border rounded-lg px-3 py-2 md:col-span-2"
-                      placeholder="מספר חשבון"
-                      value={editAgent.bankDetails.accountNum}
-                      onChange={(e) => setBank('edit', 'accountNum', e.target.value)}
-                    />
-                  </div>
-                </>
-              ) : (
-                <CommissionSection target="edit" data={editAgent} />
-              )}
-              {error ? <p className="text-red-600 text-sm">{error}</p> : null}
-              <div className="flex gap-2 justify-end pt-2">
-                <button type="button" onClick={() => setEditAgent(null)} className="px-4 py-2 rounded-lg bg-slate-200">
+              <Tabs value={editTab} onValueChange={setEditTab} className="mt-0">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="details">פרטים אישיים</TabsTrigger>
+                  <TabsTrigger value="bank">פרטי בנק</TabsTrigger>
+                  <TabsTrigger value="commissions">עמלות</TabsTrigger>
+                </TabsList>
+                <TabsContent value="details" className="space-y-4 mt-4">
+                  <FieldGroup>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field>
+                        <FieldLabel>שם סוכן *</FieldLabel>
+                        <Input
+                          value={editAgent.agentName}
+                          onChange={(e) => setEditAgent((p) => ({ ...p, agentName: e.target.value }))}
+                          required
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel>תעודת זהות / ח.פ *</FieldLabel>
+                        <Input
+                          value={editAgent.idNum}
+                          onChange={(e) => setEditAgent((p) => ({ ...p, idNum: e.target.value }))}
+                          dir="ltr"
+                          required
+                        />
+                      </Field>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field>
+                        <FieldLabel>טלפון</FieldLabel>
+                        <Input
+                          value={editAgent.phone}
+                          onChange={(e) => setEditAgent((p) => ({ ...p, phone: e.target.value }))}
+                          dir="ltr"
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel>אימייל</FieldLabel>
+                        <Input
+                          type="email"
+                          value={editAgent.email}
+                          onChange={(e) => setEditAgent((p) => ({ ...p, email: e.target.value }))}
+                          dir="ltr"
+                        />
+                      </Field>
+                    </div>
+                    <Field>
+                      <FieldLabel>כתובת</FieldLabel>
+                      <Input
+                        value={editAgent.address}
+                        onChange={(e) => setEditAgent((p) => ({ ...p, address: e.target.value }))}
+                      />
+                    </Field>
+                  </FieldGroup>
+                </TabsContent>
+                <TabsContent value="bank" className="space-y-4 mt-4">
+                  <FieldGroup>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field>
+                        <FieldLabel>שם בנק *</FieldLabel>
+                        <Input
+                          value={editAgent.bankDetails.bankName}
+                          onChange={(e) => setBank('edit', 'bankName', e.target.value)}
+                          required
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel>מספר בנק</FieldLabel>
+                        <Input
+                          value={editAgent.bankDetails.bankNum}
+                          onChange={(e) => setBank('edit', 'bankNum', e.target.value)}
+                          dir="ltr"
+                        />
+                      </Field>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field>
+                        <FieldLabel>שם בעל חשבון *</FieldLabel>
+                        <Input
+                          value={editAgent.bankDetails.accountHolder}
+                          onChange={(e) => setBank('edit', 'accountHolder', e.target.value)}
+                          required
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel>מספר סניף</FieldLabel>
+                        <Input
+                          value={editAgent.bankDetails.branchNum}
+                          onChange={(e) => setBank('edit', 'branchNum', e.target.value)}
+                          dir="ltr"
+                        />
+                      </Field>
+                    </div>
+                    <Field>
+                      <FieldLabel>מספר חשבון</FieldLabel>
+                      <Input
+                        value={editAgent.bankDetails.accountNum}
+                        onChange={(e) => setBank('edit', 'accountNum', e.target.value)}
+                        dir="ltr"
+                      />
+                    </Field>
+                  </FieldGroup>
+                </TabsContent>
+                <TabsContent value="commissions" className="mt-4">
+                  <CommissionMatrix
+                    target="edit"
+                    data={editAgent}
+                    products={products}
+                    setAddForm={setAddForm}
+                    setEditAgent={setEditAgent}
+                  />
+                </TabsContent>
+              </Tabs>
+              {error ? <p className="text-destructive text-sm">{error}</p> : null}
+              <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
+                <Button type="button" variant="outline" onClick={() => setEditAgent(null)}>
                   ביטול
-                </button>
-                <button type="submit" disabled={loading} className="px-4 py-2 rounded-lg bg-medical-blue text-white">
-                  {loading ? 'שומר...' : 'שמירה'}
-                </button>
-              </div>
+                </Button>
+                <Button type="submit" disabled={loading}>
+                  {loading && <Spinner className="me-2" />}
+                  שמירה
+                </Button>
+              </DialogFooter>
             </form>
-          </div>
-        </div>
-      ) : null}
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
-      <div className="max-w-5xl mx-auto space-y-6">
-        <div className="flex justify-between items-center flex-wrap gap-2">
-          <h1 className="text-2xl font-bold text-medical-blue-dark">ניהול סוכנים</h1>
-          <div className="flex gap-2 flex-wrap">
-            <button type="button" onClick={openAdd} className="px-4 py-2 rounded-lg bg-medical-blue text-white text-sm font-semibold">
-              + הוסף סוכן
-            </button>
-            <Link to="/admin/products" className="px-4 py-2 rounded-lg bg-emerald-700 text-white text-sm">
-              מוצרים
-            </Link>
-            <Link to="/admin" className="px-4 py-2 rounded-lg bg-slate-200 text-sm">
-              חזרה לניהול
-            </Link>
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">סוכנים</h1>
+            <p className="text-muted-foreground">ניהול סוכנים ועמלות למוצרים</p>
           </div>
+          <Button type="button" onClick={openAdd}>
+            <Plus className="size-4 me-2" />
+            הוסף סוכן
+          </Button>
         </div>
 
-        <p className="text-sm text-slate-600">
-          מנויים מקושרים ל־<code className="bg-slate-100 px-1 rounded">agentId</code>. עמלות למוצר נספרות בדוח &quot;מנויים&quot; (רווח = הכנסה − ספק − עמלה).
+        <p className="text-sm text-muted-foreground">
+          מנויים מקושרים ל־<code className="bg-muted px-1 rounded text-xs">agentId</code>. עמלות למוצר נספרות בדוח
+          &quot;מנויים&quot; (רווח = הכנסה − ספק − עמלה).
         </p>
 
-        <div className="bg-white rounded-xl border p-4">
-          <div className="flex justify-between items-center mb-3">
-            <h2 className="font-semibold text-lg">סוכנים רשומים</h2>
-            <button type="button" onClick={() => loadAgents()} className="text-sm text-medical-blue underline">
-              רענון
-            </button>
-          </div>
-          <div className="overflow-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-slate-100">
-                <tr>
-                  <th className="p-2 text-right">שם</th>
-                  <th className="p-2 text-right">ת&quot;ז / ח.פ</th>
-                  <th className="p-2 text-right">טלפון</th>
-                  <th className="p-2 text-right">אימייל</th>
-                  <th className="p-2 text-right">מוצרים בעמלה</th>
-                  <th className="p-2 text-right">סה&quot;כ מנויים</th>
-                  <th className="p-2 text-right">פעולות</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id} className="border-t">
-                    <td className="p-2">{r.agentName}</td>
-                    <td className="p-2">{r.idNum}</td>
-                    <td className="p-2">{r.phone}</td>
-                    <td className="p-2">{r.email}</td>
-                    <td className="p-2">{(r.productCommissions || []).length}</td>
-                    <td className="p-2 font-bold text-medical-blue-dark">{r.totalSales ?? 0}</td>
-                    <td className="p-2 whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditTab('details');
-                          setEditAgent(agentFromRow(r));
-                        }}
-                        className="text-medical-blue font-semibold ml-2"
-                      >
-                        עריכה
-                      </button>
-                      <button type="button" onClick={() => setDeleteAgent(r)} className="text-red-600 font-semibold">
-                        מחק
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {!rows.length ? (
-                  <tr>
-                    <td colSpan={7} className="p-4 text-slate-500">
-                      אין סוכנים
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>רשימת סוכנים</CardTitle>
+            <CardDescription>
+              {rows.length} סוכנים במערכת
+              <Button variant="link" className="px-2 h-auto font-normal text-primary" type="button" onClick={() => loadAgents()}>
+                רענון
+              </Button>
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {rows.length === 0 && !loading ? (
+              <Empty>
+                <EmptyMedia variant="icon">
+                  <Users className="size-8" />
+                </EmptyMedia>
+                <EmptyTitle>אין סוכנים עדיין</EmptyTitle>
+                <EmptyDescription>הוסיפו סוכן ראשון כדי לקשר מנויים ועמלות</EmptyDescription>
+                <Button className="mt-4" type="button" onClick={openAdd}>
+                  <Plus className="size-4 me-2" />
+                  הוסף סוכן חדש
+                </Button>
+              </Empty>
+            ) : (
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>שם</TableHead>
+                      <TableHead>ת&quot;ז / ח.פ</TableHead>
+                      <TableHead>טלפון</TableHead>
+                      <TableHead>אימייל</TableHead>
+                      <TableHead>עמלות</TableHead>
+                      <TableHead>סה&quot;כ מנויים</TableHead>
+                      <TableHead className="w-28">פעולות</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((r) => {
+                      const comms = r.productCommissions || [];
+                      const preview = comms.slice(0, 2);
+                      const rest = comms.length - preview.length;
+                      return (
+                        <TableRow key={r.id}>
+                          <TableCell className="font-medium">{r.agentName}</TableCell>
+                          <TableCell dir="ltr" className="text-start font-mono text-sm">
+                            {r.idNum}
+                          </TableCell>
+                          <TableCell dir="ltr" className="text-start">
+                            {r.phone || '—'}
+                          </TableCell>
+                          <TableCell dir="ltr" className="text-start text-muted-foreground">
+                            {r.email || '—'}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {preview.map((c) => (
+                                <Badge key={c.productId} variant="outline" className="text-xs">
+                                  <Percent className="size-3 me-1" />
+                                  {getProductLabel(c.productId).slice(0, 14)}
+                                  {String(c.commission ?? '').length ? ` · ₪${c.commission}` : ''}
+                                </Badge>
+                              ))}
+                              {rest > 0 ? (
+                                <Badge variant="secondary" className="text-xs">
+                                  +{rest}
+                                </Badge>
+                              ) : null}
+                              {!comms.length ? <span className="text-muted-foreground text-sm">—</span> : null}
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-semibold text-primary">{r.totalSales ?? 0}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                type="button"
+                                onClick={() => {
+                                  setEditTab('details');
+                                  setEditAgent(agentFromRow(r));
+                                }}
+                                aria-label="ערוך"
+                              >
+                                <Edit2 className="size-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                type="button"
+                                onClick={() => setDeleteAgent(r)}
+                                aria-label="מחק"
+                              >
+                                <Trash2 className="size-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+            {loading && rows.length > 0 ? <p className="text-sm text-muted-foreground mt-2">טוען…</p> : null}
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </AdminPageShell>
   );
 }

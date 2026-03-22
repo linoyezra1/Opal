@@ -1,7 +1,34 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import {
+  Plus,
+  Edit2,
+  Trash2,
+  Building2,
+  CreditCard,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
+import AdminPageShell from '../components/admin/AdminPageShell.jsx';
+import { Button } from '../components/ui/button.jsx';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog.jsx';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs.jsx';
+import { Input } from '../components/ui/input.jsx';
+import { FieldGroup, Field, FieldLabel } from '../components/ui/field.jsx';
+import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '../components/ui/empty.jsx';
+import { Badge } from '../components/ui/badge.jsx';
+import { Spinner } from '../components/ui/spinner.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -44,6 +71,90 @@ function vendorToEditForm(v) {
   };
 }
 
+function VendorFormFields({ data, setData }) {
+  const setForm = setData;
+  const form = data;
+  return (
+    <>
+      <Tabs defaultValue="details" className="mt-2">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="details">פרטים כלליים</TabsTrigger>
+          <TabsTrigger value="bank">פרטי בנק</TabsTrigger>
+        </TabsList>
+        <TabsContent value="details" className="space-y-4 mt-4">
+          <FieldGroup>
+            <Field>
+              <FieldLabel>שם ספק *</FieldLabel>
+              <Input
+                value={form.vendorName}
+                onChange={(e) => setForm((p) => ({ ...p, vendorName: e.target.value }))}
+                placeholder="שם החברה"
+                required
+              />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel>ח.פ / מספר זיהוי *</FieldLabel>
+                <Input
+                  value={form.idNum}
+                  onChange={(e) => setForm((p) => ({ ...p, idNum: e.target.value }))}
+                  required
+                />
+              </Field>
+              <Field>
+                <FieldLabel>טלפון</FieldLabel>
+                <Input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} dir="ltr" className="text-start" />
+              </Field>
+            </div>
+            <Field>
+              <FieldLabel>אימייל</FieldLabel>
+              <Input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+                dir="ltr"
+                className="text-start"
+              />
+            </Field>
+            <Field>
+              <FieldLabel>כתובת</FieldLabel>
+              <Input value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
+            </Field>
+          </FieldGroup>
+        </TabsContent>
+        <TabsContent value="bank" className="space-y-4 mt-4">
+          <FieldGroup>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel>שם בנק</FieldLabel>
+                <Input value={form.bankName} onChange={(e) => setForm((p) => ({ ...p, bankName: e.target.value }))} />
+              </Field>
+              <Field>
+                <FieldLabel>מספר בנק</FieldLabel>
+                <Input value={form.bankNum} onChange={(e) => setForm((p) => ({ ...p, bankNum: e.target.value }))} dir="ltr" />
+              </Field>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel>מספר סניף</FieldLabel>
+                <Input value={form.branchNum} onChange={(e) => setForm((p) => ({ ...p, branchNum: e.target.value }))} dir="ltr" />
+              </Field>
+              <Field>
+                <FieldLabel>מספר חשבון</FieldLabel>
+                <Input value={form.accountNum} onChange={(e) => setForm((p) => ({ ...p, accountNum: e.target.value }))} dir="ltr" />
+              </Field>
+            </div>
+            <Field>
+              <FieldLabel>שם בעל החשבון</FieldLabel>
+              <Input value={form.accountHolder} onChange={(e) => setForm((p) => ({ ...p, accountHolder: e.target.value }))} />
+            </Field>
+          </FieldGroup>
+        </TabsContent>
+      </Tabs>
+    </>
+  );
+}
+
 export default function VendorDashboard() {
   const [token] = React.useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [form, setForm] = React.useState(emptyVendor);
@@ -54,6 +165,8 @@ export default function VendorDashboard() {
   const [error, setError] = React.useState('');
   const [editVendor, setEditVendor] = React.useState(null);
   const [deleteTarget, setDeleteTarget] = React.useState(null);
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const [expandedVendor, setExpandedVendor] = React.useState(null);
 
   async function loadProducts() {
     const res = await fetch(`${API_BASE}/api/admin/products`, { headers: { Authorization: `Bearer ${token}` } });
@@ -134,6 +247,7 @@ export default function VendorDashboard() {
       if (!res.ok || !data.success) throw new Error(data.error || 'שמירה נכשלה');
       setForm(emptyVendor);
       setProductLinks([emptyLink()]);
+      setCreateOpen(false);
       await loadVendors();
     } catch (e2) {
       setError(e2.message || 'שגיאה');
@@ -201,6 +315,75 @@ export default function VendorDashboard() {
     }
   }
 
+  function ProductLinksEditor({ isEdit }) {
+    const links = isEdit ? editVendor.productLinks : productLinks;
+    const setLinks = isEdit ? setEditVendor : setProductLinks;
+    const onSelect = (idx, pid) => onProductSelect(idx, pid, isEdit);
+    const upd = (idx, field, val) => updateLink(idx, field, val, isEdit);
+    const addLine = () =>
+      isEdit
+        ? setEditVendor((ev) => ({ ...ev, productLinks: [...ev.productLinks, emptyLink()] }))
+        : setProductLinks((p) => [...p, emptyLink()]);
+    const removeLine = (idx) => {
+      if (isEdit) {
+        setEditVendor((ev) => ({
+          ...ev,
+          productLinks: ev.productLinks.length <= 1 ? ev.productLinks : ev.productLinks.filter((_, i) => i !== idx),
+        }));
+      } else {
+        setProductLinks((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)));
+      }
+    };
+
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">בחרו מוצר — מק&quot;ט יימשך אוטומטית.</p>
+        {links.map((line, idx) => (
+          <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end border rounded-lg p-3 bg-muted/40">
+            <div className="md:col-span-5">
+              <FieldLabel className="text-xs">מוצר</FieldLabel>
+              <select
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                value={line.productId}
+                onChange={(e) => onSelect(idx, e.target.value)}
+              >
+                <option value="">— בחרו —</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.productName || p.name} ({p.sku})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="md:col-span-3">
+              <FieldLabel className="text-xs">מק&quot;ט</FieldLabel>
+              <Input readOnly value={line.sku} className="bg-muted/50" />
+            </div>
+            <div className="md:col-span-3">
+              <FieldLabel className="text-xs">מחיר לספק (₪)</FieldLabel>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={line.vendorCost}
+                onChange={(e) => upd(idx, 'vendorCost', e.target.value)}
+                dir="ltr"
+              />
+            </div>
+            <div className="md:col-span-1">
+              <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => removeLine(idx)} disabled={links.length <= 1}>
+                הסר
+              </Button>
+            </div>
+          </div>
+        ))}
+        <Button type="button" variant="outline" size="sm" onClick={addLine}>
+          + שורת מוצר
+        </Button>
+      </div>
+    );
+  }
+
   if (!token) {
     return (
       <div dir="rtl" className="min-h-screen bg-slate-50 p-6">
@@ -213,7 +396,7 @@ export default function VendorDashboard() {
   }
 
   return (
-    <div dir="rtl" className="min-h-screen bg-slate-50 p-4 sm:p-8">
+    <AdminPageShell>
       <ConfirmDialog
         open={!!deleteTarget}
         title="מחיקת ספק"
@@ -222,215 +405,202 @@ export default function VendorDashboard() {
         danger
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
+        isLoading={loading}
       />
 
-      {editVendor ? (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/50 overflow-y-auto" onClick={() => setEditVendor(null)}>
-          <div className="bg-white rounded-xl border max-w-3xl w-full p-6 shadow-xl my-8 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-xl font-bold text-medical-blue-dark mb-4">עריכת ספק</h2>
-            <form onSubmit={saveEdit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <input className="border rounded-lg px-3 py-2" placeholder="שם ספק *" value={editVendor.vendorName} onChange={(e) => setEditVendor((p) => ({ ...p, vendorName: e.target.value }))} required />
-                <input className="border rounded-lg px-3 py-2" placeholder="ח.פ *" value={editVendor.idNum} onChange={(e) => setEditVendor((p) => ({ ...p, idNum: e.target.value }))} required />
-                <input className="border rounded-lg px-3 py-2" placeholder="טלפון" value={editVendor.phone} onChange={(e) => setEditVendor((p) => ({ ...p, phone: e.target.value }))} />
-                <input className="border rounded-lg px-3 py-2" type="email" placeholder="אימייל" value={editVendor.email} onChange={(e) => setEditVendor((p) => ({ ...p, email: e.target.value }))} />
-                <input className="border rounded-lg px-3 py-2 md:col-span-2" placeholder="כתובת" value={editVendor.address} onChange={(e) => setEditVendor((p) => ({ ...p, address: e.target.value }))} />
-              </div>
-              <h3 className="font-semibold">בנק</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <input className="border rounded-lg px-3 py-2" value={editVendor.bankName} onChange={(e) => setEditVendor((p) => ({ ...p, bankName: e.target.value }))} placeholder="שם בנק" />
-                <input className="border rounded-lg px-3 py-2" value={editVendor.bankNum} onChange={(e) => setEditVendor((p) => ({ ...p, bankNum: e.target.value }))} placeholder="מספר בנק" />
-                <input className="border rounded-lg px-3 py-2" value={editVendor.accountHolder} onChange={(e) => setEditVendor((p) => ({ ...p, accountHolder: e.target.value }))} placeholder="בעל חשבון" />
-                <input className="border rounded-lg px-3 py-2" value={editVendor.branchNum} onChange={(e) => setEditVendor((p) => ({ ...p, branchNum: e.target.value }))} placeholder="סניף" />
-                <input className="border rounded-lg px-3 py-2 md:col-span-2" value={editVendor.accountNum} onChange={(e) => setEditVendor((p) => ({ ...p, accountNum: e.target.value }))} placeholder="מספר חשבון" />
-              </div>
-              <h3 className="font-semibold">מוצרים</h3>
-              {editVendor.productLinks.map((line, idx) => (
-                <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end border rounded-lg p-3 bg-slate-50">
-                  <div className="md:col-span-5">
-                    <label className="text-xs text-slate-500">מוצר</label>
-                    <select
-                      className="w-full border rounded-lg px-3 py-2 bg-white"
-                      value={line.productId}
-                      onChange={(e) => onProductSelect(idx, e.target.value, true)}
-                    >
-                      <option value="">— בחרו —</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.productName || p.name} ({p.sku})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="md:col-span-3">
-                    <label className="text-xs text-slate-500">מק&quot;ט</label>
-                    <input className="w-full border rounded-lg px-3 py-2 bg-white" readOnly value={line.sku} />
-                  </div>
-                  <div className="md:col-span-3">
-                    <label className="text-xs text-slate-500">מחיר לספק</label>
-                    <input type="number" min="0" step="0.01" className="w-full border rounded-lg px-3 py-2" value={line.vendorCost} onChange={(e) => updateLink(idx, 'vendorCost', e.target.value, true)} />
-                  </div>
-                  <div className="md:col-span-1">
-                    <button
-                      type="button"
-                      className="text-red-600 text-sm"
-                      onClick={() =>
-                        setEditVendor((ev) => ({
-                          ...ev,
-                          productLinks: ev.productLinks.length <= 1 ? ev.productLinks : ev.productLinks.filter((_, i) => i !== idx),
-                        }))
-                      }
-                      disabled={editVendor.productLinks.length <= 1}
-                    >
-                      הסר
-                    </button>
-                  </div>
-                </div>
-              ))}
-              <button
-                type="button"
-                className="text-medical-blue text-sm font-semibold"
-                onClick={() => setEditVendor((ev) => ({ ...ev, productLinks: [...ev.productLinks, emptyLink()] }))}
-              >
-                + שורת מוצר
-              </button>
-              <div className="flex gap-2 justify-end pt-4">
-                <button type="button" onClick={() => setEditVendor(null)} className="px-4 py-2 rounded-lg bg-slate-200">
-                  ביטול
-                </button>
-                <button type="submit" disabled={loading} className="px-4 py-2 rounded-lg bg-medical-blue text-white">
-                  {loading ? 'שומר...' : 'שמירה'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
-
-      <div className="max-w-5xl mx-auto space-y-6">
-        <div className="flex flex-wrap justify-between gap-2">
-          <h1 className="text-2xl font-bold text-medical-blue-dark">הקמת ספק</h1>
-          <div className="flex gap-2 flex-wrap">
-            <Link to="/admin/products" className="px-4 py-2 rounded-lg bg-emerald-700 text-white text-sm">
-              מוצרים
-            </Link>
-            <Link to="/admin/price-list" className="px-4 py-2 rounded-lg bg-medical-blue-dark text-white text-sm">
-              מחירון
-            </Link>
-            <Link to="/admin" className="px-4 py-2 rounded-lg bg-slate-200 text-sm">
-              חזרה
-            </Link>
-          </div>
-        </div>
-
-        <form onSubmit={submit} className="bg-white rounded-xl border p-4 sm:p-6 space-y-4">
-          <h2 className="font-semibold">פרטי ספק</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <input className="border rounded-lg px-3 py-2" placeholder="שם ספק *" value={form.vendorName} onChange={(e) => setForm((p) => ({ ...p, vendorName: e.target.value }))} required />
-            <input className="border rounded-lg px-3 py-2" placeholder="ח.פ / מספר זיהוי *" value={form.idNum} onChange={(e) => setForm((p) => ({ ...p, idNum: e.target.value }))} required />
-            <input className="border rounded-lg px-3 py-2" placeholder="טלפון" value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
-            <input className="border rounded-lg px-3 py-2" placeholder="אימייל" type="email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} />
-            <input className="border rounded-lg px-3 py-2 md:col-span-2" placeholder="כתובת" value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
-          </div>
-          <h3 className="font-semibold pt-2">פרטי בנק</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <input className="border rounded-lg px-3 py-2" placeholder="שם בנק" value={form.bankName} onChange={(e) => setForm((p) => ({ ...p, bankName: e.target.value }))} />
-            <input className="border rounded-lg px-3 py-2" placeholder="מספר בנק" value={form.bankNum} onChange={(e) => setForm((p) => ({ ...p, bankNum: e.target.value }))} />
-            <input className="border rounded-lg px-3 py-2" placeholder="שם בעל חשבון" value={form.accountHolder} onChange={(e) => setForm((p) => ({ ...p, accountHolder: e.target.value }))} />
-            <input className="border rounded-lg px-3 py-2" placeholder="מספר סניף" value={form.branchNum} onChange={(e) => setForm((p) => ({ ...p, branchNum: e.target.value }))} />
-            <input className="border rounded-lg px-3 py-2 md:col-span-2" placeholder="מספר חשבון" value={form.accountNum} onChange={(e) => setForm((p) => ({ ...p, accountNum: e.target.value }))} />
-          </div>
-
-          <h3 className="font-semibold pt-2">שיוך מוצרים ומחיר תשלום לספק</h3>
-          <p className="text-sm text-slate-600">בחרו מוצר מהרשימה — מק&quot;ט יימשך אוטומטית.</p>
-          {productLinks.map((line, idx) => (
-            <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end border rounded-lg p-3 bg-slate-50">
-              <div className="md:col-span-5">
-                <label className="text-xs text-slate-500">מוצר</label>
-                <select className="w-full border rounded-lg px-3 py-2 bg-white" value={line.productId} onChange={(e) => onProductSelect(idx, e.target.value, false)}>
-                  <option value="">— בחרו —</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.productName || p.name} ({p.sku})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="md:col-span-3">
-                <label className="text-xs text-slate-500">מק&quot;ט</label>
-                <input className="w-full border rounded-lg px-3 py-2 bg-white" readOnly value={line.sku} placeholder="אוטומטי" />
-              </div>
-              <div className="md:col-span-3">
-                <label className="text-xs text-slate-500">מחיר תשלום לספק (₪)</label>
-                <input type="number" min="0" step="0.01" className="w-full border rounded-lg px-3 py-2" value={line.vendorCost} onChange={(e) => updateLink(idx, 'vendorCost', e.target.value, false)} />
-              </div>
-              <div className="md:col-span-1">
-                <button type="button" className="text-red-600 text-sm" onClick={() => setProductLinks((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)))} disabled={productLinks.length <= 1}>
-                  הסר
-                </button>
-              </div>
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>הוספת ספק חדש</DialogTitle>
+            <DialogDescription>הזן פרטי ספק, בנק וקישור מוצרים</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submit} className="space-y-4">
+            <VendorFormFields data={form} setData={setForm} />
+            <div className="border-t pt-4">
+              <h4 className="font-medium mb-2">מוצרים ומחירי ספק</h4>
+              <ProductLinksEditor isEdit={false} />
             </div>
-          ))}
-          <button type="button" className="text-medical-blue text-sm font-semibold" onClick={() => setProductLinks((p) => [...p, emptyLink()])}>
-            + שורת מוצר
-          </button>
+            {error ? <p className="text-destructive text-sm">{error}</p> : null}
+            <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
+              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
+                ביטול
+              </Button>
+              <Button type="submit" disabled={loading || !form.vendorName.trim() || !form.idNum.trim()}>
+                {loading && <Spinner className="me-2" />}
+                שמירה
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-          {error ? <p className="text-red-600 text-sm">{error}</p> : null}
-          <button type="submit" disabled={loading} className="px-5 py-2 rounded-lg bg-medical-blue text-white">
-            {loading ? 'שומר...' : 'שמירת ספק'}
-          </button>
-        </form>
+      <Dialog open={!!editVendor} onOpenChange={(o) => !o && setEditVendor(null)}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>עריכת ספק</DialogTitle>
+            <DialogDescription>עדכון פרטים ומוצרים</DialogDescription>
+          </DialogHeader>
+          {editVendor ? (
+            <form onSubmit={saveEdit} className="space-y-4">
+              <VendorFormFields data={editVendor} setData={setEditVendor} />
+              <div className="border-t pt-4">
+                <h4 className="font-medium mb-2">מוצרים ומחירי ספק</h4>
+                <ProductLinksEditor isEdit />
+              </div>
+              {error ? <p className="text-destructive text-sm">{error}</p> : null}
+              <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
+                <Button type="button" variant="outline" onClick={() => setEditVendor(null)}>
+                  ביטול
+                </Button>
+                <Button type="submit" disabled={loading}>
+                  {loading && <Spinner className="me-2" />}
+                  שמירה
+                </Button>
+              </DialogFooter>
+            </form>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
-        <div className="bg-white rounded-xl border p-4">
-          <h2 className="font-semibold text-lg mb-3">ספקים שמורים</h2>
-          <div className="overflow-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-slate-100">
-                <tr>
-                  <th className="p-2 text-right">שם ספק</th>
-                  <th className="p-2 text-right">ח.פ</th>
-                  <th className="p-2 text-right">טלפון</th>
-                  <th className="p-2 text-right">מוצרים / עלות</th>
-                  <th className="p-2 text-right">פעולות</th>
-                </tr>
-              </thead>
-              <tbody>
-                {vendors.map((v) => (
-                  <tr key={v.id} className="border-t align-top">
-                    <td className="p-2">{v.vendorName}</td>
-                    <td className="p-2">{v.idNum}</td>
-                    <td className="p-2">{v.phone}</td>
-                    <td className="p-2 text-xs">
-                      <ul className="space-y-1">
-                        {(v.productLinks || []).map((l, i) => (
-                          <li key={i}>
-                            {l.product?.productName || l.sku}: ₪{l.vendorCost} (מק&quot;ט {l.sku})
-                          </li>
-                        ))}
-                      </ul>
-                    </td>
-                    <td className="p-2 whitespace-nowrap">
-                      <button type="button" onClick={() => setEditVendor(vendorToEditForm(v))} className="text-medical-blue font-semibold ml-2">
-                        עריכה
-                      </button>
-                      <button type="button" onClick={() => setDeleteTarget(v)} className="text-red-600 font-semibold">
-                        מחק
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {!vendors.length ? (
-                  <tr>
-                    <td colSpan={5} className="p-4 text-slate-500">
-                      אין ספקים
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">ספקים</h1>
+            <p className="text-muted-foreground">ניהול ספקים, בנק וקישור מוצרים</p>
           </div>
+          <Button
+            onClick={() => {
+              setForm(emptyVendor);
+              setProductLinks([emptyLink()]);
+              setError('');
+              setCreateOpen(true);
+            }}
+          >
+            <Plus className="size-4 me-2" />
+            הוסף ספק
+          </Button>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>רשימת ספקים</CardTitle>
+            <CardDescription>
+              {vendors.length} ספקים במערכת
+              <Button variant="link" className="px-2 h-auto font-normal text-primary" type="button" onClick={() => loadVendors()}>
+                רענון
+              </Button>
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {vendors.length === 0 && !loading ? (
+              <Empty>
+                <EmptyMedia variant="icon">
+                  <Building2 className="size-8" />
+                </EmptyMedia>
+                <EmptyTitle>אין ספקים עדיין</EmptyTitle>
+                <EmptyDescription>התחל בהוספת ספק ראשון</EmptyDescription>
+                <Button className="mt-4" onClick={() => setCreateOpen(true)}>
+                  <Plus className="size-4 me-2" />
+                  הוסף ספק
+                </Button>
+              </Empty>
+            ) : (
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-10" />
+                      <TableHead>שם ספק</TableHead>
+                      <TableHead>ח.פ</TableHead>
+                      <TableHead>טלפון</TableHead>
+                      <TableHead>מוצרים</TableHead>
+                      <TableHead className="w-28">פעולות</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {vendors.map((v) => (
+                      <React.Fragment key={v.id}>
+                        <TableRow>
+                          <TableCell>
+                            <Button variant="ghost" size="icon" className="size-8" type="button" onClick={() => setExpandedVendor(expandedVendor === v.id ? null : v.id)}>
+                              {expandedVendor === v.id ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                            </Button>
+                          </TableCell>
+                          <TableCell className="font-medium">{v.vendorName}</TableCell>
+                          <TableCell dir="ltr" className="text-start font-mono text-sm">
+                            {v.idNum}
+                          </TableCell>
+                          <TableCell dir="ltr" className="text-start">
+                            {v.phone || '—'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">{(v.productLinks || []).length} מוצרים</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="icon" type="button" onClick={() => setEditVendor(vendorToEditForm(v))}>
+                                <Edit2 className="size-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" type="button" onClick={() => setDeleteTarget(v)}>
+                                <Trash2 className="size-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                        {expandedVendor === v.id ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="bg-muted/40 p-4">
+                              <div className="grid gap-4 md:grid-cols-2">
+                                <div className="space-y-1 text-sm">
+                                  <h4 className="font-medium">פרטי קשר</h4>
+                                  <p>
+                                    <span className="text-muted-foreground">אימייל:</span> {v.email || '—'}
+                                  </p>
+                                  <p>
+                                    <span className="text-muted-foreground">כתובת:</span> {v.address || '—'}
+                                  </p>
+                                </div>
+                                <div className="space-y-1 text-sm">
+                                  <h4 className="font-medium flex items-center gap-2">
+                                    <CreditCard className="size-4" />
+                                    פרטי בנק
+                                  </h4>
+                                  <p>
+                                    <span className="text-muted-foreground">בנק:</span> {v.bankName || '—'} ({v.bankNum || '—'})
+                                  </p>
+                                  <p>
+                                    <span className="text-muted-foreground">סניף:</span> {v.branchNum || '—'}
+                                  </p>
+                                  <p>
+                                    <span className="text-muted-foreground">חשבון:</span> {v.accountNum || '—'}
+                                  </p>
+                                  <p>
+                                    <span className="text-muted-foreground">בעל חשבון:</span> {v.accountHolder || '—'}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="mt-3 text-xs space-y-1">
+                                <span className="font-medium">מוצרים:</span>
+                                <ul className="list-disc list-inside">
+                                  {(v.productLinks || []).map((l, i) => (
+                                    <li key={i}>
+                                      {l.product?.productName || l.sku}: ₪{l.vendorCost} (מק&quot;ט {l.sku})
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+                      </React.Fragment>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </AdminPageShell>
   );
 }

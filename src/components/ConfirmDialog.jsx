@@ -1,25 +1,56 @@
 import React from 'react';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog.jsx';
+import { Button } from './ui/button.jsx';
+import { Spinner } from './ui/spinner.jsx';
 
-export default function ConfirmDialog({ open, title, message, confirmLabel = 'אישור', danger, onConfirm, onCancel }) {
-  if (!open) return null;
+/** דיאלוג אישור — תואם לשימוש קודם + תמיכה ב-loading אופציונלית */
+export default function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel = 'אישור',
+  danger,
+  onConfirm,
+  onCancel,
+  isLoading = false,
+}) {
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" dir="rtl" onClick={onCancel} role="dialog" aria-modal="true">
-      <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-xl border border-slate-200" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-bold text-slate-900 mb-2">{title}</h3>
-        <p className="text-slate-600 text-sm mb-6">{message}</p>
-        <div className="flex gap-2 justify-end flex-wrap">
-          <button type="button" onClick={onCancel} className="px-4 py-2 rounded-lg bg-slate-200 text-slate-800 font-medium">
-            ביטול
-          </button>
-          <button
+    <AlertDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && onCancel) onCancel();
+      }}
+    >
+      <AlertDialogContent className="dir-rtl" dir="rtl">
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{message}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
+          <AlertDialogCancel asChild>
+            <Button type="button" variant="outline" disabled={isLoading} onClick={onCancel}>
+              ביטול
+            </Button>
+          </AlertDialogCancel>
+          <Button
             type="button"
-            onClick={onConfirm}
-            className={`px-4 py-2 rounded-lg text-white font-medium ${danger ? 'bg-red-600 hover:bg-red-700' : 'bg-medical-blue hover:bg-medical-blue-dark'}`}
+            variant={danger ? 'destructive' : 'default'}
+            disabled={isLoading}
+            onClick={() => onConfirm?.()}
           >
+            {isLoading && <Spinner className="me-2" />}
             {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
