@@ -1,6 +1,14 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { Building2, Plus } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
+import AdminPageShell from '../components/admin/AdminPageShell.jsx';
+import { Button } from '../components/ui/button.jsx';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
+import { Input } from '../components/ui/input.jsx';
+import { FieldGroup, Field, FieldLabel } from '../components/ui/field.jsx';
+import { Spinner } from '../components/ui/spinner.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -193,9 +201,9 @@ export default function OrganizationPricing() {
 
   if (!token) {
     return (
-      <div dir="rtl" className="min-h-screen bg-slate-50 p-6">
-        <p className="text-slate-700">יש להתחבר דרך מסך המנהל.</p>
-        <Link to="/admin" className="text-medical-blue underline">
+      <div dir="rtl" className="min-h-screen bg-background p-6">
+        <p className="text-foreground">יש להתחבר דרך מסך המנהל.</p>
+        <Link to="/admin" className="text-primary underline">
           מעבר לכניסת מנהל
         </Link>
       </div>
@@ -203,206 +211,226 @@ export default function OrganizationPricing() {
   }
 
   return (
-    <div dir="rtl" className="min-h-screen bg-slate-50 p-4 sm:p-8">
-      <div className="max-w-6xl mx-auto space-y-6">
-        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-          פיתוח: הגדירי <code className="bg-white px-1">VITE_API_URL</code> לכתובת שרת ה-API אם הפרונט רץ על פורט אחר.
-        </p>
-        <div className="flex flex-wrap justify-between items-center gap-2">
-          <h1 className="text-2xl font-bold text-medical-blue-dark">מחירוני ארגונים</h1>
-          <div className="flex gap-2 flex-wrap">
-            <Link to="/admin/vendors" className="px-4 py-2 rounded-lg bg-amber-700 text-white text-sm">
-              ספקים
-            </Link>
-            <Link to="/admin/price-list" className="px-4 py-2 rounded-lg bg-indigo-700 text-white text-sm">
-              דשבורד מחירון
-            </Link>
-            <Link to="/admin/products" className="px-4 py-2 rounded-lg bg-medical-teal text-white text-sm">
-              מוצרים
-            </Link>
-            <Link to="/admin" className="px-4 py-2 rounded-lg bg-slate-200 text-sm">
-              חזרה לניהול
-            </Link>
+    <AdminPageShell>
+      <div className="space-y-6">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          פיתוח: הגדירי <code className="rounded bg-background px-1">VITE_API_URL</code> לכתובת שרת ה-API אם הפרונט רץ על פורט אחר.
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+              <Building2 className="size-7 text-primary" />
+              מחירוני ארגונים
+            </h1>
+            <p className="text-muted-foreground">הגדרת מחירון לארגון — קישור ל־API נחיתה</p>
           </div>
         </div>
 
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-muted-foreground">
           לכל שורה: בחרו <strong>ספק</strong> ו<strong>מוצר</strong> — עלות הספק והמק&quot;ט נמשכים אוטומטית מהמסד. הזינו מחיר קמעוני ועמלת סוכן; הרווחים מחושבים בזמן אמת.
         </p>
 
-        <form onSubmit={submit} className="bg-white rounded-xl border p-4 sm:p-6 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input
-              className="border rounded-lg px-3 py-2"
-              placeholder="שם ארגון"
-              value={organizationName}
-              onChange={(e) => setOrganizationName(e.target.value)}
-              required
-            />
-            <input
-              className="border rounded-lg px-3 py-2"
-              placeholder="שם מחירון"
-              value={pricingListName}
-              onChange={(e) => setPricingListName(e.target.value)}
-              required
-            />
-          </div>
-
-          <div className="space-y-4">
-            <h3 className="font-semibold">מוצרים במחירון (מספר שורות)</h3>
-            {lines.map((line, idx) => {
-              const retail = Number(line.retailPrice || 0);
-              const vc = Number(line.vendorCost || 0);
-              const ac = Number(line.agentCommission || 0);
-              const profitBeforeAgent = retail - vc;
-              const netProfit = profitBeforeAgent - ac;
-              return (
-                <div key={idx} className="border border-slate-200 rounded-lg p-4 bg-slate-50/80 space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                    <div>
-                      <label className="text-xs text-slate-500 block mb-1">ספק *</label>
-                      <select
-                        className="w-full border rounded-lg px-3 py-2 bg-white"
-                        value={line.vendorId}
-                        onChange={(e) => onVendorChange(idx, e.target.value)}
-                        required={idx === 0}
-                      >
-                        <option value="">— בחרו ספק —</option>
-                        {vendors.map((v) => (
-                          <option key={v.id} value={v.id}>
-                            {v.vendorName}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500 block mb-1">מוצר *</label>
-                      <select
-                        className="w-full border rounded-lg px-3 py-2 bg-white"
-                        value={line.productId}
-                        onChange={(e) => onProductChange(idx, e.target.value)}
-                        required={idx === 0}
-                      >
-                        <option value="">— בחרו מוצר —</option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.productName || p.name} ({p.sku})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500 block mb-1">מק&quot;ט (אוטומטי)</label>
-                      <input className="w-full border rounded-lg px-3 py-2 bg-white font-mono text-sm text-slate-900" readOnly value={line.costLoading ? 'טוען…' : line.sku} />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500 block mb-1">עלות ספק (₪)</label>
-                      <input
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white font-semibold text-slate-900"
-                        readOnly
-                        value={line.costLoading ? '…' : line.vendorCost}
-                        placeholder="—"
-                      />
-                      {line.costError ? <p className="text-xs text-amber-700 mt-0.5">{line.costError}</p> : null}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 items-end">
-                    <div>
-                      <label className="text-xs text-slate-500 block mb-1">מחיר קמעוני</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        className="w-full border rounded-lg px-3 py-2"
-                        value={line.retailPrice}
-                        onChange={(e) => updateLine(idx, 'retailPrice', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500 block mb-1">עמלת סוכן</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        className="w-full border rounded-lg px-3 py-2"
-                        value={line.agentCommission}
-                        onChange={(e) => updateLine(idx, 'agentCommission', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500 block mb-1">רווח לפני סוכן</label>
-                      <input className="w-full border rounded-lg px-3 py-2 bg-blue-50 font-semibold" readOnly value={profitBeforeAgent} />
-                    </div>
-                    <div className="flex gap-2 items-end">
-                      <div className="flex-1">
-                        <label className="text-xs text-slate-500 block mb-1">רווח נקי</label>
-                        <input className="w-full border rounded-lg px-3 py-2 bg-emerald-50 font-bold text-emerald-900" readOnly value={netProfit} />
-                      </div>
-                      <button type="button" onClick={() => removeLine(idx)} className="text-red-600 text-sm mb-2" disabled={lines.length <= 1}>
-                        הסר
-                      </button>
-                    </div>
-                  </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>יצירת מחירון לארגון</CardTitle>
+            <CardDescription>שם ארגון, שם מחירון ושורות מוצר–ספק</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={submit} className="space-y-4">
+              <FieldGroup>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field>
+                    <FieldLabel>שם ארגון *</FieldLabel>
+                    <Input
+                      value={organizationName}
+                      onChange={(e) => setOrganizationName(e.target.value)}
+                      placeholder="שם ארגון"
+                      required
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>שם מחירון *</FieldLabel>
+                    <Input
+                      value={pricingListName}
+                      onChange={(e) => setPricingListName(e.target.value)}
+                      placeholder="שם מחירון"
+                      required
+                    />
+                  </Field>
                 </div>
-              );
-            })}
-            <button type="button" onClick={addLine} className="text-medical-blue text-sm font-semibold">
-              + הוספת מוצר לרשימה
-            </button>
-          </div>
+              </FieldGroup>
 
-          {!products.length || !vendors.length ? (
-            <p className="text-amber-700 text-sm">נדרשים מוצרים וספקים במערכת (כולל שיוך מוצר–ספק במסך הספקים).</p>
-          ) : null}
-          {error ? <p className="text-red-600 text-sm">{error}</p> : null}
-          <button disabled={loading || !products.length || !vendors.length} type="submit" className="px-5 py-2 rounded-lg bg-medical-blue text-white">
-            {loading ? 'שומר...' : 'שמירת מחירון לארגון'}
-          </button>
-        </form>
+              <div className="space-y-4">
+                <h3 className="font-semibold text-sm">מוצרים במחירון (מספר שורות)</h3>
+                {lines.map((line, idx) => {
+                  const retail = Number(line.retailPrice || 0);
+                  const vc = Number(line.vendorCost || 0);
+                  const ac = Number(line.agentCommission || 0);
+                  const profitBeforeAgent = retail - vc;
+                  const netProfit = profitBeforeAgent - ac;
+                  return (
+                    <div key={idx} className="border rounded-lg p-4 bg-muted/30 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                        <Field className="gap-1.5">
+                          <FieldLabel className="text-xs">ספק *</FieldLabel>
+                          <select
+                            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                            value={line.vendorId}
+                            onChange={(e) => onVendorChange(idx, e.target.value)}
+                            required={idx === 0}
+                          >
+                            <option value="">— בחרו ספק —</option>
+                            {vendors.map((v) => (
+                              <option key={v.id} value={v.id}>
+                                {v.vendorName}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field className="gap-1.5">
+                          <FieldLabel className="text-xs">מוצר *</FieldLabel>
+                          <select
+                            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                            value={line.productId}
+                            onChange={(e) => onProductChange(idx, e.target.value)}
+                            required={idx === 0}
+                          >
+                            <option value="">— בחרו מוצר —</option>
+                            {products.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.productName || p.name} ({p.sku})
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field className="gap-1.5">
+                          <FieldLabel className="text-xs">מק&quot;ט (אוטומטי)</FieldLabel>
+                          <Input className="font-mono text-sm" readOnly value={line.costLoading ? 'טוען…' : line.sku} />
+                        </Field>
+                        <Field className="gap-1.5">
+                          <FieldLabel className="text-xs">עלות ספק (₪)</FieldLabel>
+                          <Input className="font-semibold" readOnly value={line.costLoading ? '…' : line.vendorCost} placeholder="—" />
+                          {line.costError ? <p className="text-xs text-amber-700 mt-0.5">{line.costError}</p> : null}
+                        </Field>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 items-end">
+                        <Field className="gap-1.5">
+                          <FieldLabel className="text-xs">מחיר קמעוני</FieldLabel>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            dir="ltr"
+                            value={line.retailPrice}
+                            onChange={(e) => updateLine(idx, 'retailPrice', e.target.value)}
+                          />
+                        </Field>
+                        <Field className="gap-1.5">
+                          <FieldLabel className="text-xs">עמלת סוכן</FieldLabel>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            dir="ltr"
+                            value={line.agentCommission}
+                            onChange={(e) => updateLine(idx, 'agentCommission', e.target.value)}
+                          />
+                        </Field>
+                        <Field className="gap-1.5">
+                          <FieldLabel className="text-xs">רווח לפני סוכן</FieldLabel>
+                          <Input className="bg-blue-50 dark:bg-blue-950/30 font-semibold" readOnly value={profitBeforeAgent} />
+                        </Field>
+                        <div className="flex gap-2 items-end">
+                          <Field className="gap-1.5 flex-1">
+                            <FieldLabel className="text-xs">רווח נקי</FieldLabel>
+                            <Input
+                              className="bg-emerald-50 dark:bg-emerald-950/30 font-bold text-emerald-900 dark:text-emerald-100"
+                              readOnly
+                              value={netProfit}
+                            />
+                          </Field>
+                          <Button type="button" variant="ghost" className="text-destructive mb-0.5" disabled={lines.length <= 1} onClick={() => removeLine(idx)}>
+                            הסר
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <Button type="button" variant="link" className="h-auto p-0" onClick={addLine}>
+                  <Plus className="size-4 me-1" />
+                  הוספת מוצר לרשימה
+                </Button>
+              </div>
 
-        <div className="bg-white rounded-xl border p-4">
-          <h2 className="font-semibold text-lg mb-3">ארגונים רשומים (מחירונים שמורים)</h2>
-          <div className="overflow-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-slate-100">
-                <tr>
-                  <th className="p-2 text-right">ארגון</th>
-                  <th className="p-2 text-right">מחירון</th>
-                  <th className="p-2 text-right">שורות</th>
-                  <th className="p-2 text-right">תאריך</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id} className="border-t align-top">
-                    <td className="p-2">{r.organizationName}</td>
-                    <td className="p-2">{r.pricingListName}</td>
-                    <td className="p-2 text-xs">
-                      <ul className="space-y-1">
-                        {(r.relatedProducts || []).map((x, i) => (
-                          <li key={i}>
-                            {x.vendor?.vendorName ? `${x.vendor.vendorName} · ` : ''}
-                            {x.product?.productName || x.product?.name || x.productId}: קמעוני ₪{x.retailPrice} · ספק ₪{x.vendorCost} · סוכן ₪
-                            {x.agentCommission ?? 0} · נקי ₪{x.netProfit ?? x.profit}
-                          </li>
-                        ))}
-                      </ul>
-                    </td>
-                    <td className="p-2 whitespace-nowrap">{r.createdAt ? new Date(r.createdAt).toLocaleString('he-IL') : '—'}</td>
-                  </tr>
-                ))}
-                {!rows.length ? (
-                  <tr>
-                    <td colSpan={4} className="p-3 text-slate-500">
-                      אין נתונים
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </div>
+              {!products.length || !vendors.length ? (
+                <p className="text-amber-700 text-sm">נדרשים מוצרים וספקים במערכת (כולל שיוך מוצר–ספק במסך הספקים).</p>
+              ) : null}
+              {error ? <p className="text-destructive text-sm">{error}</p> : null}
+              <Button type="submit" disabled={loading || !products.length || !vendors.length}>
+                {loading && <Spinner className="me-2" />}
+                שמירת מחירון לארגון
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>ארגונים רשומים (מחירונים שמורים)</CardTitle>
+            <CardDescription>
+              רשימה מהשרת
+              <Button variant="link" className="px-2 h-auto font-normal text-primary" type="button" onClick={() => loadRows()}>
+                רענון
+              </Button>
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="overflow-auto">
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>ארגון</TableHead>
+                    <TableHead>מחירון</TableHead>
+                    <TableHead>שורות</TableHead>
+                    <TableHead>תאריך</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell className="font-medium">{r.organizationName}</TableCell>
+                      <TableCell>{r.pricingListName}</TableCell>
+                      <TableCell className="text-xs">
+                        <ul className="space-y-1 list-none p-0 m-0">
+                          {(r.relatedProducts || []).map((x, i) => (
+                            <li key={i}>
+                              {x.vendor?.vendorName ? `${x.vendor.vendorName} · ` : ''}
+                              {x.product?.productName || x.product?.name || x.productId}: קמעוני ₪{x.retailPrice} · ספק ₪{x.vendorCost} · סוכן ₪
+                              {x.agentCommission ?? 0} · נקי ₪{x.netProfit ?? x.profit}
+                            </li>
+                          ))}
+                        </ul>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-xs">
+                        {r.createdAt ? new Date(r.createdAt).toLocaleString('he-IL') : '—'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {!rows.length ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center text-muted-foreground">
+                        אין נתונים
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </AdminPageShell>
   );
 }

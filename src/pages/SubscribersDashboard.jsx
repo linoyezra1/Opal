@@ -1,6 +1,21 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { UserCheck, Search } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
+import AdminPageShell from '../components/admin/AdminPageShell.jsx';
+import { Button } from '../components/ui/button.jsx';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog.jsx';
+import { Input } from '../components/ui/input.jsx';
+import { FieldGroup, Field, FieldLabel } from '../components/ui/field.jsx';
+import { Badge } from '../components/ui/badge.jsx';
+import { Spinner } from '../components/ui/spinner.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -18,6 +33,8 @@ function formatCurrency(value) {
   const n = Number(value || 0);
   return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n);
 }
+
+const checkboxClass = 'h-4 w-4 rounded border border-input bg-background text-primary ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 export default function SubscribersDashboard() {
   const token = localStorage.getItem(TOKEN_KEY) || '';
@@ -125,315 +142,337 @@ export default function SubscribersDashboard() {
   }
 
   return (
-    <div dir="rtl" className="min-h-screen bg-slate-50 p-4 sm:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-between gap-3">
-          <h1 className="text-3xl font-bold text-medical-blue-dark">מנויים</h1>
-          <div className="flex gap-2">
-            <Link to="/admin" className="px-4 py-2 rounded-lg bg-slate-200 text-slate-700">
-              חזרה לאדמין
-            </Link>
-            <button onClick={loadDashboard} className="px-4 py-2 rounded-lg bg-medical-blue text-white">
-              הצג בדוח
-            </button>
+    <AdminPageShell>
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+              <UserCheck className="size-7 text-primary" />
+              מנויים
+            </h1>
+            <p className="text-muted-foreground">דוח מנויים, סינון ורווחיות</p>
           </div>
+          <Button type="button" onClick={loadDashboard} disabled={loading}>
+            {loading && <Spinner className="me-2" />}
+            <Search className="size-4 me-2" />
+            הצג בדוח
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-          <div className="xl:col-span-3 bg-white border rounded-xl p-4 space-y-4">
-            <p className="text-sm text-slate-600">
-              סינון לפי: <strong>שם מוצר</strong>, <strong>ת&quot;ז</strong>, <strong>שם ארגון</strong>, <strong>שם סוכן</strong> (וגם חיפוש לקוח כללי).
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <label className="text-sm text-right">
-                חודש
-                <input
-                  type="month"
-                  value={filters.month}
-                  onChange={(e) => setFilters((p) => ({ ...p, month: e.target.value }))}
-                  className="mt-1 w-full border rounded-lg px-3 py-2"
-                />
-              </label>
-              <label className="text-sm text-right">
-                מתאריך
-                <input
-                  type="date"
-                  value={filters.fromDate}
-                  onChange={(e) => setFilters((p) => ({ ...p, fromDate: e.target.value }))}
-                  className="mt-1 w-full border rounded-lg px-3 py-2"
-                />
-              </label>
-              <label className="text-sm text-right">
-                עד תאריך
-                <input
-                  type="date"
-                  value={filters.toDate}
-                  onChange={(e) => setFilters((p) => ({ ...p, toDate: e.target.value }))}
-                  className="mt-1 w-full border rounded-lg px-3 py-2"
-                />
-              </label>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="border rounded-lg p-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <input
-                    type="checkbox"
-                    checked={filters.providerEnabled}
-                    onChange={(e) => setFilters((p) => ({ ...p, providerEnabled: e.target.checked }))}
+          <Card className="xl:col-span-3">
+            <CardHeader>
+              <CardTitle>סינון וחיפוש</CardTitle>
+              <CardDescription>
+                סינון לפי: <strong>שם מוצר</strong>, <strong>ת&quot;ז</strong>, <strong>שם ארגון</strong>, <strong>שם סוכן</strong> (וגם חיפוש לקוח כללי).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Field>
+                  <FieldLabel>חודש</FieldLabel>
+                  <Input
+                    type="month"
+                    value={filters.month}
+                    onChange={(e) => setFilters((p) => ({ ...p, month: e.target.value }))}
                   />
-                  <span className="text-sm font-medium">ספק</span>
+                </Field>
+                <Field>
+                  <FieldLabel>מתאריך</FieldLabel>
+                  <Input
+                    type="date"
+                    value={filters.fromDate}
+                    onChange={(e) => setFilters((p) => ({ ...p, fromDate: e.target.value }))}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>עד תאריך</FieldLabel>
+                  <Input type="date" value={filters.toDate} onChange={(e) => setFilters((p) => ({ ...p, toDate: e.target.value }))} />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="border rounded-lg p-3 space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      className={checkboxClass}
+                      checked={filters.providerEnabled}
+                      onChange={(e) => setFilters((p) => ({ ...p, providerEnabled: e.target.checked }))}
+                    />
+                    ספק
+                  </label>
+                  <select
+                    value={filters.providerValue}
+                    onChange={(e) => setFilters((p) => ({ ...p, providerValue: e.target.value }))}
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                  >
+                    <option value="">הכל</option>
+                    {filteredProviders.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className={checkboxClass}
+                      checked={filters.providerSearchEnabled}
+                      onChange={(e) => setFilters((p) => ({ ...p, providerSearchEnabled: e.target.checked }))}
+                    />
+                    <Input
+                      placeholder="הכל / שם"
+                      value={filters.providerSearch}
+                      onChange={(e) => setFilters((p) => ({ ...p, providerSearch: e.target.value }))}
+                    />
+                  </div>
                 </div>
-                <select
-                  value={filters.providerValue}
-                  onChange={(e) => setFilters((p) => ({ ...p, providerValue: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2 mb-2"
+
+                <div className="border rounded-lg p-3 space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      className={checkboxClass}
+                      checked={filters.agentEnabled}
+                      onChange={(e) => setFilters((p) => ({ ...p, agentEnabled: e.target.checked }))}
+                    />
+                    סוכן (בדיוק)
+                  </label>
+                  <select
+                    value={filters.agentValue}
+                    onChange={(e) => setFilters((p) => ({ ...p, agentValue: e.target.value }))}
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                  >
+                    <option value="">הכל</option>
+                    {filteredAgents.map((a) => (
+                      <option key={a} value={a}>
+                        {a}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className={checkboxClass}
+                      checked={filters.agentSearchEnabled}
+                      onChange={(e) => setFilters((p) => ({ ...p, agentSearchEnabled: e.target.checked }))}
+                    />
+                    <Input
+                      placeholder="הכל / שם"
+                      value={filters.agentSearch}
+                      onChange={(e) => setFilters((p) => ({ ...p, agentSearch: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <Field>
+                  <FieldLabel>שם מוצר (מנוי)</FieldLabel>
+                  <Input
+                    value={filters.productNameSearch}
+                    onChange={(e) => setFilters((p) => ({ ...p, productNameSearch: e.target.value }))}
+                    placeholder="לפי מוצר בעסקה"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>שם סוכן (חיפוש חופשי)</FieldLabel>
+                  <Input
+                    value={filters.agentNameSearch}
+                    onChange={(e) => setFilters((p) => ({ ...p, agentNameSearch: e.target.value }))}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>לתשלום (הוצאה ידנית — legacy)</FieldLabel>
+                  <Input
+                    type="number"
+                    dir="ltr"
+                    value={filters.amountDue}
+                    onChange={(e) => setFilters((p) => ({ ...p, amountDue: e.target.value }))}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>חיפוש לפי ארגון</FieldLabel>
+                  <Input
+                    value={filters.organizationSearch}
+                    onChange={(e) => setFilters((p) => ({ ...p, organizationSearch: e.target.value }))}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>חיפוש לפי לקוח</FieldLabel>
+                  <Input
+                    value={filters.customerSearch}
+                    onChange={(e) => setFilters((p) => ({ ...p, customerSearch: e.target.value }))}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>חיפוש לפי ח.פ / ת.ז</FieldLabel>
+                  <Input
+                    value={filters.idSearch}
+                    onChange={(e) => setFilters((p) => ({ ...p, idSearch: e.target.value }))}
+                  />
+                </Field>
+              </div>
+
+              <div className="rounded-lg border bg-muted/40 p-3">
+                <h3 className="font-semibold text-sm mb-2">מציג תוצאות חיפוש</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                  <div>
+                    סה&quot;כ עסקאות: <strong>{data.searchResults.totalTransactions || 0}</strong>
+                  </div>
+                  <div>
+                    סה&quot;כ לקוחות עיקריים: <strong>{data.searchResults.totalPrimary || 0}</strong>
+                  </div>
+                  <div>
+                    סה&quot;כ לקוחות משניים: <strong>{data.searchResults.totalSecondary || 0}</strong>
+                  </div>
+                  <div>
+                    סה&quot;כ מכירות בכסף: <strong>{formatCurrency(data.searchResults.totalSalesAmount || 0)}</strong>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="xl:col-span-1 h-fit">
+            <CardHeader>
+              <CardTitle className="text-lg">כמות / סנן לפי</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {SUMMARY_ITEMS.map((item) => (
+                <label
+                  key={item.key}
+                  className="flex items-center justify-between gap-2 text-sm border-b border-border pb-2 last:border-0"
                 >
-                  <option value="">הכל</option>
-                  {filteredProviders.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={filters.providerSearchEnabled}
-                    onChange={(e) => setFilters((p) => ({ ...p, providerSearchEnabled: e.target.checked }))}
-                  />
-                  <input
-                    placeholder="הכל / שם"
-                    value={filters.providerSearch}
-                    onChange={(e) => setFilters((p) => ({ ...p, providerSearch: e.target.value }))}
-                    className="w-full border rounded-lg px-3 py-2"
-                  />
-                </div>
-              </div>
-
-              <div className="border rounded-lg p-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <input
-                    type="checkbox"
-                    checked={filters.agentEnabled}
-                    onChange={(e) => setFilters((p) => ({ ...p, agentEnabled: e.target.checked }))}
-                  />
-                  <span className="text-sm font-medium">סוכן (בדיוק)</span>
-                </div>
-                <select
-                  value={filters.agentValue}
-                  onChange={(e) => setFilters((p) => ({ ...p, agentValue: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2 mb-2"
-                >
-                  <option value="">הכל</option>
-                  {filteredAgents.map((a) => (
-                    <option key={a} value={a}>
-                      {a}
-                    </option>
-                  ))}
-                </select>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={filters.agentSearchEnabled}
-                    onChange={(e) => setFilters((p) => ({ ...p, agentSearchEnabled: e.target.checked }))}
-                  />
-                  <input
-                    placeholder="הכל / שם"
-                    value={filters.agentSearch}
-                    onChange={(e) => setFilters((p) => ({ ...p, agentSearch: e.target.value }))}
-                    className="w-full border rounded-lg px-3 py-2"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              <label className="text-sm">
-                שם מוצר (מנוי)
-                <input
-                  value={filters.productNameSearch}
-                  onChange={(e) => setFilters((p) => ({ ...p, productNameSearch: e.target.value }))}
-                  className="mt-1 w-full border rounded-lg px-3 py-2"
-                  placeholder="לפי מוצר בעסקה"
-                />
-              </label>
-              <label className="text-sm">
-                שם סוכן (חיפוש חופשי)
-                <input
-                  value={filters.agentNameSearch}
-                  onChange={(e) => setFilters((p) => ({ ...p, agentNameSearch: e.target.value }))}
-                  className="mt-1 w-full border rounded-lg px-3 py-2"
-                />
-              </label>
-              <label className="text-sm">
-                לתשלום (הוצאה ידנית — legacy)
-                <input
-                  type="number"
-                  value={filters.amountDue}
-                  onChange={(e) => setFilters((p) => ({ ...p, amountDue: e.target.value }))}
-                  className="mt-1 w-full border rounded-lg px-3 py-2"
-                />
-              </label>
-              <label className="text-sm">
-                חיפוש לפי ארגון
-                <input
-                  value={filters.organizationSearch}
-                  onChange={(e) => setFilters((p) => ({ ...p, organizationSearch: e.target.value }))}
-                  className="mt-1 w-full border rounded-lg px-3 py-2"
-                />
-              </label>
-              <label className="text-sm">
-                חיפוש לפי לקוח
-                <input
-                  value={filters.customerSearch}
-                  onChange={(e) => setFilters((p) => ({ ...p, customerSearch: e.target.value }))}
-                  className="mt-1 w-full border rounded-lg px-3 py-2"
-                />
-              </label>
-              <label className="text-sm">
-                חיפוש לפי ח.פ / ת.ז
-                <input
-                  value={filters.idSearch}
-                  onChange={(e) => setFilters((p) => ({ ...p, idSearch: e.target.value }))}
-                  className="mt-1 w-full border rounded-lg px-3 py-2"
-                />
-              </label>
-            </div>
-
-            <div className="bg-slate-50 border rounded-lg p-3">
-              <h3 className="font-semibold text-medical-blue-dark mb-2">מציג תוצאות חיפוש</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                <div>
-                  סה&quot;כ עסקאות: <strong>{data.searchResults.totalTransactions || 0}</strong>
-                </div>
-                <div>
-                  סה&quot;כ לקוחות עיקריים: <strong>{data.searchResults.totalPrimary || 0}</strong>
-                </div>
-                <div>
-                  סה&quot;כ לקוחות משניים: <strong>{data.searchResults.totalSecondary || 0}</strong>
-                </div>
-                <div>
-                  סה&quot;כ מכירות בכסף: <strong>{formatCurrency(data.searchResults.totalSalesAmount || 0)}</strong>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white border rounded-xl p-4 space-y-3">
-            <h3 className="text-lg font-semibold text-medical-blue-dark">כמות / סנן לפי</h3>
-            {SUMMARY_ITEMS.map((item) => (
-              <label key={item.key} className="flex items-center justify-between gap-2 text-sm border-b pb-2">
-                <span>{item.label}</span>
-                <div className="flex items-center gap-2">
-                  <strong>{data.summary[item.key] || 0}</strong>
-                  <input
-                    type="checkbox"
-                    checked={filters.summaryCategories.includes(item.key)}
-                    onChange={() => toggleSummaryCategory(item.key)}
-                  />
-                </div>
-              </label>
-            ))}
-            <div className="pt-2 text-sm">
-              סה&quot;כ בכסף: <strong>{formatCurrency(data.summary.totalRevenue || 0)}</strong>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white border rounded-xl p-4 overflow-auto">
-          {error ? <p className="text-red-600 text-sm mb-2">{error}</p> : null}
-          {loading ? <p className="text-slate-500 text-sm mb-2">טוען…</p> : null}
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-100">
-              <tr>
-                <th className="p-2 text-right">סטטוס</th>
-                <th className="p-2 text-right">מס&apos; הזמנה</th>
-                <th className="p-2 text-right">לקוח</th>
-                <th className="p-2 text-right">ת&quot;ז</th>
-                <th className="p-2 text-right">ארגון</th>
-                <th className="p-2 text-right">סוכן</th>
-                <th className="p-2 text-right">מוצר</th>
-                <th className="p-2 text-right">חבילה</th>
-                <th className="p-2 text-right">סכום</th>
-                <th className="p-2 text-right">עלות ספק</th>
-                <th className="p-2 text-right">עמלת סוכן</th>
-                <th className="p-2 text-right">רווח נקי</th>
-                <th className="p-2 text-right">תאריך</th>
-                <th className="p-2 text-right" />
-              </tr>
-            </thead>
-            <tbody>
-              {data.rows.map((r) => (
-                <tr key={r.id} className="border-t">
-                  <td className="p-2">{r.status === 'canceled' ? 'מבוטל' : 'שולם'}</td>
-                  <td className="p-2">{r.transactionId}</td>
-                  <td className="p-2">{r.fullName || '-'}</td>
-                  <td className="p-2">{r.idNumber || '-'}</td>
-                  <td className="p-2">{r.organizationName || '-'}</td>
-                  <td className="p-2">{r.agentName || '-'}</td>
-                  <td className="p-2">{r.productName || '—'}</td>
-                  <td className="p-2">{r.planType || '-'}</td>
-                  <td className="p-2">{formatCurrency(r.amount)}</td>
-                  <td className="p-2">{formatCurrency(r.vendorCost)}</td>
-                  <td className="p-2">{formatCurrency(r.agentCommission)}</td>
-                  <td className="p-2 font-semibold text-emerald-800">{formatCurrency(r.netProfit)}</td>
-                  <td className="p-2">{r.createdAt ? new Date(r.createdAt).toLocaleString('he-IL') : '-'}</td>
-                  <td className="p-2">
-                    <button
-                      type="button"
-                      className="px-3 py-1 rounded bg-medical-teal text-white"
-                      onClick={() => setSelected(r.raw)}
-                    >
-                      פרטים
-                    </button>
-                  </td>
-                </tr>
+                  <span>{item.label}</span>
+                  <div className="flex items-center gap-2">
+                    <strong>{data.summary[item.key] || 0}</strong>
+                    <input
+                      type="checkbox"
+                      className={checkboxClass}
+                      checked={filters.summaryCategories.includes(item.key)}
+                      onChange={() => toggleSummaryCategory(item.key)}
+                    />
+                  </div>
+                </label>
               ))}
-              {!data.rows.length && !loading ? (
-                <tr>
-                  <td colSpan={14} className="p-3 text-slate-500">
-                    אין נתונים
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
+              <div className="pt-2 text-sm border-t">
+                סה&quot;כ בכסף: <strong>{formatCurrency(data.summary.totalRevenue || 0)}</strong>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        <div className="bg-white border rounded-xl p-4">
-          <h3 className="font-semibold text-medical-blue-dark mb-1">סיכום רווח (עקבי במערכת)</h3>
-          <p className="text-xs text-slate-500 mb-3">רווח נקי = הכנסה − עלות ספק − עמלת סוכן (לפי נתונים שנשמרו בעסקה)</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
-            <div className="border rounded-lg p-3">
-              סה&quot;כ עלויות ספק: <strong>{formatCurrency(data.summary.totalVendorCost || 0)}</strong>
+        <Card>
+          <CardHeader>
+            <CardTitle>תוצאות</CardTitle>
+            <CardDescription>רשימת עסקאות לפי הסינון — לחיצה על &quot;פרטים&quot; לצפייה ב-JSON מלא</CardDescription>
+          </CardHeader>
+          <CardContent className="overflow-auto">
+            {error ? <p className="text-destructive text-sm mb-2">{error}</p> : null}
+            {loading ? <p className="text-muted-foreground text-sm mb-2">טוען…</p> : null}
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>סטטוס</TableHead>
+                    <TableHead>מס&apos; הזמנה</TableHead>
+                    <TableHead>לקוח</TableHead>
+                    <TableHead>ת&quot;ז</TableHead>
+                    <TableHead>ארגון</TableHead>
+                    <TableHead>סוכן</TableHead>
+                    <TableHead>מוצר</TableHead>
+                    <TableHead>חבילה</TableHead>
+                    <TableHead>סכום</TableHead>
+                    <TableHead>עלות ספק</TableHead>
+                    <TableHead>עמלת סוכן</TableHead>
+                    <TableHead>רווח נקי</TableHead>
+                    <TableHead>תאריך</TableHead>
+                    <TableHead className="w-24" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.rows.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell>
+                        <Badge variant={r.status === 'canceled' ? 'destructive' : 'default'}>
+                          {r.status === 'canceled' ? 'מבוטל' : 'שולם'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{r.transactionId}</TableCell>
+                      <TableCell>{r.fullName || '-'}</TableCell>
+                      <TableCell dir="ltr" className="text-start">
+                        {r.idNumber || '-'}
+                      </TableCell>
+                      <TableCell>{r.organizationName || '-'}</TableCell>
+                      <TableCell>{r.agentName || '-'}</TableCell>
+                      <TableCell>{r.productName || '—'}</TableCell>
+                      <TableCell>{r.planType || '-'}</TableCell>
+                      <TableCell>{formatCurrency(r.amount)}</TableCell>
+                      <TableCell>{formatCurrency(r.vendorCost)}</TableCell>
+                      <TableCell>{formatCurrency(r.agentCommission)}</TableCell>
+                      <TableCell className="font-semibold text-emerald-700 dark:text-emerald-400">{formatCurrency(r.netProfit)}</TableCell>
+                      <TableCell className="whitespace-nowrap text-xs">
+                        {r.createdAt ? new Date(r.createdAt).toLocaleString('he-IL') : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <Button type="button" size="sm" variant="secondary" onClick={() => setSelected(r.raw)}>
+                          פרטים
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {!data.rows.length && !loading ? (
+                    <TableRow>
+                      <TableCell colSpan={14} className="text-center text-muted-foreground">
+                        אין נתונים
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
             </div>
-            <div className="border rounded-lg p-3">
-              סה&quot;כ עמלות סוכנים: <strong>{formatCurrency(data.summary.totalAgentCommission || 0)}</strong>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>סיכום רווח (עקבי במערכת)</CardTitle>
+            <CardDescription>רווח נקי = הכנסה − עלות ספק − עמלת סוכן (לפי נתונים שנשמרו בעסקה)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+              <div className="border rounded-lg p-3">
+                סה&quot;כ עלויות ספק: <strong>{formatCurrency(data.summary.totalVendorCost || 0)}</strong>
+              </div>
+              <div className="border rounded-lg p-3">
+                סה&quot;כ עמלות סוכנים: <strong>{formatCurrency(data.summary.totalAgentCommission || 0)}</strong>
+              </div>
+              <div className="border rounded-lg p-3 bg-emerald-50 dark:bg-emerald-950/30">
+                סה&quot;כ רווח נקי (מומלץ): <strong>{formatCurrency(data.summary.totalNetProfit || 0)}</strong>
+              </div>
+              <div className="border rounded-lg p-3">
+                הוצאה ידנית (legacy): <strong>{formatCurrency(data.summary.totalExpenses || 0)}</strong>
+              </div>
             </div>
-            <div className="border rounded-lg p-3 bg-emerald-50">
-              סה&quot;כ רווח נקי (מומלץ): <strong>{formatCurrency(data.summary.totalNetProfit || 0)}</strong>
-            </div>
-            <div className="border rounded-lg p-3">
-              הוצאה ידנית (legacy): <strong>{formatCurrency(data.summary.totalExpenses || 0)}</strong>
-            </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {selected ? (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-[100]" onClick={() => setSelected(null)}>
-          <div className="w-full max-w-3xl bg-white rounded-xl p-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-2">
-              <h2 className="text-xl font-semibold text-medical-blue-dark">פרטים מלאים</h2>
-              <button type="button" onClick={() => setSelected(null)} className="text-slate-500">
-                סגור
-              </button>
-            </div>
-            <pre className="text-xs bg-slate-50 border rounded p-3 overflow-auto max-h-[70vh] text-left">{JSON.stringify(selected, null, 2)}</pre>
-          </div>
-        </div>
-      ) : null}
-    </div>
+      <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>פרטים מלאים</DialogTitle>
+          </DialogHeader>
+          <pre className="text-xs bg-muted border rounded-md p-3 overflow-auto max-h-[70vh] text-start font-mono">{JSON.stringify(selected, null, 2)}</pre>
+          <DialogFooter className="flex-row-reverse sm:flex-row-reverse">
+            <Button type="button" variant="outline" onClick={() => setSelected(null)}>
+              סגור
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </AdminPageShell>
   );
 }
