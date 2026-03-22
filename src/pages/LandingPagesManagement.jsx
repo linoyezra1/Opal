@@ -31,6 +31,11 @@ const emptyForm = () => ({
   subContent: '',
   imageUrl: '',
   priceListId: '',
+  whatYouGetTitle: '',
+  whatYouGetSubtitle: '',
+  whatYouGetItemsJson: '',
+  registrationTitle: '',
+  registrationSubtitle: '',
 });
 
 export default function LandingPagesManagement() {
@@ -85,6 +90,14 @@ export default function LandingPagesManagement() {
       subContent: row.subContent || '',
       imageUrl: row.imageUrl || '',
       priceListId: row.priceListId || '',
+      whatYouGetTitle: row.whatYouGetTitle || '',
+      whatYouGetSubtitle: row.whatYouGetSubtitle || '',
+      whatYouGetItemsJson:
+        row.whatYouGetItems && row.whatYouGetItems.length > 0
+          ? JSON.stringify(row.whatYouGetItems, null, 2)
+          : '',
+      registrationTitle: row.registrationTitle || '',
+      registrationSubtitle: row.registrationSubtitle || '',
     });
     setDialogOpen(true);
   }
@@ -94,6 +107,18 @@ export default function LandingPagesManagement() {
     setLoading(true);
     setError('');
     try {
+      let whatYouGetItems = [];
+      if (form.whatYouGetItemsJson?.trim()) {
+        try {
+          const parsed = JSON.parse(form.whatYouGetItemsJson);
+          if (!Array.isArray(parsed)) throw new Error('not array');
+          whatYouGetItems = parsed;
+        } catch {
+          setError('שדה "מה אתם מקבלים (JSON)" לא תקין — נדרש מערך אובייקטים.');
+          setLoading(false);
+          return;
+        }
+      }
       const body = {
         slug: form.slug.trim().toLowerCase(),
         pageTitle: form.pageTitle,
@@ -102,6 +127,11 @@ export default function LandingPagesManagement() {
         subContent: form.subContent,
         imageUrl: form.imageUrl,
         priceListId: form.priceListId,
+        whatYouGetTitle: form.whatYouGetTitle,
+        whatYouGetSubtitle: form.whatYouGetSubtitle,
+        whatYouGetItems,
+        registrationTitle: form.registrationTitle,
+        registrationSubtitle: form.registrationSubtitle,
       };
       const url = editingId ? `${API_BASE}/api/admin/landing-pages/${editingId}` : `${API_BASE}/api/admin/landing-pages`;
       const res = await fetch(url, {
@@ -171,7 +201,7 @@ export default function LandingPagesManagement() {
       />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? 'עריכת דף נחיתה' : 'דף נחיתה חדש'}</DialogTitle>
             <DialogDescription>
@@ -211,6 +241,48 @@ export default function LandingPagesManagement() {
               <Field>
                 <FieldLabel>קישור לתמונה (URL)</FieldLabel>
                 <Input dir="ltr" value={form.imageUrl} onChange={(e) => setForm((p) => ({ ...p, imageUrl: e.target.value }))} placeholder="https://..." />
+              </Field>
+              <Field>
+                <FieldLabel>כותרת סעיף &quot;מה אתם מקבלים?&quot;</FieldLabel>
+                <Input
+                  value={form.whatYouGetTitle}
+                  onChange={(e) => setForm((p) => ({ ...p, whatYouGetTitle: e.target.value }))}
+                  placeholder="ברירת מחדל אם ריק"
+                />
+              </Field>
+              <Field>
+                <FieldLabel>תת-כותרת סעיף &quot;מה אתם מקבלים&quot;</FieldLabel>
+                <Input
+                  value={form.whatYouGetSubtitle}
+                  onChange={(e) => setForm((p) => ({ ...p, whatYouGetSubtitle: e.target.value }))}
+                  placeholder="חבילת שירותים…"
+                />
+              </Field>
+              <Field>
+                <FieldLabel>פריטי &quot;מה אתם מקבלים&quot; (JSON — אופציונלי)</FieldLabel>
+                <Textarea
+                  dir="ltr"
+                  className="font-mono text-xs min-h-[120px]"
+                  value={form.whatYouGetItemsJson}
+                  onChange={(e) => setForm((p) => ({ ...p, whatYouGetItemsJson: e.target.value }))}
+                  placeholder={`[{"title":"ייעוץ…","description":"…","icon":"phone"}]\nאייקונים: phone, users, pill, stethoscope, syringe, file`}
+                />
+              </Field>
+              <Field>
+                <FieldLabel>כותרת טופס הרשמה</FieldLabel>
+                <Input
+                  value={form.registrationTitle}
+                  onChange={(e) => setForm((p) => ({ ...p, registrationTitle: e.target.value }))}
+                  placeholder="הרשמה לשירות"
+                />
+              </Field>
+              <Field>
+                <FieldLabel>תת-כותרת טופס הרשמה</FieldLabel>
+                <Input
+                  value={form.registrationSubtitle}
+                  onChange={(e) => setForm((p) => ({ ...p, registrationSubtitle: e.target.value }))}
+                  placeholder="מלאו את הפרטים…"
+                />
               </Field>
               <Field>
                 <FieldLabel>מחירון מקושר *</FieldLabel>

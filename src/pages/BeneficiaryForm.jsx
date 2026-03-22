@@ -1,194 +1,125 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { API_BASE } from '../apiBase.js';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
+import { Button } from '../components/ui/button.jsx';
+import { Input } from '../components/ui/input.jsx';
+import { Spinner } from '../components/ui/spinner.jsx';
+import { FieldGroup, Field, FieldLabel } from '../components/ui/field.jsx';
 
-const API_BASE = window.location.origin;
-const PENDING_KEY = 'opal_pending_data';
-
-function splitFullName(fullName) {
-  const t = String(fullName || '').trim();
-  if (!t) return { firstName: '', lastName: '' };
-  const idx = t.indexOf(' ');
-  if (idx === -1) return { firstName: t, lastName: '' };
-  return { firstName: t.slice(0, idx), lastName: t.slice(idx + 1).trim() };
-}
+const MARITAL_OPTIONS = ['', 'רווק/ה', 'נשוי/אה', 'גרוש/ה', 'אלמן/ה', 'ידוע/ה בציבור'];
+const HEALTH_FUNDS = ['', 'כללית', 'מכבי', 'מאוחדת', 'לאומית'];
+const SUPPLEMENTAL_OPTIONS = ['', 'אין', 'כסף', 'זהב', 'פלטינום', 'אחר'];
 
 function validateId(value) {
   const digits = String(value || '').replace(/\D/g, '');
   return digits.length === 9;
 }
 
-const MARITAL_OPTIONS = ['', 'רווק/ה', 'נשוי/אה', 'גרוש/ה', 'אלמן/ה', 'ידוע/ה בציבור'];
-const HEALTH_FUNDS = ['', 'כללית', 'מכבי', 'מאוחדת', 'לאומית'];
-const SUPPLEMENTAL_OPTIONS = ['', 'אין', 'כסף', 'זהב', 'פלטינום', 'אחר'];
-
-function SectionCard({ title, subtitle, children }) {
-  return (
-    <section className="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 shadow-sm space-y-4">
-      <div className="text-right">
-        <h2 className="text-lg font-semibold text-medical-blue-dark">{title}</h2>
-        {subtitle ? <p className="text-sm text-medical-grey-dark mt-1 leading-relaxed">{subtitle}</p> : null}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function TextField({
-  label,
-  required,
-  value,
-  onChange,
-  placeholder,
-  type = 'text',
-  inputMode,
-  maxLength,
-  error,
-  autoFilled = false,
-  readOnly = false,
-}) {
-  return (
-    <div className="text-right">
-      <label className="block text-sm text-medical-grey-dark mb-1 text-right">
-        {label} {required ? <span className="text-red-600">*</span> : null}
-      </label>
-      <input
-        type={type}
-        value={value}
-        inputMode={inputMode}
-        maxLength={maxLength}
-        onChange={(e) => onChange(e.target.value)}
-        readOnly={readOnly}
-        className={`w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-medical-blue text-right ${
-          autoFilled ? 'bg-slate-50' : 'bg-white'
-        }`}
-        placeholder={placeholder}
-      />
-      {error ? <p className="text-red-600 text-sm mt-1 text-right">{error}</p> : null}
-      {autoFilled && !error ? (
-        <p className="text-xs text-slate-500 mt-1 text-right">שדה שנשמר מהטופס הקודם (ניתן לעריכה)</p>
-      ) : null}
-    </div>
-  );
-}
-
-function SelectField({ label, required, value, onChange, options, error }) {
-  return (
-    <div className="text-right">
-      <label className="block text-sm text-medical-grey-dark mb-1 text-right">
-        {label} {required ? <span className="text-red-600">*</span> : null}
-      </label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-medical-blue bg-white text-right"
-      >
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o || 'בחר'}
-          </option>
-        ))}
-      </select>
-      {error ? <p className="text-red-600 text-sm mt-1 text-right">{error}</p> : null}
-    </div>
-  );
+function emptyMember() {
+  return {
+    firstName: '',
+    lastName: '',
+    id: '',
+    dateOfBirth: '',
+    maritalStatus: '',
+    healthFund: '',
+    supplementalInsurance: '',
+    phone: '',
+    email: '',
+    address: '',
+  };
 }
 
 function MemberFields({ title, member, onChange, errors = {}, includeContact = false }) {
   const set = (k) => (v) => onChange({ ...member, [k]: v });
 
   return (
-    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-medical-blue-dark">{title}</h3>
-      </div>
+    <div className="rounded-xl border bg-card p-4 space-y-3">
+      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <TextField
-          label="שם פרטי"
-          required
-          value={member.firstName}
-          onChange={set('firstName')}
-          placeholder="שם פרטי"
-          error={errors.firstName}
-        />
-        <TextField
-          label="שם משפחה"
-          required
-          value={member.lastName}
-          onChange={set('lastName')}
-          placeholder="שם משפחה"
-          error={errors.lastName}
-        />
-        <TextField
-          label="תעודת זהות"
-          required
-          value={member.id}
-          onChange={(v) => set('id')(String(v).replace(/\D/g, '').slice(0, 9))}
-          placeholder="9 ספרות"
-          inputMode="numeric"
-          maxLength={9}
-          error={errors.id}
-        />
-        <TextField
-          label="תאריך לידה"
-          required
-          value={member.dateOfBirth}
-          onChange={set('dateOfBirth')}
-          type="date"
-          error={errors.dateOfBirth}
-        />
-        <SelectField
-          label="מצב משפחתי"
-          required={false}
-          value={member.maritalStatus}
-          onChange={set('maritalStatus')}
-          options={MARITAL_OPTIONS}
-          error={errors.maritalStatus}
-        />
-        <SelectField
-          label="קופת חולים"
-          required={false}
-          value={member.healthFund}
-          onChange={set('healthFund')}
-          options={HEALTH_FUNDS}
-          error={errors.healthFund}
-        />
-        <SelectField
-          label="ביטוח משלים"
-          required={false}
-          value={member.supplementalInsurance}
-          onChange={set('supplementalInsurance')}
-          options={SUPPLEMENTAL_OPTIONS}
-          error={errors.supplementalInsurance}
-        />
+        <Field>
+          <FieldLabel>שם פרטי *</FieldLabel>
+          <Input value={member.firstName} onChange={(e) => set('firstName')(e.target.value)} placeholder="שם פרטי" />
+          {errors.firstName ? <p className="text-destructive text-xs">{errors.firstName}</p> : null}
+        </Field>
+        <Field>
+          <FieldLabel>שם משפחה *</FieldLabel>
+          <Input value={member.lastName} onChange={(e) => set('lastName')(e.target.value)} placeholder="שם משפחה" />
+          {errors.lastName ? <p className="text-destructive text-xs">{errors.lastName}</p> : null}
+        </Field>
+        <Field>
+          <FieldLabel>תעודת זהות *</FieldLabel>
+          <Input
+            value={member.id}
+            onChange={(e) => set('id')(String(e.target.value).replace(/\D/g, '').slice(0, 9))}
+            placeholder="9 ספרות"
+            inputMode="numeric"
+            maxLength={9}
+          />
+          {errors.id ? <p className="text-destructive text-xs">{errors.id}</p> : null}
+        </Field>
+        <Field>
+          <FieldLabel>תאריך לידה *</FieldLabel>
+          <Input type="date" value={member.dateOfBirth} onChange={(e) => set('dateOfBirth')(e.target.value)} />
+          {errors.dateOfBirth ? <p className="text-destructive text-xs">{errors.dateOfBirth}</p> : null}
+        </Field>
+        <Field>
+          <FieldLabel>מצב משפחתי</FieldLabel>
+          <select
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={member.maritalStatus}
+            onChange={(e) => set('maritalStatus')(e.target.value)}
+          >
+            {MARITAL_OPTIONS.map((o) => (
+              <option key={o || 'empty'} value={o}>
+                {o || 'בחר'}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field>
+          <FieldLabel>קופת חולים</FieldLabel>
+          <select
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={member.healthFund}
+            onChange={(e) => set('healthFund')(e.target.value)}
+          >
+            {HEALTH_FUNDS.map((o) => (
+              <option key={o || 'empty'} value={o}>
+                {o || 'בחר'}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field>
+          <FieldLabel>ביטוח משלים</FieldLabel>
+          <select
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={member.supplementalInsurance}
+            onChange={(e) => set('supplementalInsurance')(e.target.value)}
+          >
+            {SUPPLEMENTAL_OPTIONS.map((o) => (
+              <option key={o || 'empty'} value={o}>
+                {o || 'בחר'}
+              </option>
+            ))}
+          </select>
+        </Field>
         {includeContact ? (
           <>
-            <TextField
-              label="טלפון"
-              required={false}
-              value={member.phone}
-              onChange={set('phone')}
-              placeholder="0501234567"
-              error={errors.phone}
-            />
-            <TextField
-              label="אימייל"
-              required={false}
-              value={member.email}
-              onChange={set('email')}
-              placeholder="example@email.com"
-              type="email"
-              error={errors.email}
-            />
-            <div className="sm:col-span-2">
-              <TextField
-                label="כתובת"
-                required={false}
-                value={member.address}
-                onChange={set('address')}
-                placeholder="עיר, רחוב, מספר בית"
-                error={errors.address}
-              />
-            </div>
+            <Field>
+              <FieldLabel>טלפון</FieldLabel>
+              <Input value={member.phone} onChange={(e) => set('phone')(e.target.value)} placeholder="0501234567" dir="ltr" />
+            </Field>
+            <Field>
+              <FieldLabel>אימייל</FieldLabel>
+              <Input type="email" value={member.email} onChange={(e) => set('email')(e.target.value)} dir="ltr" />
+            </Field>
+            <Field className="sm:col-span-2">
+              <FieldLabel>כתובת</FieldLabel>
+              <Input value={member.address} onChange={(e) => set('address')(e.target.value)} placeholder="עיר, רחוב, מספר בית" />
+            </Field>
           </>
         ) : null}
       </div>
@@ -196,31 +127,16 @@ function MemberFields({ title, member, onChange, errors = {}, includeContact = f
   );
 }
 
-const emptyMember = () => ({
-  firstName: '',
-  lastName: '',
-  id: '',
-  dateOfBirth: '',
-  maritalStatus: '',
-  healthFund: '',
-  supplementalInsurance: '',
-  phone: '',
-  email: '',
-  address: '',
-});
-
 export default function BeneficiaryForm({ showBackLink = true }) {
   const location = useLocation();
   const query = useMemo(() => new URLSearchParams(location.search), [location.search]);
-  const txFromQuery =
-    query.get('transactionId') || query.get('TransactionId') || query.get('tx') || query.get('transaction') || '';
 
-  const [transactionId, setTransactionId] = useState(String(txFromQuery || ''));
+  const [transactionId, setTransactionId] = useState('');
+  const [resolvingTx, setResolvingTx] = useState(true);
+  const [txResolveError, setTxResolveError] = useState('');
   const [organizationName, setOrganizationName] = useState('');
-  const [organizationAutoFilled, setOrganizationAutoFilled] = useState(false);
   const [agentName, setAgentName] = useState('');
-  const [agentAutoFilled, setAgentAutoFilled] = useState(false);
-  const [primaryMember, setPrimaryMember] = useState(emptyMember());
+  const [primaryMember, setPrimaryMember] = useState(emptyMember);
   const [additionalMembers, setAdditionalMembers] = useState([]);
 
   const [errors, setErrors] = useState({});
@@ -228,78 +144,88 @@ export default function BeneficiaryForm({ showBackLink = true }) {
   const [submitError, setSubmitError] = useState(null);
   const [submitted, setSubmitted] = useState(false);
 
+  /** מספר הזמנה מהמסד לפי LowProfileCode (אחרי תשלום) — ללא מילוי אוטומטי של פרטי מוטבים */
   useEffect(() => {
-    try {
-      if (typeof window === 'undefined' || !window.localStorage) return;
-    } catch {
-      return;
-    }
-    let data;
-    try {
-      const raw = window.localStorage.getItem(PENDING_KEY);
-      if (!raw) return;
-      data = JSON.parse(raw);
-    } catch {
-      return;
+    let cancelled = false;
+    const qTx = query.get('transactionId') || query.get('TransactionId') || query.get('tx') || '';
+    if (qTx) {
+      setTransactionId(String(qTx));
+      setResolvingTx(false);
+      return undefined;
     }
 
-    const org = data.organization || data.organizationName;
-    const agent = data.agent || data.agentName;
-    if (org) {
-      setOrganizationName((prev) => prev || org);
-      setOrganizationAutoFilled(true);
-    }
-    if (agent) {
-      setAgentName((prev) => prev || agent);
-      setAgentAutoFilled(true);
-    }
-
-    if (data.payerName || data.payerId || data.payerEmail || data.payerPhone) {
-      const { firstName, lastName } = data.payerName ? splitFullName(data.payerName) : { firstName: '', lastName: '' };
-      setPrimaryMember((prev) => ({
-        ...prev,
-        firstName: prev.firstName || firstName,
-        lastName: prev.lastName || lastName,
-        id: prev.id || (data.payerId || ''),
-        email: prev.email || (data.payerEmail || ''),
-        phone: prev.phone || (data.payerPhone || ''),
-      }));
+    const lp =
+      query.get('LowProfileCode') || query.get('lowProfileCode') || query.get('lowprofilecode') || '';
+    let code = lp;
+    if (!code) {
+      try {
+        code = sessionStorage.getItem('opal_checkout_low_profile') || '';
+      } catch {
+        code = '';
+      }
     }
 
-    const count = Number(data.beneficiaryCount);
-    if (!Number.isNaN(count) && count > 0) {
-      const n = Math.max(0, Math.min(5, count));
-      const savedBeneficiaries = Array.isArray(data.beneficiaries) ? data.beneficiaries : null;
-      setAdditionalMembers((prev) => {
-        let next = [...prev];
-        if (next.length > n) next = next.slice(0, n);
-        while (next.length < n) next.push(emptyMember());
-        if (savedBeneficiaries) {
-          const len = Math.min(n, savedBeneficiaries.length);
-          for (let i = 0; i < len; i++) {
-            const sb = savedBeneficiaries[i] || {};
-            next[i] = {
-              ...next[i],
-              firstName: next[i].firstName || sb.firstName || '',
-              lastName: next[i].lastName || sb.lastName || '',
-              id: next[i].id || sb.id || '',
-              dateOfBirth: next[i].dateOfBirth || sb.dateOfBirth || '',
-            };
+    if (!code) {
+      setResolvingTx(false);
+      setTxResolveError('חסר מזהה עסקה. יש להגיע מדף התודה לאחר תשלום, או לפתוח את הקישור מהמייל.');
+      return undefined;
+    }
+
+    (async () => {
+      setResolvingTx(true);
+      setTxResolveError('');
+      for (let i = 0; i < 20 && !cancelled; i += 1) {
+        try {
+          const r = await fetch(
+            `${API_BASE}/api/public/deal-lookup?lowProfileCode=${encodeURIComponent(code)}`
+          ).then((x) => x.json());
+          if (r.success && r.found && r.transactionId) {
+            if (!cancelled) {
+              setTransactionId(String(r.transactionId));
+              setResolvingTx(false);
+            }
+            return;
           }
-        } else if (data.firstBeneficiary && typeof data.firstBeneficiary === 'object' && n > 0) {
-          const fb = data.firstBeneficiary;
-          next[0] = {
-            ...next[0],
-            firstName: next[0].firstName || fb.firstName || '',
-            lastName: next[0].lastName || fb.lastName || '',
-            id: next[0].id || fb.id || '',
-            dateOfBirth: next[0].dateOfBirth || fb.dateOfBirth || '',
-          };
+        } catch {
+          /* retry */
         }
-        return next;
-      });
-    }
-  }, []);
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+      if (!cancelled) {
+        setResolvingTx(false);
+        setTxResolveError(
+          'מספר ההזמנה עדיין לא זמין במערכת. נסו לרענן עוד מעט, או פנו לשירות עם מספר העסקה.'
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [location.search, query]);
+
+  /** הקשר עסקה (ארגון, סוכן, מספר מוטבים) — בלי למלא שמות מוטבים */
+  useEffect(() => {
+    if (!transactionId || resolvingTx) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(
+          `${API_BASE}/api/public/deal-context?transactionId=${encodeURIComponent(transactionId)}`
+        ).then((x) => x.json());
+        if (!r.success || cancelled) return;
+        if (r.organizationName) setOrganizationName(r.organizationName);
+        if (r.agentName) setAgentName(r.agentName);
+        const n = Math.max(0, Math.min(5, Number(r.beneficiaryCount) || 0));
+        setAdditionalMembers(Array.from({ length: n }, () => emptyMember()));
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [transactionId, resolvingTx]);
 
   const validateMemberRequired = useCallback((m) => {
     const e = {};
@@ -322,14 +248,11 @@ export default function BeneficiaryForm({ showBackLink = true }) {
 
   const validate = useCallback(() => {
     const next = {};
-
-    if (!String(transactionId || '').trim()) next.transactionId = 'שדה חובה';
+    if (!String(transactionId || '').trim()) next.transactionId = 'ממתינים למספר הזמנה מהמערכת';
     if (!String(organizationName || '').trim()) next.organizationName = 'שדה חובה';
-    if (!String(agentName || '').trim()) next.agentName = 'שדה חובה';
-
+    /** סוכן אופציונלי */
     const pmErr = validateMemberRequired(primaryMember);
     if (Object.keys(pmErr).length) next.primaryMember = pmErr;
-
     const additionalErrs = [];
     for (let i = 0; i < additionalMembers.length; i++) {
       const m = additionalMembers[i];
@@ -341,31 +264,19 @@ export default function BeneficiaryForm({ showBackLink = true }) {
       additionalErrs.push(Object.keys(me).length ? me : null);
     }
     if (additionalErrs.some(Boolean)) next.additional = additionalErrs;
-
     setErrors(next);
     return Object.keys(next).length === 0;
-  }, [
-    transactionId,
-    organizationName,
-    agentName,
-    primaryMember,
-    additionalMembers,
-    validateMemberRequired,
-    isMemberProvided,
-  ]);
+  }, [transactionId, organizationName, primaryMember, additionalMembers, validateMemberRequired, isMemberProvided]);
 
   const handleSubmit = useCallback(
     async (event) => {
       event.preventDefault();
       setSubmitError(null);
       setSubmitted(false);
-
       if (!validate()) return;
-
       const additionalMembersPayload = additionalMembers
         .map((m, index) => ({ relation: `additional_${index + 1}`, ...m }))
         .filter((m) => isMemberProvided(m));
-
       setIsSubmitting(true);
       try {
         const res = await fetch(`${API_BASE}/api/update-beneficiaries`, {
@@ -394,96 +305,98 @@ export default function BeneficiaryForm({ showBackLink = true }) {
     [validate, isMemberProvided, additionalMembers, transactionId, organizationName, agentName, primaryMember]
   );
 
-  const headerRight = (
-    <div className="h-8 w-32 bg-medical-teal/10 rounded flex items-center justify-center text-medical-teal-dark font-bold text-sm">
-      לוגו אופל
-    </div>
-  );
-
   return (
-    <div dir="rtl" className="min-h-screen flex flex-col bg-slate-50 font-sans">
-      <header className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-3xl mx-auto px-4 py-4 flex justify-between items-center">
+    <div dir="rtl" className="min-h-screen flex flex-col bg-muted/30">
+      <header className="border-b bg-card">
+        <div className="container max-w-3xl mx-auto px-4 py-4 flex justify-between items-center gap-3">
           {showBackLink ? (
-            <Link to="/" className="text-medical-blue hover:underline text-sm">
-              ← חזרה לדף הבית
-            </Link>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/">חזרה לדף הבית</Link>
+            </Button>
           ) : (
             <div />
           )}
-          {headerRight}
+          <div className="h-9 px-4 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-sm">
+            אופל
+          </div>
         </div>
       </header>
 
-      <main className="flex-1 max-w-3xl mx-auto w-full px-4 py-8 sm:py-10 text-right">
-        <h1 className="text-2xl sm:text-3xl font-bold text-medical-blue-dark mb-2">עדכון פרטי מוטבים</h1>
-        <p className="text-medical-grey-dark mb-8 leading-relaxed">
-          נא למלא פרטי ארגון, סוכן, מבוטח ראשי ומוטבים נוספים (בן/בת זוג ועד 3 ילדים).
-        </p>
+      <main className="flex-1 container max-w-3xl mx-auto w-full px-4 py-8 md:py-10">
+        <div className="mb-8 text-right space-y-2">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">עדכון פרטי מוטבים</h1>
+          <p className="text-muted-foreground leading-relaxed">
+            נא למלא פרטי ארגון, סוכן (אם רלוונטי), מבוטח ראשי ומוטבים נוספים. פרטי המוטבים אינם מולאים אוטומטית — יש להזין
+            אותם כאן.
+          </p>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <SectionCard
-            title="פרטי עסקה"
-            subtitle="מס׳ הזמנה (אוטומטי) כפי שנקלט במערכת – לא ניתן לעריכה."
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <TextField
-                label="מס׳ הזמנה (אוטומטי)"
-                required
-                value={transactionId}
-                onChange={setTransactionId}
-                placeholder="לדוגמה 123456"
-                error={errors.transactionId}
-                readOnly
-              />
-            </div>
-          </SectionCard>
+          <Card>
+            <CardHeader>
+              <CardTitle>פרטי עסקה</CardTitle>
+              <CardDescription>מס׳ הזמנה נטען מהמערכת לאחר התשלום (מסד הנתונים)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {resolvingTx ? (
+                <div className="flex items-center gap-3 text-muted-foreground">
+                  <Spinner />
+                  <span>טוען מספר הזמנה מהמערכת…</span>
+                </div>
+              ) : txResolveError && !transactionId ? (
+                <p className="text-destructive text-sm">{txResolveError}</p>
+              ) : (
+                <Field>
+                  <FieldLabel>מס׳ הזמנה</FieldLabel>
+                  <Input dir="ltr" className="font-mono bg-muted" value={transactionId} readOnly />
+                </Field>
+              )}
+            </CardContent>
+          </Card>
 
-          <SectionCard title="פרטי ארגון וסוכן">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <TextField
-                label="ארגון"
-                required
-                value={organizationName}
-                onChange={setOrganizationName}
-                placeholder="שם הארגון"
-                error={errors.organizationName}
-                autoFilled={organizationAutoFilled}
-              />
-              <TextField
-                label="סוכן"
-                required
-                value={agentName}
-                onChange={setAgentName}
-                placeholder="שם הסוכן"
-                error={errors.agentName}
-                autoFilled={agentAutoFilled}
-              />
-            </div>
-          </SectionCard>
+          <Card>
+            <CardHeader>
+              <CardTitle>פרטי ארגון וסוכן</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FieldGroup>
+                <Field>
+                  <FieldLabel>ארגון *</FieldLabel>
+                  <Input value={organizationName} onChange={(e) => setOrganizationName(e.target.value)} />
+                  {errors.organizationName ? <p className="text-destructive text-xs">{errors.organizationName}</p> : null}
+                </Field>
+                <Field>
+                  <FieldLabel>סוכן</FieldLabel>
+                  <Input value={agentName} onChange={(e) => setAgentName(e.target.value)} placeholder="אופציונלי" />
+                </Field>
+              </FieldGroup>
+            </CardContent>
+          </Card>
 
-          <SectionCard
-            title="מבוטח ראשי"
-            subtitle="שורה עם סטטוס 1 תכיל גם פרטי קשר וכתובת (ככל שנדרש)."
-          >
-            <MemberFields
-              title="פרטי מבוטח ראשי"
-              member={primaryMember}
-              onChange={setPrimaryMember}
-              includeContact
-              errors={errors.primaryMember || {}}
-            />
-          </SectionCard>
+          <Card>
+            <CardHeader>
+              <CardTitle>מבוטח ראשי</CardTitle>
+              <CardDescription>פרטי קשר וכתובת במידת הצורך</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <MemberFields
+                title="פרטי מבוטח ראשי"
+                member={primaryMember}
+                onChange={setPrimaryMember}
+                includeContact
+                errors={errors.primaryMember || {}}
+              />
+            </CardContent>
+          </Card>
 
-          <SectionCard
-            title="מוטבים נוספים"
-            subtitle="מספר השורות מותאם למספר המוטבים שנבחר בטופס ההרשמה. ניתן להשאיר ריק אם אין מוטבים נוספים."
-          >
-            <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>מוטבים נוספים</CardTitle>
+              <CardDescription>שורות לפי מספר המוטבים שנרכשו בעסקה — יש למלא רק אם רלוונטי</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
               {additionalMembers.length === 0 ? (
-                <p className="text-sm text-medical-grey-dark">
-                  לא נבחרו מוטבים נוספים בשלב ההרשמה. אם תרצה להוסיף כעת, אנא פנה לסוכן.
-                </p>
+                <p className="text-sm text-muted-foreground">לא נרשמו מוטבים נוספים בעסקה זו.</p>
               ) : (
                 additionalMembers.map((m, index) => (
                   <MemberFields
@@ -501,23 +414,20 @@ export default function BeneficiaryForm({ showBackLink = true }) {
                   />
                 ))
               )}
-            </div>
-          </SectionCard>
+            </CardContent>
+          </Card>
 
-          <div className="pt-2 text-right">
-            {submitError ? <p className="text-red-600 text-sm mb-2">{submitError}</p> : null}
+          <div className="flex flex-col items-stretch gap-3 pt-2">
+            {submitError ? <p className="text-destructive text-sm">{submitError}</p> : null}
             {submitted ? (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-3">
-                <p className="text-emerald-800 font-medium">נשמר בהצלחה.</p>
+              <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/30 p-4 text-green-800 dark:text-green-200 text-sm font-medium">
+                נשמר בהצלחה.
               </div>
             ) : null}
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full sm:w-auto min-w-[220px] px-6 py-3 bg-medical-blue hover:bg-medical-blue-dark disabled:bg-medical-grey-light text-white font-semibold rounded-lg shadow-md transition-colors disabled:opacity-70"
-            >
-              {isSubmitting ? 'שולח…' : 'שמירה'}
-            </button>
+            <Button type="submit" size="lg" disabled={isSubmitting || resolvingTx || !transactionId} className="w-full sm:w-auto">
+              {isSubmitting && <Spinner className="me-2" />}
+              שמירה
+            </Button>
           </div>
         </form>
       </main>

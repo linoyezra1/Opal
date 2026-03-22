@@ -247,6 +247,16 @@ priceListSchema.pre('save', async function priceListPreSave() {
 });
 
 /** דף נחיתה מעוצב — מקושר למחירון */
+const whatYouGetItemSchema = new mongoose.Schema(
+  {
+    title: { type: String, default: '' },
+    description: { type: String, default: '' },
+    /** מפתח אייקון לצד הלקוח: phone | users | pill | stethoscope | syringe | file */
+    icon: { type: String, default: 'phone' },
+  },
+  { _id: false }
+);
+
 const landingPageSchema = new mongoose.Schema(
   {
     slug: { type: String, required: true, unique: true, trim: true, lowercase: true },
@@ -256,6 +266,11 @@ const landingPageSchema = new mongoose.Schema(
     subContent: { type: String, default: '' },
     imageUrl: { type: String, default: '' },
     priceListId: { type: mongoose.Schema.Types.ObjectId, ref: 'PriceList', required: true },
+    whatYouGetTitle: { type: String, default: '' },
+    whatYouGetSubtitle: { type: String, default: '' },
+    whatYouGetItems: { type: [whatYouGetItemSchema], default: [] },
+    registrationTitle: { type: String, default: '' },
+    registrationSubtitle: { type: String, default: '' },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
   },
@@ -848,6 +863,13 @@ function assertValidLandingSlug(slug) {
 
 function serializeLandingPageDoc(d) {
   if (!d) return null;
+  const items = Array.isArray(d.whatYouGetItems)
+    ? d.whatYouGetItems.map((it) => ({
+        title: String(it?.title || '').trim(),
+        description: String(it?.description || '').trim(),
+        icon: String(it?.icon || 'phone').trim() || 'phone',
+      }))
+    : [];
   return {
     id: String(d._id),
     slug: d.slug,
@@ -857,6 +879,11 @@ function serializeLandingPageDoc(d) {
     subContent: d.subContent || '',
     imageUrl: d.imageUrl || '',
     priceListId: String(d.priceListId),
+    whatYouGetTitle: d.whatYouGetTitle || '',
+    whatYouGetSubtitle: d.whatYouGetSubtitle || '',
+    whatYouGetItems: items,
+    registrationTitle: d.registrationTitle || '',
+    registrationSubtitle: d.registrationSubtitle || '',
     createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
     updatedAt: d.updatedAt ? new Date(d.updatedAt).toISOString() : null,
   };
@@ -868,6 +895,30 @@ export async function listLandingPages() {
   return docs.map(serializeLandingPageDoc);
 }
 
+const WHAT_YOU_GET_ICON_KEYS = new Set(['phone', 'users', 'pill', 'stethoscope', 'syringe', 'file']);
+
+function normalizeWhatYouGetItems(raw) {
+  if (!raw) return [];
+  let arr = raw;
+  if (typeof raw === 'string') {
+    try {
+      arr = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(arr)) return [];
+  return arr
+    .map((it) => {
+      const title = String(it?.title || '').trim();
+      const description = String(it?.description || '').trim();
+      let icon = String(it?.icon || 'phone').trim().toLowerCase();
+      if (!WHAT_YOU_GET_ICON_KEYS.has(icon)) icon = 'phone';
+      return { title, description, icon };
+    })
+    .filter((it) => it.title || it.description);
+}
+
 export async function createLandingPage(payload) {
   await ensureConnection();
   const slug = assertValidLandingSlug(payload.slug);
@@ -877,6 +928,7 @@ export async function createLandingPage(payload) {
   if (exists) throw new Error('מזהה URL כבר בשימוש');
   const pl = await PriceList.findById(priceListId).lean();
   if (!pl) throw new Error('מחירון לא נמצא');
+  const wItems = normalizeWhatYouGetItems(payload.whatYouGetItems);
   const doc = await LandingPage.create({
     slug,
     pageTitle: String(payload.pageTitle || '').trim(),
@@ -885,6 +937,11 @@ export async function createLandingPage(payload) {
     subContent: String(payload.subContent || ''),
     imageUrl: String(payload.imageUrl || '').trim(),
     priceListId,
+    whatYouGetTitle: String(payload.whatYouGetTitle || '').trim(),
+    whatYouGetSubtitle: String(payload.whatYouGetSubtitle || '').trim(),
+    whatYouGetItems: wItems,
+    registrationTitle: String(payload.registrationTitle || '').trim(),
+    registrationSubtitle: String(payload.registrationSubtitle || '').trim(),
   });
   return { id: String(doc._id), slug };
 }
@@ -904,6 +961,11 @@ export async function updateLandingPage(id, payload) {
   if (payload.mainContent != null) set.mainContent = String(payload.mainContent);
   if (payload.subContent != null) set.subContent = String(payload.subContent);
   if (payload.imageUrl != null) set.imageUrl = String(payload.imageUrl).trim();
+  if (payload.whatYouGetTitle != null) set.whatYouGetTitle = String(payload.whatYouGetTitle).trim();
+  if (payload.whatYouGetSubtitle != null) set.whatYouGetSubtitle = String(payload.whatYouGetSubtitle).trim();
+  if (payload.whatYouGetItems != null) set.whatYouGetItems = normalizeWhatYouGetItems(payload.whatYouGetItems);
+  if (payload.registrationTitle != null) set.registrationTitle = String(payload.registrationTitle).trim();
+  if (payload.registrationSubtitle != null) set.registrationSubtitle = String(payload.registrationSubtitle).trim();
   if (payload.priceListId != null) {
     if (!mongoose.isValidObjectId(payload.priceListId)) throw new Error('מחירון לא תקין');
     const pl = await PriceList.findById(payload.priceListId).lean();
@@ -932,6 +994,13 @@ export async function getPublicLandingPageBySlug(slug) {
   if (!doc) return null;
   const pl = await getPublicPriceListById(String(doc.priceListId));
   if (!pl) return null;
+  const items = Array.isArray(doc.whatYouGetItems)
+    ? doc.whatYouGetItems.map((it) => ({
+        title: String(it?.title || '').trim(),
+        description: String(it?.description || '').trim(),
+        icon: String(it?.icon || 'phone').trim() || 'phone',
+      }))
+    : [];
   return {
     slug: doc.slug,
     pageTitle: doc.pageTitle || '',
@@ -939,6 +1008,11 @@ export async function getPublicLandingPageBySlug(slug) {
     mainContent: doc.mainContent || '',
     subContent: doc.subContent || '',
     imageUrl: doc.imageUrl || '',
+    whatYouGetTitle: doc.whatYouGetTitle || '',
+    whatYouGetSubtitle: doc.whatYouGetSubtitle || '',
+    whatYouGetItems: items,
+    registrationTitle: doc.registrationTitle || '',
+    registrationSubtitle: doc.registrationSubtitle || '',
     priceList: pl,
   };
 }
@@ -953,13 +1027,14 @@ export async function getPublicPriceListById(id) {
   const products = [];
   for (const line of lines) {
     const pid = line.productId;
-    const p = await Product.findById(pid).select('productName name baseDescription sku').lean();
+    const p = await Product.findById(pid).select('productName name baseDescription sku imageUrl').lean();
     if (!p) continue;
     products.push({
       productId: String(pid),
       productName: p.productName || p.name || '',
       baseDescription: p.baseDescription || '',
       sku: p.sku || '',
+      imageUrl: p.imageUrl || '',
       retailPrice: Number(line.retailPrice || 0),
     });
   }

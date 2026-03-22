@@ -38,6 +38,8 @@ export async function saveDeal(params) {
 
   const doc = {
     transactionId,
+    /** מזהה Cardcom LowProfile — לחיפוש עסקה לפני קבלת מס׳ הזמנה סופי */
+    lowProfileCode: params.lowProfileCode != null ? String(params.lowProfileCode).trim() : '',
     payerAmount: Number(params.payerAmount || 0),
     formState: params.formState || {},
     /** מזהה סוכן (מנוי) — לספירת מכירות לפי סוכן */
@@ -53,6 +55,43 @@ export async function saveDeal(params) {
 
   const result = await deals.insertOne(doc);
   return { duplicate: false, id: String(result.insertedId) };
+}
+
+/** חיפוש עסקה לפי LowProfileCode (אחרי תשלום — מחזיר transactionId מהמסד) */
+export async function findDealByLowProfileCode(lowProfileCode) {
+  const db = await getDb();
+  const code = String(lowProfileCode || '').trim();
+  if (!code) return null;
+  const doc = await db.collection('deals').findOne(
+    { lowProfileCode: code },
+    { projection: { transactionId: 1, paymentStatus: 1, createdAt: 1 } }
+  );
+  if (!doc) return null;
+  return {
+    transactionId: doc.transactionId != null ? String(doc.transactionId) : '',
+    paymentStatus: doc.paymentStatus || '',
+    createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : null,
+  };
+}
+
+/** הקשר מינימלי לטופס מוטבים (ללא פרטי מוטבים — המשתמש ממלא ידנית) */
+export async function getPublicDealContext(transactionId) {
+  const db = await getDb();
+  const tid = String(transactionId || '').trim();
+  if (!tid) return null;
+  const doc = await db.collection('deals').findOne(
+    { transactionId: tid },
+    { projection: { transactionId: 1, formState: 1 } }
+  );
+  if (!doc) return null;
+  const fs = doc.formState && typeof doc.formState === 'object' ? doc.formState : {};
+  const n = Math.max(0, Math.min(5, Number(fs.beneficiaryCount) || 0));
+  return {
+    transactionId: String(doc.transactionId),
+    organizationName: String(fs.organizationName || '').trim(),
+    agentName: String(fs.agentName || '').trim(),
+    beneficiaryCount: n,
+  };
 }
 
 export async function saveBeneficiaryUpdate(params) {

@@ -1,12 +1,66 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckCircle2, Phone, Mail, ArrowRight } from 'lucide-react';
 import { Button } from '../components/ui/button.jsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
+import { Spinner } from '../components/ui/spinner.jsx';
+import { API_BASE } from '../apiBase.js';
 
 const DOCUMENTS_LINK = '#';
 
 export default function Success() {
+  const [transactionId, setTransactionId] = useState('');
+  const [loadingOrder, setLoadingOrder] = useState(true);
+  const [beneficiaryTo, setBeneficiaryTo] = useState('/beneficiary-form');
+
+  useEffect(() => {
+    const qs = new URLSearchParams(window.location.search);
+    let code = qs.get('LowProfileCode') || qs.get('lowProfileCode') || qs.get('lowprofilecode') || '';
+    if (!code) {
+      try {
+        code = sessionStorage.getItem('opal_checkout_low_profile') || '';
+      } catch {
+        code = '';
+      }
+    }
+    if (code) {
+      setBeneficiaryTo(`/beneficiary-form?lowProfileCode=${encodeURIComponent(code)}`);
+    }
+
+    if (!code) {
+      setLoadingOrder(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    (async () => {
+      for (let i = 0; i < 25 && !cancelled; i += 1) {
+        try {
+          const r = await fetch(
+            `${API_BASE}/api/public/deal-lookup?lowProfileCode=${encodeURIComponent(code)}`
+          ).then((x) => x.json());
+          if (r.success && r.found && r.transactionId) {
+            if (!cancelled) {
+              const tid = String(r.transactionId);
+              setTransactionId(tid);
+              setBeneficiaryTo(`/beneficiary-form?transactionId=${encodeURIComponent(tid)}`);
+            }
+            setLoadingOrder(false);
+            return;
+          }
+        } catch {
+          /* retry */
+        }
+        await new Promise((res) => setTimeout(res, 1000));
+      }
+      if (!cancelled) setLoadingOrder(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div dir="rtl" className="min-h-screen flex flex-col bg-gradient-to-b from-primary/5 via-background to-muted/30 font-sans">
       <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-10">
@@ -30,6 +84,29 @@ export default function Success() {
           </p>
         </div>
 
+        <Card className="mb-6 border-primary/20">
+          <CardHeader>
+            <CardTitle className="text-lg">מס׳ הזמנה</CardTitle>
+            <CardDescription>מזהה מהמערכת (עסקה במסד הנתונים)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loadingOrder ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Spinner />
+                <span>טוען מספר הזמנה…</span>
+              </div>
+            ) : transactionId ? (
+              <p className="text-2xl font-mono font-semibold text-foreground dir-ltr text-left" dir="ltr">
+                {transactionId}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                המספר יופיע כאן לאחר עדכון המערכת. ניתן להמשיך לעדכון מוטבים מהקישור למטה.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
         <Card className="mb-8 border-amber-500/40 shadow-md bg-amber-50/50 dark:bg-amber-950/20">
           <CardHeader>
             <CardTitle className="text-lg text-amber-900 dark:text-amber-100">חשוב מאוד</CardTitle>
@@ -39,7 +116,7 @@ export default function Success() {
           </CardHeader>
           <CardContent className="space-y-4">
             <Button asChild size="lg" className="w-full sm:w-auto min-w-[240px]">
-              <Link to="/beneficiary-form">
+              <Link to={beneficiaryTo}>
                 עדכון מוטבים
                 <ArrowRight className="size-4 me-2 rotate-180" />
               </Link>
@@ -55,7 +132,12 @@ export default function Success() {
             <p>טלפונים להזמנת שירותים רפואיים: 00-00000</p>
             <p>
               לינק להגשת מסמכים רפואיים — תביעה און ליין:{' '}
-              <a href={DOCUMENTS_LINK} className="text-primary hover:underline font-medium" target="_blank" rel="noopener noreferrer">
+              <a
+                href={DOCUMENTS_LINK}
+                className="text-primary hover:underline font-medium"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 לינק
               </a>
             </p>

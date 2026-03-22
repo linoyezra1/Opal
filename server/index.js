@@ -13,6 +13,8 @@ import {
   saveBeneficiaryUpdate,
   saveContactLead,
   saveDeal,
+  findDealByLowProfileCode,
+  getPublicDealContext,
   saveOrganizationLead,
   getContactLeads,
   getOrganizationLeads,
@@ -367,6 +369,7 @@ async function handleWebhookSuccess(lowProfileCode) {
     try {
       result = await saveDeal({
         transactionId,
+        lowProfileCode,
         payerAmount,
         formState: finalForm,
         agentId,
@@ -872,6 +875,47 @@ app.get('/api/public/agents', async (req, res) => {
   } catch (e) {
     console.error(`[${ts()}] public/agents error:`, e);
     res.status(500).json({ success: false, error: 'Failed to list agents' });
+  }
+});
+
+/** אחרי תשלום — מחזיר מס׳ הזמנה (transactionId) מהמסד לפי LowProfileCode של Cardcom */
+app.get('/api/public/deal-lookup', async (req, res) => {
+  try {
+    const code = String(req.query.lowProfileCode ?? req.query.LowProfileCode ?? '').trim();
+    if (!code) {
+      return res.status(400).json({ success: false, error: 'חסר lowProfileCode' });
+    }
+    const data = await findDealByLowProfileCode(code);
+    if (!data || !data.transactionId) {
+      return res.json({ success: true, found: false });
+    }
+    res.json({
+      success: true,
+      found: true,
+      transactionId: data.transactionId,
+      paymentStatus: data.paymentStatus || '',
+    });
+  } catch (e) {
+    console.error(`[${ts()}] public/deal-lookup error:`, e);
+    res.status(500).json({ success: false, error: 'Lookup failed' });
+  }
+});
+
+/** הקשר עסקה לטופס מוטבים (ארגון/סוכן/מספר מוטבים בלבד — לא פרטי מוטבים) */
+app.get('/api/public/deal-context', async (req, res) => {
+  try {
+    const tid = String(req.query.transactionId ?? '').trim();
+    if (!tid) {
+      return res.status(400).json({ success: false, error: 'חסר transactionId' });
+    }
+    const data = await getPublicDealContext(tid);
+    if (!data) {
+      return res.status(404).json({ success: false, error: 'עסקה לא נמצאה' });
+    }
+    res.json({ success: true, ...data });
+  } catch (e) {
+    console.error(`[${ts()}] public/deal-context error:`, e);
+    res.status(500).json({ success: false, error: 'Failed' });
   }
 });
 

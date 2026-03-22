@@ -9,6 +9,15 @@ import {
   Shield,
   Star,
   ArrowLeft,
+  Users,
+  Pill,
+  Stethoscope,
+  Syringe,
+  FileText,
+  CreditCard,
+  Minus,
+  Plus,
+  AlertCircle,
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import { cn } from '../lib/cn.js';
@@ -29,6 +38,24 @@ const DEFAULT_SUB_CONTENT = `מוקד שרות רפואי 24/7
 מתן הפנייה במקרה הצורך לחדר מיון (טופס 17)
 בתום הייעוץ יישלח למנוי סיכום הייעוץ הרפואי`;
 
+const DEFAULT_WHAT_YOU_GET = [
+  { icon: 'phone', title: 'ייעוץ רפואי טלפוני 24/7', description: 'שיחה עם רופא מוסמך בכל שעה ביום ובלילה' },
+  { icon: 'users', title: 'הפניות לרופאים מומחים', description: 'גישה מהירה לרופאים מומחים בכל התחומים' },
+  { icon: 'pill', title: 'מרשמים ותרופות', description: 'קבלת מרשמים לתרופות ללא צורך בהמתנה' },
+  { icon: 'stethoscope', title: 'בדיקה גופנית ואבחון', description: 'בדיקה רפואית מקיפה בנוחות הבית שלך' },
+  { icon: 'syringe', title: 'זריקות (וולטרן, פרמין)', description: 'מתן זריקות על ידי צוות רפואי מקצועי' },
+  { icon: 'file', title: 'הפניות לחדר מיון (טופס 17)', description: 'הנפקת טופס 17 להפניה לחדר מיון במידת הצורך' },
+];
+
+const ICON_MAP = {
+  phone: Phone,
+  users: Users,
+  pill: Pill,
+  stethoscope: Stethoscope,
+  syringe: Syringe,
+  file: FileText,
+};
+
 const benefits = [
   { icon: Clock, title: 'זמינות 24/7', description: 'שירות רפואי בכל שעה, כל יום' },
   { icon: Heart, title: 'טיפול אישי', description: 'רופאים מנוסים עד הבית' },
@@ -41,12 +68,10 @@ function validatePhone(value) {
   return digits.length >= 9 && digits.length <= 11;
 }
 
-function validateId(value) {
-  const digits = String(value || '').replace(/\D/g, '');
-  return digits.length === 9;
+function validateEmail(value) {
+  const t = String(value || '').trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t);
 }
-
-const DEFAULT_ID = '123456782';
 
 function popularIndex(total) {
   if (total <= 1) return 0;
@@ -54,9 +79,17 @@ function popularIndex(total) {
   return 1;
 }
 
+function mapWhatYouGetItems(items) {
+  if (!Array.isArray(items) || items.length === 0) return DEFAULT_WHAT_YOU_GET;
+  return items.map((it) => ({
+    icon: ICON_MAP[it.icon] ? it.icon : 'phone',
+    title: it.title || '',
+    description: it.description || '',
+  }));
+}
+
 /**
- * דף נחיתה ציבורי — תומך ב־/p/:slug (תוכן מלא) או ב־/landing/:priceListId (מחירון בלבד + תבנית ברירת מחדל)
- * ניתן לייבא מ־App עם prop slug (דף הבית דינמי דרך VITE_PUBLIC_HOME_LANDING_SLUG)
+ * דף נחיתה ציבורי — /p/:slug או /landing/:priceListId
  */
 export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp } = {}) {
   const params = useParams();
@@ -73,13 +106,20 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
     main: '',
     subContentRaw: '',
     imageUrl: '',
+    whatYouGetTitle: '',
+    whatYouGetSubtitle: '',
+    whatYouGetItems: [],
+    registrationTitle: '',
+    registrationSubtitle: '',
   });
   const [publicAgents, setPublicAgents] = useState([]);
   const [productId, setProductId] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [idNum, setIdNum] = useState(DEFAULT_ID);
+  const [email, setEmail] = useState('');
   const [agentId, setAgentId] = useState('');
+  const [beneficiaryCount, setBeneficiaryCount] = useState(0);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -109,6 +149,11 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
             main: r.mainContent || DEFAULT_MAIN,
             subContentRaw: r.subContent || DEFAULT_SUB_CONTENT,
             imageUrl: r.imageUrl || '',
+            whatYouGetTitle: r.whatYouGetTitle || '',
+            whatYouGetSubtitle: r.whatYouGetSubtitle || '',
+            whatYouGetItems: Array.isArray(r.whatYouGetItems) ? r.whatYouGetItems : [],
+            registrationTitle: r.registrationTitle || '',
+            registrationSubtitle: r.registrationSubtitle || '',
           });
         } else {
           const pl = await fetch(`${API_BASE}/api/public/price-list/${encodeURIComponent(priceListId)}`).then((x) => x.json());
@@ -120,6 +165,11 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
             main: DEFAULT_MAIN,
             subContentRaw: DEFAULT_SUB_CONTENT,
             imageUrl: '',
+            whatYouGetTitle: '',
+            whatYouGetSubtitle: '',
+            whatYouGetItems: [],
+            registrationTitle: '',
+            registrationSubtitle: '',
           });
         }
       } catch (e) {
@@ -136,12 +186,33 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
     [content.subContentRaw]
   );
 
+  const whatYouGetRows = useMemo(
+    () => mapWhatYouGetItems(content.whatYouGetItems),
+    [content.whatYouGetItems]
+  );
+
+  const whatYouGetTitle = content.whatYouGetTitle?.trim() || 'מה אתם מקבלים?';
+  const whatYouGetSubtitle =
+    content.whatYouGetSubtitle?.trim() || 'חבילת שירותים רפואיים מקיפה לכל המשפחה';
+
+  const registrationTitle = content.registrationTitle?.trim() || 'הרשמה לשירות';
+  const registrationSubtitle = content.registrationSubtitle?.trim() || 'מלאו את הפרטים והצטרפו למשפחת Opal';
+
   const effectivePriceListId = ctx?.priceListId ?? priceListId;
 
   const selectedProduct = useMemo(() => {
     if (!ctx?.products?.length || !productId) return null;
     return ctx.products.find((p) => p.productId === productId) || null;
   }, [ctx, productId]);
+
+  const products = ctx?.products || [];
+
+  const heroImageUrl = useMemo(() => {
+    if (selectedProduct?.imageUrl) return selectedProduct.imageUrl;
+    const firstWithImg = products.find((p) => p.imageUrl);
+    if (firstWithImg?.imageUrl) return firstWithImg.imageUrl;
+    return content.imageUrl || '';
+  }, [selectedProduct, products, content.imageUrl]);
 
   const handlePay = useCallback(
     async (e) => {
@@ -159,12 +230,12 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
         setSubmitError('נא למלא טלפון תקין');
         return;
       }
-      if (!validateId(idNum)) {
-        setSubmitError('תעודת זהות לא תקינה');
+      if (!validateEmail(email)) {
+        setSubmitError('נא למלא כתובת דוא״ל תקינה');
         return;
       }
-      if (publicAgents.length > 0 && !agentId) {
-        setSubmitError('נא לבחור סוכן');
+      if (!acceptedTerms) {
+        setSubmitError('יש לאשר את תנאי השירות');
         return;
       }
       const agent = publicAgents.find((a) => a.id === agentId);
@@ -174,12 +245,12 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
         productId,
         fullName: fullName.trim(),
         phone: phone.trim(),
-        id: idNum.replace(/\D/g, ''),
-        email: 'landing@opal.local',
+        id: '',
+        email: email.trim(),
         organizationName: ctx?.organizationName || 'לקוח פרטי',
         agentId: agentId || '',
         agentName: agent?.agentName || '',
-        beneficiaryCount: 0,
+        beneficiaryCount: Math.max(0, Math.min(5, Number(beneficiaryCount) || 0)),
         beneficiaries: [],
         landingFlow: true,
       };
@@ -197,6 +268,13 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
           return;
         }
         if (data.url) {
+          try {
+            if (data.lowProfileCode) {
+              sessionStorage.setItem('opal_checkout_low_profile', String(data.lowProfileCode));
+            }
+          } catch {
+            /* ignore */
+          }
           window.location.href = data.url;
           return;
         }
@@ -207,7 +285,18 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
         setSubmitting(false);
       }
     },
-    [productId, fullName, phone, idNum, agentId, publicAgents, effectivePriceListId, ctx]
+    [
+      productId,
+      fullName,
+      phone,
+      email,
+      acceptedTerms,
+      agentId,
+      publicAgents,
+      effectivePriceListId,
+      ctx,
+      beneficiaryCount,
+    ]
   );
 
   if (loading) {
@@ -231,7 +320,6 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
     );
   }
 
-  const products = ctx.products || [];
   const n = products.length;
   const popIdx = popularIndex(n);
 
@@ -250,51 +338,48 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
 
   return (
     <div dir="rtl" className="min-h-screen bg-background text-right">
-      {content.imageUrl ? (
-        <section className="relative h-[300px] md:h-[400px] w-full">
-          <img src={content.imageUrl} alt="" className="absolute inset-0 size-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
-        </section>
-      ) : null}
-
-      <section
-        className={cn(
-          'relative py-16 md:py-24 overflow-hidden',
-          content.imageUrl ? '-mt-32 md:-mt-48 relative z-10' : 'bg-gradient-to-b from-primary/5 via-primary/3 to-background'
-        )}
-      >
-        {!content.imageUrl ? (
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent" />
-        ) : null}
-        <div className="container relative max-w-5xl mx-auto px-4">
-          <div
-            className={cn(
-              'max-w-3xl mx-auto text-center',
-              content.imageUrl && 'bg-background/95 backdrop-blur-sm rounded-2xl p-8 md:p-12 shadow-xl border'
-            )}
-          >
-            {content.subtitle ? (
-              <Badge className="mb-4 inline-flex">{content.subtitle}</Badge>
-            ) : null}
-            <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6 text-balance leading-tight">
-              {content.title}
-            </h1>
-            <p className="text-lg text-muted-foreground mb-8 text-pretty leading-relaxed max-w-2xl mx-auto whitespace-pre-line">
-              {content.main}
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" asChild>
-                <a href="#plans">
-                  הצטרף עכשיו
-                  <ArrowLeft className="size-4 ms-2" />
-                </a>
-              </Button>
-              <Button size="lg" variant="outline" asChild>
-                <a href="#contact">
-                  <Phone className="size-4 me-2" />
-                  צור קשר
-                </a>
-              </Button>
+      {/* Hero — תמונת מוצר/דף בולטת + טקסט */}
+      <section className="relative py-10 md:py-16 overflow-hidden bg-gradient-to-b from-[#D9EAF3]/40 via-background to-background">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent pointer-events-none" />
+        <div className="container relative max-w-6xl mx-auto px-4">
+          <div className="grid md:grid-cols-2 gap-8 md:gap-12 items-center">
+            <div className="order-2 md:order-1 space-y-5 text-center md:text-right">
+              {content.subtitle ? (
+                <Badge className="inline-flex bg-primary/10 text-primary border-primary/20">{content.subtitle}</Badge>
+              ) : null}
+              <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-balance leading-tight text-foreground">
+                {content.title}
+              </h1>
+              <p className="text-lg text-muted-foreground leading-relaxed whitespace-pre-line max-w-xl mx-auto md:mx-0 md:ms-0 md:me-auto">
+                {content.main}
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
+                <Button size="lg" asChild>
+                  <a href="#plans">
+                    בחירת מסלול
+                    <ArrowLeft className="size-4 ms-2" />
+                  </a>
+                </Button>
+                <Button size="lg" variant="outline" asChild>
+                  <a href="#registration">הרשמה לשירות</a>
+                </Button>
+              </div>
+            </div>
+            <div className="order-1 md:order-2 w-full">
+              <div
+                className={cn(
+                  'relative w-full rounded-2xl overflow-hidden border-2 border-primary/15 shadow-xl bg-muted',
+                  'min-h-[240px] md:min-h-[380px] lg:min-h-[420px]'
+                )}
+              >
+                {heroImageUrl ? (
+                  <img src={heroImageUrl} alt="" className="absolute inset-0 size-full object-cover" />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm p-6">
+                    ניתן להוסיף תמונת מוצר בניהול המוצר או תמונת דף בבונה דפי הנחיתה
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -314,6 +399,35 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* מה אתם מקבלים — דינמי */}
+      <section id="services" className="py-16 md:py-20 scroll-mt-20">
+        <div className="container mx-auto max-w-6xl px-4">
+          <div className="mb-12 text-center">
+            <h2 className="mb-4 text-3xl font-bold text-foreground md:text-4xl">{whatYouGetTitle}</h2>
+            <p className="mx-auto max-w-2xl text-lg text-muted-foreground">{whatYouGetSubtitle}</p>
+          </div>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {whatYouGetRows.map((service, index) => {
+              const Ico = ICON_MAP[service.icon] || Phone;
+              return (
+                <Card
+                  key={`${service.title}-${index}`}
+                  className="group border-border bg-card transition-all duration-300 hover:border-primary/30 hover:shadow-lg"
+                >
+                  <CardContent className="p-6">
+                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[#D9EAF3] transition-colors group-hover:bg-primary/20">
+                      <Ico className="h-6 w-6 text-primary" />
+                    </div>
+                    <h3 className="mb-2 text-lg font-semibold text-card-foreground">{service.title}</h3>
+                    <p className="text-sm leading-relaxed text-muted-foreground">{service.description}</p>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -345,7 +459,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
             {ctx.organizationName ? (
               <p className="text-muted-foreground">מחירים מיוחדים לעובדי {ctx.organizationName}</p>
             ) : (
-              <p className="text-muted-foreground">בחרו מסלול והמשיכו לפרטי תשלום</p>
+              <p className="text-muted-foreground">בחרו מסלול והמשיכו להרשמה</p>
             )}
           </div>
 
@@ -364,7 +478,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                 <Card
                   key={product.productId}
                   className={cn(
-                    'relative transition-all hover:shadow-lg cursor-pointer',
+                    'relative transition-all hover:shadow-lg cursor-pointer overflow-hidden pt-0',
                     popular && 'border-primary shadow-lg md:scale-[1.02]',
                     selected && 'ring-2 ring-primary'
                   )}
@@ -378,8 +492,13 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                     }
                   }}
                 >
+                  {product.imageUrl ? (
+                    <div className="relative w-full aspect-[16/10] bg-muted border-b">
+                      <img src={product.imageUrl} alt="" className="absolute inset-0 size-full object-cover" />
+                    </div>
+                  ) : null}
                   {popular ? (
-                    <Badge className="absolute -top-3 start-1/2 -translate-x-1/2">הכי פופולרי</Badge>
+                    <Badge className="absolute top-3 start-1/2 -translate-x-1/2 z-10">הכי פופולרי</Badge>
                   ) : null}
                   <CardHeader className="text-center pb-2">
                     <CardTitle className="text-xl">{product.productName}</CardTitle>
@@ -400,10 +519,10 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                       onClick={(e) => {
                         e.stopPropagation();
                         setProductId(product.productId);
-                        document.getElementById('checkout')?.scrollIntoView({ behavior: 'smooth' });
+                        document.getElementById('registration')?.scrollIntoView({ behavior: 'smooth' });
                       }}
                     >
-                      {selected ? 'נבחר — המשך למטה' : 'בחר מסלול'}
+                      {selected ? 'נבחר — המשך להרשמה' : 'בחר מסלול'}
                     </Button>
                   </CardContent>
                 </Card>
@@ -413,52 +532,107 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
         </div>
       </section>
 
-      <section id="checkout" className="py-16 scroll-mt-20">
-        <div className="container max-w-lg mx-auto px-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>פרטים לתשלום</CardTitle>
-              <p className="text-sm text-muted-foreground">מילוי פרטים והמשך לתשלום מאובטח (Cardcom)</p>
+      {/* הרשמה לשירות — טופס ראשי */}
+      <section id="registration" className="py-16 md:py-20 scroll-mt-20 bg-gradient-to-b from-muted/20 to-background">
+        <div className="container mx-auto max-w-2xl px-4">
+          <div className="mb-8 text-center">
+            <h2 className="mb-4 text-3xl font-bold text-foreground md:text-4xl">{registrationTitle}</h2>
+            <p className="text-lg text-muted-foreground">{registrationSubtitle}</p>
+          </div>
+
+          <Card className="border-border shadow-lg overflow-hidden">
+            <CardHeader className="border-b border-border bg-[#D9EAF3]/30">
+              <CardTitle className="flex items-center justify-center gap-2 text-xl text-foreground md:justify-start">
+                <CreditCard className="size-5 text-primary shrink-0" />
+                טופס הרשמה ותשלום
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <form onSubmit={handlePay} className="space-y-4">
-                <div>
-                  <label className="text-xs text-muted-foreground">שם מלא *</label>
-                  <input
-                    className="w-full border rounded-lg px-3 py-2 mt-1 bg-background"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    required
-                  />
+            <CardContent className="p-6">
+              <form onSubmit={handlePay} className="space-y-6">
+                {selectedProduct ? (
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div className="text-right">
+                        <p className="text-sm text-muted-foreground">תוכנית נבחרת:</p>
+                        <p className="font-semibold text-foreground">{selectedProduct.productName}</p>
+                      </div>
+                      <div className="text-left sm:text-right">
+                        <p className="text-2xl font-bold text-primary">₪{Number(selectedProduct.retailPrice || 0)}</p>
+                        <p className="text-xs text-muted-foreground">לחודש</p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="mt-2 h-auto p-0 text-sm text-primary"
+                      onClick={() => document.getElementById('plans')?.scrollIntoView({ behavior: 'smooth' })}
+                    >
+                      שנה תוכנית
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-right">
+                    <AlertCircle className="size-5 shrink-0 text-amber-600" />
+                    <div>
+                      <p className="font-medium text-amber-900">לא נבחרה תוכנית</p>
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="h-auto p-0 text-sm text-amber-800 underline"
+                        onClick={() => document.getElementById('plans')?.scrollIntoView({ behavior: 'smooth' })}
+                      >
+                        בחרו תוכנית מהמחירון למעלה
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-medium text-foreground">שם מלא *</label>
+                    <input
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="הזן שם מלא"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">טלפון *</label>
+                    <input
+                      type="tel"
+                      dir="ltr"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="0501234567"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">דוא״ל *</label>
+                    <input
+                      type="email"
+                      dir="ltr"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="name@example.com"
+                      required
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">טלפון *</label>
-                  <input
-                    className="w-full border rounded-lg px-3 py-2 mt-1 bg-background"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">תעודת זהות *</label>
-                  <input
-                    className="w-full border rounded-lg px-3 py-2 mt-1 bg-background"
-                    value={idNum}
-                    onChange={(e) => setIdNum(e.target.value)}
-                    required
-                  />
-                </div>
+
                 {publicAgents.length > 0 ? (
-                  <div>
-                    <label className="text-xs text-muted-foreground">סוכן *</label>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">סוכן (אופציונלי)</label>
                     <select
-                      className="w-full border rounded-lg px-3 py-2 mt-1 bg-background"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       value={agentId}
                       onChange={(e) => setAgentId(e.target.value)}
-                      required
                     >
-                      <option value="">— בחרו סוכן —</option>
+                      <option value="">— ללא סוכן —</option>
                       {publicAgents.map((a) => (
                         <option key={a.id} value={a.id}>
                           {a.agentName}
@@ -467,18 +641,77 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                     </select>
                   </div>
                 ) : null}
-                {selectedProduct ? (
-                  <p className="text-sm rounded-lg bg-muted p-3">
-                    מסלול: <strong>{selectedProduct.productName}</strong> — <strong>₪{Number(selectedProduct.retailPrice || 0)}</strong>{' '}
-                    לחודש
-                  </p>
-                ) : (
-                  <p className="text-amber-700 text-sm">נא לבחור מסלול למעלה</p>
-                )}
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">מוטבים נוספים</label>
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <div className="flex items-center rounded-lg border border-input bg-background">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-10 w-10 rounded-l-none"
+                        onClick={() => setBeneficiaryCount((c) => Math.max(0, c - 1))}
+                        disabled={beneficiaryCount === 0}
+                      >
+                        <Minus className="size-4" />
+                      </Button>
+                      <span className="w-12 text-center font-medium">{beneficiaryCount}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-10 w-10 rounded-r-none"
+                        onClick={() => setBeneficiaryCount((c) => Math.min(5, c + 1))}
+                        disabled={beneficiaryCount >= 5}
+                      >
+                        <Plus className="size-4" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Users className="size-4" />
+                      <span>עד 5 מוטבים נוספים</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    id="terms-landing"
+                    checked={acceptedTerms}
+                    onChange={(e) => setAcceptedTerms(e.target.checked)}
+                    className="mt-1 size-4 rounded border-input"
+                  />
+                  <label htmlFor="terms-landing" className="text-sm leading-relaxed text-muted-foreground cursor-pointer">
+                    אני מסכים/ה ל{' '}
+                    <a href="#" className="text-primary underline hover:no-underline" onClick={(e) => e.preventDefault()}>
+                      תנאי השירות
+                    </a>{' '}
+                    ומאשר/ת את קבלת השירות הרפואי
+                  </label>
+                </div>
+
+                <div className="rounded-lg border border-primary/20 bg-[#D9EAF3]/30 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-lg font-medium text-foreground">סה״כ לתשלום חודשי:</span>
+                    <span className="text-3xl font-bold text-primary">
+                      {selectedProduct ? `₪${Number(selectedProduct.retailPrice || 0)}` : '—'}
+                    </span>
+                  </div>
+                </div>
+
                 {submitError ? <p className="text-destructive text-sm">{submitError}</p> : null}
-                <Button type="submit" className="w-full" size="lg" disabled={submitting || !selectedProduct}>
+
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="w-full text-lg"
+                  disabled={submitting || !selectedProduct || !acceptedTerms}
+                >
                   {submitting ? 'מעביר לתשלום…' : 'המשך לתשלום מאובטח'}
                 </Button>
+                <p className="text-xs text-center text-muted-foreground">מועברים לסביבת תשלום מאובטחת (Cardcom)</p>
               </form>
             </CardContent>
           </Card>

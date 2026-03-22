@@ -194,17 +194,11 @@ function LegacyHomeCheckout() {
     if (!formState.selectedPlanId) e.selectedPlanId = 'נא לבחור חבילה';
     if (!acceptedTerms) e.acceptedTerms = 'יש לאשר את תנאי כתב השירות';
     if (!formState.fullName?.trim()) e.fullName = 'שם מלא שדה חובה';
-    if (!formState.id?.trim()) e.id = 'תעודת זהות שדה חובה';
-    else if (!validateId(formState.id)) e.id = 'תעודת זהות חייבת להכיל 9 ספרות';
     if (!formState.phone?.trim()) e.phone = 'טלפון שדה חובה';
     else if (!validatePhone(formState.phone)) e.phone = 'הזן מספר טלפון תקין (9–11 ספרות)';
     if (!formState.email?.trim()) e.email = 'אימייל שדה חובה';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formState.email)) e.email = 'הזן כתובת אימייל תקינה';
-    if (publicAgents.length > 0) {
-      if (!formState.agentId?.trim()) e.agentName = 'נא לבחור סוכן מהרשימה';
-    } else if (!formState.agentName?.trim()) {
-      e.agentName = 'שם הסוכן שדה חובה';
-    }
+    /** סוכן אופציונלי */
     if (!formState.organizationName?.trim()) e.organizationName = 'שם הארגון שדה חובה';
     const count = formState.beneficiaryCount || 0;
     const beneficiaries = formState.beneficiaries || [];
@@ -241,6 +235,13 @@ function LegacyHomeCheckout() {
           return;
         }
         if (data.url) {
+          try {
+            if (data.lowProfileCode) {
+              sessionStorage.setItem('opal_checkout_low_profile', String(data.lowProfileCode));
+            }
+          } catch {
+            /* ignore */
+          }
           fetch(`${API_BASE}/api/checkout-draft`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -418,19 +419,6 @@ function LegacyHomeCheckout() {
                 {errors.fullName && <p className="text-red-600 text-sm mt-1">{errors.fullName}</p>}
               </div>
               <div>
-                <label className="block text-sm text-medical-grey-dark mb-1">תעודת זהות *</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={9}
-                  value={formState.id}
-                  onChange={(e) => update('id', e.target.value.replace(/\D/g, '').slice(0, 9))}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-medical-blue"
-                  placeholder="9 ספרות"
-                />
-                {errors.id && <p className="text-red-600 text-sm mt-1">{errors.id}</p>}
-              </div>
-              <div>
                 <label className="block text-sm text-medical-grey-dark mb-1">טלפון *</label>
                 <input
                   type="tel"
@@ -453,7 +441,7 @@ function LegacyHomeCheckout() {
                 {errors.email && <p className="text-red-600 text-sm mt-1">{errors.email}</p>}
               </div>
               <div className="sm:col-span-2">
-                <label className="block text-sm text-medical-grey-dark mb-1">סוכן *</label>
+                <label className="block text-sm text-medical-grey-dark mb-1">סוכן (אופציונלי)</label>
                 {publicAgents.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <select
@@ -476,7 +464,7 @@ function LegacyHomeCheckout() {
                       }}
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-medical-blue focus:border-medical-blue"
                     >
-                      <option value="">— בחרו סוכן —</option>
+                      <option value="">— ללא סוכן —</option>
                       {publicAgents.map((a) => (
                         <option key={a.id} value={a.id}>
                           {a.agentName}
