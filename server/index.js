@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import { createLowProfileDeal, getLowProfileIndicator } from './cardcomService.js';
+import { sendOrderConfirmationEmail } from './emailService.js';
 import {
   createOrganizationCompany,
   getDeals,
@@ -398,6 +399,34 @@ async function handleWebhookSuccess(lowProfileCode) {
     } else {
       console.log(`[${ts()}] MongoDB write completed`);
       console.log(`[${ts()}] Payment status: ${paymentStatus} - Result: SUCCESS`);
+      try {
+        const to = String(finalForm?.email || '').trim();
+        const beneficiaryLink = `${FRONTEND_URL}/beneficiary-form?transactionId=${encodeURIComponent(transactionId)}`;
+        const primaryName = String(finalForm?.fullName || '').trim();
+        const primaryId = String(finalForm?.id || '').trim();
+        const secondaryBeneficiaries = Array.isArray(finalForm?.beneficiaries)
+          ? finalForm.beneficiaries.map((b) => ({
+              name: [String(b?.firstName || '').trim(), String(b?.lastName || '').trim()].filter(Boolean).join(' '),
+              idNumber: String(b?.id || '').trim(),
+            }))
+          : [];
+        await sendOrderConfirmationEmail({
+          to,
+          orderNumber: transactionId,
+          orderDate: new Date().toLocaleDateString('he-IL'),
+          customerName: primaryName || 'לקוח',
+          email: to,
+          phone: String(finalForm?.phone || '').trim(),
+          productName: String(finalForm?.productName || '').trim(),
+          monthlyTotal: Number(payerAmount || 0),
+          beneficiaryLink,
+          primaryBeneficiary: { name: primaryName || '—', idNumber: primaryId || '—' },
+          secondaryBeneficiaries,
+        });
+        console.log(`[${ts()}] Email confirmation sent for transaction ${transactionId}`);
+      } catch (mailErr) {
+        console.error(`[${ts()}] Email confirmation failed:`, mailErr?.message || mailErr);
+      }
     }
     console.log(`[${ts()}] Webhook: deal saved, transactionId=`, transactionId);
   } catch (err) {

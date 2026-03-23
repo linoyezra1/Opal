@@ -117,6 +117,26 @@ export interface PriceList {
   updatedAt?: string;
 }
 
+export interface Beneficiary {
+  id: string;
+  firstName: string;
+  lastName: string;
+  idNumber: string;
+  birthDate?: string;
+  phone?: string;
+  relationship?: string;
+}
+
+export interface SubscriberDocuments {
+  beneficiariesCompleted: boolean;
+  beneficiariesCount: number;
+  contractSigned: boolean;
+  contractSignedAt?: string;
+  idDocumentUploaded: boolean;
+  medicalFormCompleted: boolean;
+  paymentVerified: boolean;
+}
+
 export interface Subscriber {
   id: string;
   firstName: string;
@@ -124,16 +144,24 @@ export interface Subscriber {
   idNumber: string;
   phone?: string;
   email?: string;
+  address?: string;
+  city?: string;
+  birthDate?: string;
   productId: string;
   productName?: string;
   agentId?: string;
   agentName?: string;
   organizationName?: string;
+  priceListId?: string;
+  priceListName?: string;
   revenue: number;
   vendorCost: number;
   agentCommission: number;
   netProfit: number;
   status: 'active' | 'pending' | 'cancelled';
+  documents?: SubscriberDocuments;
+  beneficiaries?: Beneficiary[];
+  notes?: string;
   createdAt?: string;
   updatedAt?: string;
   createdBy?: string;

@@ -848,6 +848,39 @@ export default function SubscribersDashboard() {
             <div className="overflow-auto max-h-[70vh] space-y-4">
               <Card>
                 <CardHeader>
+                  <CardTitle className="text-base">סטטוס מנוי ותשלום</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                  <div className="rounded-lg border p-3">
+                    <p className="text-xs text-muted-foreground mb-1">סטטוס תשלום</p>
+                    <p className="font-semibold">{selected?.paymentStatus || selected?.status || '—'}</p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="text-xs text-muted-foreground mb-1">סכום עסקה</p>
+                    <p className="font-semibold">{formatCurrency(selected?.payerAmount ?? selected?.amount ?? 0)}</p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="text-xs text-muted-foreground mb-1">סטטוס השלמה</p>
+                    <p className="font-semibold">{selected?.completionStatus || '—'}</p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="text-xs text-muted-foreground mb-1">עלות ספק</p>
+                    <p className="font-semibold">{formatCurrency(selected?.formState?.resolvedVendorCost ?? 0)}</p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="text-xs text-muted-foreground mb-1">עמלת סוכן</p>
+                    <p className="font-semibold">{formatCurrency(selected?.formState?.resolvedAgentCommission ?? 0)}</p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="text-xs text-muted-foreground mb-1">רווח נקי</p>
+                    <p className="font-semibold text-emerald-700 dark:text-emerald-400">
+                      {formatCurrency(selected?.formState?.resolvedNetProfit ?? 0)}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
                   <CardTitle className="text-base">מבוטח ראשי</CardTitle>
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
