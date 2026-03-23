@@ -77,7 +77,6 @@ export default function AdminControlPanel() {
   const arrears = data?.paymentArrears || [];
   const privateLeads = data?.privateLeads || [];
   const corporateLeads = data?.corporateLeads || [];
-  const registered = data?.registeredOrganizations || [];
   const overview = data?.overview;
 
   const recentActivity = React.useMemo(() => {
@@ -259,7 +258,7 @@ export default function AdminControlPanel() {
                   <ShoppingCart className="size-5" />
                   פעילות אחרונה
                 </CardTitle>
-                <CardDescription>עגלות, תשלומים ופניות — ממוין לפי זמן</CardDescription>
+                <CardDescription>טיוטות צ׳ק-אאוט, תשלומים ופניות — ממוין לפי זמן</CardDescription>
               </CardHeader>
               <CardContent className="max-h-[280px] overflow-y-auto space-y-2">
                 {recentActivity.length === 0 ? (
@@ -386,11 +385,16 @@ export default function AdminControlPanel() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Phone className="size-4" />
-                  צור קשר — פרטיים
+                <CardTitle className="flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-2">
+                    <Phone className="size-4" />
+                    צור קשר — פרטיים
+                  </span>
+                  <Button asChild variant="outline" size="sm">
+                    <Link to="/admin/contacts">ניהול מלא</Link>
+                  </Button>
                 </CardTitle>
-                <CardDescription>פניות מאתר ומדפי &quot;צור קשר&quot; בנחיתה</CardDescription>
+                <CardDescription>פניות מאתר ומדפי &quot;צור קשר&quot; בנחיתה (תצוגה מקדימה)</CardDescription>
               </CardHeader>
               <CardContent className="overflow-auto max-h-80">
                 <div className="rounded-md border">
@@ -405,7 +409,7 @@ export default function AdminControlPanel() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {privateLeads.map((l) => (
+                      {privateLeads.slice(0, 8).map((l) => (
                         <TableRow key={l.id}>
                           <TableCell>{l.name}</TableCell>
                           <TableCell dir="ltr" className="text-start">
@@ -435,11 +439,16 @@ export default function AdminControlPanel() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Building2 className="size-4" />
-                  צור קשר — חברות (B2B)
+                <CardTitle className="flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-2">
+                    <Building2 className="size-4" />
+                    צור קשר — חברות (B2B)
+                  </span>
+                  <Button asChild variant="outline" size="sm">
+                    <Link to="/admin/contacts">ניהול מלא</Link>
+                  </Button>
                 </CardTitle>
-                <CardDescription>פניות ארגוניות</CardDescription>
+                <CardDescription>פניות ארגוניות (תצוגה מקדימה)</CardDescription>
               </CardHeader>
               <CardContent className="overflow-auto max-h-80">
                 <div className="rounded-md border">
@@ -453,7 +462,7 @@ export default function AdminControlPanel() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {corporateLeads.map((l) => (
+                      {corporateLeads.slice(0, 8).map((l) => (
                         <TableRow key={l.id}>
                           <TableCell>{l.organizationName}</TableCell>
                           <TableCell>{l.contactName}</TableCell>
@@ -479,64 +488,6 @@ export default function AdminControlPanel() {
             </Card>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>ארגונים רשומים (מחירונים)</CardTitle>
-              <CardDescription>
-                רשומות ממסך &quot;מחירוני ארגונים&quot;. מזהה לדף נחיתה:{' '}
-                <code className="rounded bg-muted px-1 text-xs">pricingId</code> ב־API{' '}
-                <code className="rounded bg-muted px-1 text-xs">/api/pricing-context?pricingId=...</code>
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="overflow-auto">
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="max-w-[120px]">מזהה</TableHead>
-                      <TableHead>ארגון</TableHead>
-                      <TableHead>שם מחירון</TableHead>
-                      <TableHead>שורות מחיר</TableHead>
-                      <TableHead>נוצר</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {registered.map((r) => (
-                      <TableRow key={r.id}>
-                        <TableCell className="font-mono text-xs break-all max-w-[120px]">{r.id}</TableCell>
-                        <TableCell>{r.organizationName}</TableCell>
-                        <TableCell>{r.pricingListName}</TableCell>
-                        <TableCell className="text-xs">
-                          {(r.relatedProducts || []).length ? (
-                            <ul className="space-y-1 list-none p-0 m-0">
-                              {r.relatedProducts.map((line, i) => (
-                                <li key={i}>
-                                  {line.product?.name || line.productId}: קמעוני {formatCurrency(line.retailPrice)} · ספק{' '}
-                                  {formatCurrency(line.vendorCost)} · רווח {formatCurrency(line.profit)}
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            '—'
-                          )}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-xs">
-                          {r.createdAt ? new Date(r.createdAt).toLocaleString('he-IL') : '—'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {!registered.length ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center text-muted-foreground">
-                          אין ארגונים רשומים — הגדירו מחירון במסך מחירוני ארגונים.
-                        </TableCell>
-                      </TableRow>
-                    ) : null}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </AdminPageShell>
     </TooltipProvider>

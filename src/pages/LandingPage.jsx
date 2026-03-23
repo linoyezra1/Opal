@@ -300,12 +300,10 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
     registrationTitle: '',
     registrationSubtitle: '',
   });
-  const [publicAgents, setPublicAgents] = useState([]);
   const [productId, setProductId] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [agentId, setAgentId] = useState('');
   const [beneficiaryCount, setBeneficiaryCount] = useState(0);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [submitError, setSubmitError] = useState(null);
@@ -329,7 +327,6 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
           if (r.pageType === 'contact') {
             setPageType('contact');
             setCtx(null);
-            setPublicAgents([]);
             setContent({
               title: r.pageTitle || 'צור קשר',
               subtitle: r.subTitle || '',
@@ -345,8 +342,6 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
             return;
           }
           setPageType('sales');
-          const agRes = await fetch(`${API_BASE}/api/public/agents`).then((res) => res.json());
-          if (agRes.success && Array.isArray(agRes.agents)) setPublicAgents(agRes.agents);
           const pl = r.priceList;
           if (!pl) throw new Error('מחירון לא נמצא');
           setCtx(pl);
@@ -364,8 +359,6 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
           });
         } else {
           setPageType('sales');
-          const agRes = await fetch(`${API_BASE}/api/public/agents`).then((res) => res.json());
-          if (agRes.success && Array.isArray(agRes.agents)) setPublicAgents(agRes.agents);
           const pl = await fetch(`${API_BASE}/api/public/price-list/${encodeURIComponent(priceListId)}`).then((x) => x.json());
           if (!pl.success) throw new Error(pl.error || 'מחירון לא נמצא');
           setCtx(pl);
@@ -443,7 +436,6 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
         setSubmitError('יש לאשר את תנאי השירות');
         return;
       }
-      const agent = publicAgents.find((a) => a.id === agentId);
       const formState = {
         selectedPlanId: `pl-${productId}`,
         priceListId: effectivePriceListId,
@@ -453,8 +445,8 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
         id: '',
         email: email.trim(),
         organizationName: ctx?.organizationName || 'לקוח פרטי',
-        agentId: agentId || '',
-        agentName: agent?.agentName || '',
+        agentId: '',
+        agentName: '',
         beneficiaryCount: Math.max(0, Math.min(5, Number(beneficiaryCount) || 0)),
         beneficiaries: [],
         landingFlow: true,
@@ -496,8 +488,6 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
       phone,
       email,
       acceptedTerms,
-      agentId,
-      publicAgents,
       effectivePriceListId,
       ctx,
       beneficiaryCount,
@@ -829,24 +819,6 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                     />
                   </div>
                 </div>
-
-                {publicAgents.length > 0 ? (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">סוכן (אופציונלי)</label>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      value={agentId}
-                      onChange={(e) => setAgentId(e.target.value)}
-                    >
-                      <option value="">— ללא סוכן —</option>
-                      {publicAgents.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.agentName}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">מוטבים נוספים</label>

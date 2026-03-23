@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { API_BASE } from '../apiBase.js';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -128,6 +128,7 @@ function MemberFields({ title, member, onChange, errors = {}, includeContact = f
 }
 
 export default function BeneficiaryForm({ showBackLink = true }) {
+  const navigate = useNavigate();
   const location = useLocation();
   const query = useMemo(() => new URLSearchParams(location.search), [location.search]);
 
@@ -249,8 +250,6 @@ export default function BeneficiaryForm({ showBackLink = true }) {
   const validate = useCallback(() => {
     const next = {};
     if (!String(transactionId || '').trim()) next.transactionId = 'ממתינים למספר הזמנה מהמערכת';
-    if (!String(organizationName || '').trim()) next.organizationName = 'שדה חובה';
-    /** סוכן אופציונלי */
     const pmErr = validateMemberRequired(primaryMember);
     if (Object.keys(pmErr).length) next.primaryMember = pmErr;
     const additionalErrs = [];
@@ -266,7 +265,7 @@ export default function BeneficiaryForm({ showBackLink = true }) {
     if (additionalErrs.some(Boolean)) next.additional = additionalErrs;
     setErrors(next);
     return Object.keys(next).length === 0;
-  }, [transactionId, organizationName, primaryMember, additionalMembers, validateMemberRequired, isMemberProvided]);
+  }, [transactionId, primaryMember, additionalMembers, validateMemberRequired, isMemberProvided]);
 
   const handleSubmit = useCallback(
     async (event) => {
@@ -296,13 +295,14 @@ export default function BeneficiaryForm({ showBackLink = true }) {
           return;
         }
         setSubmitted(true);
+        navigate('/beneficiary-success', { replace: true });
       } catch (err) {
         setSubmitError(err.message || 'שגיאת רשת');
       } finally {
         setIsSubmitting(false);
       }
     },
-    [validate, isMemberProvided, additionalMembers, transactionId, organizationName, agentName, primaryMember]
+    [validate, isMemberProvided, additionalMembers, transactionId, organizationName, agentName, primaryMember, navigate]
   );
 
   return (
@@ -326,8 +326,7 @@ export default function BeneficiaryForm({ showBackLink = true }) {
         <div className="mb-8 text-right space-y-2">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">עדכון פרטי מוטבים</h1>
           <p className="text-muted-foreground leading-relaxed">
-            נא למלא פרטי ארגון, סוכן (אם רלוונטי), מבוטח ראשי ומוטבים נוספים. פרטי המוטבים אינם מולאים אוטומטית — יש להזין
-            אותם כאן.
+            נא למלא את פרטי המבוטח הראשי והמוטבים הנוספים. פרטי המוטבים אינם מולאים אוטומטית — יש להזין אותם כאן.
           </p>
         </div>
 
@@ -351,25 +350,6 @@ export default function BeneficiaryForm({ showBackLink = true }) {
                   <Input dir="ltr" className="font-mono bg-muted" value={transactionId} readOnly />
                 </Field>
               )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>פרטי ארגון וסוכן</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <FieldGroup>
-                <Field>
-                  <FieldLabel>ארגון *</FieldLabel>
-                  <Input value={organizationName} onChange={(e) => setOrganizationName(e.target.value)} />
-                  {errors.organizationName ? <p className="text-destructive text-xs">{errors.organizationName}</p> : null}
-                </Field>
-                <Field>
-                  <FieldLabel>סוכן</FieldLabel>
-                  <Input value={agentName} onChange={(e) => setAgentName(e.target.value)} placeholder="אופציונלי" />
-                </Field>
-              </FieldGroup>
             </CardContent>
           </Card>
 
@@ -419,11 +399,6 @@ export default function BeneficiaryForm({ showBackLink = true }) {
 
           <div className="flex flex-col items-stretch gap-3 pt-2">
             {submitError ? <p className="text-destructive text-sm">{submitError}</p> : null}
-            {submitted ? (
-              <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/30 p-4 text-green-800 dark:text-green-200 text-sm font-medium">
-                נשמר בהצלחה.
-              </div>
-            ) : null}
             <Button type="submit" size="lg" disabled={isSubmitting || resolvingTx || !transactionId} className="w-full sm:w-auto">
               {isSubmitting && <Spinner className="me-2" />}
               שמירה

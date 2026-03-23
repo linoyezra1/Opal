@@ -139,15 +139,53 @@ export async function saveContactLead(params) {
 
 export async function saveOrganizationLead(params) {
   const db = await getDb();
+  const now = new Date();
   const result = await db.collection('organizationLeads').insertOne({
     organizationName: params.organizationName || '',
     contactName: params.contactName || '',
     phone: params.phone || '',
     email: params.email || '',
     notes: params.notes || '',
-    createdAt: new Date(),
+    source: params.source || 'site',
+    requestType: params.requestType || '',
+    company: params.company || null,
+    contactPerson: params.contactPerson || null,
+    accounting: params.accounting || null,
+    additionalContact: params.additionalContact || null,
+    billingMethod: params.billingMethod || '',
+    generalData: params.generalData || null,
+    createdAt: now,
+    updatedAt: now,
   });
   return { id: String(result.insertedId) };
+}
+
+export async function createOrganizationCompany(params) {
+  const db = await getDb();
+  const now = new Date();
+  const result = await db.collection('organizations').insertOne({
+    companyName: params.companyName || '',
+    companyId: params.companyId || '',
+    officialAddress: params.officialAddress || '',
+    companyEmail: params.companyEmail || '',
+    fieldOfActivity: params.fieldOfActivity || '',
+    employeesCount: Number(params.employeesCount || 0),
+    billingMethod: params.billingMethod || '',
+    contactPerson: params.contactPerson || null,
+    accounting: params.accounting || null,
+    additionalContact: params.additionalContact || null,
+    source: params.source || 'admin',
+    status: params.status || 'active',
+    createdAt: now,
+    updatedAt: now,
+  });
+  return { id: String(result.insertedId) };
+}
+
+export async function getOrganizationCompanies(limit = 300) {
+  const db = await getDb();
+  const docs = await db.collection('organizations').find({}).sort({ createdAt: -1 }).limit(limit).toArray();
+  return docs.map(serializeDocDates);
 }
 
 export async function getDeals() {

@@ -10,7 +10,7 @@ import {
   Edit2,
   Trash2,
   Download,
-  Braces,
+  Eye,
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -306,6 +306,9 @@ export default function SubscribersDashboard() {
 
   const s = data.summary || {};
   const sr = data.searchResults || {};
+  const selectedBeneficiary = selected?.beneficiaryUpdate || {};
+  const selectedPrimary = selectedBeneficiary?.primaryMember || {};
+  const selectedAdditional = Array.isArray(selectedBeneficiary?.additionalMembers) ? selectedBeneficiary.additionalMembers : [];
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -771,11 +774,11 @@ export default function SubscribersDashboard() {
                             <div className="flex items-center gap-1">
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" type="button" onClick={() => setSelected(r.raw ?? r)} aria-label="פרטים גולמיים">
-                                    <Braces className="size-4" />
+                                  <Button variant="ghost" size="icon" type="button" onClick={() => setSelected(r.raw ?? r)} aria-label="הצג פרטים">
+                                    <Eye className="size-4" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>JSON מלא</TooltipContent>
+                                <TooltipContent>הצג פרטים</TooltipContent>
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -835,11 +838,46 @@ export default function SubscribersDashboard() {
         </div>
 
         <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
-          <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
             <DialogHeader>
-              <DialogTitle>פרטים מלאים (MongoDB)</DialogTitle>
+              <DialogTitle>פרטי מוטבים</DialogTitle>
+              <DialogDescription>
+                הזמנה: <span className="font-mono">{selected?.transactionId || '—'}</span>
+              </DialogDescription>
             </DialogHeader>
-            <pre className="text-xs bg-muted border rounded-md p-3 overflow-auto max-h-[70vh] text-start font-mono">{JSON.stringify(selected, null, 2)}</pre>
+            <div className="overflow-auto max-h-[70vh] space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">מבוטח ראשי</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div>שם מלא: <strong>{[selectedPrimary.firstName, selectedPrimary.lastName].filter(Boolean).join(' ') || '—'}</strong></div>
+                  <div>ת.ז: <strong dir="ltr">{selectedPrimary.id || '—'}</strong></div>
+                  <div>תאריך לידה: <strong>{selectedPrimary.dateOfBirth || '—'}</strong></div>
+                  <div>טלפון: <strong dir="ltr">{selectedPrimary.phone || '—'}</strong></div>
+                  <div>אימייל: <strong dir="ltr">{selectedPrimary.email || '—'}</strong></div>
+                  <div>כתובת: <strong>{selectedPrimary.address || '—'}</strong></div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">מוטבים נוספים</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {selectedAdditional.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">לא נמצאו מוטבים נוספים בעסקה זו.</p>
+                  ) : (
+                    selectedAdditional.map((m, idx) => (
+                      <div key={`${m.id || 'ben'}-${idx}`} className="rounded-lg border p-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                        <div>שם: <strong>{[m.firstName, m.lastName].filter(Boolean).join(' ') || '—'}</strong></div>
+                        <div>ת.ז: <strong dir="ltr">{m.id || '—'}</strong></div>
+                        <div>תאריך לידה: <strong>{m.dateOfBirth || '—'}</strong></div>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+            </div>
             <DialogFooter className="flex-row-reverse sm:flex-row-reverse">
               <Button type="button" variant="outline" onClick={() => setSelected(null)}>
                 סגור

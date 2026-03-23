@@ -15,6 +15,10 @@ import AdminControlPanel from './pages/AdminControlPanel.jsx';
 import VendorDashboard from './pages/VendorDashboard.jsx';
 import PricingDashboard from './pages/PricingDashboard.jsx';
 import LandingPagesManagement from './pages/LandingPagesManagement.jsx';
+import ContactManagement from './pages/ContactManagement.jsx';
+import OrganizationsDashboard from './pages/OrganizationsDashboard.jsx';
+import OrganizationJoinRequest from './pages/OrganizationJoinRequest.jsx';
+import BeneficiarySuccess from './pages/BeneficiarySuccess.jsx';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -26,6 +30,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/landing/:priceListId" element={<LandingPage />} />
         <Route path="/success" element={<Success />} />
         <Route path="/beneficiary-form" element={<BeneficiaryForm />} />
+        <Route path="/beneficiary-success" element={<BeneficiarySuccess />} />
+        <Route path="/organization-join-request" element={<OrganizationJoinRequest />} />
         <Route path="/error" element={<Error />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/admin/subscribers" element={<SubscribersDashboard />} />
@@ -35,6 +41,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/admin/vendors" element={<VendorDashboard />} />
         <Route path="/admin/price-list" element={<PricingDashboard />} />
         <Route path="/admin/control-panel" element={<AdminControlPanel />} />
+        <Route path="/admin/contacts" element={<ContactManagement />} />
+        <Route path="/admin/organizations" element={<OrganizationsDashboard />} />
         <Route path="/admin/agents" element={<AgentSetup />} />
         <Route path="/admin/landing-pages" element={<LandingPagesManagement />} />
       </Routes>

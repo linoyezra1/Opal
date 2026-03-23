@@ -1,6 +1,6 @@
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Edit2, Trash2, Receipt, Copy, ExternalLink } from 'lucide-react';
+import { Plus, Edit2, Trash2, Receipt } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -46,9 +46,6 @@ export default function PricingDashboard() {
   const [orgName, setOrgName] = useState('');
   const [lines, setLines] = useState([emptyLine()]);
   const [deleteId, setDeleteId] = useState(null);
-  const [copiedId, setCopiedId] = useState(null);
-
-  const landingBase = useMemo(() => `${window.location.origin}/landing`, []);
 
   async function loadAll() {
     if (!token) return;
@@ -242,17 +239,6 @@ export default function PricingDashboard() {
     }
   }
 
-  async function copyLandingUrl(id) {
-    const url = `${landingBase}/${id}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
-    } catch {
-      /* ignore */
-    }
-  }
-
   if (!token) {
     return (
       <div dir="rtl" className="min-h-screen bg-slate-50 p-6">
@@ -421,8 +407,7 @@ export default function PricingDashboard() {
 
       <div className="space-y-6">
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          מחירון מגדיר מספר מוצרים תחת שם אחד — משמש ליצירת <strong>דף נחיתה</strong> בכתובת{' '}
-          <code className="rounded bg-background px-1">/landing/מזהה-מחירון</code>. ודאי ש־
+          מחירון מגדיר מספר מוצרים תחת שם אחד. ניהול דפי נחיתה מבוצע בלשונית <strong>דפי נחיתה</strong>. ודאי ש־
           <code className="rounded bg-background px-1">VITE_API_URL</code> מצביע על שרת ה-API.
         </div>
 
@@ -470,46 +455,17 @@ export default function PricingDashboard() {
                       <TableHead>שם מחירון</TableHead>
                       <TableHead>ארגון</TableHead>
                       <TableHead>מוצרים</TableHead>
-                      <TableHead>קישור דף נחיתה</TableHead>
                       <TableHead className="w-36">פעולות</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {lists.map((row) => {
-                      const fullUrl = `${landingBase}/${row.id}`;
                       return (
                         <TableRow key={row.id}>
                           <TableCell className="font-medium">{row.listName}</TableCell>
                           <TableCell>{row.orgName || '—'}</TableCell>
                           <TableCell>
                             <Badge variant="secondary">{(row.lines || []).length}</Badge>
-                          </TableCell>
-                          <TableCell className="max-w-[220px]">
-                            <div className="flex items-center gap-1 flex-wrap">
-                              <code className="text-xs bg-muted px-1 rounded break-all">{fullUrl}</code>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="shrink-0"
-                                title="העתק קישור"
-                                onClick={() => copyLandingUrl(row.id)}
-                              >
-                                <Copy className="size-4" />
-                              </Button>
-                              {copiedId === row.id ? (
-                                <span className="text-xs text-muted-foreground">הועתק</span>
-                              ) : null}
-                              <a
-                                href={fullUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="shrink-0 text-primary"
-                                title="פתח בלשונית חדשה"
-                              >
-                                <ExternalLink className="size-4" />
-                              </a>
-                            </div>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">

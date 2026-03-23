@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useMemo, useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 
 const API_BASE = window.location.origin;
 const TOKEN_KEY = 'opal_admin_token';
@@ -10,6 +10,7 @@ function formatCurrency(value) {
 }
 
 export default function Admin() {
+  const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
@@ -35,6 +36,7 @@ export default function Admin() {
       }
       localStorage.setItem(TOKEN_KEY, data.token);
       setToken(data.token);
+      navigate('/admin/control-panel', { replace: true });
     } catch (e2) {
       setError(e2.message || 'שגיאה');
     } finally {
@@ -65,6 +67,10 @@ export default function Admin() {
   React.useEffect(() => {
     if (token) loadDeals(token);
   }, [token]);
+
+  useEffect(() => {
+    if (token) navigate('/admin/control-panel', { replace: true });
+  }, [token, navigate]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

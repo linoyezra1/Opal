@@ -8,7 +8,9 @@ import express from 'express';
 import cors from 'cors';
 import { createLowProfileDeal, getLowProfileIndicator } from './cardcomService.js';
 import {
+  createOrganizationCompany,
   getDeals,
+  getOrganizationCompanies,
   getSalesDashboardData,
   saveBeneficiaryUpdate,
   saveContactLead,
@@ -477,6 +479,73 @@ app.post('/api/organization', async (req, res) => {
     res.json({ success: true, message: 'נשלח בהצלחה' });
   } catch (err) {
     console.error(`[${ts()}] Organization form error:`, err);
+    res.status(500).json({ success: false, error: err.message || 'שגיאה בשליחה' });
+  }
+});
+
+/** Public B2B onboarding form: בקשת הצטרפות והזמנה */
+app.post('/api/organization-join-request', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const company = body.company && typeof body.company === 'object' ? body.company : {};
+    const contactPerson = body.contactPerson && typeof body.contactPerson === 'object' ? body.contactPerson : {};
+    const accounting = body.accounting && typeof body.accounting === 'object' ? body.accounting : {};
+    const additionalContact = body.additionalContact && typeof body.additionalContact === 'object' ? body.additionalContact : {};
+    const generalData = body.generalData && typeof body.generalData === 'object' ? body.generalData : {};
+    const billingMethod = String(body.billingMethod || '').trim();
+
+    if (!String(company.companyName || '').trim()) {
+      return res.status(400).json({ success: false, error: 'נדרש שם חברה' });
+    }
+    if (!String(contactPerson.name || '').trim() || !String(contactPerson.phone || '').trim()) {
+      return res.status(400).json({ success: false, error: 'נדרשים שם וטלפון של איש הקשר הראשי' });
+    }
+
+    await saveOrganizationLead({
+      organizationName: String(company.companyName || '').trim(),
+      contactName: String(contactPerson.name || '').trim(),
+      phone: String(contactPerson.phone || '').trim(),
+      email: String(contactPerson.email || '').trim(),
+      notes: '',
+      source: 'organization_join_request',
+      requestType: 'onboarding',
+      company: {
+        companyName: String(company.companyName || '').trim(),
+        companyId: String(company.companyId || '').trim(),
+        officialAddress: String(company.officialAddress || '').trim(),
+        companyEmail: String(company.companyEmail || '').trim(),
+      },
+      contactPerson: {
+        name: String(contactPerson.name || '').trim(),
+        role: String(contactPerson.role || '').trim(),
+        phone: String(contactPerson.phone || '').trim(),
+        mobile: String(contactPerson.mobile || '').trim(),
+        email: String(contactPerson.email || '').trim(),
+      },
+      accounting: {
+        name: String(accounting.name || '').trim(),
+        role: String(accounting.role || '').trim(),
+        phone: String(accounting.phone || '').trim(),
+        mobile: String(accounting.mobile || '').trim(),
+        email: String(accounting.email || '').trim(),
+      },
+      additionalContact: {
+        name: String(additionalContact.name || '').trim(),
+        role: String(additionalContact.role || '').trim(),
+        phone: String(additionalContact.phone || '').trim(),
+        mobile: String(additionalContact.mobile || '').trim(),
+        email: String(additionalContact.email || '').trim(),
+      },
+      billingMethod,
+      generalData: {
+        fieldOfActivity: String(generalData.fieldOfActivity || '').trim(),
+        employeesCount: Number(generalData.employeesCount || 0),
+      },
+    });
+
+    res.json({ success: true, message: 'הבקשה נקלטה בהצלחה' });
+  } catch (err) {
+    console.error(`[${ts()}] organization-join-request error:`, err);
     res.status(500).json({ success: false, error: err.message || 'שגיאה בשליחה' });
   }
 });
@@ -980,6 +1049,30 @@ app.get('/api/admin/org-pricing', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(`[${ts()}] admin/org-pricing list error:`, e);
     res.status(500).json({ success: false, error: 'Failed to fetch organization pricing' });
+  }
+});
+
+app.get('/api/admin/organizations', requireAdmin, async (req, res) => {
+  try {
+    const rows = await getOrganizationCompanies(400);
+    res.json({ success: true, rows });
+  } catch (e) {
+    console.error(`[${ts()}] admin/organizations list error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to fetch organizations' });
+  }
+});
+
+app.post('/api/admin/organizations', requireAdmin, async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!String(body.companyName || '').trim()) {
+      return res.status(400).json({ success: false, error: 'companyName is required' });
+    }
+    const result = await createOrganizationCompany(body);
+    res.json({ success: true, id: result.id });
+  } catch (e) {
+    console.error(`[${ts()}] admin/organizations create error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to create organization' });
   }
 });
 

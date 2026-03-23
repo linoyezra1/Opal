@@ -12,6 +12,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   LayoutTemplate,
+  Phone,
 } from 'lucide-react';
 import { cn } from '../../lib/cn.js';
 import { Button } from '../ui/button.jsx';
@@ -28,6 +29,8 @@ const groups = [
       { label: 'סוכנים', to: '/admin/agents', icon: Users },
       { label: 'מחירונים', to: '/admin/price-list', icon: Receipt },
       { label: 'דפי נחיתה', to: '/admin/landing-pages', icon: LayoutTemplate },
+      { label: 'פניות', to: '/admin/contacts', icon: Phone },
+      { label: 'ארגונים', to: '/admin/organizations', icon: Building2 },
       { label: 'מחירון ארגונים', to: '/admin/pricing', icon: Receipt },
     ],
   },
