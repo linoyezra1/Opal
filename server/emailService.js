@@ -96,7 +96,9 @@ export async function sendOrderConfirmationEmail(payload) {
     return { sent: false, reason: 'smtp-not-configured' };
   }
 
-  const fromAddress = process.env.MAIL_FROM_ADDRESS || 'linoy05353@gmail.com';
+  // Gmail usually requires the "From" address to match the authenticated mailbox.
+  // Use the SMTP user as a safe default and keep OPAL display name.
+  const fromAddress = process.env.MAIL_FROM_ADDRESS || process.env.SMTP_USER || 'linoy05353@gmail.com';
   const fromName = process.env.MAIL_FROM_NAME || 'OPAL';
   const subject = `אישור הזמנה - ${payload.orderNumber || ''}`.trim();
   const html = buildOrderConfirmationHtml(payload);

@@ -39,7 +39,6 @@ const emptyForm = () => ({
 
 export default function OrganizationsDashboard() {
   const [token] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
-  const [products, setProducts] = useState([]);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -55,13 +54,11 @@ export default function OrganizationsDashboard() {
     setLoading(true);
     setError('');
     try {
-      const [orgRes, prRes] = await Promise.all([
-        fetch(`${API_BASE}/api/admin/organizations`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
-        fetch(`${API_BASE}/api/admin/products`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
-      ]);
+      const orgRes = await fetch(`${API_BASE}/api/admin/organizations`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then((r) => r.json());
       if (!orgRes.success) throw new Error(orgRes.error || 'טעינה נכשלה');
       setRows(Array.isArray(orgRes.rows) ? orgRes.rows : []);
-      if (prRes.success) setProducts(prRes.products || []);
     } catch (e) {
       setError(e.message || 'שגיאה');
     } finally {
@@ -320,9 +317,19 @@ export default function OrganizationsDashboard() {
         <Card>
           <CardHeader>
             <CardTitle>רשימת ארגונים</CardTitle>
-            <CardDescription>{rows.length} ארגונים במערכת</CardDescription>
+            <CardDescription>
+              {rows.length} ארגונים במערכת
+              <Button
+                variant="link"
+                className="px-2 h-auto font-normal text-primary"
+                type="button"
+                onClick={loadRows}
+              >
+                רענון
+              </Button>
+            </CardDescription>
           </CardHeader>
-          <CardContent className="overflow-auto">
+          <CardContent>
             {rows.length === 0 && !loading ? (
               <Empty>
                 <EmptyMedia variant="icon"><Building2 className="size-8" /></EmptyMedia>
@@ -331,7 +338,7 @@ export default function OrganizationsDashboard() {
                 <Button className="mt-4" type="button" onClick={openAdd}><Plus className="size-4 me-2" />הוסף ארגון חדש</Button>
               </Empty>
             ) : (
-              <div className="rounded-md border">
+              <div className="overflow-x-auto rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>

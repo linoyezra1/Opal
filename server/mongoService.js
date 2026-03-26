@@ -57,6 +57,34 @@ export async function saveDeal(params) {
   return { duplicate: false, id: String(result.insertedId) };
 }
 
+export async function getDealEmailSentAt(transactionId) {
+  const db = await getDb();
+  const tid = String(transactionId || '').trim();
+  if (!tid) return null;
+  const doc = await db.collection('deals').findOne(
+    { transactionId: tid },
+    { projection: { emailSentAt: 1 } }
+  );
+  return doc?.emailSentAt || null;
+}
+
+export async function markDealOrderEmailSent(transactionId, { emailTo } = {}) {
+  const db = await getDb();
+  const tid = String(transactionId || '').trim();
+  if (!tid) throw new Error('Missing transactionId');
+  const now = new Date();
+  await db.collection('deals').updateOne(
+    { transactionId: tid },
+    {
+      $set: {
+        emailSentAt: now,
+        emailTo: emailTo || '',
+      },
+    }
+  );
+  return { ok: true };
+}
+
 /** חיפוש עסקה לפי LowProfileCode (אחרי תשלום — מחזיר transactionId מהמסד) */
 export async function findDealByLowProfileCode(lowProfileCode) {
   const db = await getDb();
@@ -109,6 +137,9 @@ export async function saveBeneficiaryUpdate(params) {
     id: String(m.id || '').trim(),
     dateOfBirth: String(m.dateOfBirth || '').trim(),
     relationship: String(m.relation || '').trim(),
+    maritalStatus: String(m.maritalStatus || '').trim(),
+    healthFund: String(m.healthFund || '').trim(),
+    supplementalInsurance: String(m.supplementalInsurance || '').trim(),
   }));
   await deals.updateOne(
     { transactionId },
@@ -125,6 +156,10 @@ export async function saveBeneficiaryUpdate(params) {
         },
         'formState.fullName': [String(primary.firstName || '').trim(), String(primary.lastName || '').trim()].filter(Boolean).join(' '),
         'formState.id': String(primary.id || '').trim(),
+        'formState.dateOfBirth': String(primary.dateOfBirth || '').trim(),
+        'formState.maritalStatus': String(primary.maritalStatus || '').trim(),
+        'formState.healthFund': String(primary.healthFund || '').trim(),
+        'formState.supplementalInsurance': String(primary.supplementalInsurance || '').trim(),
         'formState.phone': String(primary.phone || '').trim(),
         'formState.email': String(primary.email || '').trim(),
         'formState.address': String(primary.address || '').trim(),

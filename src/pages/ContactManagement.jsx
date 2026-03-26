@@ -69,7 +69,7 @@ export default function ContactManagement() {
       <div className="space-y-6">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">ניהול פניות (Contact Management)</h1>
+            <h1 className="text-2xl font-bold tracking-tight">ניהול צור קשר (Contact Management)</h1>
             <p className="text-muted-foreground">כל הלידים מהאתר ומדפי הנחיתה במקום אחד</p>
           </div>
           <Button onClick={load} disabled={loading}>
@@ -132,7 +132,7 @@ export default function ContactManagement() {
                       </TableCell>
                       <TableCell className="font-mono text-xs">
                         {l.source === 'abandoned_checkout'
-                          ? 'לא המשיכו לתשלום'
+                          ? l.category || 'לא המשיכו לתשלום'
                           : l.source === 'landing_contact' && l.landingSlug
                             ? `דף: ${l.landingSlug}`
                             : l.source || 'site'}
@@ -140,9 +140,9 @@ export default function ContactManagement() {
                       <TableCell className="whitespace-nowrap text-xs">{l.createdAt ? new Date(l.createdAt).toLocaleString('he-IL') : '—'}</TableCell>
                     </TableRow>
                   ))}
-                  {!privateLeads.length ? (
+                      {!privateLeads.length ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground">אין פניות</TableCell>
+                      <TableCell colSpan={7} className="text-center text-muted-foreground">אין רשומות</TableCell>
                     </TableRow>
                   ) : null}
                 </TableBody>
@@ -208,7 +208,7 @@ export default function ContactManagement() {
                   ))}
                   {!corporateLeads.length ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground">אין פניות</TableCell>
+                      <TableCell colSpan={7} className="text-center text-muted-foreground">אין רשומות</TableCell>
                     </TableRow>
                   ) : null}
                 </TableBody>

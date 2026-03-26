@@ -307,8 +307,27 @@ export default function SubscribersDashboard() {
   const s = data.summary || {};
   const sr = data.searchResults || {};
   const selectedBeneficiary = selected?.beneficiaryUpdate || {};
-  const selectedPrimary = selectedBeneficiary?.primaryMember || {};
-  const selectedAdditional = Array.isArray(selectedBeneficiary?.additionalMembers) ? selectedBeneficiary.additionalMembers : [];
+  const formState = selected?.formState || {};
+  const selectedPrimaryFromUpdate = selectedBeneficiary?.primaryMember || {};
+  const stateBeneficiaries = Array.isArray(formState?.beneficiaries) ? formState.beneficiaries : [];
+  const selectedAdditional = Array.isArray(selectedBeneficiary?.additionalMembers)
+    ? selectedBeneficiary.additionalMembers
+    : stateBeneficiaries;
+  const selectedPrimary =
+    selectedPrimaryFromUpdate && (selectedPrimaryFromUpdate.firstName || selectedPrimaryFromUpdate.lastName || selectedPrimaryFromUpdate.id)
+      ? selectedPrimaryFromUpdate
+      : {
+          firstName: formState.fullName || '',
+          lastName: '',
+          id: formState.id || '',
+          phone: formState.phone || '',
+          email: formState.email || '',
+          address: formState.address || '',
+          dateOfBirth: formState.dateOfBirth || '',
+          maritalStatus: formState.maritalStatus || '',
+          healthFund: formState.healthFund || '',
+          supplementalInsurance: formState.supplementalInsurance || '',
+        };
 
   return (
     <TooltipProvider delayDuration={300}>

@@ -31,6 +31,8 @@ import {
   getControlPanelOverviewStats,
   updateDealAdmin,
   deleteDealAdmin,
+  getDealEmailSentAt,
+  markDealOrderEmailSent,
 } from './mongoService.js';
 import {
   createLandingPage,
@@ -398,24 +400,35 @@ async function handleWebhookSuccess(lowProfileCode) {
       throw dbErr;
     }
 
+    const to = String(finalForm?.email || '').trim();
+    const beneficiaryLink = `${FRONTEND_URL}/beneficiary-form?transactionId=${encodeURIComponent(transactionId)}`;
+    const primaryName = String(finalForm?.fullName || '').trim();
+    const primaryId = String(finalForm?.id || '').trim();
+    const secondaryBeneficiaries = Array.isArray(finalForm?.beneficiaries)
+      ? finalForm.beneficiaries.map((b) => ({
+          name: [String(b?.firstName || '').trim(), String(b?.lastName || '').trim()].filter(Boolean).join(' '),
+          idNumber: String(b?.id || '').trim(),
+        }))
+      : [];
+
+    const existingEmailSentAt = result.duplicate ? await getDealEmailSentAt(transactionId) : null;
+    const shouldSendEmail = !result.duplicate || !existingEmailSentAt;
+
     if (result.duplicate) {
       console.log(`[${ts()}] MongoDB write completed (duplicate skipped)`);
-      console.log(`[${ts()}] Payment status: ${paymentStatus} - Result: FAILURE (duplicate)`);
+      if (existingEmailSentAt) {
+        console.log(`[${ts()}] Payment status: ${paymentStatus} - Email already sent; skipping`);
+      } else {
+        console.log(`[${ts()}] Payment status: ${paymentStatus} - Duplicate deal but email not sent; sending now`);
+      }
     } else {
       console.log(`[${ts()}] MongoDB write completed`);
       console.log(`[${ts()}] Payment status: ${paymentStatus} - Result: SUCCESS`);
+    }
+
+    if (shouldSendEmail) {
       try {
-        const to = String(finalForm?.email || '').trim();
-        const beneficiaryLink = `${FRONTEND_URL}/beneficiary-form?transactionId=${encodeURIComponent(transactionId)}`;
-        const primaryName = String(finalForm?.fullName || '').trim();
-        const primaryId = String(finalForm?.id || '').trim();
-        const secondaryBeneficiaries = Array.isArray(finalForm?.beneficiaries)
-          ? finalForm.beneficiaries.map((b) => ({
-              name: [String(b?.firstName || '').trim(), String(b?.lastName || '').trim()].filter(Boolean).join(' '),
-              idNumber: String(b?.id || '').trim(),
-            }))
-          : [];
-        await sendOrderConfirmationEmail({
+        const mailResult = await sendOrderConfirmationEmail({
           to,
           orderNumber: transactionId,
           orderDate: new Date().toLocaleDateString('he-IL'),
@@ -428,15 +441,27 @@ async function handleWebhookSuccess(lowProfileCode) {
           primaryBeneficiary: { name: primaryName || '—', idNumber: primaryId || '—' },
           secondaryBeneficiaries,
         });
-        await clearAbandonedCheckoutLeadsByContact({
-          phone: String(finalForm?.phone || '').trim(),
-          email: String(finalForm?.email || '').trim(),
-          landingSlug: String(finalForm?.priceListId || '').trim(),
-        });
-        console.log(`[${ts()}] Email confirmation sent for transaction ${transactionId}`);
+
+        if (mailResult?.sent) {
+          await markDealOrderEmailSent(transactionId, { emailTo: to });
+          console.log(`[${ts()}] Email confirmation sent for transaction ${transactionId}`);
+        } else {
+          console.warn(`[${ts()}] Email not sent (reason=${mailResult?.reason || 'unknown'})`);
+        }
       } catch (mailErr) {
         console.error(`[${ts()}] Email confirmation failed:`, mailErr?.message || mailErr);
       }
+    }
+
+    // Clear abandoned checkout leads after successful payment regardless of webhook duplicates.
+    try {
+      await clearAbandonedCheckoutLeadsByContact({
+        phone: String(finalForm?.phone || '').trim(),
+        email: String(finalForm?.email || '').trim(),
+        landingSlug: String(finalForm?.priceListId || '').trim(),
+      });
+    } catch (clearErr) {
+      console.warn(`[${ts()}] Failed clearing abandoned checkout leads (non-blocking):`, clearErr?.message || clearErr);
     }
     console.log(`[${ts()}] Webhook: deal saved, transactionId=`, transactionId);
   } catch (err) {

@@ -283,7 +283,7 @@ export default function AdminControlPanel() {
           {overview ? (
             <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
               <span>
-                פניות חדשות (7 ימים): <strong className="text-foreground">{overview.newLeads7d}</strong>
+                לידים חדשים (7 ימים): <strong className="text-foreground">{overview.newLeads7d}</strong>
               </span>
               <span>·</span>
               <span>
@@ -394,7 +394,7 @@ export default function AdminControlPanel() {
                     <Link to="/admin/contacts">ניהול מלא</Link>
                   </Button>
                 </CardTitle>
-                <CardDescription>פניות מאתר ומדפי &quot;צור קשר&quot; בנחיתה (תצוגה מקדימה)</CardDescription>
+                <CardDescription>לידים מהאתר ומדפי &quot;צור קשר&quot; בנחיתה (תצוגה מקדימה)</CardDescription>
               </CardHeader>
               <CardContent className="overflow-auto max-h-80">
                 <div className="rounded-md border">
@@ -427,7 +427,7 @@ export default function AdminControlPanel() {
                       {!privateLeads.length ? (
                         <TableRow>
                           <TableCell colSpan={5} className="text-center text-muted-foreground">
-                            אין פניות
+                            אין רשומות
                           </TableCell>
                         </TableRow>
                       ) : null}
@@ -448,7 +448,7 @@ export default function AdminControlPanel() {
                     <Link to="/admin/contacts">ניהול מלא</Link>
                   </Button>
                 </CardTitle>
-                <CardDescription>פניות ארגוניות (תצוגה מקדימה)</CardDescription>
+                <CardDescription>לידים ארגוניים (תצוגה מקדימה)</CardDescription>
               </CardHeader>
               <CardContent className="overflow-auto max-h-80">
                 <div className="rounded-md border">
@@ -477,7 +477,7 @@ export default function AdminControlPanel() {
                       {!corporateLeads.length ? (
                         <TableRow>
                           <TableCell colSpan={4} className="text-center text-muted-foreground">
-                            אין פניות
+                            אין רשומות
                           </TableCell>
                         </TableRow>
                       ) : null}

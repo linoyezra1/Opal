@@ -432,7 +432,7 @@ export async function updateProduct(id, payload) {
         updatedAt: new Date(),
       },
     },
-    { new: true, runValidators: true }
+    { returnDocument: 'after', runValidators: true }
   );
   if (!doc) throw new Error('Product not found');
   await Vendor.updateMany(
@@ -561,7 +561,7 @@ export async function updateVendor(id, payload) {
         updatedAt: new Date(),
       },
     },
-    { new: true, runValidators: true }
+    { returnDocument: 'after', runValidators: true }
   );
   if (!doc) throw new Error('Vendor not found');
   return { id: String(doc._id) };
@@ -839,7 +839,7 @@ export async function updatePriceList(id, payload) {
         updatedAt: new Date(),
       },
     },
-    { new: true, runValidators: true }
+    { returnDocument: 'after', runValidators: true }
   );
   if (!doc) throw new Error('Price list not found');
   return { id: String(doc._id) };
@@ -992,7 +992,7 @@ export async function updateLandingPage(id, payload) {
       set.priceListId = payload.priceListId;
     }
   }
-  const doc = await LandingPage.findByIdAndUpdate(id, { $set: set }, { new: true }).lean();
+  const doc = await LandingPage.findByIdAndUpdate(id, { $set: set }, { returnDocument: 'after' }).lean();
   if (!doc) throw new Error('דף לא נמצא');
   return serializeLandingPageDoc(doc);
 }
@@ -1191,7 +1191,7 @@ export async function updatePricingEntry(id, payload) {
         profit: net,
       },
     },
-    { new: true, runValidators: true }
+    { returnDocument: 'after', runValidators: true }
   );
   if (!doc) throw new Error('Pricing entry not found');
   return { id: String(doc._id) };
@@ -1305,7 +1305,7 @@ export async function updateSalesAgent(id, payload) {
         updatedAt: new Date(),
       },
     },
-    { new: true }
+    { returnDocument: 'after' }
   );
   if (!doc) throw new Error('Agent not found');
   return { id: String(doc._id) };
@@ -1481,7 +1481,7 @@ export async function upsertCheckoutDraft({ sessionKey, formSnapshot, step, comp
       },
       $setOnInsert: { sessionKey: key },
     },
-    { upsert: true, new: true }
+    { upsert: true, returnDocument: 'after' }
   );
   return { ok: true };
 }

@@ -312,8 +312,9 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
 
   useEffect(() => {
     if (pageType !== 'sales') return undefined;
-    const hasContact = String(phone || '').trim() || String(email || '').trim();
-    if (!hasContact) return undefined;
+    const phoneOk = validatePhone(String(phone || '').trim());
+    const emailOk = validateEmail(String(email || '').trim());
+    if (!phoneOk || !emailOk) return undefined;
     const keyBase = slug || String(priceListId || '');
     if (!keyBase) return undefined;
 
@@ -330,7 +331,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
             phone: phone.trim(),
             email: email.trim(),
             landingSlug: slug || String(priceListId || ''),
-            message: productId ? `התעניין במסלול: ${productId}` : 'לא המשיכו לתשלום',
+            message: 'לא המשיכו לתשלום',
           }),
         });
         sessionStorage.setItem(markKey, '1');

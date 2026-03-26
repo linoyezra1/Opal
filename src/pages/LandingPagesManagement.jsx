@@ -186,6 +186,23 @@ export default function LandingPagesManagement() {
     }
   }
 
+  function onImageFileChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // DataURL makes deployments simpler (no separate upload endpoint).
+    // Keep size reasonable to avoid very large payloads.
+    if (file.size > 1_800_000) {
+      setError('קובץ התמונה גדול מדי — מומלץ עד ~1.8MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = String(reader.result || '');
+      setForm((p) => ({ ...p, imageUrl: url }));
+    };
+    reader.readAsDataURL(file);
+  }
+
   if (!token) {
     return (
       <div dir="rtl" className="p-6">
@@ -228,7 +245,7 @@ export default function LandingPagesManagement() {
                   onChange={(e) => setForm((p) => ({ ...p, pageType: e.target.value }))}
                 >
                   <option value="sales">דף מכירות (מחירון + הרשמה)</option>
-                  <option value="contact">דף צור קשר (טופס פניות)</option>
+                  <option value="contact">דף צור קשר (טופס צור קשר)</option>
                 </select>
               </Field>
               <Field>
@@ -262,6 +279,20 @@ export default function LandingPagesManagement() {
               <Field>
                 <FieldLabel>קישור לתמונה (URL)</FieldLabel>
                 <Input dir="ltr" value={form.imageUrl} onChange={(e) => setForm((p) => ({ ...p, imageUrl: e.target.value }))} placeholder="https://..." />
+                <div className="mt-2 space-y-2">
+                  <label className="block text-sm font-medium text-muted-foreground">
+                    או העלאת תמונה מהמחשב
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={onImageFileChange}
+                    className="w-full text-sm"
+                  />
+                  {form.imageUrl && form.imageUrl.startsWith('data:') ? (
+                    <p className="text-xs text-muted-foreground">נבחרה תמונה מקומית (DataURL)</p>
+                  ) : null}
+                </div>
               </Field>
               <Field>
                 <FieldLabel>כותרת סעיף &quot;מה אתם מקבלים?&quot;</FieldLabel>
