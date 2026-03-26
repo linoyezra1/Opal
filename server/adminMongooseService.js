@@ -1,13 +1,13 @@
 import mongoose from 'mongoose';
 import { countDealsByAgentId } from './mongoService.js';
 
-const MONGO_URL = process.env.MONGO_URL || '';
+const MONGO_URL = process.env.MONGODB_URI || process.env.MONGO_URL || '';
 const DB_NAME = process.env.MONGO_DB_NAME || 'opal';
 
 let isConnected = false;
 
 async function ensureConnection() {
-  if (!MONGO_URL) throw new Error('MONGO_URL is not set');
+  if (!MONGO_URL) throw new Error('MONGODB_URI/MONGO_URL is not set');
   if (isConnected && mongoose.connection.readyState === 1) return;
   await mongoose.connect(MONGO_URL, { dbName: DB_NAME });
   isConnected = true;

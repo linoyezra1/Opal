@@ -890,6 +890,9 @@ export default function SubscribersDashboard() {
                   <div>טלפון: <strong dir="ltr">{selectedPrimary.phone || '—'}</strong></div>
                   <div>אימייל: <strong dir="ltr">{selectedPrimary.email || '—'}</strong></div>
                   <div>כתובת: <strong>{selectedPrimary.address || '—'}</strong></div>
+                  <div>מצב משפחתי: <strong>{selectedPrimary.maritalStatus || '—'}</strong></div>
+                  <div>קופת חולים: <strong>{selectedPrimary.healthFund || '—'}</strong></div>
+                  <div>ביטוח משלים: <strong>{selectedPrimary.supplementalInsurance || '—'}</strong></div>
                 </CardContent>
               </Card>
               <Card>
@@ -905,6 +908,12 @@ export default function SubscribersDashboard() {
                         <div>שם: <strong>{[m.firstName, m.lastName].filter(Boolean).join(' ') || '—'}</strong></div>
                         <div>ת.ז: <strong dir="ltr">{m.id || '—'}</strong></div>
                         <div>תאריך לידה: <strong>{m.dateOfBirth || '—'}</strong></div>
+                        <div>טלפון: <strong dir="ltr">{m.phone || '—'}</strong></div>
+                        <div>אימייל: <strong dir="ltr">{m.email || '—'}</strong></div>
+                        <div>קרבה: <strong>{m.relation || m.relationship || '—'}</strong></div>
+                        <div>מצב משפחתי: <strong>{m.maritalStatus || '—'}</strong></div>
+                        <div>קופת חולים: <strong>{m.healthFund || '—'}</strong></div>
+                        <div>ביטוח משלים: <strong>{m.supplementalInsurance || '—'}</strong></div>
                       </div>
                     ))
                   )}

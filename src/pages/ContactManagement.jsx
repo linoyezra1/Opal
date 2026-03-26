@@ -3,6 +3,7 @@ import { Phone, Building2, RefreshCw } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { Button } from '../components/ui/button.jsx';
+import { Input } from '../components/ui/input.jsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
 
@@ -14,6 +15,7 @@ export default function ContactManagement() {
   const [error, setError] = React.useState('');
   const [privateLeads, setPrivateLeads] = React.useState([]);
   const [corporateLeads, setCorporateLeads] = React.useState([]);
+  const [savingKey, setSavingKey] = React.useState('');
 
   async function load() {
     if (!token) return;
@@ -37,6 +39,30 @@ export default function ContactManagement() {
   React.useEffect(() => {
     load();
   }, [token]);
+
+  async function updateLead(kind, leadId, patch) {
+    if (!leadId) return;
+    setSavingKey(`${kind}:${leadId}`);
+    setError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/leads/${kind}/${encodeURIComponent(leadId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(patch),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.success) throw new Error(j.error || 'שמירה נכשלה');
+      if (kind === 'private') {
+        setPrivateLeads((prev) => prev.map((x) => (x.id === leadId ? { ...x, ...patch } : x)));
+      } else {
+        setCorporateLeads((prev) => prev.map((x) => (x.id === leadId ? { ...x, ...patch } : x)));
+      }
+    } catch (e) {
+      setError(e.message || 'שגיאה');
+    } finally {
+      setSavingKey('');
+    }
+  }
 
   return (
     <AdminPageShell>
@@ -69,6 +95,8 @@ export default function ContactManagement() {
                     <TableHead>שם</TableHead>
                     <TableHead>טלפון</TableHead>
                     <TableHead>הודעה</TableHead>
+                    <TableHead>סטטוס פנייה</TableHead>
+                    <TableHead>הערות</TableHead>
                     <TableHead>מקור</TableHead>
                     <TableHead>תאריך</TableHead>
                   </TableRow>
@@ -79,15 +107,42 @@ export default function ContactManagement() {
                       <TableCell>{l.name || '—'}</TableCell>
                       <TableCell dir="ltr" className="text-start">{l.phone || '—'}</TableCell>
                       <TableCell className="max-w-[280px] truncate">{l.message || '—'}</TableCell>
+                      <TableCell>
+                        <select
+                          className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                          value={l.leadStatus || 'חדש'}
+                          onChange={(e) => updateLead('private', l.id, { leadStatus: e.target.value })}
+                          disabled={savingKey === `private:${l.id}`}
+                        >
+                          <option value="חדש">חדש</option>
+                          <option value="בטיפול">בטיפול</option>
+                          <option value="טופל">טופל</option>
+                        </select>
+                      </TableCell>
+                      <TableCell className="min-w-[220px]">
+                        <Input
+                          value={l.adminNotes || ''}
+                          onChange={(e) =>
+                            setPrivateLeads((prev) => prev.map((x) => (x.id === l.id ? { ...x, adminNotes: e.target.value } : x)))
+                          }
+                          onBlur={(e) => updateLead('private', l.id, { adminNotes: e.target.value })}
+                          placeholder="הערות אדמין"
+                          disabled={savingKey === `private:${l.id}`}
+                        />
+                      </TableCell>
                       <TableCell className="font-mono text-xs">
-                        {l.source === 'landing_contact' && l.landingSlug ? `דף: ${l.landingSlug}` : l.source || 'site'}
+                        {l.source === 'abandoned_checkout'
+                          ? 'לא המשיכו לתשלום'
+                          : l.source === 'landing_contact' && l.landingSlug
+                            ? `דף: ${l.landingSlug}`
+                            : l.source || 'site'}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-xs">{l.createdAt ? new Date(l.createdAt).toLocaleString('he-IL') : '—'}</TableCell>
                     </TableRow>
                   ))}
                   {!privateLeads.length ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground">אין פניות</TableCell>
+                      <TableCell colSpan={7} className="text-center text-muted-foreground">אין פניות</TableCell>
                     </TableRow>
                   ) : null}
                 </TableBody>
@@ -113,6 +168,8 @@ export default function ContactManagement() {
                     <TableHead>איש קשר</TableHead>
                     <TableHead>טלפון</TableHead>
                     <TableHead>אימייל</TableHead>
+                    <TableHead>סטטוס פנייה</TableHead>
+                    <TableHead>הערות</TableHead>
                     <TableHead>תאריך</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -123,12 +180,35 @@ export default function ContactManagement() {
                       <TableCell>{l.contactName || l.contactPerson?.name || '—'}</TableCell>
                       <TableCell dir="ltr" className="text-start">{l.phone || l.contactPerson?.phone || '—'}</TableCell>
                       <TableCell dir="ltr" className="text-start">{l.email || l.contactPerson?.email || '—'}</TableCell>
+                      <TableCell>
+                        <select
+                          className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                          value={l.leadStatus || 'חדש'}
+                          onChange={(e) => updateLead('corporate', l.id, { leadStatus: e.target.value })}
+                          disabled={savingKey === `corporate:${l.id}`}
+                        >
+                          <option value="חדש">חדש</option>
+                          <option value="בטיפול">בטיפול</option>
+                          <option value="טופל">טופל</option>
+                        </select>
+                      </TableCell>
+                      <TableCell className="min-w-[220px]">
+                        <Input
+                          value={l.adminNotes || ''}
+                          onChange={(e) =>
+                            setCorporateLeads((prev) => prev.map((x) => (x.id === l.id ? { ...x, adminNotes: e.target.value } : x)))
+                          }
+                          onBlur={(e) => updateLead('corporate', l.id, { adminNotes: e.target.value })}
+                          placeholder="הערות אדמין"
+                          disabled={savingKey === `corporate:${l.id}`}
+                        />
+                      </TableCell>
                       <TableCell className="whitespace-nowrap text-xs">{l.createdAt ? new Date(l.createdAt).toLocaleString('he-IL') : '—'}</TableCell>
                     </TableRow>
                   ))}
                   {!corporateLeads.length ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground">אין פניות</TableCell>
+                      <TableCell colSpan={7} className="text-center text-muted-foreground">אין פניות</TableCell>
                     </TableRow>
                   ) : null}
                 </TableBody>

@@ -311,6 +311,38 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
   const [pageType, setPageType] = useState('sales');
 
   useEffect(() => {
+    if (pageType !== 'sales') return undefined;
+    const hasContact = String(phone || '').trim() || String(email || '').trim();
+    if (!hasContact) return undefined;
+    const keyBase = slug || String(priceListId || '');
+    if (!keyBase) return undefined;
+
+    const timer = setTimeout(async () => {
+      try {
+        const markKey = `opal_abandoned_lead_sent:${keyBase}:${String(phone || '').trim()}:${String(email || '').trim().toLowerCase()}`;
+        const already = sessionStorage.getItem(markKey);
+        if (already) return;
+        await fetch(`${API_BASE}/api/public/abandoned-checkout-lead`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: fullName.trim(),
+            phone: phone.trim(),
+            email: email.trim(),
+            landingSlug: slug || String(priceListId || ''),
+            message: productId ? `התעניין במסלול: ${productId}` : 'לא המשיכו לתשלום',
+          }),
+        });
+        sessionStorage.setItem(markKey, '1');
+      } catch {
+        /* best effort */
+      }
+    }, 900);
+
+    return () => clearTimeout(timer);
+  }, [pageType, fullName, phone, email, slug, priceListId, productId]);
+
+  useEffect(() => {
     if (!slug && !priceListId) {
       setLoading(false);
       setError('כתובת לא תקינה');

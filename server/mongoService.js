@@ -1,13 +1,13 @@
 import { MongoClient, ObjectId } from 'mongodb';
 
-const MONGO_URL = process.env.MONGO_URL || '';
+const MONGO_URL = process.env.MONGODB_URI || process.env.MONGO_URL || '';
 const DB_NAME = process.env.MONGO_DB_NAME || 'opal';
 
 let clientPromise = null;
 
 function getClient() {
   if (!MONGO_URL) {
-    throw new Error('MONGO_URL is not set');
+    throw new Error('MONGODB_URI/MONGO_URL is not set');
   }
   if (!clientPromise) {
     const client = new MongoClient(MONGO_URL);
@@ -101,6 +101,15 @@ export async function saveBeneficiaryUpdate(params) {
 
   const deals = db.collection('deals');
   const now = new Date();
+  const primary = params.primaryMember || {};
+  const additional = Array.isArray(params.additionalMembers) ? params.additionalMembers : [];
+  const normalizedBeneficiaries = additional.map((m) => ({
+    firstName: String(m.firstName || '').trim(),
+    lastName: String(m.lastName || '').trim(),
+    id: String(m.id || '').trim(),
+    dateOfBirth: String(m.dateOfBirth || '').trim(),
+    relationship: String(m.relation || '').trim(),
+  }));
   await deals.updateOne(
     { transactionId },
     {
@@ -110,10 +119,17 @@ export async function saveBeneficiaryUpdate(params) {
           transactionId,
           organizationName: params.organizationName || '',
           agentName: params.agentName || '',
-          primaryMember: params.primaryMember || {},
-          additionalMembers: params.additionalMembers || [],
+          primaryMember: primary,
+          additionalMembers: additional,
           submittedAt: now,
         },
+        'formState.fullName': [String(primary.firstName || '').trim(), String(primary.lastName || '').trim()].filter(Boolean).join(' '),
+        'formState.id': String(primary.id || '').trim(),
+        'formState.phone': String(primary.phone || '').trim(),
+        'formState.email': String(primary.email || '').trim(),
+        'formState.address': String(primary.address || '').trim(),
+        'formState.beneficiaries': normalizedBeneficiaries,
+        'formState.beneficiaryCount': normalizedBeneficiaries.length,
         updatedAt: now,
       },
       $setOnInsert: { createdAt: now },
@@ -125,6 +141,7 @@ export async function saveBeneficiaryUpdate(params) {
 
 export async function saveContactLead(params) {
   const db = await getDb();
+  const now = new Date();
   const result = await db.collection('contactLeads').insertOne({
     name: params.name || '',
     email: params.email || '',
@@ -132,9 +149,69 @@ export async function saveContactLead(params) {
     message: params.message || '',
     source: params.source || 'site',
     landingSlug: params.landingSlug || '',
-    createdAt: new Date(),
+    category: params.category || '',
+    leadStatus: params.leadStatus || 'חדש',
+    adminNotes: params.adminNotes || '',
+    createdAt: now,
+    updatedAt: now,
   });
   return { id: String(result.insertedId) };
+}
+
+export async function saveOrUpdateAbandonedCheckoutLead(params) {
+  const db = await getDb();
+  const now = new Date();
+  const phone = String(params.phone || '').trim();
+  const email = String(params.email || '').trim().toLowerCase();
+  const landingSlug = String(params.landingSlug || '').trim().toLowerCase();
+  if (!phone && !email) return { id: null, skipped: true };
+
+  const key = { source: 'abandoned_checkout', phone, email, landingSlug };
+  const existing = await db.collection('contactLeads').findOne(key, { projection: { _id: 1 } });
+  if (existing) {
+    await db.collection('contactLeads').updateOne(
+      { _id: existing._id },
+      {
+        $set: {
+          name: params.name || '',
+          message: params.message || '',
+          category: 'לא המשיכו לתשלום',
+          updatedAt: now,
+        },
+      }
+    );
+    return { id: String(existing._id), updated: true };
+  }
+
+  const result = await db.collection('contactLeads').insertOne({
+    name: params.name || '',
+    email,
+    phone,
+    message: params.message || '',
+    source: 'abandoned_checkout',
+    landingSlug,
+    category: 'לא המשיכו לתשלום',
+    leadStatus: 'חדש',
+    adminNotes: '',
+    createdAt: now,
+    updatedAt: now,
+  });
+  return { id: String(result.insertedId), created: true };
+}
+
+export async function clearAbandonedCheckoutLeadsByContact(params) {
+  const db = await getDb();
+  const phone = String(params.phone || '').trim();
+  const email = String(params.email || '').trim().toLowerCase();
+  const landingSlug = String(params.landingSlug || '').trim().toLowerCase();
+  if (!phone && !email) return { deleted: 0 };
+  const r = await db.collection('contactLeads').deleteMany({
+    source: 'abandoned_checkout',
+    phone,
+    email,
+    landingSlug,
+  });
+  return { deleted: Number(r.deletedCount || 0) };
 }
 
 export async function saveOrganizationLead(params) {
@@ -186,6 +263,62 @@ export async function getOrganizationCompanies(limit = 300) {
   const db = await getDb();
   const docs = await db.collection('organizations').find({}).sort({ createdAt: -1 }).limit(limit).toArray();
   return docs.map(serializeDocDates);
+}
+
+export async function updateOrganizationCompany(id, params) {
+  const db = await getDb();
+  let oid;
+  try {
+    oid = new ObjectId(String(id));
+  } catch {
+    throw new Error('מזהה ארגון לא תקין');
+  }
+  const set = {
+    updatedAt: new Date(),
+  };
+  if (params.companyName != null) set.companyName = String(params.companyName || '').trim();
+  if (params.companyId != null) set.companyId = String(params.companyId || '').trim();
+  if (params.officialAddress != null) set.officialAddress = String(params.officialAddress || '').trim();
+  if (params.companyEmail != null) set.companyEmail = String(params.companyEmail || '').trim();
+  if (params.fieldOfActivity != null) set.fieldOfActivity = String(params.fieldOfActivity || '').trim();
+  if (params.employeesCount != null) set.employeesCount = Number(params.employeesCount || 0);
+  if (params.billingMethod != null) set.billingMethod = String(params.billingMethod || '').trim();
+  if (params.contactPerson != null) set.contactPerson = params.contactPerson || null;
+  if (params.accounting != null) set.accounting = params.accounting || null;
+  if (params.additionalContact != null) set.additionalContact = params.additionalContact || null;
+  const r = await db.collection('organizations').updateOne({ _id: oid }, { $set: set });
+  if (!r.matchedCount) throw new Error('ארגון לא נמצא');
+  return { ok: true };
+}
+
+export async function deleteOrganizationCompany(id) {
+  const db = await getDb();
+  let oid;
+  try {
+    oid = new ObjectId(String(id));
+  } catch {
+    throw new Error('מזהה ארגון לא תקין');
+  }
+  const r = await db.collection('organizations').deleteOne({ _id: oid });
+  if (!r.deletedCount) throw new Error('ארגון לא נמצא');
+  return { ok: true };
+}
+
+export async function updateLeadAdmin(kind, id, params) {
+  const db = await getDb();
+  let oid;
+  try {
+    oid = new ObjectId(String(id));
+  } catch {
+    throw new Error('מזהה ליד לא תקין');
+  }
+  const col = kind === 'corporate' ? 'organizationLeads' : 'contactLeads';
+  const set = { updatedAt: new Date() };
+  if (params.leadStatus != null) set.leadStatus = String(params.leadStatus || '').trim();
+  if (params.adminNotes != null) set.adminNotes = String(params.adminNotes || '');
+  const r = await db.collection(col).updateOne({ _id: oid }, { $set: set });
+  if (!r.matchedCount) throw new Error('ליד לא נמצא');
+  return { ok: true };
 }
 
 export async function getDeals() {

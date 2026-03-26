@@ -10,15 +10,20 @@ import { createLowProfileDeal, getLowProfileIndicator } from './cardcomService.j
 import { sendOrderConfirmationEmail } from './emailService.js';
 import {
   createOrganizationCompany,
+  clearAbandonedCheckoutLeadsByContact,
+  deleteOrganizationCompany,
   getDeals,
   getOrganizationCompanies,
   getSalesDashboardData,
   saveBeneficiaryUpdate,
   saveContactLead,
   saveDeal,
+  saveOrUpdateAbandonedCheckoutLead,
   findDealByLowProfileCode,
   getPublicDealContext,
   saveOrganizationLead,
+  updateLeadAdmin,
+  updateOrganizationCompany,
   getContactLeads,
   getDealsPendingBeneficiaryCompletion,
   getOrganizationLeads,
@@ -423,6 +428,11 @@ async function handleWebhookSuccess(lowProfileCode) {
           primaryBeneficiary: { name: primaryName || '—', idNumber: primaryId || '—' },
           secondaryBeneficiaries,
         });
+        await clearAbandonedCheckoutLeadsByContact({
+          phone: String(finalForm?.phone || '').trim(),
+          email: String(finalForm?.email || '').trim(),
+          landingSlug: String(finalForm?.priceListId || '').trim(),
+        });
         console.log(`[${ts()}] Email confirmation sent for transaction ${transactionId}`);
       } catch (mailErr) {
         console.error(`[${ts()}] Email confirmation failed:`, mailErr?.message || mailErr);
@@ -480,6 +490,27 @@ app.post('/api/public/contact-lead', async (req, res) => {
     res.json({ success: true, message: 'נשלח בהצלחה' });
   } catch (err) {
     console.error(`[${ts()}] public/contact-lead error:`, err);
+    res.status(500).json({ success: false, error: err.message || 'שגיאה' });
+  }
+});
+
+/** Lead: user filled checkout details but didn't continue to payment */
+app.post('/api/public/abandoned-checkout-lead', async (req, res) => {
+  try {
+    const { name = '', phone = '', email = '', message = '', landingSlug = '' } = req.body || {};
+    if (!String(phone).trim() && !String(email).trim()) {
+      return res.status(400).json({ success: false, error: 'נא לספק טלפון או אימייל' });
+    }
+    const result = await saveOrUpdateAbandonedCheckoutLead({
+      name: String(name).trim(),
+      phone: String(phone).trim(),
+      email: String(email).trim(),
+      message: String(message).trim(),
+      landingSlug: String(landingSlug).trim().toLowerCase(),
+    });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error(`[${ts()}] public/abandoned-checkout-lead error:`, err);
     res.status(500).json({ success: false, error: err.message || 'שגיאה' });
   }
 });
@@ -664,7 +695,7 @@ app.post('/api/update-beneficiaries', async (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
-    mongoConfigured: !!process.env.MONGO_URL,
+    mongoConfigured: !!(process.env.MONGODB_URI || process.env.MONGO_URL),
     cardcomConfigured: !!(process.env.CARDCOM_TERMINAL && process.env.CARDCOM_USER),
   });
 });
@@ -1105,6 +1136,40 @@ app.post('/api/admin/organizations', requireAdmin, async (req, res) => {
   }
 });
 
+app.put('/api/admin/organizations/:id', requireAdmin, async (req, res) => {
+  try {
+    await updateOrganizationCompany(req.params.id, req.body || {});
+    res.json({ success: true });
+  } catch (e) {
+    console.error(`[${ts()}] admin/organizations update error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to update organization' });
+  }
+});
+
+app.delete('/api/admin/organizations/:id', requireAdmin, async (req, res) => {
+  try {
+    await deleteOrganizationCompany(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    console.error(`[${ts()}] admin/organizations delete error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to delete organization' });
+  }
+});
+
+app.put('/api/admin/leads/:kind/:id', requireAdmin, async (req, res) => {
+  try {
+    const kind = String(req.params.kind || '').trim();
+    if (!['private', 'corporate'].includes(kind)) {
+      return res.status(400).json({ success: false, error: 'Invalid lead kind' });
+    }
+    await updateLeadAdmin(kind, req.params.id, req.body || {});
+    res.json({ success: true });
+  } catch (e) {
+    console.error(`[${ts()}] admin/leads update error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to update lead' });
+  }
+});
+
 /** Aggregated dashboard: לקוחות ללא טופס מוטבים, פיגור תשלום, פניות, וכו׳ */
 app.get('/api/admin/control-panel', requireAdmin, async (req, res) => {
   try {
@@ -1284,8 +1349,8 @@ app.get(/^\/(?!api\/).*/, (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[${ts()}] Opal API listening on http://0.0.0.0:${PORT}`);
-  if (!process.env.MONGO_URL) {
-    console.warn(`[${ts()}] MONGO_URL not set`);
+  if (!(process.env.MONGODB_URI || process.env.MONGO_URL)) {
+    console.warn(`[${ts()}] MONGODB_URI/MONGO_URL not set`);
   }
   if (!process.env.CARDCOM_TERMINAL) console.warn(`[${ts()}] CARDCOM_TERMINAL not set`);
 });

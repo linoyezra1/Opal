@@ -1,10 +1,5 @@
 import nodemailer from 'nodemailer';
 
-function boolFromEnv(value, fallback = false) {
-  if (value == null) return fallback;
-  return String(value).trim().toLowerCase() === 'true';
-}
-
 function buildOrderConfirmationHtml(payload) {
   const amount = Number(payload.monthlyTotal || 0).toLocaleString('he-IL');
   const secondaries = Array.isArray(payload.secondaryBeneficiaries) ? payload.secondaryBeneficiaries : [];
@@ -78,16 +73,15 @@ function buildOrderConfirmationHtml(payload) {
 }
 
 function createTransporter() {
-  const host = process.env.SMTP_HOST || '';
-  const port = Number(process.env.SMTP_PORT || 587);
   const user = process.env.SMTP_USER || '';
   const pass = process.env.SMTP_PASS || '';
-  if (!host || !user || !pass) return null;
+  if (!user || !pass) return null;
 
   return nodemailer.createTransport({
-    host,
-    port,
-    secure: boolFromEnv(process.env.SMTP_SECURE, port === 465),
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    family: 4,
     auth: { user, pass },
   });
 }
