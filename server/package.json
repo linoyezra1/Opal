@@ -16,6 +16,7 @@
     "google-auth-library": "^9.0.0",
     "googleapis": "^144.0.0",
     "mongodb": "^6.21.0",
-    "mongoose": "^9.3.1"
+    "mongoose": "^9.3.1",
+    "resend": "^6.9.4"
   }
 }

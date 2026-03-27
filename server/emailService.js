@@ -1,5 +1,4 @@
-import nodemailer from 'nodemailer';
-import dns from 'dns';
+import { Resend } from 'resend';
 
 function buildOrderConfirmationHtml(payload) {
   const amount = Number(payload.monthlyTotal || 0).toLocaleString('he-IL');
@@ -73,92 +72,41 @@ function buildOrderConfirmationHtml(payload) {
 </html>`;
 }
 
-function createTransporter(options) {
-  const user = process.env.SMTP_USER || '';
-  const pass = process.env.SMTP_PASS || '';
-  if (!user || !pass) return null;
-
-  return nodemailer.createTransport(options);
-}
-
-function buildSmtpOptions({ port, secure }) {
-  const host = process.env.SMTP_HOST;
-  return {
-    host,
-    port: Number.parseInt(String(port), 10),
-    secure: Boolean(secure),
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-    tls: {
-      rejectUnauthorized: false, // Helps avoid handshake issues in production
-      // Keep TLS validation tied to Gmail hostname when host is set to IP.
-      servername: process.env.SMTP_TLS_SERVERNAME || 'smtp.gmail.com',
-    },
-    family: 4, // FORCED IPv4 (Railway -> Google SMTP)
-    // Force DNS resolution to IPv4 even when platform resolver prefers IPv6.
-    lookup(hostname, options, callback) {
-      const opts = typeof options === 'object' && options ? options : {};
-      dns.lookup(hostname, { ...opts, family: 4, all: false }, callback);
-    },
-  };
-}
-
 export async function sendOrderConfirmationEmail(payload) {
   const to = String(payload.to || '').trim();
   if (!to) return { sent: false, reason: 'missing-recipient' };
+  const apiKey = String(process.env.RESEND_API_KEY || '').trim();
+  if (!apiKey) {
+    console.warn('[email] RESEND_API_KEY not configured; skipping email send');
+    return { sent: false, reason: 'resend-not-configured' };
+  }
 
-  // Gmail usually requires the "From" address to match the authenticated mailbox.
-  // Use the SMTP user as a safe default and keep OPAL display name.
-  const fromAddress = process.env.MAIL_FROM_ADDRESS || process.env.SMTP_USER || 'linoy05353@gmail.com';
+  const resend = new Resend(apiKey);
+  // Use Resend onboarding sender until custom domain is verified.
+  const fromAddress = process.env.MAIL_FROM_ADDRESS || 'onboarding@resend.dev';
   const fromName = process.env.MAIL_FROM_NAME || 'OPAL';
   const subject = `אישור הזמנה - ${payload.orderNumber || ''}`.trim();
   const html = buildOrderConfirmationHtml(payload);
-  const configuredPort = Number.parseInt(String(process.env.SMTP_PORT || '465'), 10);
-  const configuredSecure = String(process.env.SMTP_SECURE || 'true').toLowerCase() === 'true';
-  const primaryOptions = buildSmtpOptions({ port: configuredPort, secure: configuredSecure });
 
-  const attempts = [primaryOptions];
-  // Fallback required for Railway timeout cases with Gmail over 465.
-  if (configuredPort === 465) {
-    attempts.push(buildSmtpOptions({ port: 587, secure: false }));
-  }
-
-  let lastErr = null;
-  for (let i = 0; i < attempts.length; i += 1) {
-    const options = attempts[i];
-    const transporter = createTransporter(options);
-    if (!transporter) {
-      console.warn('[email] SMTP not configured; skipping email send');
-      return { sent: false, reason: 'smtp-not-configured' };
+  try {
+    const result = await resend.emails.send({
+      from: `"${fromName}" <${fromAddress}>`,
+      to: [to],
+      subject,
+      html,
+    });
+    if (result?.error) {
+      console.error('[email] Resend send failed', result.error);
+      throw new Error(result.error?.message || 'Resend send failed');
     }
-    try {
-      console.log(`[email] Send attempt ${i + 1}/${attempts.length} host=${options.host} port=${options.port} secure=${options.secure} family=4`);
-      await transporter.sendMail({
-        from: `"${fromName}" <${fromAddress}>`,
-        to,
-        subject,
-        html,
-      });
-      return { sent: true, attempt: i + 1, port: options.port };
-    } catch (err) {
-      lastErr = err;
-      console.error(
-        `[email] SMTP send attempt failed (attempt=${i + 1}, host=${options.host}, port=${options.port}, secure=${options.secure})`,
-        {
-          message: err?.message || String(err),
-          code: err?.code,
-          command: err?.command,
-          errno: err?.errno,
-          syscall: err?.syscall,
-          address: err?.address,
-          port: err?.port,
-        }
-      );
-    }
+    return { sent: true, provider: 'resend', id: result?.data?.id || null };
+  } catch (err) {
+    console.error('[email] Resend send exception', {
+      message: err?.message || String(err),
+      name: err?.name,
+      statusCode: err?.statusCode,
+    });
+    throw err;
   }
-
-  throw lastErr || new Error('SMTP send failed');
 }
 
