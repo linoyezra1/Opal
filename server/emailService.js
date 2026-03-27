@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import dns from 'dns';
 
 function buildOrderConfirmationHtml(payload) {
   const amount = Number(payload.monthlyTotal || 0).toLocaleString('he-IL');
@@ -81,8 +82,9 @@ function createTransporter(options) {
 }
 
 function buildSmtpOptions({ port, secure }) {
+  const host = process.env.SMTP_HOST;
   return {
-    host: process.env.SMTP_HOST,
+    host,
     port: Number.parseInt(String(port), 10),
     secure: Boolean(secure),
     auth: {
@@ -91,8 +93,15 @@ function buildSmtpOptions({ port, secure }) {
     },
     tls: {
       rejectUnauthorized: false, // Helps avoid handshake issues in production
+      // Keep TLS validation tied to Gmail hostname when host is set to IP.
+      servername: process.env.SMTP_TLS_SERVERNAME || 'smtp.gmail.com',
     },
     family: 4, // FORCED IPv4 (Railway -> Google SMTP)
+    // Force DNS resolution to IPv4 even when platform resolver prefers IPv6.
+    lookup(hostname, options, callback) {
+      const opts = typeof options === 'object' && options ? options : {};
+      dns.lookup(hostname, { ...opts, family: 4, all: false }, callback);
+    },
   };
 }
 
