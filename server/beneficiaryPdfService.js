@@ -1,4 +1,5 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { PDFDocument, rgb } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -43,18 +44,42 @@ export function buildBeneficiaryPdfModel(input = {}) {
 export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
   const model = buildBeneficiaryPdfModel(modelInput);
   const pdfDoc = await PDFDocument.create();
+  pdfDoc.registerFontkit(fontkit);
   let page = pdfDoc.addPage([595, 842]); // A4
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const fontPath = path.resolve(process.cwd(), 'assets', 'fonts', 'Heebo-Regular.ttf');
+  const fontBytes = await fs.readFile(fontPath);
+  const font = await pdfDoc.embedFont(fontBytes);
+  const bold = font;
 
   let y = 810;
   const left = 40;
   const sectionGap = 14;
   const textColor = rgb(0.15, 0.17, 0.2);
   const muted = rgb(0.35, 0.39, 0.45);
+  const right = 555;
+
+  function reverseRtlText(value) {
+    return String(value || '')
+      .split('\n')
+      .map((lineText) => lineText.split('').reverse().join(''))
+      .join('\n');
+  }
+
+  function drawRtlText(text, { xRight, yPos, size = 10, useBold = false, color = textColor }) {
+    const value = reverseRtlText(text);
+    const selectedFont = useBold ? bold : font;
+    const width = selectedFont.widthOfTextAtSize(value, size);
+    page.drawText(value, {
+      x: xRight - width,
+      y: yPos,
+      size,
+      font: selectedFont,
+      color,
+    });
+  }
 
   function drawTitle(title) {
-    page.drawText(title, { x: left, y, size: 15, font: bold, color: textColor });
+    drawRtlText(title, { xRight: right, yPos: y, size: 15, useBold: true, color: textColor });
     y -= 20;
     page.drawLine({
       start: { x: left, y: y + 6 },
@@ -66,44 +91,44 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
   }
 
   function drawRow(label, value) {
-    page.drawText(`${label}:`, { x: left, y, size: 10, font: bold, color: muted });
-    page.drawText(String(value || '—'), { x: 180, y, size: 10, font, color: textColor });
+    drawRtlText(`${label}:`, { xRight: right, yPos: y, size: 10, useBold: true, color: muted });
+    drawRtlText(String(value || '—'), { xRight: right - 210, yPos: y, size: 10, useBold: false, color: textColor });
     y -= 15;
   }
 
-  drawTitle('OPAL - Beneficiary Summary');
-  drawRow('Order Number', model.orderNumber);
-  drawRow('Order Date', model.orderDate);
-  drawRow('Customer Name', model.customerName);
-  drawRow('Customer ID', model.customerId);
-  drawRow('Subscription Start', model.subscriptionStartDate);
-  drawRow('Address', model.address);
-  drawRow('Phone', model.phone);
-  drawRow('Email', model.email);
-  drawRow('Product', model.productName);
-  drawRow('Monthly Total (ILS)', model.monthlyTotal.toLocaleString('he-IL'));
+  drawTitle('סיכום טופס מוטבים - OPAL');
+  drawRow('מספר הזמנה', model.orderNumber);
+  drawRow('תאריך הזמנה', model.orderDate);
+  drawRow('שם לקוח', model.customerName);
+  drawRow('תעודת זהות', model.customerId);
+  drawRow('תאריך תחילת מנוי', model.subscriptionStartDate);
+  drawRow('כתובת', model.address);
+  drawRow('טלפון', model.phone);
+  drawRow('אימייל', model.email);
+  drawRow('מוצר', model.productName);
+  drawRow('תשלום חודשי', `${model.monthlyTotal.toLocaleString('he-IL')} ₪`);
   y -= sectionGap;
 
-  drawTitle('Primary Insured');
-  drawRow('Full Name', model.primaryBeneficiary.fullName);
-  drawRow('ID Number', model.primaryBeneficiary.idNumber);
-  drawRow('Date of Birth', model.primaryBeneficiary.dateOfBirth);
-  drawRow('Marital Status', model.primaryBeneficiary.maritalStatus);
-  drawRow('Health Fund', model.primaryBeneficiary.healthFund);
-  drawRow('Supplemental Insurance', model.primaryBeneficiary.supplementalInsurance);
+  drawTitle('מבוטח ראשי');
+  drawRow('שם מלא', model.primaryBeneficiary.fullName);
+  drawRow('תעודת זהות', model.primaryBeneficiary.idNumber);
+  drawRow('תאריך לידה', model.primaryBeneficiary.dateOfBirth);
+  drawRow('מצב משפחתי', model.primaryBeneficiary.maritalStatus);
+  drawRow('קופת חולים', model.primaryBeneficiary.healthFund);
+  drawRow('ביטוח משלים', model.primaryBeneficiary.supplementalInsurance);
   y -= sectionGap;
 
-  drawTitle('Secondary Beneficiaries');
+  drawTitle('מוטבים נוספים');
   if (!model.secondaryBeneficiaries.length) {
-    drawRow('Beneficiaries', 'No secondary beneficiaries');
+    drawRow('מוטבים', 'לא הוגדרו מוטבים נוספים');
   } else {
     model.secondaryBeneficiaries.forEach((b, idx) => {
-      drawRow(`Beneficiary #${idx + 1} Name`, b.fullName);
-      drawRow(`Beneficiary #${idx + 1} ID`, b.idNumber);
-      drawRow(`Beneficiary #${idx + 1} DOB`, b.dateOfBirth);
-      drawRow(`Beneficiary #${idx + 1} Marital`, b.maritalStatus);
-      drawRow(`Beneficiary #${idx + 1} Health Fund`, b.healthFund);
-      drawRow(`Beneficiary #${idx + 1} Supplemental`, b.supplementalInsurance);
+      drawRow(`מוטב ${idx + 1} - שם מלא`, b.fullName);
+      drawRow(`מוטב ${idx + 1} - תעודת זהות`, b.idNumber);
+      drawRow(`מוטב ${idx + 1} - תאריך לידה`, b.dateOfBirth);
+      drawRow(`מוטב ${idx + 1} - מצב משפחתי`, b.maritalStatus);
+      drawRow(`מוטב ${idx + 1} - קופת חולים`, b.healthFund);
+      drawRow(`מוטב ${idx + 1} - ביטוח משלים`, b.supplementalInsurance);
       y -= 4;
       if (y < 100) {
         y = 810;
