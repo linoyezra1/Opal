@@ -87,6 +87,7 @@ export async function sendOrderConfirmationEmail(payload) {
   const fromName = process.env.MAIL_FROM_NAME || 'OPAL';
   const subject = `אישור הזמנה - ${payload.orderNumber || ''}`.trim();
   const html = buildOrderConfirmationHtml(payload);
+  const attachments = Array.isArray(payload.attachments) ? payload.attachments : [];
 
   try {
     const result = await resend.emails.send({
@@ -94,6 +95,7 @@ export async function sendOrderConfirmationEmail(payload) {
       to: [to],
       subject,
       html,
+      attachments,
     });
     if (result?.error) {
       console.error('[email] Resend send failed', result.error);

@@ -102,6 +102,23 @@ export async function findDealByLowProfileCode(lowProfileCode) {
   };
 }
 
+export async function getDealByTransactionId(transactionId) {
+  const db = await getDb();
+  const tid = String(transactionId || '').trim();
+  if (!tid) return null;
+  const doc = await db.collection('deals').findOne({ transactionId: tid });
+  if (!doc) return null;
+  return {
+    id: String(doc._id),
+    transactionId: String(doc.transactionId || ''),
+    payerAmount: Number(doc.payerAmount || 0),
+    formState: doc.formState && typeof doc.formState === 'object' ? doc.formState : {},
+    beneficiaryUpdate: doc.beneficiaryUpdate && typeof doc.beneficiaryUpdate === 'object' ? doc.beneficiaryUpdate : null,
+    createdAt: doc.createdAt || null,
+    updatedAt: doc.updatedAt || null,
+  };
+}
+
 /** הקשר מינימלי לטופס מוטבים (ללא פרטי מוטבים — המשתמש ממלא ידנית) */
 export async function getPublicDealContext(transactionId) {
   const db = await getDb();

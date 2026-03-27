@@ -8,6 +8,7 @@ import express from 'express';
 import cors from 'cors';
 import { createLowProfileDeal, getLowProfileIndicator } from './cardcomService.js';
 import { sendOrderConfirmationEmail } from './emailService.js';
+import { generateBeneficiarySummaryPdfBuffer, saveBeneficiarySummaryPdfToDisk } from './beneficiaryPdfService.js';
 import {
   createOrganizationCompany,
   clearAbandonedCheckoutLeadsByContact,
@@ -32,6 +33,7 @@ import {
   updateDealAdmin,
   deleteDealAdmin,
   getDealEmailSentAt,
+  getDealByTransactionId,
   markDealOrderEmailSent,
 } from './mongoService.js';
 import {
@@ -73,6 +75,7 @@ import {
   updateVendor,
   upsertCheckoutDraft,
 } from './adminMongooseService.js';
+import fs from 'fs/promises';
 import { resolve } from 'path';
 
 try {
@@ -96,6 +99,87 @@ function ts() {
   const hms = d.toTimeString().slice(0, 8);
   const ms = String(d.getMilliseconds()).padStart(3, '0');
   return `${hms}.${ms}`;
+}
+
+function firstDefined(...vals) {
+  for (const v of vals) {
+    if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+  }
+  return '';
+}
+
+function buildBeneficiaryPdfModelFromDeal({ transactionId, deal, primaryMember, additionalMembers, payerAmount }) {
+  const fsState = deal?.formState || {};
+  const primary = primaryMember || {};
+  const additional = Array.isArray(additionalMembers) ? additionalMembers : [];
+  return {
+    orderNumber: String(transactionId || ''),
+    orderDate: new Date().toLocaleDateString('he-IL'),
+    customerName: firstDefined(
+      [primary.firstName, primary.lastName].filter(Boolean).join(' '),
+      fsState.fullName
+    ),
+    customerId: firstDefined(primary.id, fsState.id),
+    subscriptionStartDate: fsState.subscriptionStartDate || new Date().toLocaleDateString('he-IL'),
+    address: firstDefined(primary.address, fsState.address),
+    phone: firstDefined(primary.phone, fsState.phone),
+    email: firstDefined(primary.email, fsState.email),
+    productName: firstDefined(fsState.productName, fsState.selectedPlanId),
+    monthlyTotal: Number(payerAmount || deal?.payerAmount || 0),
+    primaryBeneficiary: {
+      fullName: firstDefined([primary.firstName, primary.lastName].filter(Boolean).join(' '), fsState.fullName),
+      idNumber: firstDefined(primary.id, fsState.id),
+      dateOfBirth: firstDefined(primary.dateOfBirth, fsState.dateOfBirth),
+      maritalStatus: firstDefined(primary.maritalStatus, fsState.maritalStatus),
+      healthFund: firstDefined(primary.healthFund, fsState.healthFund),
+      supplementalInsurance: firstDefined(primary.supplementalInsurance, fsState.supplementalInsurance),
+    },
+    secondaryBeneficiaries: additional.map((m) => ({
+      fullName: [String(m.firstName || '').trim(), String(m.lastName || '').trim()].filter(Boolean).join(' '),
+      idNumber: String(m.id || '').trim(),
+      dateOfBirth: String(m.dateOfBirth || '').trim(),
+      maritalStatus: String(m.maritalStatus || '').trim(),
+      healthFund: String(m.healthFund || '').trim(),
+      supplementalInsurance: String(m.supplementalInsurance || '').trim(),
+    })),
+  };
+}
+
+async function buildEmailAttachments({ transactionId, beneficiaryPdfBuffer }) {
+  const attachments = [];
+  if (beneficiaryPdfBuffer) {
+    attachments.push({
+      filename: `beneficiary-summary-${String(transactionId || '').trim() || 'order'}.pdf`,
+      content: beneficiaryPdfBuffer,
+    });
+  }
+
+  const staticDocCandidates = [
+    { filename: 'גילוי נאות.pdf', rel: ['assets', 'docs', 'גילוי נאות.pdf'] },
+    { filename: 'כתב שירות.pdf', rel: ['assets', 'docs', 'כתב שירות.pdf'] },
+  ];
+
+  for (const doc of staticDocCandidates) {
+    const candidates = [
+      resolve(process.cwd(), ...doc.rel),
+      resolve(process.cwd(), 'server', ...doc.rel),
+    ];
+    let loaded = false;
+    for (const p of candidates) {
+      try {
+        const content = await fs.readFile(p);
+        attachments.push({ filename: doc.filename, content });
+        loaded = true;
+        break;
+      } catch {
+        // Try next candidate path
+      }
+    }
+    if (!loaded) {
+      console.warn(`[${ts()}] Attachment missing (optional): ${doc.filename}`);
+    }
+  }
+  return attachments;
 }
 
 function createAdminToken(username) {
@@ -428,6 +512,24 @@ async function handleWebhookSuccess(lowProfileCode) {
 
     if (shouldSendEmail) {
       try {
+        const pdfModel = buildBeneficiaryPdfModelFromDeal({
+          transactionId,
+          deal: { formState: finalForm, payerAmount },
+          primaryMember: {
+            firstName: primaryName,
+            lastName: '',
+            id: primaryId,
+            email: to,
+            phone: String(finalForm?.phone || '').trim(),
+            address: String(finalForm?.address || '').trim(),
+          },
+          additionalMembers: Array.isArray(finalForm?.beneficiaries) ? finalForm.beneficiaries : [],
+          payerAmount,
+        });
+        const beneficiaryPdfBuffer = await generateBeneficiarySummaryPdfBuffer(pdfModel);
+        await saveBeneficiarySummaryPdfToDisk({ transactionId, buffer: beneficiaryPdfBuffer });
+        const attachments = await buildEmailAttachments({ transactionId, beneficiaryPdfBuffer });
+
         const mailResult = await sendOrderConfirmationEmail({
           to,
           orderNumber: transactionId,
@@ -440,6 +542,7 @@ async function handleWebhookSuccess(lowProfileCode) {
           beneficiaryLink,
           primaryBeneficiary: { name: primaryName || '—', idNumber: primaryId || '—' },
           secondaryBeneficiaries,
+          attachments,
         });
 
         if (mailResult?.sent) {
@@ -707,9 +810,61 @@ app.post('/api/update-beneficiaries', async (req, res) => {
       additionalMembers: beneficiaries,
     });
 
+    // Generate beneficiary summary PDF from the consolidated subscription row.
+    const deal = await getDealByTransactionId(transactionId);
+    const pdfModel = buildBeneficiaryPdfModelFromDeal({
+      transactionId,
+      deal,
+      primaryMember: {
+        firstName: primaryFirstName,
+        lastName: primaryLastName,
+        id: primaryId,
+        email: primaryEmail,
+        phone: String(pm.phone ?? '').trim(),
+        address: String(pm.address ?? '').trim(),
+        dateOfBirth: String(pm.dateOfBirth ?? '').trim(),
+        maritalStatus: String(pm.maritalStatus ?? '').trim(),
+        healthFund: String(pm.healthFund ?? '').trim(),
+        supplementalInsurance: String(pm.supplementalInsurance ?? '').trim(),
+      },
+      additionalMembers: beneficiaries,
+      payerAmount: deal?.payerAmount,
+    });
+    const beneficiaryPdfBuffer = await generateBeneficiarySummaryPdfBuffer(pdfModel);
+    const pdfDisk = await saveBeneficiarySummaryPdfToDisk({ transactionId, buffer: beneficiaryPdfBuffer });
+
+    // Send beneficiary completion confirmation with attachments (PDF summary + static docs).
+    try {
+      const to = firstDefined(primaryEmail, deal?.formState?.email);
+      if (to) {
+        const attachments = await buildEmailAttachments({ transactionId, beneficiaryPdfBuffer });
+        const primaryName = [primaryFirstName, primaryLastName].filter(Boolean).join(' ');
+        await sendOrderConfirmationEmail({
+          to,
+          orderNumber: transactionId,
+          orderDate: new Date().toLocaleDateString('he-IL'),
+          customerName: primaryName || 'לקוח',
+          email: to,
+          phone: firstDefined(pm.phone, deal?.formState?.phone),
+          productName: firstDefined(deal?.formState?.productName, deal?.formState?.selectedPlanId),
+          monthlyTotal: Number(deal?.payerAmount || 0),
+          beneficiaryLink: `${FRONTEND_URL}/beneficiary-form?transactionId=${encodeURIComponent(transactionId)}`,
+          primaryBeneficiary: { name: primaryName || '—', idNumber: primaryId || '—' },
+          secondaryBeneficiaries: beneficiaries.map((b) => ({
+            name: [String(b.firstName || '').trim(), String(b.lastName || '').trim()].filter(Boolean).join(' '),
+            idNumber: String(b.id || '').trim(),
+          })),
+          attachments,
+        });
+      }
+    } catch (mailErr) {
+      console.error(`[${ts()}] beneficiary completion email failed:`, mailErr?.message || mailErr);
+    }
+
     res.json({
       success: true,
       dealId: result.id,
+      beneficiaryPdfPath: pdfDisk.fullPath,
     });
   } catch (err) {
     console.error(`[${ts()}] update-beneficiaries error:`, err);
