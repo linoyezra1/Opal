@@ -72,29 +72,33 @@ function buildOrderConfirmationHtml(payload) {
 </html>`;
 }
 
-function createTransporter() {
+function createTransporter(options) {
   const user = process.env.SMTP_USER || '';
   const pass = process.env.SMTP_PASS || '';
   if (!user || !pass) return null;
 
-  return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    family: 4,
-    auth: { user, pass },
-  });
+  return nodemailer.createTransport(options);
+}
+
+function buildSmtpOptions({ port, secure }) {
+  return {
+    host: process.env.SMTP_HOST,
+    port: Number.parseInt(String(port), 10),
+    secure: Boolean(secure),
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+    tls: {
+      rejectUnauthorized: false, // Helps avoid handshake issues in production
+    },
+    family: 4, // FORCED IPv4 (Railway -> Google SMTP)
+  };
 }
 
 export async function sendOrderConfirmationEmail(payload) {
   const to = String(payload.to || '').trim();
   if (!to) return { sent: false, reason: 'missing-recipient' };
-
-  const transporter = createTransporter();
-  if (!transporter) {
-    console.warn('[email] SMTP not configured; skipping email send');
-    return { sent: false, reason: 'smtp-not-configured' };
-  }
 
   // Gmail usually requires the "From" address to match the authenticated mailbox.
   // Use the SMTP user as a safe default and keep OPAL display name.
@@ -102,13 +106,50 @@ export async function sendOrderConfirmationEmail(payload) {
   const fromName = process.env.MAIL_FROM_NAME || 'OPAL';
   const subject = `אישור הזמנה - ${payload.orderNumber || ''}`.trim();
   const html = buildOrderConfirmationHtml(payload);
+  const configuredPort = Number.parseInt(String(process.env.SMTP_PORT || '465'), 10);
+  const configuredSecure = String(process.env.SMTP_SECURE || 'true').toLowerCase() === 'true';
+  const primaryOptions = buildSmtpOptions({ port: configuredPort, secure: configuredSecure });
 
-  await transporter.sendMail({
-    from: `"${fromName}" <${fromAddress}>`,
-    to,
-    subject,
-    html,
-  });
-  return { sent: true };
+  const attempts = [primaryOptions];
+  // Fallback required for Railway timeout cases with Gmail over 465.
+  if (configuredPort === 465) {
+    attempts.push(buildSmtpOptions({ port: 587, secure: false }));
+  }
+
+  let lastErr = null;
+  for (let i = 0; i < attempts.length; i += 1) {
+    const options = attempts[i];
+    const transporter = createTransporter(options);
+    if (!transporter) {
+      console.warn('[email] SMTP not configured; skipping email send');
+      return { sent: false, reason: 'smtp-not-configured' };
+    }
+    try {
+      console.log(`[email] Send attempt ${i + 1}/${attempts.length} host=${options.host} port=${options.port} secure=${options.secure} family=4`);
+      await transporter.sendMail({
+        from: `"${fromName}" <${fromAddress}>`,
+        to,
+        subject,
+        html,
+      });
+      return { sent: true, attempt: i + 1, port: options.port };
+    } catch (err) {
+      lastErr = err;
+      console.error(
+        `[email] SMTP send attempt failed (attempt=${i + 1}, host=${options.host}, port=${options.port}, secure=${options.secure})`,
+        {
+          message: err?.message || String(err),
+          code: err?.code,
+          command: err?.command,
+          errno: err?.errno,
+          syscall: err?.syscall,
+          address: err?.address,
+          port: err?.port,
+        }
+      );
+    }
+  }
+
+  throw lastErr || new Error('SMTP send failed');
 }
 
