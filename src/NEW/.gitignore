@@ -2,7 +2,6 @@
 __v0_runtime_loader.js
 __v0_devtools.tsx
 __v0_jsx-dev-runtime.ts
-.npmrc
 .snowflake/
 .v0-trash/
 .vercel/
@@ -12,6 +11,6 @@ next.user-config.*
 .env*.local
 
 # Common ignores
-node_modules/
+node_modules
 .next/
 .DS_Store

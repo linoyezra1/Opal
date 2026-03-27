@@ -1,16 +1,21 @@
-import type { Metadata } from 'next'
-import { Heebo } from 'next/font/google'
+import type { Metadata, Viewport } from 'next'
+import { Heebo, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
 const heebo = Heebo({ 
-  subsets: ["hebrew", "latin"],
-  variable: '--font-heebo'
-});
+  subsets: ["latin", "hebrew"],
+  variable: '--font-heebo',
+})
+
+const geistMono = Geist_Mono({ 
+  subsets: ["latin"],
+  variable: '--font-geist-mono',
+})
 
 export const metadata: Metadata = {
-  title: 'Opal - Medical Entrepreneurship Home',
-  description: 'Private Doctor at Home 24/7 - Professional medical care at your doorstep',
+  title: 'Opal | ניהול מנויים',
+  description: 'מערכת ניהול מנויים וספקים מתקדמת',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -31,14 +36,23 @@ export const metadata: Metadata = {
   },
 }
 
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#0d9488' },
+    { media: '(prefers-color-scheme: dark)', color: '#14b8a6' },
+  ],
+  width: 'device-width',
+  initialScale: 1,
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
   return (
-    <html lang="he" dir="rtl">
-      <body className={`${heebo.variable} font-sans antialiased`}>
+    <html lang="he" dir="rtl" suppressHydrationWarning>
+      <body className={`${heebo.variable} ${geistMono.variable} font-sans antialiased`}>
         {children}
         <Analytics />
       </body>
