@@ -408,7 +408,35 @@ function serializeDocDates(doc) {
 /** B2C contact form leads */
 export async function getContactLeads(limit = 200) {
   const db = await getDb();
-  const docs = await db.collection('contactLeads').find({}).sort({ createdAt: -1 }).limit(limit).toArray();
+  const docs = await db
+    .collection('contactLeads')
+    .aggregate([
+      { $sort: { createdAt: -1 } },
+      { $limit: limit },
+      {
+        $lookup: {
+          from: 'landing_pages',
+          let: {
+            ls: {
+              $toLower: { $trim: { input: { $ifNull: ['$landingSlug', ''] } } },
+            },
+          },
+          pipeline: [
+            { $match: { $expr: { $eq: [{ $toLower: '$slug' }, '$$ls'] } } },
+            { $project: { _id: 0, pageTitle: 1 } },
+            { $limit: 1 },
+          ],
+          as: '_lp',
+        },
+      },
+      {
+        $set: {
+          landingPageTitle: { $ifNull: [{ $arrayElemAt: ['$_lp.pageTitle', 0] }, ''] },
+        },
+      },
+      { $project: { _lp: 0 } },
+    ])
+    .toArray();
   return docs.map(serializeDocDates);
 }
 

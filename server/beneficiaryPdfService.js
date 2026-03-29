@@ -62,15 +62,21 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
   const muted = rgb(0.35, 0.39, 0.45);
   const right = 555;
 
-  function reverseRtlText(value) {
+  /** Reverse glyph order only for Hebrew lines so digits/LTR stay readable */
+  function prepareVisualText(value) {
     return String(value || '')
       .split('\n')
-      .map((lineText) => lineText.split('').reverse().join(''))
+      .map((lineText) => {
+        if (/[\u0590-\u05FF]/.test(lineText)) {
+          return lineText.split('').reverse().join('');
+        }
+        return lineText;
+      })
       .join('\n');
   }
 
   function drawRtlText(text, { xRight, yPos, size = 10, useBold = false, color = textColor }) {
-    const value = reverseRtlText(text);
+    const value = prepareVisualText(text);
     const selectedFont = useBold ? bold : font;
     const width = selectedFont.widthOfTextAtSize(value, size);
     page.drawText(value, {

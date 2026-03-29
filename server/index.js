@@ -7,7 +7,7 @@ import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import { createLowProfileDeal, getLowProfileIndicator } from './cardcomService.js';
-import { sendOrderConfirmationEmail } from './emailService.js';
+import { sendOrderConfirmationEmail, sendBeneficiaryCompletionEmail } from './emailService.js';
 import { generateBeneficiarySummaryPdfBuffer, saveBeneficiarySummaryPdfToDisk } from './beneficiaryPdfService.js';
 import {
   createOrganizationCompany,
@@ -499,24 +499,6 @@ async function handleWebhookSuccess(lowProfileCode) {
 
     if (shouldSendEmail) {
       try {
-        const pdfModel = buildBeneficiaryPdfModelFromDeal({
-          transactionId,
-          deal: { formState: finalForm, payerAmount },
-          primaryMember: {
-            firstName: primaryName,
-            lastName: '',
-            id: primaryId,
-            email: to,
-            phone: String(finalForm?.phone || '').trim(),
-            address: String(finalForm?.address || '').trim(),
-          },
-          additionalMembers: Array.isArray(finalForm?.beneficiaries) ? finalForm.beneficiaries : [],
-          payerAmount,
-        });
-        const beneficiaryPdfBuffer = await generateBeneficiarySummaryPdfBuffer(pdfModel);
-        await saveBeneficiarySummaryPdfToDisk({ transactionId, buffer: beneficiaryPdfBuffer });
-        const attachments = await buildEmailAttachments({ transactionId, beneficiaryPdfBuffer });
-
         const mailResult = await sendOrderConfirmationEmail({
           to,
           orderNumber: transactionId,
@@ -529,7 +511,6 @@ async function handleWebhookSuccess(lowProfileCode) {
           beneficiaryLink,
           primaryBeneficiary: { name: primaryName || '—', idNumber: primaryId || '—' },
           secondaryBeneficiaries,
-          attachments,
         });
 
         if (mailResult?.sent) {
@@ -826,7 +807,7 @@ app.post('/api/update-beneficiaries', async (req, res) => {
       if (to) {
         const attachments = await buildEmailAttachments({ transactionId, beneficiaryPdfBuffer });
         const primaryName = [primaryFirstName, primaryLastName].filter(Boolean).join(' ');
-        await sendOrderConfirmationEmail({
+        await sendBeneficiaryCompletionEmail({
           to,
           orderNumber: transactionId,
           orderDate: new Date().toLocaleDateString('he-IL'),
@@ -835,7 +816,6 @@ app.post('/api/update-beneficiaries', async (req, res) => {
           phone: firstDefined(pm.phone, deal?.formState?.phone),
           productName: firstDefined(deal?.formState?.productName, deal?.formState?.selectedPlanId),
           monthlyTotal: Number(deal?.payerAmount || 0),
-          beneficiaryLink: `${FRONTEND_URL}/beneficiary-form?transactionId=${encodeURIComponent(transactionId)}`,
           primaryBeneficiary: { name: primaryName || '—', idNumber: primaryId || '—' },
           secondaryBeneficiaries: beneficiaries.map((b) => ({
             name: [String(b.firstName || '').trim(), String(b.lastName || '').trim()].filter(Boolean).join(' '),

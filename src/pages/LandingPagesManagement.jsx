@@ -191,8 +191,9 @@ export default function LandingPagesManagement() {
     if (!file) return;
     // DataURL makes deployments simpler (no separate upload endpoint).
     // Keep size reasonable to avoid very large payloads.
-    if (file.size > 1_800_000) {
-      setError('קובץ התמונה גדול מדי — מומלץ עד ~1.8MB.');
+    const maxBytes = 2 * 1024 * 1024; // 2MB (client-side; no Multer on this flow)
+    if (file.size > maxBytes) {
+      setError('קובץ התמונה גדול מדי — מקסימום 2MB.');
       return;
     }
     const reader = new FileReader();

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Phone, RefreshCw, Search, MessageSquare, ShoppingCart, Mail, ExternalLink } from 'lucide-react';
+import { Phone, RefreshCw, Search, MessageSquare, ShoppingCart, Pencil } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -83,19 +83,31 @@ export default function ContactManagement() {
   }
 
   const allLeads = React.useMemo(() => {
-    const privateRows = privateLeads.map((l) => ({
-      id: l.id,
-      kind: 'private',
-      fullName: l.name || '—',
-      phone: l.phone || '',
-      email: l.email || '',
-      createdAt: l.createdAt,
-      leadStatus: l.leadStatus || 'חדש',
-      adminNotes: l.adminNotes || '',
-      message: l.message || '',
-      category: l.source === 'abandoned_checkout' ? 'abandoned_checkout' : 'general',
-      categoryLabel: l.source === 'abandoned_checkout' ? l.category || 'לא המשיכו לתשלום' : 'כללי',
-    }));
+    const privateRows = privateLeads.map((l) => {
+      let category = 'general';
+      let categoryLabel = 'כללי';
+      if (l.source === 'abandoned_checkout') {
+        category = 'abandoned_checkout';
+        categoryLabel = l.category || 'לא המשיכו לתשלום';
+      } else if (l.source === 'landing_contact' && String(l.landingSlug || '').trim()) {
+        category = 'landing';
+        const title = String(l.landingPageTitle || '').trim();
+        categoryLabel = title || `דף נחיתה: ${l.landingSlug}`;
+      }
+      return {
+        id: l.id,
+        kind: 'private',
+        fullName: l.name || '—',
+        phone: l.phone || '',
+        email: l.email || '',
+        createdAt: l.createdAt,
+        leadStatus: l.leadStatus || 'חדש',
+        adminNotes: l.adminNotes || '',
+        message: l.message || '',
+        category,
+        categoryLabel,
+      };
+    });
 
     const corporateRows = corporateLeads.map((l) => ({
       id: l.id,
@@ -125,7 +137,8 @@ export default function ContactManagement() {
         !q ||
         String(lead.fullName || '').toLowerCase().includes(q) ||
         String(lead.phone || '').toLowerCase().includes(q) ||
-        String(lead.email || '').toLowerCase().includes(q);
+        String(lead.email || '').toLowerCase().includes(q) ||
+        String(lead.categoryLabel || '').toLowerCase().includes(q);
       const matchesCategory = filterCategory === 'all' || lead.category === filterCategory;
       const matchesStatus = filterStatus === 'all' || lead.leadStatus === filterStatus;
       return matchesSearch && matchesCategory && matchesStatus;
@@ -147,12 +160,6 @@ export default function ContactManagement() {
     if (status === 'בטיפול') return 'bg-amber-50 border-amber-200 text-amber-700';
     if (status === 'טופל') return 'bg-emerald-50 border-emerald-200 text-emerald-700';
     return 'bg-muted border-border text-foreground';
-  }
-
-  function getWhatsAppLink(phone) {
-    const cleanPhone = String(phone || '').replace(/\D/g, '');
-    const israelPhone = cleanPhone.startsWith('0') ? `972${cleanPhone.slice(1)}` : cleanPhone;
-    return `https://wa.me/${israelPhone}`;
   }
 
   function openEdit(lead) {
@@ -213,7 +220,7 @@ export default function ContactManagement() {
 
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">ניהול צור קשר (Contact Management)</h1>
+            <h1 className="text-2xl font-bold tracking-tight">ניהול צור קשר</h1>
             <p className="text-muted-foreground">כל הלידים מהאתר ומדפי הנחיתה במקום אחד</p>
           </div>
           <Button onClick={load} disabled={loading}>
@@ -277,6 +284,7 @@ export default function ContactManagement() {
                 >
                   <option value="all">כל הקטגוריות</option>
                   <option value="general">כללי</option>
+                  <option value="landing">דף נחיתה</option>
                   <option value="abandoned_checkout">לא המשיכו לתשלום</option>
                 </select>
                 <select
@@ -313,7 +321,7 @@ export default function ContactManagement() {
                     <TableHead>סטטוס</TableHead>
                     <TableHead>הערות</TableHead>
                     <TableHead>תאריך</TableHead>
-                    <TableHead className="w-[220px]">פעולות</TableHead>
+                    <TableHead className="w-20">פעולות</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -327,9 +335,20 @@ export default function ContactManagement() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={cn('gap-1', lead.category === 'abandoned_checkout' ? 'text-amber-700 border-amber-300 bg-amber-50' : '')}>
-                          {lead.category === 'abandoned_checkout' ? <ShoppingCart className="size-3" /> : <MessageSquare className="size-3" />}
-                          {lead.categoryLabel}
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'gap-1 max-w-[240px] truncate',
+                            lead.category === 'abandoned_checkout' && 'text-amber-700 border-amber-300 bg-amber-50',
+                            lead.category === 'landing' && 'text-primary border-primary/30 bg-primary/5'
+                          )}
+                        >
+                          {lead.category === 'abandoned_checkout' ? (
+                            <ShoppingCart className="size-3 shrink-0" />
+                          ) : (
+                            <MessageSquare className="size-3 shrink-0" />
+                          )}
+                          <span className="truncate">{lead.categoryLabel}</span>
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -351,37 +370,9 @@ export default function ContactManagement() {
                         {lead.createdAt ? new Date(lead.createdAt).toLocaleString('he-IL') : '—'}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Button size="icon" variant="ghost" type="button" onClick={() => openEdit(lead)} title="עריכה">
-                            <ExternalLink className="size-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            type="button"
-                            title="שליחת מייל"
-                            onClick={() => {
-                              if (!lead.email) return;
-                              window.open(`mailto:${lead.email}`, '_blank', 'noopener,noreferrer');
-                            }}
-                            disabled={!lead.email}
-                          >
-                            <Mail className="size-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            type="button"
-                            title="וואטסאפ"
-                            onClick={() => {
-                              if (!lead.phone) return;
-                              window.open(getWhatsAppLink(lead.phone), '_blank', 'noopener,noreferrer');
-                            }}
-                            disabled={!lead.phone}
-                          >
-                            <Phone className="size-4" />
-                          </Button>
-                        </div>
+                        <Button size="icon" variant="ghost" type="button" onClick={() => openEdit(lead)} title="עריכה" aria-label="עריכה">
+                          <Pencil className="size-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
