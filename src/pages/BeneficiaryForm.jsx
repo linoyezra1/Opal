@@ -31,6 +31,16 @@ function emptyMember() {
   };
 }
 
+function splitFullName(fullName) {
+  const parts = String(fullName || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!parts.length) return { firstName: '', lastName: '' };
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' };
+  return { firstName: parts.slice(0, -1).join(' '), lastName: parts[parts.length - 1] };
+}
+
 function MemberFields({ title, member, onChange, errors = {}, includeContact = false }) {
   const set = (k) => (v) => onChange({ ...member, [k]: v });
 
@@ -205,7 +215,7 @@ export default function BeneficiaryForm({ showBackLink = true }) {
     };
   }, [location.search, query]);
 
-  /** הקשר עסקה (ארגון, סוכן, מספר מוטבים) — בלי למלא שמות מוטבים */
+  /** הקשר עסקה (כולל prefill למבוטח הראשי מהתשלום; ניתן לעריכה) */
   useEffect(() => {
     if (!transactionId || resolvingTx) return undefined;
     let cancelled = false;
@@ -217,6 +227,16 @@ export default function BeneficiaryForm({ showBackLink = true }) {
         if (!r.success || cancelled) return;
         if (r.organizationName) setOrganizationName(r.organizationName);
         if (r.agentName) setAgentName(r.agentName);
+        setPrimaryMember((prev) => {
+          const name = splitFullName(r.fullName);
+          return {
+            ...prev,
+            firstName: prev.firstName || name.firstName || '',
+            lastName: prev.lastName || name.lastName || '',
+            phone: prev.phone || String(r.phone || '').trim(),
+            email: prev.email || String(r.email || '').trim(),
+          };
+        });
         const n = Math.max(0, Math.min(5, Number(r.beneficiaryCount) || 0));
         setAdditionalMembers(Array.from({ length: n }, () => emptyMember()));
       } catch {
@@ -326,7 +346,7 @@ export default function BeneficiaryForm({ showBackLink = true }) {
         <div className="mb-8 text-right space-y-2">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">עדכון פרטי מוטבים</h1>
           <p className="text-muted-foreground leading-relaxed">
-            נא למלא את פרטי המבוטח הראשי והמוטבים הנוספים. פרטי המוטבים אינם מולאים אוטומטית — יש להזין אותם כאן.
+            נא למלא את פרטי המבוטח הראשי והמוטבים הנוספים. שם מלא/טלפון/אימייל של המבוטח הראשי נטענים מההזמנה וניתנים לעריכה.
           </p>
         </div>
 

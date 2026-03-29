@@ -146,27 +146,32 @@ function buildBeneficiaryPdfModelFromDeal({ transactionId, deal, primaryMember, 
   };
 }
 
-async function buildEmailAttachments({ transactionId, beneficiaryPdfBuffer }) {
+async function buildLegalDocAttachments() {
   const attachments = [];
-  if (beneficiaryPdfBuffer) {
-    attachments.push({
-      filename: `beneficiary-summary-${String(transactionId || '').trim() || 'order'}.pdf`,
-      content: beneficiaryPdfBuffer,
-    });
-  }
-
   const staticDocFilenames = ['גילוי נאות.pdf', 'כתב שירות.pdf'];
 
   for (const filename of staticDocFilenames) {
     const candidates = candidateDocPdfPaths(filename);
     try {
-      const { buffer } = await readFirstExistingFile(candidates, filename);
+      const { path: resolvedPath, buffer } = await readFirstExistingFile(candidates, filename);
+      console.log(`[${ts()}] Legal attachment resolved: ${filename} -> ${resolvedPath}`);
       attachments.push({ filename, content: buffer });
-    } catch {
-      console.warn(`[${ts()}] Attachment missing (optional): ${filename}`);
+    } catch (err) {
+      console.error(`[${ts()}] Legal attachment missing: ${filename}`, err?.message || err);
+      throw err;
     }
   }
   return attachments;
+}
+
+function buildBeneficiarySummaryAttachment({ transactionId, beneficiaryPdfBuffer }) {
+  if (!beneficiaryPdfBuffer) return [];
+  return [
+    {
+      filename: `beneficiary-summary-${String(transactionId || '').trim() || 'order'}.pdf`,
+      content: beneficiaryPdfBuffer,
+    },
+  ];
 }
 
 function createAdminToken(username) {
@@ -517,6 +522,7 @@ async function handleWebhookSuccess(lowProfileCode) {
           beneficiaryLink,
           primaryBeneficiary: { name: primaryName || '—', idNumber: primaryId || '—' },
           secondaryBeneficiaries,
+          attachments: await buildLegalDocAttachments(),
         });
 
         if (mailResult?.sent) {
@@ -807,11 +813,11 @@ app.post('/api/update-beneficiaries', async (req, res) => {
     const beneficiaryPdfBuffer = await generateBeneficiarySummaryPdfBuffer(pdfModel);
     const pdfDisk = await saveBeneficiarySummaryPdfToDisk({ transactionId, buffer: beneficiaryPdfBuffer });
 
-    // Send beneficiary completion confirmation with attachments (PDF summary + static docs).
+    // Send beneficiary completion confirmation with transaction summary attachment only.
     try {
       const to = firstDefined(primaryEmail, deal?.formState?.email);
       if (to) {
-        const attachments = await buildEmailAttachments({ transactionId, beneficiaryPdfBuffer });
+        const attachments = buildBeneficiarySummaryAttachment({ transactionId, beneficiaryPdfBuffer });
         const primaryName = [primaryFirstName, primaryLastName].filter(Boolean).join(' ');
         await sendBeneficiaryCompletionEmail({
           to,

@@ -45,8 +45,6 @@ function buildOrderConfirmationHtml(payload) {
   const orderDate = escapeHtml(payload.orderDate || '—');
   const customerName = escapeHtml(payload.customerName || '—');
   const customerId = escapeHtml(payload.customerId || payload.primaryBeneficiary?.idNumber || '—');
-  const startDate = escapeHtml(payload.subscriptionStartDate || payload.orderDate || '—');
-  const address = escapeHtml(String(payload.address || '').trim() || '—');
   const phone = escapeHtml(payload.phone || '—');
   const email = escapeHtml(payload.email || '—');
   const last4 = String(payload.lastFourDigits || '').trim();
@@ -107,14 +105,6 @@ function buildOrderConfirmationHtml(payload) {
                       <tr>
                         <td style="padding:10px 0;color:#64748b;font-size:14px;vertical-align:top;">ת.ז:</td>
                         <td style="padding:10px 0;color:#1e293b;font-size:14px;font-weight:600;direction:ltr;text-align:right;">${customerId}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding:10px 0;color:#64748b;font-size:14px;vertical-align:top;">תאריך תחילת מנוי:</td>
-                        <td style="padding:10px 0;color:#1e293b;font-size:14px;font-weight:600;">${startDate}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding:10px 0;color:#64748b;font-size:14px;vertical-align:top;">כתובת:</td>
-                        <td style="padding:10px 0;color:#1e293b;font-size:14px;font-weight:600;">${address}</td>
                       </tr>
                       <tr>
                         <td style="padding:10px 0;color:#64748b;font-size:14px;vertical-align:top;">טלפון:</td>
@@ -329,7 +319,7 @@ function buildBeneficiaryCompletionHtml(payload) {
                       לפניות ובירורים: 054-4261369 | דוא"ל: opal2000@zahav.net.il
                     </p>
                     <p style="margin:12px 0 0;color:#92400e;font-size:13px;line-height:1.6;">
-                      במייל זה צורפו: סיכום מוטבים ב־PDF, גילוי נאות וכתב שירות.
+                      במייל זה צורף סיכום המוטבים ב־PDF בלבד.
                     </p>
                   </td>
                 </tr>
@@ -338,7 +328,7 @@ function buildBeneficiaryCompletionHtml(payload) {
           </tr>
           <tr>
             <td style="background-color:#1e293b;padding:24px;text-align:center;">
-              <p style="margin:0 0 8px;color:#94a3b8;font-size:12px;line-height:1.6;">המנוי כפוף לכתב השירות ולגילוי נאות המצורפים למייל זה.</p>
+              <p style="margin:0 0 8px;color:#94a3b8;font-size:12px;line-height:1.6;">המנוי כפוף לכתב השירות ולגילוי הנאות שנשלחו לאחר ביצוע התשלום.</p>
               <p style="margin:0;color:#64748b;font-size:12px;">אופאל - בית ליזמות רפואית</p>
             </td>
           </tr>
@@ -362,6 +352,7 @@ export async function sendOrderConfirmationEmail(payload) {
   const fromName = process.env.MAIL_FROM_NAME || 'OPAL';
   const subject = `אישור הזמנה - ${payload.orderNumber || ''}`.trim();
   const html = buildOrderConfirmationHtml(payload);
+  const attachments = Array.isArray(payload.attachments) ? payload.attachments : [];
 
   try {
     const result = await resend.emails.send({
@@ -369,7 +360,7 @@ export async function sendOrderConfirmationEmail(payload) {
       to: [to],
       subject,
       html,
-      attachments: [],
+      attachments,
     });
     if (result?.error) {
       console.error('[email] Resend send failed', result.error);

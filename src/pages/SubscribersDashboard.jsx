@@ -765,7 +765,7 @@ export default function SubscribersDashboard() {
                           <TableCell>
                             {r.pendingBeneficiaryCompletion ? (
                               <Badge className="bg-orange-500 hover:bg-orange-500 text-white border-0">
-                                ממתין להשלמת מוטבים
+                                ממתין להשלמת מסמכים
                               </Badge>
                             ) : (
                               <Badge variant={r.status === 'canceled' ? 'destructive' : 'default'}>

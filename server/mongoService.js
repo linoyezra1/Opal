@@ -119,7 +119,7 @@ export async function getDealByTransactionId(transactionId) {
   };
 }
 
-/** הקשר מינימלי לטופס מוטבים (ללא פרטי מוטבים — המשתמש ממלא ידנית) */
+/** הקשר לטופס מוטבים (כולל פרטי מבוטח ראשי מהתשלום לעריכה מראש) */
 export async function getPublicDealContext(transactionId) {
   const db = await getDb();
   const tid = String(transactionId || '').trim();
@@ -136,6 +136,9 @@ export async function getPublicDealContext(transactionId) {
     organizationName: String(fs.organizationName || '').trim(),
     agentName: String(fs.agentName || '').trim(),
     beneficiaryCount: n,
+    fullName: String(fs.fullName || '').trim(),
+    phone: String(fs.phone || '').trim(),
+    email: String(fs.email || '').trim(),
   };
 }
 
@@ -543,7 +546,7 @@ function enrichDeal(d) {
   let completionStatus = '—';
   if (isCanceled) completionStatus = 'בוטל';
   else if (isPaidSuccess && beneficiarySubmitted) completionStatus = 'הושלם';
-  else if (pendingBeneficiaryCompletion) completionStatus = 'ממתין להשלמת מוטבים';
+  else if (pendingBeneficiaryCompletion) completionStatus = 'ממתין להשלמת מסמכים';
   return {
     ...d,
     provider,

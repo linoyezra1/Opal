@@ -86,7 +86,7 @@ export default function AdminControlPanel() {
       items.push({
         id: `pb-${row.id}`,
         type: 'pending_beneficiary',
-        label: 'ממתין להשלמת מוטבים',
+        label: 'ממתין להשלמת מסמכים',
         detail: [row.fullName, row.phone, row.transactionId].filter(Boolean).join(' · ') || '—',
         at: t,
       });
