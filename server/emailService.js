@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { getOpalLogoDataUriForEmail, OPAL_BLUE, OPAL_GOLD } from './emailBrandAssets.js';
 
 function escapeHtml(s) {
   return String(s ?? '')
@@ -27,142 +28,104 @@ const rtlWrap = (inner) => `
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 </head>
-<body style="margin:0;background:#f5f7fa;font-family:'Heebo','Segoe UI',Arial,sans-serif;color:#1e293b;direction:rtl;text-align:right;">
+<body style="margin:0;background:#f5f5f5;font-family:'Heebo','Segoe UI',Arial,sans-serif;color:#333;direction:rtl;text-align:right;">
 ${inner}
 </body>
 </html>`;
 
 /**
- * Email 1 — אחרי תשלום (עיצוב כמו src/NEW/components/email/post-payment-email.tsx).
- * ללא מצורפים; CTA להשלמת מוטבים.
+ * Email 1 — visual parity with `src/NEW/components/email/post-payment-email.tsx`.
+ * Logo sits above the navy headline band (not inside it). Opening line per product copy.
  */
-function buildOrderConfirmationHtml(payload) {
+function buildOrderConfirmationHtml(payload, logoDataUri = '') {
   const amount = Number(payload.monthlyTotal || 0).toLocaleString('he-IL');
   const link = String(payload.beneficiaryLink || '#').trim() || '#';
   const monthlyDisplay = `₪${amount}`;
 
   const orderId = escapeHtml(payload.orderNumber || '—');
   const orderDate = escapeHtml(payload.orderDate || '—');
-  const customerName = escapeHtml(payload.customerName || '—');
-  const customerId = escapeHtml(payload.customerId || payload.primaryBeneficiary?.idNumber || '—');
-  const phone = escapeHtml(payload.phone || '—');
-  const email = escapeHtml(payload.email || '—');
-  const last4 = String(payload.lastFourDigits || '').trim();
-  const last4Display = last4 ? escapeHtml(last4) : escapeHtml('לא זמין');
-  const subscriptionType = escapeHtml(
-    String(payload.subscriptionType || payload.productName || '').trim() || 'רופא עד הבית'
+  const customerName = escapeHtml(payload.customerName || 'לקוח');
+  const productTitle = escapeHtml(
+    String(payload.productName || payload.subscriptionType || '').trim() || 'רופא עד הבית'
   );
 
+  const servicePhone = escapeHtml(String(process.env.MEDICAL_SERVICES_PHONE || '00-0000000').trim());
+  const claimsLink = String(process.env.CLAIMS_ONLINE_URL || '#').trim() || '#';
+  const salesPhone = escapeHtml(String(process.env.OPAL_SALES_PHONE || '054-4261369').trim());
+  const contactEmail = escapeHtml(String(process.env.OPAL_CONTACT_EMAIL || 'opal2000@zahav.net.il').trim());
+
+  const logoBlock = logoDataUri
+    ? `<img src="${escapeAttr(logoDataUri)}" alt="אופאל" width="140" height="40" style="height:40px;width:auto;max-width:180px;display:inline-block;background-color:#ffffff;border-radius:4px;padding:4px 8px;object-fit:contain;" />`
+    : `<span style="font-size:20px;font-weight:700;color:${OPAL_BLUE};letter-spacing:0.02em;">אופאל</span>`;
+
   return rtlWrap(`
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f5f7fa;padding:40px 20px;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f5f5f5;padding:32px 16px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08);direction:rtl;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background-color:#ffffff;direction:rtl;">
           <tr>
-            <td style="background:linear-gradient(135deg,#0d7377 0%,#14919b 100%);background-color:#0d7377;padding:32px 24px;text-align:center;">
-              <table role="presentation" cellspacing="0" cellpadding="0" align="center" style="margin:0 auto 16px;">
-                <tr>
-                  <td style="width:64px;height:64px;background-color:rgba(255,255,255,0.2);border-radius:50%;text-align:center;vertical-align:middle;font-size:32px;color:#ffffff;line-height:64px;">&#x2714;</td>
-                </tr>
-              </table>
-              <h1 style="margin:0 0 8px;color:#ffffff;font-size:24px;font-weight:700;line-height:1.4;text-align:center;">שמחים על הצטרפותך למנוי רופא עד הבית</h1>
-              <p style="margin:0;color:rgba(255,255,255,0.9);font-size:16px;text-align:center;">הזמנתך התקבלה בהצלחה</p>
+            <td style="padding:24px 32px 16px;text-align:center;background-color:#ffffff;">
+              ${logoBlock}
             </td>
           </tr>
           <tr>
-            <td style="padding:32px 24px;direction:rtl;text-align:right;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#fef2f2;border:2px solid #ef4444;border-radius:8px;margin-bottom:24px;">
-                <tr>
-                  <td style="padding:20px;text-align:right;">
-                    <p style="margin:0 0 16px;color:#dc2626;font-size:15px;font-weight:700;line-height:1.6;text-align:right;">
-                      חשוב מאד - בכדי להפעיל את השרות יש למלא את פרטי המוטבים<br />
-                      ללא קבלת פרטי המוטבים לא יהיה ניתן לקבל את השרות
-                    </p>
-                    <a href="${escapeAttr(link)}" style="display:inline-block;background-color:#dc2626;color:#ffffff !important;font-size:16px;font-weight:600;padding:14px 32px;border-radius:8px;text-decoration:none;text-align:center;">
-                      לחץ כאן להשלמת פרטי המוטבים
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f8fafc;border-radius:8px;margin-bottom:24px;">
-                <tr>
-                  <td style="padding:24px;">
-                    <h2 style="margin:0 0 20px;color:#0d7377;font-size:18px;font-weight:600;padding-bottom:12px;border-bottom:2px solid #e2e8f0;text-align:right;">סיכום הזמנה</h2>
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
-                      <tr>
-                        <td style="padding:10px 0;color:#64748b;font-size:14px;width:40%;vertical-align:top;">מספר הזמנה:</td>
-                        <td style="padding:10px 0;color:#1e293b;font-size:14px;font-weight:600;">${orderId}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding:10px 0;color:#64748b;font-size:14px;vertical-align:top;">תאריך הזמנה:</td>
-                        <td style="padding:10px 0;color:#1e293b;font-size:14px;font-weight:600;">${orderDate}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding:10px 0;color:#64748b;font-size:14px;vertical-align:top;">שם לקוח:</td>
-                        <td style="padding:10px 0;color:#1e293b;font-size:14px;font-weight:600;">${customerName}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding:10px 0;color:#64748b;font-size:14px;vertical-align:top;">ת.ז:</td>
-                        <td style="padding:10px 0;color:#1e293b;font-size:14px;font-weight:600;direction:ltr;text-align:right;">${customerId}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding:10px 0;color:#64748b;font-size:14px;vertical-align:top;">טלפון:</td>
-                        <td style="padding:10px 0;color:#1e293b;font-size:14px;font-weight:600;direction:ltr;text-align:right;">${phone}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding:10px 0;color:#64748b;font-size:14px;vertical-align:top;">מייל:</td>
-                        <td style="padding:10px 0;color:#1e293b;font-size:14px;font-weight:600;direction:ltr;text-align:right;">${email}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding:10px 0;color:#64748b;font-size:14px;vertical-align:top;">אמצעי תשלום:</td>
-                        <td style="padding:10px 0;color:#1e293b;font-size:14px;font-weight:600;">כרטיס המסתיים ב-${last4Display}</td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f0fdfa;border:1px solid #99f6e4;border-radius:8px;margin-bottom:24px;">
-                <tr>
-                  <td style="padding:24px;">
-                    <h2 style="margin:0 0 16px;color:#0d7377;font-size:18px;font-weight:600;text-align:right;">פרטי המנוי</h2>
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
-                      <tr>
-                        <td style="padding:8px 0;color:#64748b;font-size:14px;width:40%;vertical-align:top;">סוג מנוי:</td>
-                        <td style="padding:8px 0;color:#1e293b;font-size:14px;font-weight:600;">${subscriptionType}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding:8px 0;color:#64748b;font-size:14px;vertical-align:top;">שם כתב שירות:</td>
-                        <td style="padding:8px 0;color:#1e293b;font-size:14px;font-weight:600;">רופא עד הבית</td>
-                      </tr>
-                      <tr>
-                        <td style="padding:12px 0;color:#0d7377;font-size:16px;font-weight:700;vertical-align:top;">סה"כ תשלום חודשי:</td>
-                        <td style="padding:12px 0;color:#0d7377;font-size:20px;font-weight:700;">${escapeHtml(monthlyDisplay)}</td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f8fafc;border-radius:8px;margin-bottom:0;">
-                <tr>
-                  <td style="padding:20px;text-align:center;">
-                    <p style="margin:0 0 8px;color:#64748b;font-size:14px;">לשאלות ובירורים:</p>
-                    <p style="margin:0;color:#1e293b;font-size:16px;font-weight:600;direction:ltr;">054-4261369 | opal2000@zahav.net.il</p>
-                  </td>
-                </tr>
-              </table>
+            <td style="background-color:${OPAL_BLUE};padding:20px 32px;text-align:center;">
+              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;line-height:1.4;">
+                שמחים על הצטרפותך למנוי ${productTitle}
+              </h1>
             </td>
           </tr>
           <tr>
-            <td style="background-color:#1e293b;padding:24px;text-align:center;">
-              <p style="margin:0 0 8px;color:#94a3b8;font-size:13px;line-height:1.6;">שים לב: החיוב החודשי של המנוי דרך חברת אופאל תקשורת בע"מ</p>
-              <p style="margin:0;color:#64748b;font-size:12px;">אופאל - בית ליזמות רפואית</p>
+            <td style="padding:28px 32px;">
+              <p style="font-size:15px;color:#333;margin:0 0 16px;line-height:1.7;">
+                שלום ${customerName}, כתב השירות וגילוי הנאות מצורפים למייל זה.
+              </p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin-bottom:24px;">
+                <tr>
+                  <td style="padding:10px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;">מספר הזמנה</td>
+                  <td style="padding:10px 0;color:${OPAL_BLUE};font-size:14px;font-weight:600;text-align:left;border-bottom:1px solid #eee;">${orderId}</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;">תאריך</td>
+                  <td style="padding:10px 0;color:${OPAL_BLUE};font-size:14px;text-align:left;border-bottom:1px solid #eee;">${orderDate}</td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 0;color:${OPAL_BLUE};font-size:15px;font-weight:600;">תשלום חודשי</td>
+                  <td style="padding:12px 0;color:${OPAL_GOLD};font-size:18px;font-weight:700;text-align:left;">${escapeHtml(monthlyDisplay)}</td>
+                </tr>
+              </table>
+              <div style="border-right:3px solid ${OPAL_GOLD};padding-right:16px;margin-bottom:28px;">
+                <p style="font-size:14px;color:${OPAL_BLUE};margin:0 0 8px;font-weight:600;">להפעלת השירות יש למלא את פרטי המוטבים</p>
+                <p style="font-size:13px;color:#666;margin:0 0 14px;">ללא קבלת פרטי המוטבים לא יהיה ניתן לקבל את השירות</p>
+                <a href="${escapeAttr(link)}" style="display:inline-block;background-color:${OPAL_BLUE};color:#ffffff !important;padding:10px 20px;border-radius:4px;text-decoration:none;font-size:14px;font-weight:500;">
+                  מילוי פרטי מוטבים
+                </a>
+              </div>
+              <div style="border-top:1px solid #eee;margin-bottom:20px;"></div>
+              <div style="font-size:14px;color:#555;line-height:1.8;">
+                <p style="margin:0 0 6px;">
+                  <span style="color:${OPAL_BLUE};font-weight:500;">הזמנת שירותים רפואיים:</span>
+                  <span dir="ltr">${servicePhone}</span>
+                </p>
+                <p style="margin:0 0 6px;">
+                  <span style="color:${OPAL_BLUE};font-weight:500;">הגשת מסמכים:</span>
+                  <a href="${escapeAttr(claimsLink)}" style="color:${OPAL_GOLD};text-decoration:none;">תביעה און ליין</a>
+                </p>
+                <p style="margin:0;">
+                  <span style="color:${OPAL_BLUE};font-weight:500;">מכירות:</span>
+                  <span dir="ltr">${salesPhone}</span>
+                </p>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#F5F5F5;padding:16px 32px;text-align:center;">
+              <p style="font-size:12px;color:#666;margin:0 0 4px;">החיוב החודשי דרך חברת אופאל תקשורת בע״מ</p>
+              <p style="font-size:12px;color:#888;margin:0;" dir="ltr">${salesPhone} | ${contactEmail}</p>
             </td>
           </tr>
         </table>
-        <p style="margin:16px 0 0;font-size:13px;color:#64748b;text-align:center;max-width:600px;">
+        <p style="margin:16px 0 0;font-size:13px;color:#64748b;text-align:center;max-width:560px;">
           אם הכפתור לא נפתח, העתיקו את הקישור לדפדפן:<br />
           <span dir="ltr" style="word-break:break-all;">${escapeHtml(link)}</span>
         </p>
@@ -172,7 +135,7 @@ function buildOrderConfirmationHtml(payload) {
 }
 
 /**
- * Email 2 — אחרי טופס מוטבים (עיצוב כמו src/NEW/components/email/final-summary-email.tsx).
+ * Email 2 — visual parity with `src/NEW/components/email/final-summary-email.tsx`.
  */
 function buildBeneficiaryCompletionHtml(payload) {
   const amount = Number(payload.monthlyTotal || 0).toLocaleString('he-IL');
@@ -191,31 +154,25 @@ function buildBeneficiaryCompletionHtml(payload) {
   secondaries.forEach((b, index) => {
     const name = escapeHtml(b?.name || '—');
     const idNum = escapeHtml(b?.idNumber || '—');
-    const border = index < secondaries.length - 1 ? 'border-bottom:1px solid #e2e8f0;' : '';
+    const border = index < secondaries.length - 1 ? 'border-bottom:1px solid #eee;' : 'border-bottom:none;';
     beneficiariesRows += `
       <tr>
-        <td style="padding:14px 16px;color:#1e293b;font-size:14px;font-weight:500;${border}">${name}</td>
-        <td style="padding:14px 16px;color:#1e293b;font-size:14px;font-weight:500;direction:ltr;text-align:left;${border}">${idNum}</td>
+        <td style="padding:10px 0;color:#333;font-size:14px;${border}">${name}</td>
+        <td style="padding:10px 0;color:#666;font-size:14px;text-align:left;direction:ltr;${border}">${idNum}</td>
       </tr>`;
   });
 
   const beneficiariesBlock =
     secondaries.length > 0
       ? `
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:24px;">
-        <tr>
-          <td>
-            <h2 style="margin:0 0 16px;color:#1e293b;font-size:16px;font-weight:600;padding-bottom:8px;border-bottom:1px solid #e2e8f0;text-align:right;">מוטבים נוספים</h2>
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background-color:#f8fafc;border-radius:8px;">
-              <tr style="background-color:#e2e8f0;">
-                <th style="padding:12px 16px;text-align:right;color:#64748b;font-size:13px;font-weight:600;">שם מלא</th>
-                <th style="padding:12px 16px;text-align:left;color:#64748b;font-size:13px;font-weight:600;">ת.ז</th>
-              </tr>
-              ${beneficiariesRows}
-            </table>
-          </td>
-        </tr>
-      </table>`
+      <div style="margin-bottom:24px;">
+        <div style="font-size:14px;color:${OPAL_BLUE};font-weight:600;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #eee;">
+          מוטבים נוספים
+        </div>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+          <tbody>${beneficiariesRows}</tbody>
+        </table>
+      </div>`
       : '';
 
   const medicalPhone = String(process.env.MEDICAL_SERVICES_PHONE || '00-0000000').trim();
@@ -224,112 +181,68 @@ function buildBeneficiaryCompletionHtml(payload) {
   const tel = escapeAttr(telHref(medicalPhone));
 
   return rtlWrap(`
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f5f7fa;padding:40px 20px;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f5f5f5;padding:32px 16px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08);direction:rtl;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background-color:#ffffff;direction:rtl;">
           <tr>
-            <td style="background:linear-gradient(135deg,#0d7377 0%,#14919b 100%);background-color:#0d7377;padding:32px 24px;text-align:center;">
-              <table role="presentation" cellspacing="0" cellpadding="0" align="center" style="margin:0 auto 16px;">
-                <tr>
-                  <td style="width:64px;height:64px;background-color:rgba(255,255,255,0.2);border-radius:50%;text-align:center;vertical-align:middle;font-size:32px;color:#ffffff;line-height:64px;">&#128196;</td>
-                </tr>
-              </table>
-              <h1 style="margin:0 0 8px;color:#ffffff;font-size:24px;font-weight:700;line-height:1.4;text-align:center;">סיכום הצטרפות ופרטי מנוי</h1>
-              <p style="margin:0;color:rgba(255,255,255,0.9);font-size:16px;text-align:center;">אופאל - רופא עד הבית</p>
+            <td style="background-color:${OPAL_BLUE};padding:28px 32px;text-align:center;">
+              <h1 style="color:#ffffff;font-size:20px;font-weight:600;margin:0;">סיכום הצטרפות ופרטי מנוי</h1>
+              <p style="color:rgba(255,255,255,0.8);font-size:14px;margin:8px 0 0;">אופאל - רופא עד הבית</p>
             </td>
           </tr>
           <tr>
-            <td style="padding:32px 24px;direction:rtl;text-align:right;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f8fafc;border-radius:8px;margin-bottom:24px;">
+            <td style="padding:28px 32px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin-bottom:24px;">
                 <tr>
-                  <td style="padding:16px 20px;width:50%;vertical-align:top;text-align:right;">
-                    <span style="color:#64748b;font-size:13px;">מספר הזמנה</span>
-                    <p style="margin:4px 0 0;color:#1e293b;font-size:16px;font-weight:600;">${orderId}</p>
-                  </td>
-                  <td style="padding:16px 20px;width:50%;vertical-align:top;text-align:left;">
-                    <span style="color:#64748b;font-size:13px;">תאריך</span>
-                    <p style="margin:4px 0 0;color:#1e293b;font-size:16px;font-weight:600;">${orderDate}</p>
-                  </td>
+                  <td style="padding:8px 0;color:#666;font-size:14px;">מספר הזמנה</td>
+                  <td style="padding:8px 0;color:${OPAL_BLUE};font-size:14px;font-weight:600;text-align:left;">${orderId}</td>
+                </tr>
+                <tr>
+                  <td style="padding:8px 0;color:#666;font-size:14px;">תאריך</td>
+                  <td style="padding:8px 0;color:${OPAL_BLUE};font-size:14px;text-align:left;">${orderDate}</td>
                 </tr>
               </table>
-
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f0fdfa;border:2px solid #0d7377;border-radius:8px;margin-bottom:24px;">
-                <tr>
-                  <td style="padding:20px;">
-                    <table role="presentation" cellspacing="0" cellpadding="0" style="margin-bottom:12px;">
-                      <tr>
-                        <td style="background-color:#0d7377;color:#ffffff;font-size:12px;font-weight:600;padding:4px 12px;border-radius:4px;">מבוטח ראשי</td>
-                      </tr>
-                    </table>
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                      <tr>
-                        <td style="vertical-align:middle;text-align:right;">
-                          <p style="margin:0;color:#1e293b;font-size:18px;font-weight:700;">${primaryName}</p>
-                        </td>
-                        <td style="vertical-align:middle;text-align:left;white-space:nowrap;">
-                          <span style="color:#64748b;font-size:13px;">ת.ז: </span>
-                          <span style="color:#1e293b;font-size:15px;font-weight:600;direction:ltr;">${primaryId}</span>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
+              <div style="background-color:#F8F9FA;border-right:4px solid ${OPAL_GOLD};padding:16px;margin-bottom:20px;">
+                <div style="font-size:11px;color:${OPAL_GOLD};font-weight:600;margin-bottom:8px;">מבוטח ראשי</div>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td style="text-align:right;"><span style="color:${OPAL_BLUE};font-size:16px;font-weight:600;">${primaryName}</span></td>
+                    <td style="text-align:left;white-space:nowrap;"><span style="color:#666;font-size:14px;direction:ltr;">${primaryId}</span></td>
+                  </tr>
+                </table>
+              </div>
               ${beneficiariesBlock}
-
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#fefce8;border:1px solid #fde047;border-radius:8px;margin-bottom:24px;">
-                <tr>
-                  <td style="padding:20px;text-align:center;">
-                    <p style="margin:0 0 4px;color:#64748b;font-size:14px;">סוג מנוי</p>
-                    <p style="margin:0 0 12px;color:#1e293b;font-size:16px;font-weight:600;">${subscriptionType}</p>
-                    <span style="display:inline-block;background-color:#0d7377;color:#ffffff;font-size:20px;font-weight:700;padding:12px 32px;border-radius:8px;">${escapeHtml(monthlyDisplay)} לחודש</span>
-                  </td>
-                </tr>
-              </table>
-
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f8fafc;border-radius:8px;margin-bottom:24px;">
-                <tr>
-                  <td style="padding:24px;">
-                    <h2 style="margin:0 0 16px;color:#0d7377;font-size:16px;font-weight:600;text-align:center;">פרטי נותן השירות</h2>
-                    <p style="margin:0 0 8px;color:#64748b;font-size:14px;text-align:center;">טלפונים להזמנת שירותים רפואיים:</p>
-                    <p style="margin:0;text-align:center;">
-                      <a href="${tel}" style="color:#0d7377;font-size:24px;font-weight:700;text-decoration:none;direction:ltr;display:inline-block;">${medicalPhoneEsc}</a>
-                    </p>
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:20px;padding-top:20px;border-top:1px solid #e2e8f0;">
-                      <tr>
-                        <td style="text-align:center;">
-                          <a href="${escapeAttr(claimsLink)}" style="display:inline-block;background-color:#0d7377;color:#ffffff !important;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;">
-                            להגשת מסמכים רפואיים - תביעה און ליין
-                          </a>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#fef3c7;border:1px solid #f59e0b;border-radius:8px;">
-                <tr>
-                  <td style="padding:16px 20px;">
-                    <p style="margin:0 0 8px;color:#92400e;font-size:14px;font-weight:600;">שים לב:</p>
-                    <p style="margin:0;color:#92400e;font-size:13px;line-height:1.6;">
-                      החיוב החודשי של המנוי דרך חברת אופאל תקשורת בע"מ.<br />
-                      לפניות ובירורים: 054-4261369 | דוא"ל: opal2000@zahav.net.il
-                    </p>
-                    <p style="margin:12px 0 0;color:#92400e;font-size:13px;line-height:1.6;">
-                      במייל זה צורף סיכום המוטבים ב־PDF בלבד.
-                    </p>
-                  </td>
-                </tr>
-              </table>
+              <div style="background-color:#F8F9FA;padding:16px;margin-bottom:24px;text-align:center;">
+                <div style="color:#666;font-size:13px;margin-bottom:4px;">סוג מנוי</div>
+                <div style="color:${OPAL_BLUE};font-size:15px;font-weight:600;margin-bottom:12px;">${subscriptionType}</div>
+                <span style="display:inline-block;background-color:${OPAL_BLUE};color:#ffffff;font-size:18px;font-weight:700;padding:10px 24px;border-radius:4px;">
+                  ${escapeHtml(monthlyDisplay)} לחודש
+                </span>
+              </div>
+              <div style="border-top:1px solid #eee;margin-bottom:20px;"></div>
+              <div style="text-align:center;margin-bottom:24px;">
+                <div style="color:#666;font-size:13px;margin-bottom:8px;">טלפונים להזמנת שירותים רפואיים</div>
+                <a href="${tel}" style="color:${OPAL_BLUE};font-size:20px;font-weight:700;text-decoration:none;direction:ltr;display:inline-block;">
+                  ${medicalPhoneEsc}
+                </a>
+                <div style="margin-top:16px;">
+                  <a href="${escapeAttr(claimsLink)}" style="color:${OPAL_GOLD};font-size:14px;font-weight:500;text-decoration:none;">
+                    להגשת מסמכים רפואיים - תביעה און ליין
+                  </a>
+                </div>
+              </div>
+              <div style="border-right:3px solid ${OPAL_GOLD};padding-right:12px;font-size:13px;color:#555;line-height:1.6;">
+                <strong style="color:${OPAL_BLUE};">שים לב:</strong> החיוב החודשי דרך חברת אופאל תקשורת בע״מ.<br />
+                לפניות: 054-4261369 | opal2000@zahav.net.il
+              </div>
             </td>
           </tr>
           <tr>
-            <td style="background-color:#1e293b;padding:24px;text-align:center;">
-              <p style="margin:0 0 8px;color:#94a3b8;font-size:12px;line-height:1.6;">המנוי כפוף לכתב השירות ולגילוי הנאות שנשלחו לאחר ביצוע התשלום.</p>
-              <p style="margin:0;color:#64748b;font-size:12px;">אופאל - בית ליזמות רפואית</p>
+            <td style="background-color:#F5F5F5;padding:16px 32px;text-align:center;">
+              <p style="font-size:11px;color:#888;margin:0;">
+                המנוי כפוף לכתב השירות ולגילוי נאות המצורפים למייל זה.
+              </p>
             </td>
           </tr>
         </table>
@@ -351,7 +264,8 @@ export async function sendOrderConfirmationEmail(payload) {
   const fromAddress = process.env.MAIL_FROM_ADDRESS || 'onboarding@resend.dev';
   const fromName = process.env.MAIL_FROM_NAME || 'OPAL';
   const subject = `אישור הזמנה - ${payload.orderNumber || ''}`.trim();
-  const html = buildOrderConfirmationHtml(payload);
+  const logoDataUri = await getOpalLogoDataUriForEmail();
+  const html = buildOrderConfirmationHtml(payload, logoDataUri);
   const attachments = Array.isArray(payload.attachments) ? payload.attachments : [];
 
   try {

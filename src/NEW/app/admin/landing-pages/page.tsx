@@ -1,7 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Edit2, Eye, ExternalLink, Copy, FileText, ImageIcon, Palette } from 'lucide-react'
+import Image from 'next/image'
+import { Edit2, Eye, ExternalLink, Copy, FileText, ImageIcon, Palette, CheckCircle } from 'lucide-react'
+
+// Opal Brand Colors
+const OPAL_BLUE = '#1A365D'
+const OPAL_GOLD = '#C5A059'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -316,66 +321,111 @@ export default function LandingPagesPage() {
             </TabsContent>
             
             <TabsContent value="preview" className="mt-4">
-              <div className="border rounded-lg overflow-hidden bg-background">
+              <div className="border rounded-lg overflow-hidden bg-white">
+                {/* Preview Header with Logo */}
+                <div 
+                  className="py-3 px-6 flex items-center justify-between"
+                  style={{ backgroundColor: OPAL_BLUE }}
+                >
+                  <Image
+                    src="/images/opal-logo.jpeg"
+                    alt="אופאל"
+                    width={120}
+                    height={40}
+                    className="h-8 w-auto bg-white rounded p-0.5"
+                  />
+                  <span className="text-white/90 text-sm" dir="ltr">054-426-1369</span>
+                </div>
+
                 {/* Preview Image */}
                 {formData.imageUrl && (
-                  <div className="relative h-48 md:h-64 w-full bg-muted">
+                  <div className="relative h-48 md:h-64 w-full bg-gray-100">
                     <img 
                       src={formData.imageUrl} 
                       alt="תמונת דף נחיתה" 
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent" />
+                    <div 
+                      className="absolute inset-0"
+                      style={{ background: `linear-gradient(to top, white, ${OPAL_BLUE}33 50%, transparent)` }}
+                    />
                   </div>
                 )}
                 
-                {/* Preview Header */}
-                <div className={`bg-gradient-to-b from-primary/5 to-background p-8 text-center ${formData.imageUrl ? '-mt-16 relative z-10' : ''}`}>
-                  <Badge className="mb-4">{selectedPriceList?.organizationName}</Badge>
-                  <h1 className="text-2xl md:text-3xl font-bold mb-4 text-balance">
+                {/* Preview Header Content */}
+                <div className={`p-8 text-center ${formData.imageUrl ? '-mt-16 relative z-10' : ''}`}>
+                  <Badge 
+                    className="mb-4 border-0"
+                    style={{ backgroundColor: `${OPAL_GOLD}20`, color: OPAL_BLUE }}
+                  >
+                    {formData.subtitle || 'תת כותרת'}
+                  </Badge>
+                  <h1 
+                    className="text-2xl md:text-3xl font-bold mb-4 text-balance"
+                    style={{ color: OPAL_BLUE }}
+                  >
                     {formData.title || 'כותרת ראשית'}
                   </h1>
-                  <p className="text-lg text-primary font-medium mb-4">
-                    {formData.subtitle || 'תת כותרת'}
-                  </p>
-                  <p className="text-muted-foreground max-w-xl mx-auto text-pretty">
+                  <p className="text-gray-600 max-w-xl mx-auto text-pretty">
                     {formData.content || 'תוכן ראשי'}
                   </p>
                 </div>
                 
                 {/* Preview Services */}
-                <div className="p-8 bg-muted/30">
-                  <h3 className="font-semibold mb-4 text-center">מה כולל השירות?</h3>
+                <div className="p-8" style={{ backgroundColor: `${OPAL_BLUE}05` }}>
+                  <h3 
+                    className="font-semibold mb-4 text-center"
+                    style={{ color: OPAL_BLUE }}
+                  >
+                    מה כולל השירות?
+                  </h3>
                   <ul className="space-y-2 max-w-md mx-auto">
                     {(formData.subContent || '').split('\n').filter(line => line.trim()).map((line, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm">
-                        <span className="text-success mt-0.5">✓</span>
-                        {line.trim()}
+                        <CheckCircle className="size-4 shrink-0 mt-0.5" style={{ color: OPAL_GOLD }} />
+                        <span className="text-gray-700">{line.trim()}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
                 
                 {/* Preview Products */}
-                <div className="p-8">
-                  <h3 className="font-semibold mb-4 text-center">המוצרים שלנו</h3>
+                <div className="p-8 bg-white">
+                  <h3 
+                    className="font-semibold mb-4 text-center"
+                    style={{ color: OPAL_BLUE }}
+                  >
+                    המוצרים שלנו
+                  </h3>
                   <div className="grid gap-4 max-w-md mx-auto">
                     {selectedPriceList?.lines.map((line, i) => (
-                      <div key={i} className="flex items-center justify-between p-4 border rounded-lg">
-                        <span className="font-medium">מוצר {i + 1}</span>
-                        <Badge variant="secondary">₪{line.retailPrice}/חודש</Badge>
+                      <div 
+                        key={i} 
+                        className="flex items-center justify-between p-4 border rounded-lg"
+                        style={{ borderColor: `${OPAL_GOLD}40` }}
+                      >
+                        <span className="font-medium" style={{ color: OPAL_BLUE }}>מוצר {i + 1}</span>
+                        <Badge 
+                          variant="secondary"
+                          style={{ backgroundColor: `${OPAL_GOLD}20`, color: OPAL_BLUE }}
+                        >
+                          ₪{line.retailPrice}/חודש
+                        </Badge>
                       </div>
                     ))}
                   </div>
                 </div>
                 
                 {/* Preview Footer */}
-                <div className="bg-primary text-primary-foreground p-8 text-center">
+                <div 
+                  className="p-8 text-center text-white"
+                  style={{ backgroundColor: OPAL_BLUE }}
+                >
                   <h3 className="font-bold mb-2">צור קשר</h3>
-                  <p className="text-sm text-primary-foreground/90 mb-4">
+                  <p className="text-sm text-white/80 mb-4">
                     אופאל - בית ליזמות רפואית, המושתת על מקצועיות, מצוינות וחווית שירות פרטית.
                   </p>
-                  <p className="text-sm text-primary-foreground/80">
+                  <p className="text-sm text-white/70">
                     טלפון: 0544261369 | אימייל: opal2000@zahav.net.il
                   </p>
                 </div>

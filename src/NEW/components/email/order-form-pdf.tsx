@@ -1,6 +1,8 @@
 'use client'
 
-import { cn } from '@/lib/utils'
+// Opal Brand Colors
+const OPAL_BLUE = '#1A365D'
+const OPAL_GOLD = '#C5A059'
 
 interface Beneficiary {
   fullName: string
@@ -55,147 +57,266 @@ export function OrderFormPDF({
     filledSecondaryBeneficiaries.push({ fullName: '', idNumber: '' })
   }
 
+  const cellStyle: React.CSSProperties = {
+    borderTop: `1px solid ${OPAL_BLUE}30`,
+    borderRight: `1px solid ${OPAL_BLUE}30`,
+    borderBottom: `1px solid ${OPAL_BLUE}30`,
+    borderLeft: `1px solid ${OPAL_BLUE}30`,
+    padding: '5px 8px',
+    fontSize: '11px',
+  }
+
+  const labelCellStyle: React.CSSProperties = {
+    ...cellStyle,
+    backgroundColor: OPAL_BLUE,
+    fontWeight: 600,
+    color: 'white',
+    whiteSpace: 'nowrap',
+    fontSize: '10px',
+  }
+
+  const valueCellStyle: React.CSSProperties = {
+    ...cellStyle,
+    backgroundColor: 'white',
+    color: OPAL_BLUE,
+    fontSize: '11px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  }
+
+  const sectionHeaderStyle: React.CSSProperties = {
+    backgroundColor: OPAL_GOLD,
+    color: 'white',
+    padding: '8px 12px',
+    fontWeight: 700,
+    fontSize: '12px',
+    textAlign: 'center' as const,
+  }
+
   return (
     <div 
-      className="bg-white text-foreground font-sans print:text-black"
       style={{ 
         width: '210mm', 
-        minHeight: '297mm',
-        padding: '15mm 20mm',
+        minHeight: '200mm',
+        padding: '10mm 15mm',
         direction: 'rtl',
+        fontFamily: 'Heebo, Arial, sans-serif',
+        backgroundColor: 'white',
+        color: OPAL_BLUE,
       }}
     >
-      {/* Header Notice */}
-      <p className="text-xs text-muted-foreground text-center mb-4">
-        טופס הזמנה שנשלח למייל של הלקוח ולאופאל כולל כתב השרות וצילומי ת.ז.
-      </p>
-
       {/* Order Number Header */}
-      <div className="flex justify-center mb-6">
-        <div className="flex items-stretch border border-border rounded overflow-hidden">
-          <div className="px-6 py-3 bg-[#E8B88A] text-foreground font-bold text-lg">
-            מס הזמנה
-          </div>
-          <div className="flex items-center">
-            <div className="px-4 py-3 border-s border-border bg-muted/30">
-              <span className="text-xs text-muted-foreground ms-1">ממררטור</span>
-              <span className="font-mono font-semibold ms-2">{numerator}</span>
-            </div>
-            <div className="px-4 py-3 border-s border-border bg-muted/30">
-              <span className="text-xs text-muted-foreground ms-1">תאריך הזמנה</span>
-              <span className="font-mono font-semibold ms-2">{orderDate}</span>
-            </div>
-            <div className="px-6 py-3 border-s border-border bg-white font-mono text-lg font-bold">
-              {orderNumber}
-            </div>
-          </div>
-        </div>
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        marginBottom: '16px',
+      }}>
+        <table style={{ borderCollapse: 'collapse' }}>
+          <tbody>
+            <tr>
+              <td style={{
+                backgroundColor: OPAL_GOLD,
+                color: 'white',
+                padding: '8px 16px',
+                fontWeight: 700,
+                fontSize: '14px',
+                borderTop: `1px solid ${OPAL_GOLD}`,
+                borderRight: `1px solid ${OPAL_GOLD}`,
+                borderBottom: `1px solid ${OPAL_GOLD}`,
+                borderLeft: `1px solid ${OPAL_GOLD}`,
+              }}>
+                מס הזמנה
+              </td>
+              <td style={{
+                backgroundColor: `${OPAL_GOLD}30`,
+                padding: '8px 10px',
+                borderTop: `1px solid ${OPAL_BLUE}30`,
+                borderRight: `1px solid ${OPAL_BLUE}30`,
+                borderBottom: `1px solid ${OPAL_BLUE}30`,
+                borderLeft: `1px solid ${OPAL_BLUE}30`,
+                fontWeight: 600,
+                fontSize: '11px',
+              }}>
+                <span style={{ fontSize: '9px', color: `${OPAL_BLUE}99`, marginLeft: '4px' }}>נומרטור</span>
+                <span style={{ fontFamily: 'monospace' }}>{numerator}</span>
+              </td>
+              <td style={{
+                backgroundColor: 'white',
+                padding: '8px 10px',
+                borderTop: `1px solid ${OPAL_BLUE}30`,
+                borderRight: `1px solid ${OPAL_BLUE}30`,
+                borderBottom: `1px solid ${OPAL_BLUE}30`,
+                borderLeft: `1px solid ${OPAL_BLUE}30`,
+                fontWeight: 600,
+                fontSize: '11px',
+              }}>
+                <span style={{ fontSize: '9px', color: `${OPAL_BLUE}99`, marginLeft: '4px' }}>תאריך הזמנה</span>
+                <span style={{ fontFamily: 'monospace' }}>{orderDate}</span>
+              </td>
+              <td style={{
+                backgroundColor: 'white',
+                padding: '8px 16px',
+                borderTop: `1px solid ${OPAL_BLUE}30`,
+                borderRight: `1px solid ${OPAL_BLUE}30`,
+                borderBottom: `1px solid ${OPAL_BLUE}30`,
+                borderLeft: `1px solid ${OPAL_BLUE}30`,
+                fontFamily: 'monospace',
+                fontSize: '14px',
+                fontWeight: 700,
+              }}>
+                {orderNumber}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       {/* Customer Details Table */}
-      <table className="w-full border-collapse mb-4">
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '12px' }}>
         <tbody>
           {/* Row 1: Customer Name, ID, Subscription Start */}
           <tr>
-            <td className="border border-border p-2 text-sm bg-muted/20 w-28 text-start">שם לקוח</td>
-            <td className="border border-border p-2 font-medium" colSpan={3}>{customerName}</td>
-            <td className="border border-border p-2 text-sm bg-muted/20 w-16 text-start">ת.ז</td>
-            <td className="border border-border p-2 font-mono w-32">{customerId}</td>
-            <td className="border border-border p-2 text-sm bg-muted/20 w-28 text-start">תאריך תחילת מנוי</td>
-            <td className="border border-border p-2 font-mono w-28">{subscriptionStartDate}</td>
+            <td style={labelCellStyle}>שם לקוח</td>
+            <td style={{ ...valueCellStyle, width: '22%' }}>{customerName}</td>
+            <td style={labelCellStyle}>ת.ז</td>
+            <td style={{ ...valueCellStyle, fontFamily: 'monospace', width: '14%' }}>{customerId}</td>
+            <td style={labelCellStyle}>תאריך תחילת מנוי</td>
+            <td style={{ ...valueCellStyle, fontFamily: 'monospace', width: '10%' }}>{subscriptionStartDate}</td>
           </tr>
           
           {/* Row 2: Address, Phone, Email */}
           <tr>
-            <td className="border border-border p-2 text-sm bg-muted/20 text-start">כתובת הלקוח</td>
-            <td className="border border-border p-2" colSpan={3}>{address}</td>
-            <td className="border border-border p-2 text-sm bg-muted/20 text-start">טלפון</td>
-            <td className="border border-border p-2 font-mono" dir="ltr">{phone}</td>
-            <td className="border border-border p-2 text-sm bg-muted/20 text-start">מייל</td>
-            <td className="border border-border p-2 text-xs" dir="ltr">{email}</td>
+            <td style={labelCellStyle}>כתובת הלקוח</td>
+            <td style={valueCellStyle}>{address}</td>
+            <td style={labelCellStyle}>טלפון</td>
+            <td style={{ ...valueCellStyle, fontFamily: 'monospace', fontSize: '10px', direction: 'ltr', textAlign: 'right' }}>{phone}</td>
+            <td style={labelCellStyle}>מייל</td>
+            <td style={{ ...valueCellStyle, fontSize: '9px', direction: 'ltr', textAlign: 'right' }}>{email}</td>
           </tr>
           
           {/* Row 3: Last 4 Credit Card Digits */}
           <tr>
-            <td className="border border-border p-2 text-sm bg-muted/20 text-start" colSpan={2}>
-              ארבע ספרות אחרונות בכרטיס האשראי
-            </td>
-            <td className="border border-border p-2 font-mono text-center" colSpan={6}>
-              **** **** **** {lastFourDigits}
+            <td style={labelCellStyle} colSpan={2}>ארבע ספרות אחרונות בכרטיס האשראי</td>
+            <td style={{ ...valueCellStyle, fontFamily: 'monospace', textAlign: 'center' }} colSpan={4}>
+              {lastFourDigits}
             </td>
           </tr>
         </tbody>
       </table>
 
       {/* Subscription Type Table */}
-      <table className="w-full border-collapse mb-4">
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '12px' }}>
         <tbody>
           <tr>
-            <td className="border border-border p-2 text-sm bg-muted/20 w-24 text-start">סוג המנוי</td>
-            <td className="border border-border p-2 text-sm bg-muted/20 w-24 text-start">תאור העסקה</td>
-            <td className="border border-border p-2" colSpan={2}>{transactionDescription}</td>
-          </tr>
-          <tr>
-            <td className="border border-border p-2" rowSpan={2}></td>
-            <td className="border border-border p-2 text-sm bg-muted/20 text-start">שם כתב השרות</td>
-            <td className="border border-border p-2">{serviceDocumentName}</td>
-            <td className="border border-border p-2 bg-[#E8B88A] font-bold text-center w-32">
+            <td style={{ ...labelCellStyle, width: '70px' }}>סוג המנוי</td>
+            <td style={{ ...valueCellStyle, fontSize: '10px' }}>{transactionDescription}</td>
+            <td style={labelCellStyle}>שם כתב השרות</td>
+            <td style={{ ...valueCellStyle, fontSize: '10px' }}>{serviceDocumentName}</td>
+            <td style={{
+              ...valueCellStyle,
+              backgroundColor: `${OPAL_GOLD}20`,
+              fontWeight: 700,
+              color: OPAL_BLUE,
+              textAlign: 'center',
+              width: '100px',
+              fontSize: '10px',
+            }}>
               {productName}
             </td>
-          </tr>
-          <tr>
-            <td className="border border-border p-2 text-sm bg-muted/20 text-start">סה״כ תש׳ חודשי</td>
-            <td className="border border-border p-2 font-bold text-lg" colSpan={2}>
-              {monthlyTotal.toLocaleString('he-IL')} ₪
+            <td style={labelCellStyle}>סה״כ תש׳ חודשי</td>
+            <td style={{
+              ...valueCellStyle,
+              fontWeight: 700,
+              fontSize: '13px',
+              width: '60px',
+            }}>
+              {monthlyTotal}
             </td>
           </tr>
         </tbody>
       </table>
 
+      {/* Transaction Description Header */}
+      <div style={sectionHeaderStyle}>
+        תאור העסקה
+      </div>
+
       {/* Beneficiaries Table */}
-      <table className="w-full border-collapse mb-4">
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '14px' }}>
         <tbody>
           {/* Primary Beneficiary */}
           <tr>
-            <td className="border border-border p-2 text-sm bg-[#E8B88A]/50 w-36 text-start font-medium">
+            <td style={{
+              ...labelCellStyle,
+              backgroundColor: OPAL_GOLD,
+              fontWeight: 700,
+              width: '110px',
+            }}>
               שם המבוטח העיקרי
             </td>
-            <td className="border border-border p-2 font-medium">{primaryBeneficiary.fullName}</td>
-            <td className="border border-border p-2 text-sm bg-muted/20 w-12 text-center">ת.ז</td>
-            <td className="border border-border p-2 font-mono w-32">{primaryBeneficiary.idNumber}</td>
+            <td style={{ ...valueCellStyle, fontWeight: 600, fontSize: '11px' }}>{primaryBeneficiary.fullName}</td>
+            <td style={{ ...labelCellStyle, width: '40px', textAlign: 'center' }}>ת.ז</td>
+            <td style={{ ...valueCellStyle, fontFamily: 'monospace', width: '100px', fontSize: '10px' }}>{primaryBeneficiary.idNumber}</td>
           </tr>
           
           {/* Secondary Beneficiaries */}
           {filledSecondaryBeneficiaries.map((beneficiary, index) => (
             <tr key={index}>
-              <td className="border border-border p-2 text-sm bg-muted/20 text-start">
-                שם המבוטח המשני
-              </td>
-              <td className="border border-border p-2">{beneficiary.fullName || ''}</td>
-              <td className="border border-border p-2 text-sm bg-muted/20 text-center">ת.ז</td>
-              <td className="border border-border p-2 font-mono">{beneficiary.idNumber || ''}</td>
+              <td style={labelCellStyle}>שם המבוטח המשני</td>
+              <td style={{ ...valueCellStyle, fontSize: '10px' }}>{beneficiary.fullName || ''}</td>
+              <td style={{ ...labelCellStyle, textAlign: 'center' }}>ת.ז</td>
+              <td style={{ ...valueCellStyle, fontFamily: 'monospace', fontSize: '10px' }}>{beneficiary.idNumber || ''}</td>
             </tr>
           ))}
         </tbody>
       </table>
 
       {/* Service Provider Details */}
-      <div className="border border-border rounded overflow-hidden mb-4">
-        <div className="bg-[#E8B88A] px-4 py-2 text-center font-bold">
+      <div style={{ marginBottom: '12px' }}>
+        <div style={sectionHeaderStyle}>
           פרטי נותן השרות
         </div>
-        <div className="p-4 space-y-3">
-          <div className="flex items-center justify-center gap-4">
-            <span className="text-sm">טלפונים להזמנת שרותים רפואיים</span>
-            <span className="font-mono font-bold text-lg" dir="ltr">{servicePhone}</span>
+        <div style={{
+          backgroundColor: 'white',
+          padding: '10px 16px',
+          borderLeft: `1px solid ${OPAL_BLUE}30`,
+          borderRight: `1px solid ${OPAL_BLUE}30`,
+          borderBottom: `1px solid ${OPAL_BLUE}30`,
+        }}>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center',
+            gap: '12px',
+            marginBottom: '8px',
+            fontSize: '12px',
+          }}>
+            <span style={{ color: OPAL_BLUE }}>טלפונים להזמנת שרותים רפואיים</span>
+            <span style={{ 
+              fontFamily: 'monospace', 
+              fontWeight: 700, 
+              fontSize: '14px',
+              color: OPAL_BLUE,
+              direction: 'ltr',
+            }}>
+              {servicePhone}
+            </span>
           </div>
-          <div className="flex items-center justify-center gap-4">
-            <span className="text-sm">לינק להגשת מסמכים רפואיים - תביעה און ליין</span>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center',
+            gap: '12px',
+            fontSize: '12px',
+          }}>
+            <span style={{ color: OPAL_BLUE }}>לינק להגשת מסמכים רפואיים - תביעה און ליין</span>
             <a 
-              href={claimsLink} 
-              className="text-primary underline font-medium"
-              target="_blank"
-              rel="noopener noreferrer"
+              href={claimsLink}
+              style={{ 
+                color: OPAL_GOLD, 
+                fontWeight: 700,
+                textDecoration: 'underline',
+              }}
             >
               לינק
             </a>
@@ -204,20 +325,37 @@ export function OrderFormPDF({
       </div>
 
       {/* Notice Section */}
-      <div className="border-2 border-primary/30 rounded p-4 mb-4 bg-primary/5">
-        <div className="flex items-start gap-3">
-          <div className="bg-[#E8B88A] text-foreground px-3 py-1 rounded font-bold text-sm shrink-0">
+      <div style={{
+        backgroundColor: 'white',
+        borderTop: `2px solid ${OPAL_GOLD}`,
+        borderRight: `2px solid ${OPAL_GOLD}`,
+        borderBottom: `2px solid ${OPAL_GOLD}`,
+        borderLeft: `2px solid ${OPAL_GOLD}`,
+        borderRadius: '4px',
+        padding: '10px 14px',
+        marginBottom: '12px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+          <div style={{
+            backgroundColor: OPAL_GOLD,
+            color: 'white',
+            padding: '4px 10px',
+            borderRadius: '3px',
+            fontWeight: 700,
+            fontSize: '11px',
+            whiteSpace: 'nowrap',
+          }}>
             שים לב
           </div>
-          <div className="space-y-2 text-sm">
-            <p>
-              <strong>חיוב החודשי של המנוי דרך חברת אופאל תקשורת בע״מ</strong>
+          <div style={{ fontSize: '11px', lineHeight: 1.5 }}>
+            <p style={{ margin: 0, marginBottom: '4px', fontWeight: 600, color: OPAL_BLUE }}>
+              חיוב החודשי של המנוי דרך חברת אופאל תקשורת בע״מ
             </p>
-            <p>
-              לפניות וברורים: {' '}
-              <span className="font-mono" dir="ltr">054-4261369</span>
-              {' '} דואל: {' '}
-              <a href="mailto:opal2000@zahav.net.il" className="text-primary underline">
+            <p style={{ margin: 0, color: `${OPAL_BLUE}CC`, fontSize: '10px' }}>
+              לפניות וברורים:{' '}
+              <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>054-4261369</span>
+              {' '}דואל:{' '}
+              <a href="mailto:opal2000@zahav.net.il" style={{ color: OPAL_GOLD, fontWeight: 600 }}>
                 opal2000@zahav.net.il
               </a>
             </p>
@@ -226,20 +364,26 @@ export function OrderFormPDF({
       </div>
 
       {/* Footer */}
-      <div className="text-center text-xs text-muted-foreground border-t border-border pt-4">
-        <p>המנוי כפוף לכתב השרות ולצילומי ת.ז.</p>
+      <div style={{
+        textAlign: 'center',
+        fontSize: '10px',
+        color: `${OPAL_BLUE}99`,
+        borderTop: `1px solid ${OPAL_BLUE}20`,
+        paddingTop: '8px',
+      }}>
+        <p style={{ margin: 0 }}>המנוי כפוף לכתב השרות ולצילומי ת.ז.</p>
       </div>
 
       {/* Print Styles */}
-      <style jsx global>{`
+      <style>{`
         @media print {
           body {
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
           @page {
             size: A4;
-            margin: 0;
+            margin: 10mm;
           }
         }
       `}</style>
@@ -254,16 +398,44 @@ export function OrderFormPDFPreview(props: OrderFormPDFProps) {
   }
 
   return (
-    <div className="min-h-screen bg-muted/50 py-8">
-      <div className="container max-w-4xl">
+    <div style={{ 
+      minHeight: '100vh', 
+      backgroundColor: '#f1f5f9', 
+      padding: '32px 16px',
+    }}>
+      <div style={{ maxWidth: '900px', margin: '0 auto' }}>
         {/* Actions Bar */}
-        <div className="flex items-center justify-between mb-6 print:hidden">
-          <h1 className="text-xl font-bold">תצוגה מקדימה - טופס הזמנה</h1>
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          marginBottom: '24px',
+        }} className="print:hidden">
+          <h1 style={{ 
+            fontSize: '20px', 
+            fontWeight: 700,
+            color: OPAL_BLUE,
+            margin: 0,
+          }}>
+            תצוגה מקדימה - טופס הזמנה
+          </h1>
           <button
             onClick={handlePrint}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 20px',
+              backgroundColor: OPAL_BLUE,
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '14px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
           >
-            <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg style={{ width: '18px', height: '18px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
             </svg>
             הדפס / שמור PDF
@@ -271,7 +443,12 @@ export function OrderFormPDFPreview(props: OrderFormPDFProps) {
         </div>
 
         {/* PDF Preview */}
-        <div className="bg-white shadow-xl rounded-lg overflow-hidden print:shadow-none print:rounded-none">
+        <div style={{ 
+          backgroundColor: 'white', 
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          borderRadius: '8px',
+          overflow: 'hidden',
+        }} className="print:shadow-none print:rounded-none">
           <OrderFormPDF {...props} />
         </div>
       </div>

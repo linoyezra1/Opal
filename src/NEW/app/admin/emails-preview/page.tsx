@@ -26,15 +26,13 @@ export default function EmailsPreviewPage() {
                 orderId="ORD-2026-00123"
                 orderDate="29/03/2026"
                 customerName="ישראל ישראלי"
-                customerId="123456789"
-                startDate="01/04/2026"
-                address="רחוב הרצל 15, תל אביב"
-                phone="054-1234567"
-                email="israel@example.com"
-                last4Digits="4532"
-                subscriptionType="רופא עד הבית - מנוי משפחתי"
+                productName="רופא עד הבית"
                 monthlyTotal="₪149"
                 beneficiaryLink="https://opal.co.il/beneficiaries/abc123"
+                servicePhone="00-0000000"
+                claimsLink="https://opal.co.il/claims"
+                salesPhone="054-4261369"
+                contactEmail="opal2000@zahav.net.il"
               />
             </div>
           </TabsContent>

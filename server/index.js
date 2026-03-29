@@ -113,9 +113,14 @@ function buildBeneficiaryPdfModelFromDeal({ transactionId, deal, primaryMember, 
   const fsState = deal?.formState || {};
   const primary = primaryMember || {};
   const additional = Array.isArray(additionalMembers) ? additionalMembers : [];
+  const tid = String(transactionId || '');
+  const digitsOnly = tid.replace(/\D/g, '');
+  const numerator =
+    digitsOnly.length >= 6 ? digitsOnly.slice(-6) : tid.replace(/[^0-9A-Za-z]/g, '').slice(0, 8) || '—';
   return {
-    orderNumber: String(transactionId || ''),
+    orderNumber: tid,
     orderDate: new Date().toLocaleDateString('he-IL'),
+    numerator,
     customerName: firstDefined(
       [primary.firstName, primary.lastName].filter(Boolean).join(' '),
       fsState.fullName
@@ -125,6 +130,9 @@ function buildBeneficiaryPdfModelFromDeal({ transactionId, deal, primaryMember, 
     address: firstDefined(primary.address, fsState.address),
     phone: firstDefined(primary.phone, fsState.phone),
     email: firstDefined(primary.email, fsState.email),
+    lastFourDigits: String(fsState.lastFourDigits || '').trim(),
+    transactionDescription: firstDefined(fsState.productName, fsState.selectedPlanId, 'רופא עד הבית'),
+    serviceDocumentName: 'רופא עד הבית',
     productName: firstDefined(fsState.productName, fsState.selectedPlanId),
     monthlyTotal: Number(payerAmount || deal?.payerAmount || 0),
     primaryBeneficiary: {
