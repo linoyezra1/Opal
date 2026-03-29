@@ -1,5 +1,10 @@
 import { Resend } from 'resend';
 
+/**
+ * Static PDF attachments (גילוי נאות, כתב שירות) are loaded in `index.js` via
+ * `src/assets/DOC/` (see repoAssets.js). This module only forwards `payload.attachments` to Resend.
+ */
+
 function buildOrderConfirmationHtml(payload) {
   const amount = Number(payload.monthlyTotal || 0).toLocaleString('he-IL');
   const secondaries = Array.isArray(payload.secondaryBeneficiaries) ? payload.secondaryBeneficiaries : [];

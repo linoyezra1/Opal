@@ -77,6 +77,7 @@ import {
 } from './adminMongooseService.js';
 import fs from 'fs/promises';
 import { resolve } from 'path';
+import { candidateSrcAssetPaths, readFirstExistingFile } from './repoAssets.js';
 
 try {
   dotenv.config();
@@ -154,29 +155,19 @@ async function buildEmailAttachments({ transactionId, beneficiaryPdfBuffer }) {
     });
   }
 
-  const staticDocCandidates = [
-    { filename: 'גילוי נאות.pdf', rel: ['assets', 'docs', 'גילוי נאות.pdf'] },
-    { filename: 'כתב שירות.pdf', rel: ['assets', 'docs', 'כתב שירות.pdf'] },
-  ];
+  const staticDocFilenames = ['גילוי נאות.pdf', 'כתב שירות.pdf'];
 
-  for (const doc of staticDocCandidates) {
+  for (const filename of staticDocFilenames) {
     const candidates = [
-      resolve(process.cwd(), ...doc.rel),
-      resolve(process.cwd(), 'server', ...doc.rel),
+      ...candidateSrcAssetPaths('DOC', filename),
+      resolve(process.cwd(), 'server', 'assets', 'docs', filename),
+      resolve(process.cwd(), 'assets', 'docs', filename),
     ];
-    let loaded = false;
-    for (const p of candidates) {
-      try {
-        const content = await fs.readFile(p);
-        attachments.push({ filename: doc.filename, content });
-        loaded = true;
-        break;
-      } catch {
-        // Try next candidate path
-      }
-    }
-    if (!loaded) {
-      console.warn(`[${ts()}] Attachment missing (optional): ${doc.filename}`);
+    try {
+      const { buffer } = await readFirstExistingFile(candidates, filename);
+      attachments.push({ filename, content: buffer });
+    } catch {
+      console.warn(`[${ts()}] Attachment missing (optional): ${filename}`);
     }
   }
   return attachments;

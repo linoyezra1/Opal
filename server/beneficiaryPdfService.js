@@ -2,6 +2,7 @@ import { PDFDocument, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import fs from 'fs/promises';
 import path from 'path';
+import { candidateSrcAssetPaths, readFirstExistingFile, getGeneratedPdfDir } from './repoAssets.js';
 
 function line(text, fallback = '—') {
   const t = String(text || '').trim();
@@ -46,8 +47,11 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
   let page = pdfDoc.addPage([595, 842]); // A4
-  const fontPath = path.resolve(process.cwd(), 'assets', 'fonts', 'Heebo-Regular.ttf');
-  const fontBytes = await fs.readFile(fontPath);
+  const fontCandidates = candidateSrcAssetPaths('fonts', 'Heebo-Regular.ttf');
+  const { buffer: fontBytes } = await readFirstExistingFile(
+    fontCandidates,
+    'Heebo-Regular.ttf (src/assets/fonts)'
+  );
   const font = await pdfDoc.embedFont(fontBytes);
   const bold = font;
 
@@ -142,7 +146,7 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
 
 export async function saveBeneficiarySummaryPdfToDisk({ transactionId, buffer }) {
   const fileName = `beneficiary-summary-${String(transactionId || '').trim() || 'unknown'}.pdf`;
-  const outDir = path.resolve(process.cwd(), 'assets', 'generated');
+  const outDir = getGeneratedPdfDir();
   await fs.mkdir(outDir, { recursive: true });
   const fullPath = path.resolve(outDir, fileName);
   await fs.writeFile(fullPath, buffer);
