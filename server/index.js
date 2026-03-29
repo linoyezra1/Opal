@@ -499,11 +499,17 @@ async function handleWebhookSuccess(lowProfileCode) {
 
     if (shouldSendEmail) {
       try {
+        const orderDateStr = new Date().toLocaleDateString('he-IL');
         const mailResult = await sendOrderConfirmationEmail({
           to,
           orderNumber: transactionId,
-          orderDate: new Date().toLocaleDateString('he-IL'),
+          orderDate: orderDateStr,
           customerName: primaryName || 'לקוח',
+          customerId: primaryId,
+          subscriptionStartDate: String(finalForm?.subscriptionStartDate || '').trim() || orderDateStr,
+          address: String(finalForm?.address || '').trim(),
+          lastFourDigits: String(finalForm?.lastFourDigits || '').trim(),
+          subscriptionType: String(finalForm?.productName || '').trim(),
           email: to,
           phone: String(finalForm?.phone || '').trim(),
           productName: String(finalForm?.productName || '').trim(),
@@ -815,6 +821,7 @@ app.post('/api/update-beneficiaries', async (req, res) => {
           email: to,
           phone: firstDefined(pm.phone, deal?.formState?.phone),
           productName: firstDefined(deal?.formState?.productName, deal?.formState?.selectedPlanId),
+          subscriptionType: firstDefined(deal?.formState?.productName, deal?.formState?.selectedPlanId),
           monthlyTotal: Number(deal?.payerAmount || 0),
           primaryBeneficiary: { name: primaryName || '—', idNumber: primaryId || '—' },
           secondaryBeneficiaries: beneficiaries.map((b) => ({
