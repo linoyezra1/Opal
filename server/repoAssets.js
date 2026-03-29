@@ -8,19 +8,32 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const SERVER_DIR = __dirname;
 
 /**
- * Possible project roots: cwd may be repo root (/app) or server (/app/server) locally.
+ * Candidate paths under `server/assets/<...segments>`.
+ * - `path.join(process.cwd(), 'server', 'assets', ...)` — Railway when cwd is repo root (/app)
+ * - `path.join(process.cwd(), 'assets', ...)` — when cwd is already `server/`
+ * - `path.join(SERVER_DIR, 'assets', ...)` — always relative to this file (robust)
  */
-function projectRootCandidates() {
+export function candidateServerAssetPaths(...segments) {
   const cwd = process.cwd();
-  return [...new Set([cwd, path.resolve(cwd, '..'), SERVER_DIR, path.resolve(SERVER_DIR, '..')])];
+  return [
+    ...new Set([
+      path.join(cwd, 'server', 'assets', ...segments),
+      path.join(cwd, 'assets', ...segments),
+      path.join(SERVER_DIR, 'assets', ...segments),
+    ]),
+  ];
 }
 
 /**
- * Candidate absolute paths for `src/assets/<...segments>` (fonts, DOC, etc.).
+ * Static legal PDFs may live in `assets/docs/` or `assets/DOC/` (Windows vs naming).
  */
-export function candidateSrcAssetPaths(...segments) {
-  const roots = projectRootCandidates();
-  return [...new Set(roots.map((root) => path.resolve(root, 'src', 'assets', ...segments)))];
+export function candidateDocPdfPaths(filename) {
+  return [
+    ...new Set([
+      ...candidateServerAssetPaths('docs', filename),
+      ...candidateServerAssetPaths('DOC', filename),
+    ]),
+  ];
 }
 
 /**
@@ -40,8 +53,8 @@ export async function readFirstExistingFile(candidates, label = 'asset') {
 }
 
 /**
- * Writable output dir for generated PDFs (under server/, always writable on Railway).
+ * Writable output dir for generated PDFs (under server/assets/generated).
  */
 export function getGeneratedPdfDir() {
-  return path.resolve(SERVER_DIR, 'assets', 'generated');
+  return path.join(SERVER_DIR, 'assets', 'generated');
 }

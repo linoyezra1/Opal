@@ -77,7 +77,7 @@ import {
 } from './adminMongooseService.js';
 import fs from 'fs/promises';
 import { resolve } from 'path';
-import { candidateSrcAssetPaths, readFirstExistingFile } from './repoAssets.js';
+import { candidateDocPdfPaths, readFirstExistingFile } from './repoAssets.js';
 
 try {
   dotenv.config();
@@ -158,11 +158,7 @@ async function buildEmailAttachments({ transactionId, beneficiaryPdfBuffer }) {
   const staticDocFilenames = ['גילוי נאות.pdf', 'כתב שירות.pdf'];
 
   for (const filename of staticDocFilenames) {
-    const candidates = [
-      ...candidateSrcAssetPaths('DOC', filename),
-      resolve(process.cwd(), 'server', 'assets', 'docs', filename),
-      resolve(process.cwd(), 'assets', 'docs', filename),
-    ];
+    const candidates = candidateDocPdfPaths(filename);
     try {
       const { buffer } = await readFirstExistingFile(candidates, filename);
       attachments.push({ filename, content: buffer });

@@ -2,7 +2,7 @@ import { PDFDocument, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import fs from 'fs/promises';
 import path from 'path';
-import { candidateSrcAssetPaths, readFirstExistingFile, getGeneratedPdfDir } from './repoAssets.js';
+import { candidateServerAssetPaths, readFirstExistingFile, getGeneratedPdfDir } from './repoAssets.js';
 
 function line(text, fallback = '—') {
   const t = String(text || '').trim();
@@ -47,10 +47,10 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
   let page = pdfDoc.addPage([595, 842]); // A4
-  const fontCandidates = candidateSrcAssetPaths('fonts', 'Heebo-Regular.ttf');
+  const fontCandidates = candidateServerAssetPaths('fonts', 'Heebo-Regular.ttf');
   const { buffer: fontBytes } = await readFirstExistingFile(
     fontCandidates,
-    'Heebo-Regular.ttf (src/assets/fonts)'
+    'Heebo-Regular.ttf (server/assets/fonts)'
   );
   const font = await pdfDoc.embedFont(fontBytes);
   const bold = font;
