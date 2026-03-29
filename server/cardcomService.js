@@ -1,6 +1,11 @@
 /**
  * Cardcom Low Profile API – create payment link (SOAP).
  * Test terminal credentials from .env: CARDCOM_TERMINAL, CARDCOM_USER, CARDCOM_PASS.
+ *
+ * Payment page styling: do not inject custom CSS (e.g. ConCss) from this codebase.
+ * Cardcom renders `<style id="conCss">` from terminal / merchant back-office settings;
+ * rules like `display: none` on `.fieldName`, `label`, or payment UI break dropdowns and buttons.
+ * To restore the default Low Profile look, clear or fix custom CSS in the Cardcom terminal, not here.
  */
 
 import axios from 'axios';
@@ -89,6 +94,9 @@ function parseCreateLowProfileDealResponse(xml) {
  * Create a Low Profile payment link.
  * @param {Object} opts - Same as buildCreateLowProfileDealSoap; terminalNumber, username, password (for auth if needed), sumToBill, redirect URLs, indicatorUrl.
  * @returns {Promise<{ url: string, lowProfileCode: string, responseCode: number, description: string }>}
+ *
+ * Styling: the SOAP body must not include ConCss, css, Style, or any custom-design fields—only
+ * `lowprofileParams` below. Payment page look comes from Cardcom defaults + terminal dashboard.
  */
 export async function createLowProfileDeal(opts) {
   const soap = buildCreateLowProfileDealSoap(opts);
