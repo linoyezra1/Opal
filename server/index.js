@@ -615,21 +615,42 @@ function pickFirstValue(source, keys = []) {
 }
 
 async function handleMasterRecurringWebhook(body = {}, query = {}) {
+  let normalizedBody = body;
+  if (typeof normalizedBody === 'string') {
+    const parsed = Object.fromEntries(new URLSearchParams(normalizedBody));
+    normalizedBody = parsed;
+  }
+  if (!normalizedBody || typeof normalizedBody !== 'object') {
+    normalizedBody = {};
+  }
+
   const secretExpected = String(process.env.CARDCOM_MASTER_RECURRING_SECRET || '').trim();
-  const secretReceived = pickFirstValue({ ...query, ...body }, ['Secret', 'secret']);
+  // Cardcom table field is case-sensitive: Secret
+  const secretReceived = normalizedBody.Secret != null ? String(normalizedBody.Secret).trim() : '';
   if (secretExpected && secretReceived !== secretExpected) {
     throw new Error('Invalid Cardcom MasterRecurring secret');
   }
 
-  const combined = { ...(query || {}), ...(body || {}) };
-  const transactionId = pickFirstValue(combined, ['InternalDealNumber', 'InternalUsageRowID', 'ReturnValue', 'transactionId']);
-  const lowProfileCode = pickFirstValue(combined, ['LowProfileCode', 'LowProfileDealGuid', 'lowProfileCode']);
-  const cardcomAccountId = pickFirstValue(combined, ['AccountId', 'accountId']);
-  const cardcomRecurringId = pickFirstValue(combined, ['RecurringId', 'RowID', 'recurringId']);
-  const cardcomToken = pickFirstValue(combined, ['Token', 'CardToken', 'TokenToSave', 'token']);
+  // Required case-sensitive fields from MasterRecurring table
+  const cardcomAccountId =
+    normalizedBody.AccountId != null && String(normalizedBody.AccountId).trim() !== ''
+      ? String(normalizedBody.AccountId).trim()
+      : '';
+  const cardcomRecurringId =
+    normalizedBody.RecurringId != null && String(normalizedBody.RecurringId).trim() !== ''
+      ? String(normalizedBody.RecurringId).trim()
+      : '';
+  const cardcomToken = pickFirstValue(normalizedBody, ['Token', 'CardToken', 'TokenToSave']);
+
+  // Link key per requirement: InternalDealNumber or lowProfileCode
+  const transactionId =
+    normalizedBody.InternalDealNumber != null && String(normalizedBody.InternalDealNumber).trim() !== ''
+      ? String(normalizedBody.InternalDealNumber).trim()
+      : '';
+  const lowProfileCode = pickFirstValue(normalizedBody, ['lowProfileCode', 'LowProfileCode']);
 
   if (!cardcomRecurringId && !cardcomAccountId && !cardcomToken) {
-    console.warn(`[${ts()}] MasterRecurring webhook without identifiers`, combined);
+    console.warn(`[${ts()}] MasterRecurring webhook without identifiers`, normalizedBody);
     return;
   }
 
