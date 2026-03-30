@@ -243,6 +243,8 @@ export async function getLowProfileIndicator(terminalNumber, username, lowProfil
   const rootInternal = getVal('InternalDealNumber');
   const rootOk = parseInt(getVal('ProssesEndOK'), 10) === 1;
   const rootDeal = parseInt(getVal('DealRespone'), 10);
+  const rootAccountId = getVal('AccountId');
+  const rootRecurringId = getVal('RecurringId') || getVal('RowID');
   const rootToken = getVal('Token') || getVal('CardToken') || getVal('TokenToSave');
 
   return {
@@ -251,8 +253,8 @@ export async function getLowProfileIndicator(terminalNumber, username, lowProfil
     processEndOk: parsed.processEndOk || rootOk,
     dealResponse: Number.isFinite(parsed.dealResponse) ? parsed.dealResponse : rootDeal,
     internalDealNumber: parsed.internalDealNumber || (rootInternal != null ? String(rootInternal) : null),
-    cardcomAccountId: parsed.cardcomAccountId,
-    cardcomRecurringId: parsed.cardcomRecurringId,
+    cardcomAccountId: parsed.cardcomAccountId || (rootAccountId != null ? String(rootAccountId).trim() : null),
+    cardcomRecurringId: parsed.cardcomRecurringId || (rootRecurringId != null ? String(rootRecurringId).trim() : null),
     cardcomToken: parsed.cardcomToken || (rootToken != null ? String(rootToken).trim() : null),
     responseXml: xml,
   };

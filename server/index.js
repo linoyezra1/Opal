@@ -20,6 +20,7 @@ import {
   saveContactLead,
   saveDeal,
   mergeDealCardcomRecurringIds,
+  mergeDealCardcomRecurringIdsByLowProfileCode,
   saveOrUpdateAbandonedCheckoutLead,
   findDealByLowProfileCode,
   getPublicDealContext,
@@ -373,6 +374,16 @@ app.get('/api/cardcom-webhook', (req, res) => {
   setImmediate(() => handleWebhookSuccess(lowProfileCode).catch((e) => console.error(`[${ts()}] Webhook error:`, e)));
 });
 
+/** Cardcom "MasterRecurring" external report (BillGold recurring events). */
+app.post('/api/cardcom-master-recurring-webhook', (req, res) => {
+  res.status(200).send('OK');
+  setImmediate(() =>
+    handleMasterRecurringWebhook(req.body, req.query).catch((err) =>
+      console.error(`[${ts()}] MasterRecurring webhook error:`, err?.message || err)
+    )
+  );
+});
+
 /**
  * Process webhook in background: confirm deal with Cardcom, then persist to MongoDB.
  * Uses fallbacks everywhere so missing metadata does not crash.
@@ -592,6 +603,59 @@ async function handleWebhookSuccess(lowProfileCode) {
     console.log(`[${ts()}] Payment status: ${paymentStatus} - Result: FAILURE`);
     console.error(`[${ts()}] Webhook: handleWebhookSuccess failed`, err);
   }
+}
+
+function pickFirstValue(source, keys = []) {
+  const src = source && typeof source === 'object' ? source : {};
+  for (const k of keys) {
+    const val = src[k];
+    if (val != null && String(val).trim() !== '') return String(val).trim();
+  }
+  return '';
+}
+
+async function handleMasterRecurringWebhook(body = {}, query = {}) {
+  const secretExpected = String(process.env.CARDCOM_MASTER_RECURRING_SECRET || '').trim();
+  const secretReceived = pickFirstValue({ ...query, ...body }, ['Secret', 'secret']);
+  if (secretExpected && secretReceived !== secretExpected) {
+    throw new Error('Invalid Cardcom MasterRecurring secret');
+  }
+
+  const combined = { ...(query || {}), ...(body || {}) };
+  const transactionId = pickFirstValue(combined, ['InternalDealNumber', 'InternalUsageRowID', 'ReturnValue', 'transactionId']);
+  const lowProfileCode = pickFirstValue(combined, ['LowProfileCode', 'LowProfileDealGuid', 'lowProfileCode']);
+  const cardcomAccountId = pickFirstValue(combined, ['AccountId', 'accountId']);
+  const cardcomRecurringId = pickFirstValue(combined, ['RecurringId', 'RowID', 'recurringId']);
+  const cardcomToken = pickFirstValue(combined, ['Token', 'CardToken', 'TokenToSave', 'token']);
+
+  if (!cardcomRecurringId && !cardcomAccountId && !cardcomToken) {
+    console.warn(`[${ts()}] MasterRecurring webhook without identifiers`, combined);
+    return;
+  }
+
+  if (transactionId) {
+    await mergeDealCardcomRecurringIds(transactionId, {
+      cardcomAccountId,
+      cardcomRecurringId,
+      cardcomToken,
+    });
+    return;
+  }
+
+  if (lowProfileCode) {
+    await mergeDealCardcomRecurringIdsByLowProfileCode(lowProfileCode, {
+      cardcomAccountId,
+      cardcomRecurringId,
+      cardcomToken,
+    });
+    return;
+  }
+
+  console.warn(`[${ts()}] MasterRecurring webhook could not map deal (missing transactionId + lowProfileCode)`, {
+    cardcomAccountId: cardcomAccountId || null,
+    cardcomRecurringId: cardcomRecurringId || null,
+    hasToken: !!cardcomToken,
+  });
 }
 
 const OPAL_EMAIL = process.env.OPAL_EMAIL || 'opal2000@zahav.net.il';

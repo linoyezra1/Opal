@@ -92,6 +92,28 @@ export async function mergeDealCardcomRecurringIds(transactionId, params = {}) {
   return { ok: true };
 }
 
+/** מיזוג מזהי recurring לעסקה לפי LowProfileCode */
+export async function mergeDealCardcomRecurringIdsByLowProfileCode(lowProfileCode, params = {}) {
+  const db = await getDb();
+  const code = String(lowProfileCode || '').trim();
+  if (!code) return { ok: false };
+
+  const set = { updatedAt: new Date() };
+  if (params.cardcomAccountId != null && String(params.cardcomAccountId).trim() !== '') {
+    set.cardcomAccountId = String(params.cardcomAccountId).trim();
+  }
+  if (params.cardcomRecurringId != null && String(params.cardcomRecurringId).trim() !== '') {
+    set.cardcomRecurringId = String(params.cardcomRecurringId).trim();
+  }
+  if (params.cardcomToken != null && String(params.cardcomToken).trim() !== '') {
+    set.cardcomToken = String(params.cardcomToken).trim();
+  }
+  if (Object.keys(set).length <= 1) return { ok: true, skipped: true };
+
+  await db.collection('deals').updateOne({ lowProfileCode: code }, { $set: set });
+  return { ok: true };
+}
+
 export async function getDealEmailSentAt(transactionId) {
   const db = await getDb();
   const tid = String(transactionId || '').trim();
