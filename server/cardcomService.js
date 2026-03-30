@@ -38,9 +38,21 @@ function buildCreateLowProfileDealSoap(opts) {
     indicatorUrl,
     returnValue = '',
     language = 'he',
+    /** When true, ask Cardcom to create a BillGold recurring profile (subscription). */
+    createRecurring = true,
+    recurringType = 1,
+    recurringTotalCount = 0,
   } = opts;
 
   const escape = (s) => (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const recurringXml =
+    createRecurring === false
+      ? ''
+      : `
+    <CreateRecurring>true</CreateRecurring>
+    <RecurringType>${Number(recurringType)}</RecurringType>
+    <RecurringTotalCount>${Number(recurringTotalCount)}</RecurringTotalCount>`;
 
   const body = `
 <CreateLowProfileDeal xmlns="http://cardcom.co.il/">
@@ -54,7 +66,7 @@ function buildCreateLowProfileDealSoap(opts) {
     <SuccessRedirectUrl>${escape(successRedirectUrl)}</SuccessRedirectUrl>
     <ErrorRedirectUrl>${escape(errorRedirectUrl)}</ErrorRedirectUrl>
     <CancelRedirectUrl>${escape(cancelRedirectUrl)}</CancelRedirectUrl>
-    <IndicatorUrl>${escape(indicatorUrl)}</IndicatorUrl>
+    <IndicatorUrl>${escape(indicatorUrl)}</IndicatorUrl>${recurringXml}
   </lowprofileParams>
 </CreateLowProfileDeal>`;
 
@@ -128,11 +140,55 @@ export async function createLowProfileDeal(opts) {
 }
 
 /**
+ * Create Low Profile checkout page for subscriptions — same as {@link createLowProfileDeal}
+ * with recurring defaults (CreateRecurring, monthly, unlimited count).
+ */
+export async function createLowProfilePage(opts) {
+  return createLowProfileDeal({
+    createRecurring: true,
+    recurringType: 1,
+    recurringTotalCount: 0,
+    ...opts,
+  });
+}
+
+/** Extract first tag value inside XML (non-greedy, first occurrence). */
+function firstTagValue(xml, tag) {
+  const re = new RegExp(`<(?:[\\w]+:)?${tag}[^>]*>([^<]*)</(?:[\\w]+:)?${tag}>`, 'i');
+  const m = String(xml || '').match(re);
+  return m ? m[1].trim() : null;
+}
+
+/**
+ * Parse nested &lt;Indicator&gt;…&lt;/Indicator&gt; from GetLowProfileIndicator response.
+ * Recurring id: RecurringId if present, else RowID (Cardcom docs expose RowID on indicator).
+ */
+export function parseLowProfileIndicatorXml(xml) {
+  const raw = String(xml || '');
+  const indMatch = raw.match(/<Indicator[^>]*>([\s\S]*?)<\/Indicator>/i);
+  const block = indMatch ? indMatch[1] : raw;
+
+  const internalDealNumber = firstTagValue(block, 'InternalDealNumber');
+  const accountId = firstTagValue(block, 'AccountId');
+  const recurringId = firstTagValue(block, 'RecurringId') || firstTagValue(block, 'RowID');
+  const processEndOkRaw = firstTagValue(block, 'ProssesEndOK');
+  const dealResponseRaw = firstTagValue(block, 'DealRespone');
+
+  return {
+    internalDealNumber: internalDealNumber != null ? String(internalDealNumber) : null,
+    cardcomAccountId: accountId != null && String(accountId).trim() !== '' ? String(accountId).trim() : null,
+    cardcomRecurringId: recurringId != null && String(recurringId).trim() !== '' ? String(recurringId).trim() : null,
+    processEndOk: parseInt(processEndOkRaw, 10) === 1,
+    dealResponse: dealResponseRaw != null ? parseInt(dealResponseRaw, 10) : null,
+  };
+}
+
+/**
  * Get Low Profile deal result (for webhook: confirm payment and get InternalDealNumber).
  * @param {number} terminalNumber
  * @param {string} username - API name
  * @param {string} lowProfileCode - GUID from CreateLowProfileDeal
- * @returns {Promise<{ responseCode: number, description: string, processEndOk: boolean, dealResponse: number, internalDealNumber: string|number, sum?: number }>}
+ * @returns {Promise<{ responseCode: number, description: string, processEndOk: boolean, dealResponse: number, internalDealNumber: string|number|null, cardcomAccountId: string|null, cardcomRecurringId: string|null, responseXml: string }>}
  */
 export async function getLowProfileIndicator(terminalNumber, username, lowProfileCode) {
   const escape = (s) =>
@@ -153,20 +209,16 @@ export async function getLowProfileIndicator(terminalNumber, username, lowProfil
   </soap:Body>
 </soap:Envelope>`;
 
-  const response = await axios.post(
-    'https://secure.cardcom.solutions/service.asmx',
-    soap,
-    {
-      headers: {
-        'Content-Type': 'text/xml; charset=utf-8',
-        SOAPAction: 'http://cardcom.co.il/GetLowProfileIndicator',
-      },
-      timeout: 15000,
-      validateStatus: () => true,
-    }
-  );
+  const response = await axios.post(CARDCOM_SOAP_URL, soap, {
+    headers: {
+      'Content-Type': 'text/xml; charset=utf-8',
+      SOAPAction: 'http://cardcom.co.il/GetLowProfileIndicator',
+    },
+    timeout: 15000,
+    validateStatus: () => true,
+  });
 
-  const xml = response.data;
+  const xml = String(response.data || '');
   const getVal = (tag) => {
     const re = new RegExp(`<(?:\w+:)?${tag}[^>]*>([^<]*)</(?:\w+:)?${tag}>`, 'i');
     const m = xml.match(re);
@@ -174,16 +226,20 @@ export async function getLowProfileIndicator(terminalNumber, username, lowProfil
   };
   const responseCode = parseInt(getVal('ResponseCode'), 10);
   const description = getVal('Description') || '';
-  const prossesEndOK = parseInt(getVal('ProssesEndOK'), 10) === 1;
-  const dealRespone = parseInt(getVal('DealRespone'), 10);
-  const internalDealNumber = getVal('InternalDealNumber');
+  const parsed = parseLowProfileIndicatorXml(xml);
+  const rootInternal = getVal('InternalDealNumber');
+  const rootOk = parseInt(getVal('ProssesEndOK'), 10) === 1;
+  const rootDeal = parseInt(getVal('DealRespone'), 10);
 
   return {
     responseCode,
     description,
-    processEndOk: prossesEndOK,
-    dealResponse: dealRespone,
-    internalDealNumber: internalDealNumber != null ? String(internalDealNumber) : null,
+    processEndOk: parsed.processEndOk || rootOk,
+    dealResponse: Number.isFinite(parsed.dealResponse) ? parsed.dealResponse : rootDeal,
+    internalDealNumber: parsed.internalDealNumber || (rootInternal != null ? String(rootInternal) : null),
+    cardcomAccountId: parsed.cardcomAccountId,
+    cardcomRecurringId: parsed.cardcomRecurringId,
+    responseXml: xml,
   };
 }
 
@@ -193,18 +249,20 @@ export async function getLowProfileIndicator(terminalNumber, username, lowProfil
  * - Account.RecurringPaymentsActive=false
  * - RecurringPayments.ExtRecurringPayments.IsActive=false
  *
- * Primary identifier: Cardcom lowProfileCode (LowProfileDealGuid).
+ * Uses BillGold AccountId + RecurringId (from GetLowProfileIndicator after CreateRecurring).
  * @param {Object} opts
- * @param {string} opts.lowProfileCode - required identifier (LowProfileDealGuid)
- * @param {string|number} [opts.internalDealNumber] - optional for traceability
+ * @param {string|number} opts.cardcomAccountId
+ * @param {string|number} opts.cardcomRecurringId
+ * @param {string} [opts.lowProfileCode] - optional LowProfileDealGuid
  * @param {number} [opts.terminalNumber]
  * @returns {Promise<{ responseCode: number, description: string, lowProfileCode: string }>}
  */
 export async function stopRecurringProfile(opts = {}) {
   const lowProfileCode = String(opts.lowProfileCode || '').trim();
-  const internalDealNumber = String(opts.internalDealNumber || '').trim();
-  if (!lowProfileCode) {
-    throw new Error('Cannot cancel: Missing Cardcom Low Profile Code');
+  const accountId = String(opts.cardcomAccountId || '').trim();
+  const recurringId = String(opts.cardcomRecurringId || '').trim();
+  if (!accountId || !recurringId) {
+    throw new Error('Cannot cancel: Missing Cardcom recurring identifiers (AccountId/RecurringId)');
   }
 
   let terminalNumber = Number(opts.terminalNumber || 0);
@@ -222,6 +280,13 @@ export async function stopRecurringProfile(opts = {}) {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
 
+  const accountNum = parseInt(accountId, 10);
+  const recurringNum = parseInt(recurringId, 10);
+  if (!Number.isFinite(accountNum) || !Number.isFinite(recurringNum)) {
+    throw new Error('Invalid Cardcom AccountId or RecurringId (must be numeric)');
+  }
+  const rowKey = lowProfileCode || accountId;
+
   const soap = `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
   <soap:Body>
@@ -230,16 +295,18 @@ export async function stopRecurringProfile(opts = {}) {
       <UserName>${escape(apiName)}</UserName>
       <Password>${escape(apiPassword)}</Password>
       <RecurringOrder>
-        <InternalUsageRowID>${escape(lowProfileCode)}</InternalUsageRowID>
+        <InternalUsageRowID>${escape(rowKey)}</InternalUsageRowID>
         <Operation>Update</Operation>
         <Account>
+          <AccountId>${accountNum}</AccountId>
           <RecurringPaymentsActive>false</RecurringPaymentsActive>
         </Account>
-        <LowProfileDealGuid>${escape(lowProfileCode)}</LowProfileDealGuid>
+        ${lowProfileCode ? `<LowProfileDealGuid>${escape(lowProfileCode)}</LowProfileDealGuid>` : ''}
         <RecurringPayments>
           <ExtRecurringPayments>
+            <RecurringId>${recurringNum}</RecurringId>
             <IsActive>false</IsActive>
-            <ReturnValue>${escape(lowProfileCode)}</ReturnValue>
+            <ReturnValue>${escape(rowKey)}</ReturnValue>
             <InternalDecription>Stop recurring by admin request</InternalDecription>
           </ExtRecurringPayments>
         </RecurringPayments>
@@ -269,8 +336,9 @@ export async function stopRecurringProfile(opts = {}) {
   if (responseCode !== 0) {
     console.error('[cardcom] stopRecurringProfile failed', {
       terminalNumber,
-      lowProfileCode,
-      internalDealNumber: internalDealNumber || null,
+      lowProfileCode: lowProfileCode || null,
+      cardcomAccountId: accountId,
+      cardcomRecurringId: recurringId,
       requestXml: soap,
       responseXml: xml,
     });

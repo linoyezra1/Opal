@@ -6,7 +6,7 @@
 import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
-import { createLowProfileDeal, getLowProfileIndicator, stopRecurringProfile } from './cardcomService.js';
+import { createLowProfilePage, getLowProfileIndicator, stopRecurringProfile } from './cardcomService.js';
 import { sendOrderConfirmationEmail, sendBeneficiaryCompletionEmail } from './emailService.js';
 import { generateBeneficiarySummaryPdfBuffer, saveBeneficiarySummaryPdfToDisk } from './beneficiaryPdfService.js';
 import {
@@ -19,6 +19,7 @@ import {
   saveBeneficiaryUpdate,
   saveContactLead,
   saveDeal,
+  mergeDealCardcomRecurringIds,
   saveOrUpdateAbandonedCheckoutLead,
   findDealByLowProfileCode,
   getPublicDealContext,
@@ -297,7 +298,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
       priceListId: econ.priceListId || formState.priceListId,
     };
 
-    const result = await createLowProfileDeal({
+    const result = await createLowProfilePage({
       terminalNumber: terminal,
       username: user,
       password: pass,
@@ -430,6 +431,14 @@ async function handleWebhookSuccess(lowProfileCode) {
     pendingDeals.delete(lowProfileCode);
 
     const transactionId = indicator?.internalDealNumber != null ? String(indicator.internalDealNumber) : lowProfileCode;
+
+    if (!indicator?.cardcomAccountId || !indicator?.cardcomRecurringId) {
+      console.warn(`[${ts()}] Webhook: payment OK but missing BillGold ids (AccountId/RecurringId). Was CreateRecurring sent on CreateLowProfileDeal?`, {
+        lowProfileCode,
+        cardcomAccountId: indicator?.cardcomAccountId || null,
+        cardcomRecurringId: indicator?.cardcomRecurringId || null,
+      });
+    }
     const agentId = await resolveAgentIdFromFormState(pending.formState);
     const mergedForm = { ...(pending.formState || {}), ...(agentId ? { agentId } : {}) };
 
@@ -467,6 +476,8 @@ async function handleWebhookSuccess(lowProfileCode) {
       result = await saveDeal({
         transactionId,
         lowProfileCode,
+        cardcomAccountId: indicator?.cardcomAccountId || '',
+        cardcomRecurringId: indicator?.cardcomRecurringId || '',
         payerAmount,
         formState: finalForm,
         agentId,
@@ -477,6 +488,8 @@ async function handleWebhookSuccess(lowProfileCode) {
           processEndOk: indicator?.processEndOk ?? null,
           dealResponse: indicator?.dealResponse ?? null,
           internalDealNumber: indicator?.internalDealNumber ?? null,
+          cardcomAccountId: indicator?.cardcomAccountId ?? null,
+          cardcomRecurringId: indicator?.cardcomRecurringId ?? null,
         },
         normalizedPayload: dealPayload,
       });
@@ -484,6 +497,15 @@ async function handleWebhookSuccess(lowProfileCode) {
       console.log(`[${ts()}] MongoDB write failed`);
       console.error(`[${ts()}] Payment status: ${paymentStatus} - Result: FAILURE`, dbErr);
       throw dbErr;
+    }
+
+    try {
+      await mergeDealCardcomRecurringIds(transactionId, {
+        cardcomAccountId: indicator?.cardcomAccountId,
+        cardcomRecurringId: indicator?.cardcomRecurringId,
+      });
+    } catch (mergeErr) {
+      console.warn(`[${ts()}] mergeDealCardcomRecurringIds (non-blocking):`, mergeErr?.message || mergeErr);
     }
 
     const to = String(finalForm?.email || '').trim();
@@ -1394,13 +1416,17 @@ app.delete('/api/admin/deals/:id', requireAdmin, async (req, res) => {
 app.post('/api/admin/deals/:id/cancel-future-charges', requireAdmin, async (req, res) => {
   try {
     const deal = await getDealForRecurringCancellation(req.params.id);
-    if (!deal.lowProfileCode) {
-      return res.status(400).json({ success: false, error: 'Cannot cancel: Missing Cardcom Low Profile Code' });
+    if (!deal.cardcomAccountId || !deal.cardcomRecurringId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Subscription was not created as recurring - cancel manually in Cardcom',
+      });
     }
 
     const cardcom = await stopRecurringProfile({
+      cardcomAccountId: deal.cardcomAccountId,
+      cardcomRecurringId: deal.cardcomRecurringId,
       lowProfileCode: deal.lowProfileCode,
-      internalDealNumber: deal.internalDealNumber,
       terminalNumber: deal.terminalNumber,
     });
     if (Number(cardcom.responseCode) !== 0) {

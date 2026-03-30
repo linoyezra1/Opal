@@ -794,7 +794,8 @@ export default function SubscribersDashboard() {
                       {data.rows.map((r) => (
                         (() => {
                           const isCancelled = r.status === 'canceled' || String(r.subscriptionStatus || '').toLowerCase() === 'cancelled';
-                          const missingLowProfileCode = !String(r.lowProfileCode || '').trim();
+                          const missingRecurringIds =
+                            !String(r.cardcomAccountId || '').trim() || !String(r.cardcomRecurringId || '').trim();
                           const cancelledAtText = r.cancellationDate
                             ? new Date(r.cancellationDate).toLocaleString('he-IL')
                             : '';
@@ -880,7 +881,7 @@ export default function SubscribersDashboard() {
                                 variant="outline"
                                 size="sm"
                                 className="h-8 px-2 text-xs"
-                                disabled={isCancelled || missingLowProfileCode}
+                                disabled={isCancelled || missingRecurringIds}
                                 onClick={() =>
                                   setCancelTarget({
                                     id: r.id,
@@ -888,7 +889,9 @@ export default function SubscribersDashboard() {
                                   })
                                 }
                                 title={
-                                  missingLowProfileCode ? 'Cannot cancel: Missing Cardcom Low Profile Code' : undefined
+                                  missingRecurringIds
+                                    ? 'Subscription was not created as recurring - cancel manually in Cardcom'
+                                    : undefined
                                 }
                               >
                                 <Ban className="size-3.5 me-1 text-amber-600" />

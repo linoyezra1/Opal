@@ -40,6 +40,15 @@ export async function saveDeal(params) {
     transactionId,
     /** מזהה Cardcom LowProfile — לחיפוש עסקה לפני קבלת מס׳ הזמנה סופי */
     lowProfileCode: params.lowProfileCode != null ? String(params.lowProfileCode).trim() : '',
+    /** BillGold — מזהי מנוי חוזר אחרי תשלום (מ־GetLowProfileIndicator) */
+    cardcomAccountId:
+      params.cardcomAccountId != null && String(params.cardcomAccountId).trim() !== ''
+        ? String(params.cardcomAccountId).trim()
+        : '',
+    cardcomRecurringId:
+      params.cardcomRecurringId != null && String(params.cardcomRecurringId).trim() !== ''
+        ? String(params.cardcomRecurringId).trim()
+        : '',
     payerAmount: Number(params.payerAmount || 0),
     formState: params.formState || {},
     /** מזהה סוכן (מנוי) — לספירת מכירות לפי סוכן */
@@ -55,6 +64,25 @@ export async function saveDeal(params) {
 
   const result = await deals.insertOne(doc);
   return { duplicate: false, id: String(result.insertedId) };
+}
+
+/** מיזוג מזהי recurring מ־Cardcom לעסקה קיימת (למשל duplicate webhook או עדכון מאוחר) */
+export async function mergeDealCardcomRecurringIds(transactionId, params = {}) {
+  const db = await getDb();
+  const tid = String(transactionId || '').trim();
+  if (!tid) return { ok: false };
+
+  const set = { updatedAt: new Date() };
+  if (params.cardcomAccountId != null && String(params.cardcomAccountId).trim() !== '') {
+    set.cardcomAccountId = String(params.cardcomAccountId).trim();
+  }
+  if (params.cardcomRecurringId != null && String(params.cardcomRecurringId).trim() !== '') {
+    set.cardcomRecurringId = String(params.cardcomRecurringId).trim();
+  }
+  if (Object.keys(set).length <= 1) return { ok: true, skipped: true };
+
+  await db.collection('deals').updateOne({ transactionId: tid }, { $set: set });
+  return { ok: true };
 }
 
 export async function getDealEmailSentAt(transactionId) {
@@ -717,6 +745,8 @@ export async function getSalesDashboardData(filters = {}) {
           cancellationDateRaw && !Number.isNaN(cancellationDateRaw.getTime()) ? cancellationDateRaw.toISOString() : null,
         internalDealNumber: String(d.indicator?.internalDealNumber || '').trim(),
         lowProfileCode: String(d.lowProfileCode || ''),
+        cardcomAccountId: String(d.cardcomAccountId || '').trim(),
+        cardcomRecurringId: String(d.cardcomRecurringId || '').trim(),
         fullName: d.formState?.fullName || '',
         idNumber: d.formState?.id || '',
         organizationName: d.organizationName || '',
@@ -855,6 +885,8 @@ export async function getDealForRecurringCancellation(dealId) {
       projection: {
         lowProfileCode: 1,
         terminalNumber: 1,
+        cardcomAccountId: 1,
+        cardcomRecurringId: 1,
         'indicator.internalDealNumber': 1,
       },
     }
@@ -866,6 +898,8 @@ export async function getDealForRecurringCancellation(dealId) {
     lowProfileCode: String(existing.lowProfileCode || '').trim(),
     terminalNumber: Number(existing.terminalNumber || 0),
     internalDealNumber: String(existing?.indicator?.internalDealNumber || '').trim(),
+    cardcomAccountId: String(existing.cardcomAccountId || '').trim(),
+    cardcomRecurringId: String(existing.cardcomRecurringId || '').trim(),
   };
 }
 
