@@ -439,6 +439,11 @@ async function handleWebhookSuccess(lowProfileCode) {
         cardcomRecurringId: indicator?.cardcomRecurringId || null,
       });
     }
+    if (!indicator?.cardcomToken) {
+      console.warn(`[${ts()}] Webhook: payment OK but missing Cardcom token (IsCreateToken=true expected).`, {
+        lowProfileCode,
+      });
+    }
     const agentId = await resolveAgentIdFromFormState(pending.formState);
     const mergedForm = { ...(pending.formState || {}), ...(agentId ? { agentId } : {}) };
 
@@ -478,6 +483,7 @@ async function handleWebhookSuccess(lowProfileCode) {
         lowProfileCode,
         cardcomAccountId: indicator?.cardcomAccountId || '',
         cardcomRecurringId: indicator?.cardcomRecurringId || '',
+        cardcomToken: indicator?.cardcomToken || '',
         payerAmount,
         formState: finalForm,
         agentId,
@@ -490,6 +496,7 @@ async function handleWebhookSuccess(lowProfileCode) {
           internalDealNumber: indicator?.internalDealNumber ?? null,
           cardcomAccountId: indicator?.cardcomAccountId ?? null,
           cardcomRecurringId: indicator?.cardcomRecurringId ?? null,
+          cardcomToken: indicator?.cardcomToken ?? null,
         },
         normalizedPayload: dealPayload,
       });
@@ -503,6 +510,7 @@ async function handleWebhookSuccess(lowProfileCode) {
       await mergeDealCardcomRecurringIds(transactionId, {
         cardcomAccountId: indicator?.cardcomAccountId,
         cardcomRecurringId: indicator?.cardcomRecurringId,
+        cardcomToken: indicator?.cardcomToken,
       });
     } catch (mergeErr) {
       console.warn(`[${ts()}] mergeDealCardcomRecurringIds (non-blocking):`, mergeErr?.message || mergeErr);

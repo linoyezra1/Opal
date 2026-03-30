@@ -42,6 +42,8 @@ function buildCreateLowProfileDealSoap(opts) {
     createRecurring = true,
     recurringType = 1,
     recurringTotalCount = 0,
+    isCreateToken = true,
+    isAutoCreateUpdateAccount = true,
   } = opts;
 
   const escape = (s) => (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -53,6 +55,10 @@ function buildCreateLowProfileDealSoap(opts) {
     <CreateRecurring>true</CreateRecurring>
     <RecurringType>${Number(recurringType)}</RecurringType>
     <RecurringTotalCount>${Number(recurringTotalCount)}</RecurringTotalCount>`;
+
+  const tokenAndAccountXml = `
+    <IsCreateToken>${isCreateToken ? 'true' : 'false'}</IsCreateToken>
+    <IsAutoCreateUpdateAccount>${isAutoCreateUpdateAccount ? 'true' : 'false'}</IsAutoCreateUpdateAccount>`;
 
   const body = `
 <CreateLowProfileDeal xmlns="http://cardcom.co.il/">
@@ -66,7 +72,7 @@ function buildCreateLowProfileDealSoap(opts) {
     <SuccessRedirectUrl>${escape(successRedirectUrl)}</SuccessRedirectUrl>
     <ErrorRedirectUrl>${escape(errorRedirectUrl)}</ErrorRedirectUrl>
     <CancelRedirectUrl>${escape(cancelRedirectUrl)}</CancelRedirectUrl>
-    <IndicatorUrl>${escape(indicatorUrl)}</IndicatorUrl>${recurringXml}
+    <IndicatorUrl>${escape(indicatorUrl)}</IndicatorUrl>${tokenAndAccountXml}${recurringXml}
   </lowprofileParams>
 </CreateLowProfileDeal>`;
 
@@ -145,6 +151,8 @@ export async function createLowProfileDeal(opts) {
  */
 export async function createLowProfilePage(opts) {
   return createLowProfileDeal({
+    isCreateToken: true,
+    isAutoCreateUpdateAccount: true,
     createRecurring: true,
     recurringType: 1,
     recurringTotalCount: 0,
@@ -171,6 +179,10 @@ export function parseLowProfileIndicatorXml(xml) {
   const internalDealNumber = firstTagValue(block, 'InternalDealNumber');
   const accountId = firstTagValue(block, 'AccountId');
   const recurringId = firstTagValue(block, 'RecurringId') || firstTagValue(block, 'RowID');
+  const token =
+    firstTagValue(block, 'Token') ||
+    firstTagValue(block, 'CardToken') ||
+    firstTagValue(block, 'TokenToSave');
   const processEndOkRaw = firstTagValue(block, 'ProssesEndOK');
   const dealResponseRaw = firstTagValue(block, 'DealRespone');
 
@@ -178,6 +190,7 @@ export function parseLowProfileIndicatorXml(xml) {
     internalDealNumber: internalDealNumber != null ? String(internalDealNumber) : null,
     cardcomAccountId: accountId != null && String(accountId).trim() !== '' ? String(accountId).trim() : null,
     cardcomRecurringId: recurringId != null && String(recurringId).trim() !== '' ? String(recurringId).trim() : null,
+    cardcomToken: token != null && String(token).trim() !== '' ? String(token).trim() : null,
     processEndOk: parseInt(processEndOkRaw, 10) === 1,
     dealResponse: dealResponseRaw != null ? parseInt(dealResponseRaw, 10) : null,
   };
@@ -230,6 +243,7 @@ export async function getLowProfileIndicator(terminalNumber, username, lowProfil
   const rootInternal = getVal('InternalDealNumber');
   const rootOk = parseInt(getVal('ProssesEndOK'), 10) === 1;
   const rootDeal = parseInt(getVal('DealRespone'), 10);
+  const rootToken = getVal('Token') || getVal('CardToken') || getVal('TokenToSave');
 
   return {
     responseCode,
@@ -239,6 +253,7 @@ export async function getLowProfileIndicator(terminalNumber, username, lowProfil
     internalDealNumber: parsed.internalDealNumber || (rootInternal != null ? String(rootInternal) : null),
     cardcomAccountId: parsed.cardcomAccountId,
     cardcomRecurringId: parsed.cardcomRecurringId,
+    cardcomToken: parsed.cardcomToken || (rootToken != null ? String(rootToken).trim() : null),
     responseXml: xml,
   };
 }

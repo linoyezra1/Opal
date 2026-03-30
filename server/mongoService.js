@@ -49,6 +49,10 @@ export async function saveDeal(params) {
       params.cardcomRecurringId != null && String(params.cardcomRecurringId).trim() !== ''
         ? String(params.cardcomRecurringId).trim()
         : '',
+    cardcomToken:
+      params.cardcomToken != null && String(params.cardcomToken).trim() !== ''
+        ? String(params.cardcomToken).trim()
+        : '',
     payerAmount: Number(params.payerAmount || 0),
     formState: params.formState || {},
     /** מזהה סוכן (מנוי) — לספירת מכירות לפי סוכן */
@@ -78,6 +82,9 @@ export async function mergeDealCardcomRecurringIds(transactionId, params = {}) {
   }
   if (params.cardcomRecurringId != null && String(params.cardcomRecurringId).trim() !== '') {
     set.cardcomRecurringId = String(params.cardcomRecurringId).trim();
+  }
+  if (params.cardcomToken != null && String(params.cardcomToken).trim() !== '') {
+    set.cardcomToken = String(params.cardcomToken).trim();
   }
   if (Object.keys(set).length <= 1) return { ok: true, skipped: true };
 
@@ -747,6 +754,7 @@ export async function getSalesDashboardData(filters = {}) {
         lowProfileCode: String(d.lowProfileCode || ''),
         cardcomAccountId: String(d.cardcomAccountId || '').trim(),
         cardcomRecurringId: String(d.cardcomRecurringId || '').trim(),
+        cardcomToken: String(d.cardcomToken || '').trim(),
         fullName: d.formState?.fullName || '',
         idNumber: d.formState?.id || '',
         organizationName: d.organizationName || '',
