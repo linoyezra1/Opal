@@ -715,6 +715,8 @@ export async function getSalesDashboardData(filters = {}) {
         subscriptionStatus: String(d.subscriptionStatus || ''),
         cancellationDate:
           cancellationDateRaw && !Number.isNaN(cancellationDateRaw.getTime()) ? cancellationDateRaw.toISOString() : null,
+        lowProfileCode: String(d.lowProfileCode || ''),
+        cardcomAccountId: String(d.cardcomAccountId || d.formState?.cardcomAccountId || ''),
         fullName: d.formState?.fullName || '',
         idNumber: d.formState?.id || '',
         organizationName: d.organizationName || '',
@@ -847,10 +849,28 @@ export async function getDealForRecurringCancellation(dealId) {
     throw new Error('מזהה עסקה לא תקין');
   }
 
-  const existing = await deals.findOne({ _id: oid }, { projection: { lowProfileCode: 1 } });
+  const existing = await deals.findOne(
+    { _id: oid },
+    {
+      projection: {
+        lowProfileCode: 1,
+        cardcomAccountId: 1,
+        terminalNumber: 1,
+        formState: 1,
+      },
+    }
+  );
   if (!existing) throw new Error('עסקה לא נמצאה');
 
-  return { id: String(existing._id), lowProfileCode: String(existing.lowProfileCode || '').trim() };
+  const fs = existing.formState && typeof existing.formState === 'object' ? existing.formState : {};
+  return {
+    id: String(existing._id),
+    lowProfileCode: String(existing.lowProfileCode || '').trim(),
+    cardcomAccountId: String(existing.cardcomAccountId || fs.cardcomAccountId || '').trim(),
+    terminalNumber: Number(existing.terminalNumber || 0),
+    email: String(fs.email || '').trim(),
+    phone: String(fs.phone || '').trim(),
+  };
 }
 
 export async function markDealCancelledByAdmin(dealId) {

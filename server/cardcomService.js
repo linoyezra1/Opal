@@ -188,16 +188,30 @@ export async function getLowProfileIndicator(terminalNumber, username, lowProfil
 }
 
 /**
- * Stop recurring profile by LowProfileCode so no future charges are executed.
- * Uses Cardcom BillGoldService/AddUpdateRecurringOrder with RecurringPaymentsActive=false.
- * @param {string} lowProfileCode
- * @returns {Promise<{ responseCode: number, description: string, lowProfileCode: string }>}
+ * Stop recurring profile so no future charges are executed.
+ * Uses Cardcom BillGoldService/AddUpdateRecurringOrder with:
+ * - Account.RecurringPaymentsActive=false
+ * - RecurringPayments.ExtRecurringPayments.IsActive=false
+ *
+ * If cardcomAccountId is missing, fallback identifiers are email/phone.
+ * @param {Object} opts
+ * @param {string} [opts.lowProfileCode]
+ * @param {string|number} [opts.cardcomAccountId]
+ * @param {string} [opts.email]
+ * @param {string} [opts.phone]
+ * @param {number} [opts.terminalNumber]
+ * @returns {Promise<{ responseCode: number, description: string, lowProfileCode: string, cardcomAccountId: string }>}
  */
-export async function stopRecurringProfile(lowProfileCode) {
-  const code = String(lowProfileCode || '').trim();
-  if (!code) throw new Error('Missing lowProfileCode');
+export async function stopRecurringProfile(opts = {}) {
+  const code = String(opts.lowProfileCode || '').trim();
+  const accountId = String(opts.cardcomAccountId || '').trim();
+  const email = String(opts.email || '').trim();
+  const phone = String(opts.phone || '').trim();
+  if (!code && !accountId) {
+    throw new Error('Cannot cancel: Missing Cardcom identifiers for this deal');
+  }
 
-  const terminalNumber = Number(process.env.CARDCOM_TERMINAL || 0);
+  const terminalNumber = Number(opts.terminalNumber || process.env.CARDCOM_TERMINAL || 0);
   const apiName = String(process.env.CARDCOM_API_NAME || process.env.CARDCOM_USER || '').trim();
   const apiPassword = String(process.env.CARDCOM_API_PASSWORD || process.env.CARDCOM_PASS || '').trim();
   if (!terminalNumber || !apiName || !apiPassword) {
@@ -211,6 +225,14 @@ export async function stopRecurringProfile(lowProfileCode) {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
 
+  const accountIdentifierXml = [
+    accountId ? `<AccountId>${Number(accountId)}</AccountId>` : '',
+    email ? `<Email>${escape(email)}</Email>` : '',
+    phone ? `<PhMobile>${escape(phone)}</PhMobile>` : '',
+  ]
+    .filter(Boolean)
+    .join('');
+
   const soap = `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
   <soap:Body>
@@ -219,16 +241,17 @@ export async function stopRecurringProfile(lowProfileCode) {
       <UserName>${escape(apiName)}</UserName>
       <Password>${escape(apiPassword)}</Password>
       <RecurringOrder>
-        <InternalUsageRowID>${escape(code)}</InternalUsageRowID>
+        <InternalUsageRowID>${escape(code || accountId || email || phone)}</InternalUsageRowID>
         <Operation>Update</Operation>
         <Account>
+          ${accountIdentifierXml}
           <RecurringPaymentsActive>false</RecurringPaymentsActive>
         </Account>
-        <LowProfileDealGuid>${escape(code)}</LowProfileDealGuid>
+        ${code ? `<LowProfileDealGuid>${escape(code)}</LowProfileDealGuid>` : ''}
         <RecurringPayments>
           <ExtRecurringPayments>
             <IsActive>false</IsActive>
-            <ReturnValue>${escape(code)}</ReturnValue>
+            <ReturnValue>${escape(code || accountId || email || phone)}</ReturnValue>
             <InternalDecription>Stop recurring by admin request</InternalDecription>
           </ExtRecurringPayments>
         </RecurringPayments>
@@ -259,5 +282,5 @@ export async function stopRecurringProfile(lowProfileCode) {
     throw new Error(description || `Cardcom recurring stop failed (${responseCode || 'unknown'})`);
   }
 
-  return { responseCode, description, lowProfileCode: code };
+  return { responseCode, description, lowProfileCode: code, cardcomAccountId: accountId };
 }

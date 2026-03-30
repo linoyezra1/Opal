@@ -794,6 +794,7 @@ export default function SubscribersDashboard() {
                       {data.rows.map((r) => (
                         (() => {
                           const isCancelled = r.status === 'canceled' || String(r.subscriptionStatus || '').toLowerCase() === 'cancelled';
+                          const missingCardcomIdentifiers = !String(r.lowProfileCode || '').trim() && !String(r.cardcomAccountId || '').trim();
                           const cancelledAtText = r.cancellationDate
                             ? new Date(r.cancellationDate).toLocaleString('he-IL')
                             : '';
@@ -879,13 +880,14 @@ export default function SubscribersDashboard() {
                                 variant="outline"
                                 size="sm"
                                 className="h-8 px-2 text-xs"
-                                disabled={isCancelled}
+                                disabled={isCancelled || missingCardcomIdentifiers}
                                 onClick={() =>
                                   setCancelTarget({
                                     id: r.id,
                                     transactionId: r.transactionId,
                                   })
                                 }
+                                title={missingCardcomIdentifiers ? 'Cannot cancel: Missing Cardcom identifiers for this deal' : undefined}
                               >
                                 <Ban className="size-3.5 me-1 text-amber-600" />
                                 ביטול מנוי (עצירת חיוב עתידי)
