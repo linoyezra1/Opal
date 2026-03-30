@@ -49,61 +49,75 @@ export default function OrganizationJoinRequest() {
   }
 
   return (
-    <div dir="rtl" className="min-h-screen bg-gradient-to-b from-primary/5 via-background to-muted/30 p-4 md:p-8">
+    <div
+      dir="rtl"
+      className="min-h-screen p-3 sm:p-4 md:p-8"
+      style={{ background: 'linear-gradient(180deg, #f6f3ed 0%, #efe8db 48%, #e7e2d8 100%)' }}
+    >
       <div className="max-w-5xl mx-auto space-y-6">
+        <div className="flex justify-end">
+          <img
+            src="/images/opal-logo.jpeg"
+            alt="אופאל"
+            className="h-auto w-[130px] sm:w-[160px] object-contain rounded-md bg-white px-2 py-1"
+          />
+        </div>
+
         <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">בקשת הצטרפות והזמנה</h1>
-          <p className="text-muted-foreground">אנא מלאו את הפרטים והצוות שלנו יחזור אליכם בהקדם</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#1A365D]">בקשת הצטרפות והזמנה</h1>
+          <p className="text-sm sm:text-base text-[#1A365D]">אנא מלאו את הפרטים והצוות שלנו יחזור אליכם בהקדם</p>
         </div>
 
         <form onSubmit={submit} className="space-y-6">
-          <Card>
-            <CardHeader><CardTitle>פרטי ארגון</CardTitle></CardHeader>
+          <Card className="bg-[#f8f4ea] border-[#dacdaf] shadow-sm">
+            <CardHeader><CardTitle className="text-[#1A365D]">פרטי ארגון</CardTitle></CardHeader>
             <CardContent>
               <FieldGroup>
-                <Field><FieldLabel>שם חברה *</FieldLabel><Input value={company.companyName} onChange={(e) => setCompany((p) => ({ ...p, companyName: e.target.value }))} required /></Field>
-                <Field><FieldLabel>ח.פ</FieldLabel><Input value={company.companyId} onChange={(e) => setCompany((p) => ({ ...p, companyId: e.target.value }))} /></Field>
-                <Field><FieldLabel>כתובת רשמית</FieldLabel><Input value={company.officialAddress} onChange={(e) => setCompany((p) => ({ ...p, officialAddress: e.target.value }))} /></Field>
-                <Field><FieldLabel>אימייל חברה</FieldLabel><Input dir="ltr" value={company.companyEmail} onChange={(e) => setCompany((p) => ({ ...p, companyEmail: e.target.value }))} /></Field>
+                <Field><FieldLabel className="text-[#1A365D]">שם חברה *</FieldLabel><Input value={company.companyName} onChange={(e) => setCompany((p) => ({ ...p, companyName: e.target.value }))} required /></Field>
+                <Field><FieldLabel className="text-[#1A365D]">ח.פ</FieldLabel><Input value={company.companyId} onChange={(e) => setCompany((p) => ({ ...p, companyId: e.target.value }))} /></Field>
+                <Field><FieldLabel className="text-[#1A365D]">כתובת רשמית</FieldLabel><Input value={company.officialAddress} onChange={(e) => setCompany((p) => ({ ...p, officialAddress: e.target.value }))} /></Field>
+                <Field><FieldLabel className="text-[#1A365D]">אימייל חברה</FieldLabel><Input dir="ltr" value={company.companyEmail} onChange={(e) => setCompany((p) => ({ ...p, companyEmail: e.target.value }))} /></Field>
               </FieldGroup>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader><CardTitle>איש קשר ראשי</CardTitle></CardHeader>
+          <Card className="bg-[#f8f4ea] border-[#dacdaf] shadow-sm">
+            <CardHeader><CardTitle className="text-[#1A365D]">איש קשר ראשי</CardTitle></CardHeader>
             <CardContent><PersonFields person={contactPerson} setPerson={setPerson} setter={setContactPerson} requiredName requiredPhone /></CardContent>
           </Card>
 
-          <Card>
-            <CardHeader><CardTitle>הנהלת חשבונות</CardTitle></CardHeader>
+          <Card className="bg-[#f8f4ea] border-[#dacdaf] shadow-sm">
+            <CardHeader><CardTitle className="text-[#1A365D]">הנהלת חשבונות</CardTitle></CardHeader>
             <CardContent><PersonFields person={accounting} setPerson={setPerson} setter={setAccounting} /></CardContent>
           </Card>
 
-          <Card>
-            <CardHeader><CardTitle>איש קשר נוסף</CardTitle></CardHeader>
+          <Card className="bg-[#f8f4ea] border-[#dacdaf] shadow-sm">
+            <CardHeader><CardTitle className="text-[#1A365D]">איש קשר נוסף</CardTitle></CardHeader>
             <CardContent><PersonFields person={additionalContact} setPerson={setPerson} setter={setAdditionalContact} /></CardContent>
           </Card>
 
-          <Card>
-            <CardHeader><CardTitle>נתונים כלליים</CardTitle></CardHeader>
+          <Card className="bg-[#f8f4ea] border-[#dacdaf] shadow-sm">
+            <CardHeader><CardTitle className="text-[#1A365D]">נתונים כלליים</CardTitle></CardHeader>
             <CardContent>
               <FieldGroup>
                 <Field>
-                  <FieldLabel>שיטת חיוב</FieldLabel>
-                  <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={billingMethod} onChange={(e) => setBillingMethod(e.target.value)}>
+                  <FieldLabel className="text-[#1A365D]">שיטת חיוב</FieldLabel>
+                  <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-[#1A365D]" value={billingMethod} onChange={(e) => setBillingMethod(e.target.value)}>
                     <option value="private">חיוב לקוח פרטי</option>
                     <option value="corporate">חיוב מרוכז חברה</option>
                   </select>
                 </Field>
-                <Field><FieldLabel>תחום פעילות</FieldLabel><Input value={generalData.fieldOfActivity} onChange={(e) => setGeneralData((p) => ({ ...p, fieldOfActivity: e.target.value }))} /></Field>
-                <Field><FieldLabel>מספר עובדים</FieldLabel><Input type="number" value={generalData.employeesCount} onChange={(e) => setGeneralData((p) => ({ ...p, employeesCount: e.target.value }))} /></Field>
+                <Field><FieldLabel className="text-[#1A365D]">תחום פעילות</FieldLabel><Input value={generalData.fieldOfActivity} onChange={(e) => setGeneralData((p) => ({ ...p, fieldOfActivity: e.target.value }))} /></Field>
+                <Field><FieldLabel className="text-[#1A365D]">מספר עובדים</FieldLabel><Input type="number" value={generalData.employeesCount} onChange={(e) => setGeneralData((p) => ({ ...p, employeesCount: e.target.value }))} /></Field>
               </FieldGroup>
             </CardContent>
           </Card>
 
           {error ? <p className="text-destructive text-sm">{error}</p> : null}
           {done ? <p className="text-emerald-700 text-sm font-medium">הבקשה נשלחה בהצלחה.</p> : null}
-          <Button type="submit" size="lg" disabled={loading}>{loading ? 'שולח…' : 'שליחת בקשה'}</Button>
+          <Button type="submit" size="lg" className="w-full sm:w-auto bg-[#1A365D] hover:bg-[#152d4e]" disabled={loading}>
+            {loading ? 'שולח…' : 'שליחת בקשה'}
+          </Button>
         </form>
       </div>
     </div>
@@ -113,11 +127,11 @@ export default function OrganizationJoinRequest() {
 function PersonFields({ person, setPerson, setter, requiredName = false, requiredPhone = false }) {
   return (
     <FieldGroup>
-      <Field><FieldLabel>שם</FieldLabel><Input value={person.name} onChange={setPerson(setter, 'name')} required={requiredName} /></Field>
-      <Field><FieldLabel>תפקיד</FieldLabel><Input value={person.role} onChange={setPerson(setter, 'role')} /></Field>
-      <Field><FieldLabel>טלפון</FieldLabel><Input dir="ltr" value={person.phone} onChange={setPerson(setter, 'phone')} required={requiredPhone} /></Field>
-      <Field><FieldLabel>נייד</FieldLabel><Input dir="ltr" value={person.mobile} onChange={setPerson(setter, 'mobile')} /></Field>
-      <Field><FieldLabel>אימייל</FieldLabel><Input dir="ltr" value={person.email} onChange={setPerson(setter, 'email')} /></Field>
+      <Field><FieldLabel className="text-[#1A365D]">שם</FieldLabel><Input value={person.name} onChange={setPerson(setter, 'name')} required={requiredName} /></Field>
+      <Field><FieldLabel className="text-[#1A365D]">תפקיד</FieldLabel><Input value={person.role} onChange={setPerson(setter, 'role')} /></Field>
+      <Field><FieldLabel className="text-[#1A365D]">טלפון</FieldLabel><Input dir="ltr" value={person.phone} onChange={setPerson(setter, 'phone')} required={requiredPhone} /></Field>
+      <Field><FieldLabel className="text-[#1A365D]">נייד</FieldLabel><Input dir="ltr" value={person.mobile} onChange={setPerson(setter, 'mobile')} /></Field>
+      <Field><FieldLabel className="text-[#1A365D]">אימייל</FieldLabel><Input dir="ltr" value={person.email} onChange={setPerson(setter, 'email')} /></Field>
     </FieldGroup>
   );
 }
