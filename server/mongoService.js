@@ -715,8 +715,8 @@ export async function getSalesDashboardData(filters = {}) {
         subscriptionStatus: String(d.subscriptionStatus || ''),
         cancellationDate:
           cancellationDateRaw && !Number.isNaN(cancellationDateRaw.getTime()) ? cancellationDateRaw.toISOString() : null,
+        internalDealNumber: String(d.indicator?.internalDealNumber || '').trim(),
         lowProfileCode: String(d.lowProfileCode || ''),
-        cardcomAccountId: String(d.cardcomAccountId || d.formState?.cardcomAccountId || ''),
         fullName: d.formState?.fullName || '',
         idNumber: d.formState?.id || '',
         organizationName: d.organizationName || '',
@@ -854,22 +854,18 @@ export async function getDealForRecurringCancellation(dealId) {
     {
       projection: {
         lowProfileCode: 1,
-        cardcomAccountId: 1,
         terminalNumber: 1,
-        formState: 1,
+        'indicator.internalDealNumber': 1,
       },
     }
   );
   if (!existing) throw new Error('עסקה לא נמצאה');
 
-  const fs = existing.formState && typeof existing.formState === 'object' ? existing.formState : {};
   return {
     id: String(existing._id),
     lowProfileCode: String(existing.lowProfileCode || '').trim(),
-    cardcomAccountId: String(existing.cardcomAccountId || fs.cardcomAccountId || '').trim(),
     terminalNumber: Number(existing.terminalNumber || 0),
-    email: String(fs.email || '').trim(),
-    phone: String(fs.phone || '').trim(),
+    internalDealNumber: String(existing?.indicator?.internalDealNumber || '').trim(),
   };
 }
 
