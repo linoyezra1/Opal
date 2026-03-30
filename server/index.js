@@ -6,7 +6,7 @@
 import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
-import { createLowProfileDeal, getLowProfileIndicator } from './cardcomService.js';
+import { createLowProfileDeal, getLowProfileIndicator, stopRecurringProfile } from './cardcomService.js';
 import { sendOrderConfirmationEmail, sendBeneficiaryCompletionEmail } from './emailService.js';
 import { generateBeneficiarySummaryPdfBuffer, saveBeneficiarySummaryPdfToDisk } from './beneficiaryPdfService.js';
 import {
@@ -32,6 +32,8 @@ import {
   getControlPanelOverviewStats,
   updateDealAdmin,
   deleteDealAdmin,
+  getDealForRecurringCancellation,
+  markDealCancelledByAdmin,
   getDealEmailSentAt,
   getDealByTransactionId,
   markDealOrderEmailSent,
@@ -1385,6 +1387,37 @@ app.delete('/api/admin/deals/:id', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(`[${ts()}] admin/deals delete error:`, e);
     res.status(400).json({ success: false, error: e.message || 'Failed to delete deal' });
+  }
+});
+
+/** עצירת חיוב עתידי במנוי (Cardcom recurring) + סימון ביטול במסד */
+app.post('/api/admin/deals/:id/cancel-future-charges', requireAdmin, async (req, res) => {
+  try {
+    const deal = await getDealForRecurringCancellation(req.params.id);
+    if (!deal.lowProfileCode) {
+      return res.status(400).json({ success: false, error: 'לא נמצא LowProfileCode לעסקה זו' });
+    }
+
+    const cardcom = await stopRecurringProfile(deal.lowProfileCode);
+    if (Number(cardcom.responseCode) !== 0) {
+      return res.status(502).json({
+        success: false,
+        error: cardcom.description || 'Cardcom recurring stop failed',
+        cardcom,
+      });
+    }
+
+    const updated = await markDealCancelledByAdmin(req.params.id);
+
+    res.json({
+      success: true,
+      message: 'החיובים העתידיים בוטלו בהצלחה החל מהמחזור הבא',
+      cardcom,
+      ...updated,
+    });
+  } catch (e) {
+    console.error(`[${ts()}] admin/deals cancel-future-charges error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to cancel future charges' });
   }
 });
 

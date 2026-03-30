@@ -11,6 +11,7 @@
 import axios from 'axios';
 
 const CARDCOM_SOAP_URL = 'https://secure.cardcom.co.il/service.asmx';
+const CARDCOM_RECURRING_SOAP_URL = 'https://secure.cardcom.co.il/Interface/BillGoldService.asmx';
 
 /**
  * Build SOAP envelope for CreateLowProfileDeal.
@@ -184,4 +185,79 @@ export async function getLowProfileIndicator(terminalNumber, username, lowProfil
     dealResponse: dealRespone,
     internalDealNumber: internalDealNumber != null ? String(internalDealNumber) : null,
   };
+}
+
+/**
+ * Stop recurring profile by LowProfileCode so no future charges are executed.
+ * Uses Cardcom BillGoldService/AddUpdateRecurringOrder with RecurringPaymentsActive=false.
+ * @param {string} lowProfileCode
+ * @returns {Promise<{ responseCode: number, description: string, lowProfileCode: string }>}
+ */
+export async function stopRecurringProfile(lowProfileCode) {
+  const code = String(lowProfileCode || '').trim();
+  if (!code) throw new Error('Missing lowProfileCode');
+
+  const terminalNumber = Number(process.env.CARDCOM_TERMINAL || 0);
+  const apiName = String(process.env.CARDCOM_API_NAME || process.env.CARDCOM_USER || '').trim();
+  const apiPassword = String(process.env.CARDCOM_API_PASSWORD || process.env.CARDCOM_PASS || '').trim();
+  if (!terminalNumber || !apiName || !apiPassword) {
+    throw new Error('Missing Cardcom credentials (CARDCOM_TERMINAL + CARDCOM_API_NAME/API_PASSWORD)');
+  }
+
+  const escape = (s) =>
+    (s == null ? '' : String(s))
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+
+  const soap = `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <AddUpdateRecurringOrder xmlns="BillGoldService">
+      <TerminalNumber>${terminalNumber}</TerminalNumber>
+      <UserName>${escape(apiName)}</UserName>
+      <Password>${escape(apiPassword)}</Password>
+      <RecurringOrder>
+        <InternalUsageRowID>${escape(code)}</InternalUsageRowID>
+        <Operation>Update</Operation>
+        <Account>
+          <RecurringPaymentsActive>false</RecurringPaymentsActive>
+        </Account>
+        <LowProfileDealGuid>${escape(code)}</LowProfileDealGuid>
+        <RecurringPayments>
+          <ExtRecurringPayments>
+            <IsActive>false</IsActive>
+            <ReturnValue>${escape(code)}</ReturnValue>
+            <InternalDecription>Stop recurring by admin request</InternalDecription>
+          </ExtRecurringPayments>
+        </RecurringPayments>
+      </RecurringOrder>
+    </AddUpdateRecurringOrder>
+  </soap:Body>
+</soap:Envelope>`;
+
+  const response = await axios.post(CARDCOM_RECURRING_SOAP_URL, soap, {
+    headers: {
+      'Content-Type': 'text/xml; charset=utf-8',
+      SOAPAction: 'BillGoldService/AddUpdateRecurringOrder',
+    },
+    timeout: 20000,
+    validateStatus: () => true,
+  });
+
+  const xml = String(response?.data || '');
+  const getVal = (tag) => {
+    const re = new RegExp(`<(?:\\w+:)?${tag}[^>]*>([^<]*)</(?:\\w+:)?${tag}>`, 'i');
+    const m = xml.match(re);
+    return m ? m[1].trim() : null;
+  };
+  const responseCode = Number(getVal('ResponseCode'));
+  const description = getVal('Description') || '';
+
+  if (responseCode !== 0) {
+    throw new Error(description || `Cardcom recurring stop failed (${responseCode || 'unknown'})`);
+  }
+
+  return { responseCode, description, lowProfileCode: code };
 }

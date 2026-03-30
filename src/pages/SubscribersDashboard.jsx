@@ -11,6 +11,7 @@ import {
   Trash2,
   Download,
   Eye,
+  Ban,
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -85,6 +86,8 @@ export default function SubscribersDashboard() {
   const [saveLoading, setSaveLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
 
   const [data, setData] = useState({
     summary: {},
@@ -280,6 +283,26 @@ export default function SubscribersDashboard() {
     }
   }
 
+  async function confirmCancelFutureCharges() {
+    if (!cancelTarget?.id || !token) return;
+    setCancelLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/deals/${encodeURIComponent(cancelTarget.id)}/cancel-future-charges`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) throw new Error(json.error || 'ביטול חיוב עתידי נכשל');
+      setCancelTarget(null);
+      await loadDashboard();
+    } catch (err) {
+      setError(err.message || 'שגיאה');
+    } finally {
+      setCancelLoading(false);
+    }
+  }
+
   function clearFilters() {
     setFilters((p) => ({
       ...p,
@@ -345,6 +368,20 @@ export default function SubscribersDashboard() {
           onConfirm={confirmDelete}
           onCancel={() => setDeleteTarget(null)}
           isLoading={deleteLoading}
+        />
+        <ConfirmDialog
+          open={!!cancelTarget}
+          title="ביטול מנוי (עצירת חיוב עתידי)"
+          message={
+            cancelTarget
+              ? 'האם את בטוחה שברצונך לבטל את העסקה ולקוח לא יחויב בעתיד? פעולה זו תעצור את כל החיובים העתידיים מול קארדקום החל מהחודש הבא.'
+              : ''
+          }
+          confirmLabel="אישור"
+          danger
+          onConfirm={confirmCancelFutureCharges}
+          onCancel={() => setCancelTarget(null)}
+          isLoading={cancelLoading}
         />
 
         <Dialog open={editOpen} onOpenChange={setEditOpen}>
@@ -737,6 +774,7 @@ export default function SubscribersDashboard() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>סטטוס</TableHead>
+                        <TableHead>סטטוס חיוב עתידי</TableHead>
                         <TableHead>מס&apos; הזמנה</TableHead>
                         <TableHead>לקוח</TableHead>
                         <TableHead>ת&quot;ז</TableHead>
@@ -754,6 +792,12 @@ export default function SubscribersDashboard() {
                     </TableHeader>
                     <TableBody>
                       {data.rows.map((r) => (
+                        (() => {
+                          const isCancelled = r.status === 'canceled' || String(r.subscriptionStatus || '').toLowerCase() === 'cancelled';
+                          const cancelledAtText = r.cancellationDate
+                            ? new Date(r.cancellationDate).toLocaleString('he-IL')
+                            : '';
+                          return (
                         <TableRow
                           key={r.id}
                           className={
@@ -768,9 +812,18 @@ export default function SubscribersDashboard() {
                                 ממתין להשלמת מסמכים
                               </Badge>
                             ) : (
-                              <Badge variant={r.status === 'canceled' ? 'destructive' : 'default'}>
-                                {r.status === 'canceled' ? 'מבוטל' : 'שולם'}
+                              <Badge variant={isCancelled ? 'destructive' : 'default'}>
+                                {isCancelled ? 'Cancelled' : 'שולם'}
                               </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {isCancelled ? (
+                              <Badge variant="destructive" className="font-normal">
+                                {`בוטל מול קארדקום${cancelledAtText ? ` ב-${cancelledAtText}` : ''}`}
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary">פעיל</Badge>
                             )}
                           </TableCell>
                           <TableCell className="font-mono text-xs">{r.transactionId}</TableCell>
@@ -821,9 +874,27 @@ export default function SubscribersDashboard() {
                                 </TooltipTrigger>
                                 <TooltipContent>מחיקה</TooltipContent>
                               </Tooltip>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2 text-xs"
+                                disabled={isCancelled}
+                                onClick={() =>
+                                  setCancelTarget({
+                                    id: r.id,
+                                    transactionId: r.transactionId,
+                                  })
+                                }
+                              >
+                                <Ban className="size-3.5 me-1 text-amber-600" />
+                                ביטול מנוי (עצירת חיוב עתידי)
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
+                          );
+                        })()
                       ))}
                     </TableBody>
                   </Table>

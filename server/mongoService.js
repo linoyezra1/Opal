@@ -390,6 +390,11 @@ export async function getDeals() {
   }));
 }
 
+function isCancelledStatus(doc) {
+  if (String(doc?.subscriptionStatus || '').toLowerCase() === 'cancelled') return true;
+  return /cancel|fail|error|declin|void|refund|בוטל|נכשל/i.test(String(doc?.paymentStatus || ''));
+}
+
 /** Count successful/paid subscribers (deals) linked to an agent */
 export async function countDealsByAgentId(agentId) {
   if (!agentId) return 0;
@@ -398,6 +403,7 @@ export async function countDealsByAgentId(agentId) {
   return db.collection('deals').countDocuments({
     agentId: id,
     paymentStatus: { $regex: /success|paid|test_success/i },
+    subscriptionStatus: { $ne: 'Cancelled' },
   });
 }
 
@@ -458,6 +464,7 @@ export async function getDealsPendingBeneficiaryCompletion(limit = 150) {
     .collection('deals')
     .find({
       paymentStatus: { $regex: /success|paid|test_success/i },
+      subscriptionStatus: { $ne: 'Cancelled' },
       $or: [
         { beneficiaryUpdate: { $exists: false } },
         { 'beneficiaryUpdate.submittedAt': { $exists: false } },
@@ -535,7 +542,7 @@ function enrichDeal(d) {
   const secondaryCount = beneficiaries.length;
   const primaryCount = 1;
   const orgName = String(d?.formState?.organizationName || '').trim();
-  const isCanceled = /cancel|fail|error|declin|void|refund|בוטל|נכשל/i.test(String(d?.paymentStatus || ''));
+  const isCanceled = isCancelledStatus(d);
   const provider = d?.provider || 'Cardcom';
   const agentName = String(d?.formState?.agentName || '').trim();
   const isPaidSuccess = /success|paid|test_success/i.test(String(d?.paymentStatus || ''));
@@ -699,11 +706,15 @@ export async function getSalesDashboardData(filters = {}) {
     },
     rows: shown.slice(0, 500).map((d) => {
       const e = economicsFromDeal(d);
+      const cancellationDateRaw = d.cancellationDate instanceof Date ? d.cancellationDate : (d.cancellationDate ? new Date(d.cancellationDate) : null);
       return {
         id: String(d._id),
         transactionId: d.transactionId || '',
         status: d.isCanceled ? 'canceled' : 'paid',
         paymentStatus: d.paymentStatus || '',
+        subscriptionStatus: String(d.subscriptionStatus || ''),
+        cancellationDate:
+          cancellationDateRaw && !Number.isNaN(cancellationDateRaw.getTime()) ? cancellationDateRaw.toISOString() : null,
         fullName: d.formState?.fullName || '',
         idNumber: d.formState?.id || '',
         organizationName: d.organizationName || '',
@@ -824,6 +835,49 @@ export async function updateDealAdmin(dealId, body = {}) {
 
   await deals.updateOne({ _id: oid }, { $set: set });
   return { success: true };
+}
+
+export async function getDealForRecurringCancellation(dealId) {
+  const db = await getDb();
+  const deals = db.collection('deals');
+  let oid;
+  try {
+    oid = new ObjectId(String(dealId));
+  } catch {
+    throw new Error('מזהה עסקה לא תקין');
+  }
+
+  const existing = await deals.findOne({ _id: oid }, { projection: { lowProfileCode: 1 } });
+  if (!existing) throw new Error('עסקה לא נמצאה');
+
+  return { id: String(existing._id), lowProfileCode: String(existing.lowProfileCode || '').trim() };
+}
+
+export async function markDealCancelledByAdmin(dealId) {
+  const db = await getDb();
+  const deals = db.collection('deals');
+  let oid;
+  try {
+    oid = new ObjectId(String(dealId));
+  } catch {
+    throw new Error('מזהה עסקה לא תקין');
+  }
+
+  const cancellationDate = new Date();
+  const r = await deals.updateOne(
+    { _id: oid },
+    {
+      $set: {
+        subscriptionStatus: 'Cancelled',
+        status: 'Cancelled',
+        paymentStatus: 'Cancelled',
+        cancellationDate,
+        updatedAt: cancellationDate,
+      },
+    }
+  );
+  if (!r.matchedCount) throw new Error('עסקה לא נמצאה');
+  return { success: true, cancellationDate: cancellationDate.toISOString(), status: 'Cancelled' };
 }
 
 export async function deleteDealAdmin(dealId) {
