@@ -1394,8 +1394,8 @@ app.delete('/api/admin/deals/:id', requireAdmin, async (req, res) => {
 app.post('/api/admin/deals/:id/cancel-future-charges', requireAdmin, async (req, res) => {
   try {
     const deal = await getDealForRecurringCancellation(req.params.id);
-    if (!deal.internalDealNumber) {
-      return res.status(400).json({ success: false, error: 'Cannot cancel: Missing Cardcom Internal Deal Number' });
+    if (!deal.lowProfileCode) {
+      return res.status(400).json({ success: false, error: 'Cannot cancel: Missing Cardcom Low Profile Code' });
     }
 
     const cardcom = await stopRecurringProfile({

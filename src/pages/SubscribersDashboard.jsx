@@ -794,7 +794,7 @@ export default function SubscribersDashboard() {
                       {data.rows.map((r) => (
                         (() => {
                           const isCancelled = r.status === 'canceled' || String(r.subscriptionStatus || '').toLowerCase() === 'cancelled';
-                          const missingInternalDealNumber = !String(r.internalDealNumber || '').trim();
+                          const missingLowProfileCode = !String(r.lowProfileCode || '').trim();
                           const cancelledAtText = r.cancellationDate
                             ? new Date(r.cancellationDate).toLocaleString('he-IL')
                             : '';
@@ -880,7 +880,7 @@ export default function SubscribersDashboard() {
                                 variant="outline"
                                 size="sm"
                                 className="h-8 px-2 text-xs"
-                                disabled={isCancelled || missingInternalDealNumber}
+                                disabled={isCancelled || missingLowProfileCode}
                                 onClick={() =>
                                   setCancelTarget({
                                     id: r.id,
@@ -888,7 +888,7 @@ export default function SubscribersDashboard() {
                                   })
                                 }
                                 title={
-                                  missingInternalDealNumber ? 'Cannot cancel: Missing Cardcom Internal Deal Number' : undefined
+                                  missingLowProfileCode ? 'Cannot cancel: Missing Cardcom Low Profile Code' : undefined
                                 }
                               >
                                 <Ban className="size-3.5 me-1 text-amber-600" />
