@@ -190,7 +190,15 @@ export async function createRecurringProfileFromLowProfile(opts = {}) {
   form.set('Account.Email', String(opts.email || '').trim());
   form.set('Account.CompanyName', String(opts.companyName || '').trim());
   form.set('Account.PhMobile', String(opts.phone || '').trim());
+  form.set(
+    'RecurringPayments.InternalDecription',
+    String(opts.internalDescription || 'Subscription').trim()
+  );
   form.set('RecurringPayments.TotalNumOfBills', '999999');
+  form.set(
+    'RecurringPayments.FlexItem.InvoiceDescription',
+    String(opts.invoiceDescription || opts.internalDescription || 'Subscription').trim()
+  );
   form.set('RecurringPayments.FlexItem.Price', String(Number(opts.monthlyAmount || 0)));
   form.set('RecurringPayments.ReturnValue', String(opts.returnValue || '').trim());
   const ccToken = String(opts.cardToken || '').trim();

@@ -518,6 +518,8 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
         email: String(finalForm?.email || '').trim(),
         companyName: String(finalForm?.fullName || '').trim() || String(finalForm?.organizationName || '').trim() || 'Customer',
         phone: String(finalForm?.phone || '').trim(),
+        internalDescription: String(finalForm?.productName || 'Subscription').trim(),
+        invoiceDescription: String(finalForm?.productName || 'Subscription').trim(),
         monthlyAmount: payerAmount,
         returnValue: lowProfileCode,
         cardToken: webhookCardToken,
