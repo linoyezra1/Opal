@@ -6,7 +6,12 @@
 import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
-import { createLowProfilePage, getLowProfileIndicator, stopRecurringProfile } from './cardcomService.js';
+import {
+  createLowProfilePage,
+  getLowProfileIndicator,
+  stopRecurringProfile,
+  createRecurringProfileFromLowProfile,
+} from './cardcomService.js';
 import { sendOrderConfirmationEmail, sendBeneficiaryCompletionEmail } from './emailService.js';
 import { generateBeneficiarySummaryPdfBuffer, saveBeneficiarySummaryPdfToDisk } from './beneficiaryPdfService.js';
 import {
@@ -486,14 +491,39 @@ async function handleWebhookSuccess(lowProfileCode) {
 
     const dealPayload = buildDealPayloadFromFormState(finalForm);
 
+    // Step 2 (required): create BillGold recurring profile from successful Low Profile charge.
+    let step2Recurring = null;
+    try {
+      step2Recurring = await createRecurringProfileFromLowProfile({
+        terminalNumber: terminalNum,
+        username: user,
+        lowProfileCode,
+        email: String(finalForm?.email || '').trim(),
+        companyName: String(finalForm?.fullName || '').trim() || String(finalForm?.organizationName || '').trim() || 'Customer',
+        phone: String(finalForm?.phone || '').trim(),
+        monthlyAmount: payerAmount,
+        returnValue: lowProfileCode,
+      });
+      console.log(`[${ts()}] RecurringPayment Step2 created`, {
+        lowProfileCode,
+        cardcomAccountId: step2Recurring?.cardcomAccountId || null,
+        cardcomRecurringId: step2Recurring?.cardcomRecurringId || null,
+      });
+    } catch (step2Err) {
+      console.error(`[${ts()}] RecurringPayment Step2 failed`, {
+        lowProfileCode,
+        message: step2Err?.message || step2Err,
+      });
+    }
+
     console.log(`[${ts()}] Attempting to write deal to MongoDB...`);
     let result;
     try {
       result = await saveDeal({
         transactionId,
         lowProfileCode,
-        cardcomAccountId: indicator?.cardcomAccountId || '',
-        cardcomRecurringId: indicator?.cardcomRecurringId || '',
+        cardcomAccountId: step2Recurring?.cardcomAccountId || indicator?.cardcomAccountId || '',
+        cardcomRecurringId: step2Recurring?.cardcomRecurringId || indicator?.cardcomRecurringId || '',
         cardcomToken: indicator?.cardcomToken || '',
         payerAmount,
         formState: finalForm,
@@ -507,6 +537,8 @@ async function handleWebhookSuccess(lowProfileCode) {
           internalDealNumber: indicator?.internalDealNumber ?? null,
           cardcomAccountId: indicator?.cardcomAccountId ?? null,
           cardcomRecurringId: indicator?.cardcomRecurringId ?? null,
+          step2CardcomAccountId: step2Recurring?.cardcomAccountId ?? null,
+          step2CardcomRecurringId: step2Recurring?.cardcomRecurringId ?? null,
           cardcomToken: indicator?.cardcomToken ?? null,
         },
         normalizedPayload: dealPayload,
@@ -519,8 +551,8 @@ async function handleWebhookSuccess(lowProfileCode) {
 
     try {
       await mergeDealCardcomRecurringIds(transactionId, {
-        cardcomAccountId: indicator?.cardcomAccountId,
-        cardcomRecurringId: indicator?.cardcomRecurringId,
+        cardcomAccountId: step2Recurring?.cardcomAccountId || indicator?.cardcomAccountId,
+        cardcomRecurringId: step2Recurring?.cardcomRecurringId || indicator?.cardcomRecurringId,
         cardcomToken: indicator?.cardcomToken,
       });
     } catch (mergeErr) {

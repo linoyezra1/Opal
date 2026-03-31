@@ -12,6 +12,7 @@ import axios from 'axios';
 
 const CARDCOM_SOAP_URL = 'https://secure.cardcom.co.il/service.asmx';
 const CARDCOM_RECURRING_SOAP_URL = 'https://secure.cardcom.co.il/Interface/BillGoldService.asmx';
+const CARDCOM_RECURRING_NTV_URL = 'https://secure.cardcom.solutions/interface/RecurringPayment.aspx';
 
 /**
  * Build SOAP envelope for CreateLowProfileDeal.
@@ -160,11 +161,65 @@ export async function createLowProfilePage(opts) {
   return createLowProfileDeal({
     isCreateToken: true,
     isAutoCreateUpdateAccount: true,
-    createRecurring: true,
-    recurringType: 1,
-    recurringTotalCount: 0,
+    // Two-step flow: charge first, then create BillGold recurring via RecurringPayment.aspx
+    createRecurring: false,
     ...opts,
   });
+}
+
+function parseNameValueResponse(raw) {
+  const pairs = new URLSearchParams(String(raw || ''));
+  const data = {};
+  for (const [k, v] of pairs.entries()) data[k] = v;
+  return data;
+}
+
+/**
+ * Step 2 of recurring flow:
+ * Create/Update BillGold recurring profile from successful LowProfile deal GUID.
+ * Response is Name=Value format.
+ */
+export async function createRecurringProfileFromLowProfile(opts = {}) {
+  const form = new URLSearchParams();
+  form.set('TerminalNumber', String(Number(opts.terminalNumber || 0)));
+  form.set('UserName', String(opts.username || ''));
+  form.set('codepage', '65001');
+  form.set('Operation', 'NewAndUpdate');
+  form.set('LowProfileDealGuid', String(opts.lowProfileCode || '').trim());
+  form.set('Account.Email', String(opts.email || '').trim());
+  form.set('Account.CompanyName', String(opts.companyName || '').trim());
+  form.set('Account.PhMobile', String(opts.phone || '').trim());
+  form.set('RecurringPayments.TotalNumOfBills', '999999');
+  form.set('RecurringPayments.FlexItem.Price', String(Number(opts.monthlyAmount || 0)));
+  form.set('RecurringPayments.ReturnValue', String(opts.returnValue || '').trim());
+
+  const response = await axios.post(CARDCOM_RECURRING_NTV_URL, form.toString(), {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
+    },
+    timeout: 20000,
+    validateStatus: () => true,
+  });
+
+  const parsed = parseNameValueResponse(response.data);
+  const responseCode = Number(parsed.ResponseCode);
+  const description = String(parsed.Description || '');
+  const accountId = String(parsed.AccountId || '').trim();
+  const recurringId =
+    String(parsed['Recurring0.RecurringId'] || '').trim() ||
+    String(parsed.RecurringId || '').trim();
+
+  if (responseCode !== 0) {
+    throw new Error(description || `RecurringPayment failed (${parsed.ResponseCode || 'unknown'})`);
+  }
+
+  return {
+    responseCode,
+    description,
+    cardcomAccountId: accountId || null,
+    cardcomRecurringId: recurringId || null,
+    raw: parsed,
+  };
 }
 
 /** Extract first tag value inside XML (non-greedy, first occurrence). */
