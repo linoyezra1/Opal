@@ -42,6 +42,8 @@ function buildCreateLowProfileDealSoap(opts) {
     createRecurring = true,
     recurringType = 1,
     recurringTotalCount = 0,
+    recurringOperation = 1,
+    recurringAmount = Number(sumToBill || 0),
     isCreateToken = true,
     isAutoCreateUpdateAccount = true,
   } = opts;
@@ -52,27 +54,34 @@ function buildCreateLowProfileDealSoap(opts) {
     createRecurring === false
       ? ''
       : `
-    <CreateRecurring>true</CreateRecurring>
-    <RecurringType>${Number(recurringType)}</RecurringType>
-    <RecurringTotalCount>${Number(recurringTotalCount)}</RecurringTotalCount>`;
+      <CreateRecurring>true</CreateRecurring>
+      <Recurring>
+        <Operation>${Number(recurringOperation)}</Operation>
+        <RecurringType>${Number(recurringType)}</RecurringType>
+        <RecurringTotalCount>${Number(recurringTotalCount)}</RecurringTotalCount>
+        <RecurringAmount>${Number(recurringAmount)}</RecurringAmount>
+        <ReturnValue>${escape(returnValue)}</ReturnValue>
+      </Recurring>`;
 
   const tokenAndAccountXml = `
-    <IsCreateToken>${isCreateToken ? 'true' : 'false'}</IsCreateToken>
-    <IsAutoCreateUpdateAccount>${isAutoCreateUpdateAccount ? 'true' : 'false'}</IsAutoCreateUpdateAccount>`;
+      <IsCreateToken>${isCreateToken ? 'true' : 'false'}</IsCreateToken>
+      <IsAutoCreateUpdateAccount>${isAutoCreateUpdateAccount ? 'true' : 'false'}</IsAutoCreateUpdateAccount>`;
 
   const body = `
 <CreateLowProfileDeal xmlns="http://cardcom.co.il/">
   <terminalnumber>${Number(terminalNumber)}</terminalnumber>
   <username>${escape(username)}</username>
   <lowprofileParams>
-    <Operation>BillOnly</Operation>
-    <ReturnValue>${escape(returnValue)}</ReturnValue>
-    <SumToBill>${Number(sumToBill)}</SumToBill>
-    <Language>${escape(language)}</Language>
-    <SuccessRedirectUrl>${escape(successRedirectUrl)}</SuccessRedirectUrl>
-    <ErrorRedirectUrl>${escape(errorRedirectUrl)}</ErrorRedirectUrl>
-    <CancelRedirectUrl>${escape(cancelRedirectUrl)}</CancelRedirectUrl>
-    <IndicatorUrl>${escape(indicatorUrl)}</IndicatorUrl>${tokenAndAccountXml}${recurringXml}
+    <LowProfile>
+      <Operation>BillOnly</Operation>
+      <ReturnValue>${escape(returnValue)}</ReturnValue>
+      <SumToBill>${Number(sumToBill)}</SumToBill>
+      <Language>${escape(language)}</Language>
+      <SuccessRedirectUrl>${escape(successRedirectUrl)}</SuccessRedirectUrl>
+      <ErrorRedirectUrl>${escape(errorRedirectUrl)}</ErrorRedirectUrl>
+      <CancelRedirectUrl>${escape(cancelRedirectUrl)}</CancelRedirectUrl>
+      <IndicatorUrl>${escape(indicatorUrl)}</IndicatorUrl>${tokenAndAccountXml}${recurringXml}
+    </LowProfile>
   </lowprofileParams>
 </CreateLowProfileDeal>`;
 
