@@ -72,16 +72,14 @@ function buildCreateLowProfileDealSoap(opts) {
   <terminalnumber>${Number(terminalNumber)}</terminalnumber>
   <username>${escape(username)}</username>
   <lowprofileParams>
-    <LowProfile>
-      <Operation>BillOnly</Operation>
-      <ReturnValue>${escape(returnValue)}</ReturnValue>
-      <SumToBill>${Number(sumToBill)}</SumToBill>
-      <Language>${escape(language)}</Language>
-      <SuccessRedirectUrl>${escape(successRedirectUrl)}</SuccessRedirectUrl>
-      <ErrorRedirectUrl>${escape(errorRedirectUrl)}</ErrorRedirectUrl>
-      <CancelRedirectUrl>${escape(cancelRedirectUrl)}</CancelRedirectUrl>
-      <IndicatorUrl>${escape(indicatorUrl)}</IndicatorUrl>${tokenAndAccountXml}${recurringXml}
-    </LowProfile>
+    <Operation>BillOnly</Operation>
+    <ReturnValue>${escape(returnValue)}</ReturnValue>
+    <SumToBill>${Number(sumToBill)}</SumToBill>
+    <Language>${escape(language)}</Language>
+    <SuccessRedirectUrl>${escape(successRedirectUrl)}</SuccessRedirectUrl>
+    <ErrorRedirectUrl>${escape(errorRedirectUrl)}</ErrorRedirectUrl>
+    <CancelRedirectUrl>${escape(cancelRedirectUrl)}</CancelRedirectUrl>
+    <IndicatorUrl>${escape(indicatorUrl)}</IndicatorUrl>${tokenAndAccountXml}${recurringXml}
   </lowprofileParams>
 </CreateLowProfileDeal>`;
 
