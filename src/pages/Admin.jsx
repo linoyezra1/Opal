@@ -116,7 +116,7 @@ export default function Admin() {
     <div dir="rtl" className="min-h-screen bg-slate-50 p-4 sm:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex flex-wrap gap-3 justify-between items-center">
-          <h1 className="text-3xl font-bold text-medical-blue-dark">לוח ניהול אופל</h1>
+          <h1 className="text-3xl font-bold text-medical-blue-dark">לוח ניהול אופאל</h1>
           <div className="flex gap-2">
             <Link to="/admin/subscribers" className="px-4 py-2 rounded-lg bg-medical-teal text-white">מנויים</Link>
             <Link to="/admin/control-panel" className="px-4 py-2 rounded-lg bg-amber-600 text-white">לוח בקרה</Link>

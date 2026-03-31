@@ -183,10 +183,15 @@ export async function getPublicDealContext(transactionId) {
   if (!tid) return null;
   const doc = await db.collection('deals').findOne(
     { transactionId: tid },
-    { projection: { transactionId: 1, formState: 1 } }
+    { projection: { transactionId: 1, formState: 1, 'beneficiaryUpdate.additionalMembers': 1 } }
   );
   if (!doc) return null;
   const fs = doc.formState && typeof doc.formState === 'object' ? doc.formState : {};
+  const formBeneficiaries = Array.isArray(fs.beneficiaries) ? fs.beneficiaries : [];
+  const submittedBeneficiaries = Array.isArray(doc?.beneficiaryUpdate?.additionalMembers)
+    ? doc.beneficiaryUpdate.additionalMembers
+    : [];
+  const hasBeneficiaries = formBeneficiaries.length > 0 || submittedBeneficiaries.length > 0;
   const n = Math.max(0, Math.min(5, Number(fs.beneficiaryCount) || 0));
   return {
     transactionId: String(doc.transactionId),
@@ -196,6 +201,7 @@ export async function getPublicDealContext(transactionId) {
     fullName: String(fs.fullName || '').trim(),
     phone: String(fs.phone || '').trim(),
     email: String(fs.email || '').trim(),
+    hasBeneficiaries,
   };
 }
 

@@ -66,7 +66,7 @@ export default function Success() {
       <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="container max-w-3xl mx-auto px-4 py-5 flex justify-center">
           <div className="h-11 px-6 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-lg">
-            אופל
+            אופאל
           </div>
         </div>
       </header>

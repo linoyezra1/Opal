@@ -47,14 +47,6 @@ const SUMMARY_ITEMS = [
   { key: 'centralized_canceled', label: 'ביטולים בתשלום מרוכז' },
 ];
 
-const PAYMENT_STATUS_OPTIONS = [
-  { value: 'success', label: 'הצלחה' },
-  { value: 'paid', label: 'שולם' },
-  { value: 'pending', label: 'ממתין' },
-  { value: 'failed', label: 'נכשל' },
-  { value: 'canceled', label: 'בוטל' },
-];
-
 function formatCurrency(value) {
   const n = Number(value || 0);
   return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n);
@@ -71,7 +63,6 @@ const emptyEditForm = () => ({
   agentName: '',
   productName: '',
   payerAmount: '',
-  paymentStatus: 'success',
 });
 
 export default function SubscribersDashboard() {
@@ -91,10 +82,10 @@ export default function SubscribersDashboard() {
 
   const [data, setData] = useState({
     summary: {},
-    searchResults: {},
     filterOptions: { providers: [], agents: [] },
     rows: [],
   });
+  const [liveSearch, setLiveSearch] = useState('');
 
   const [filters, setFilters] = useState({
     month: '',
@@ -186,7 +177,6 @@ export default function SubscribersDashboard() {
       }
       setData({
         summary: json.summary || {},
-        searchResults: json.searchResults || {},
         filterOptions: json.filterOptions || { providers: [], agents: [] },
         rows: Array.isArray(json.rows) ? json.rows : [],
       });
@@ -224,7 +214,6 @@ export default function SubscribersDashboard() {
       agentName: fs.agentName || row.agentName || '',
       productName: fs.productName || row.productName || '',
       payerAmount: String(row.amount ?? ''),
-      paymentStatus: String(row.raw?.paymentStatus || row.paymentStatus || 'success'),
     });
     setEditOpen(true);
   }
@@ -249,7 +238,6 @@ export default function SubscribersDashboard() {
             productName: editForm.productName,
           },
           payerAmount: editForm.payerAmount,
-          paymentStatus: editForm.paymentStatus,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -328,7 +316,23 @@ export default function SubscribersDashboard() {
   }
 
   const s = data.summary || {};
-  const sr = data.searchResults || {};
+  const visibleRows = useMemo(() => {
+    const q = String(liveSearch || '').trim().toLowerCase();
+    if (!q) return data.rows || [];
+    return (data.rows || []).filter((r) => {
+      const hay = [
+        r.transactionId,
+        r.fullName,
+        r.idNumber,
+        r.organizationName,
+        r.agentName,
+        r.productName,
+      ]
+        .map((x) => String(x || '').toLowerCase())
+        .join(' | ');
+      return hay.includes(q);
+    });
+  }, [data.rows, liveSearch]);
   const selectedBeneficiary = selected?.beneficiaryUpdate || {};
   const formState = selected?.formState || {};
   const selectedPrimaryFromUpdate = selectedBeneficiary?.primaryMember || {};
@@ -443,20 +447,6 @@ export default function SubscribersDashboard() {
                     <Input value={editForm.productName} onChange={(e) => setEditForm((p) => ({ ...p, productName: e.target.value }))} />
                   </Field>
                 </div>
-                <Field>
-                  <FieldLabel>סטטוס תשלום</FieldLabel>
-                  <select
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                    value={editForm.paymentStatus}
-                    onChange={(e) => setEditForm((p) => ({ ...p, paymentStatus: e.target.value }))}
-                  >
-                    {PAYMENT_STATUS_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
               </FieldGroup>
               {error ? <p className="text-destructive text-sm">{error}</p> : null}
               <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
@@ -647,7 +637,7 @@ export default function SubscribersDashboard() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatsCard title="סה״כ הכנסות" value={formatCurrency(s.totalRevenue || 0)} icon={TrendingUp} loading={loading} />
             <StatsCard title="רווח נקי" value={formatCurrency(s.totalNetProfit || 0)} icon={Receipt} loading={loading} />
-            <StatsCard title="עסקאות בתוצאות" value={sr.totalTransactions ?? 0} icon={Users} loading={loading} />
+            <StatsCard title="עסקאות בתוצאות" value={visibleRows.length} icon={Users} loading={loading} />
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="rounded-lg outline-none">
@@ -666,17 +656,14 @@ export default function SubscribersDashboard() {
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
                   <Input
                     className="pe-10"
-                    placeholder="חיפוש מהיר: שם לקוח, טקסט חופשי (שדה customerSearch ב-API)…"
-                    value={filters.customerSearch}
-                    onChange={(e) => setFilters((p) => ({ ...p, customerSearch: e.target.value }))}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') loadDashboard();
-                    }}
+                    placeholder="חיפוש חי: שם לקוח, ת.ז, מס׳ הזמנה…"
+                    value={liveSearch}
+                    onChange={(e) => setLiveSearch(e.target.value)}
                   />
                 </div>
                 <Button type="button" onClick={loadDashboard} disabled={loading}>
                   {loading && <Spinner className="me-2" />}
-                  הצג בדוח
+                  רענון
                 </Button>
                 <Button type="button" variant="outline" onClick={() => setFilterDialogOpen(true)} className="shrink-0">
                   <Filter className="size-4 me-2" />
@@ -689,38 +676,13 @@ export default function SubscribersDashboard() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                לחיפוש לפי ת.ז או שדות נוספים השתמשו ב&quot;סינון מתקדם&quot;. הלוגיקה נשארה זהה לשרת.
+                החיפוש מסנן מיידית את הרשימה הנוכחית. לסינונים נוספים השתמשו ב&quot;סינון מתקדם&quot;.
               </p>
             </CardContent>
           </Card>
 
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-            <Card className="xl:col-span-3">
-              <CardHeader>
-                <CardTitle>תוצאות חיפוש (מסכם)</CardTitle>
-                <CardDescription>לפי הסינון הנוכחי</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="rounded-lg border bg-muted/40 p-3">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                    <div>
-                      סה&quot;כ עסקאות: <strong>{sr.totalTransactions || 0}</strong>
-                    </div>
-                    <div>
-                      לקוחות עיקריים: <strong>{sr.totalPrimary || 0}</strong>
-                    </div>
-                    <div>
-                      לקוחות משניים: <strong>{sr.totalSecondary || 0}</strong>
-                    </div>
-                    <div>
-                      מכירות בכסף: <strong>{formatCurrency(sr.totalSalesAmount || 0)}</strong>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="xl:col-span-1 h-fit">
+            <Card className="xl:col-span-4 h-fit">
               <CardHeader>
                 <CardTitle className="text-lg">כמות / סנן לפי</CardTitle>
               </CardHeader>
@@ -755,12 +717,12 @@ export default function SubscribersDashboard() {
           <Card>
             <CardHeader>
               <CardTitle>רשימת עסקאות</CardTitle>
-              <CardDescription>עריכה ומחיקה — פועלות מול /api/admin/deals/:id</CardDescription>
+              <CardDescription>תצוגה מקוצרת; פרטים מלאים ב״הצג״ או ״ערוך״</CardDescription>
             </CardHeader>
             <CardContent className="overflow-auto">
               {error && !editOpen ? <p className="text-destructive text-sm mb-2">{error}</p> : null}
               {loading ? <p className="text-muted-foreground text-sm mb-2">טוען…</p> : null}
-              {data.rows.length === 0 && !loading ? (
+              {visibleRows.length === 0 && !loading ? (
                 <Empty>
                   <EmptyMedia variant="icon">
                     <UserCheck className="size-8" />
@@ -777,21 +739,13 @@ export default function SubscribersDashboard() {
                         <TableHead>סטטוס חיוב עתידי</TableHead>
                         <TableHead>מס&apos; הזמנה</TableHead>
                         <TableHead>לקוח</TableHead>
-                        <TableHead>ת&quot;ז</TableHead>
-                        <TableHead>ארגון</TableHead>
-                        <TableHead>סוכן</TableHead>
-                        <TableHead>מוצר</TableHead>
-                        <TableHead>חבילה</TableHead>
                         <TableHead>סכום</TableHead>
-                        <TableHead>עלות ספק</TableHead>
-                        <TableHead>עמלת סוכן</TableHead>
-                        <TableHead>רווח נקי</TableHead>
                         <TableHead>תאריך</TableHead>
                         <TableHead className="w-28">פעולות</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {data.rows.map((r) => (
+                      {visibleRows.map((r) => (
                         (() => {
                           const isCancelled = r.status === 'canceled' || String(r.subscriptionStatus || '').toLowerCase() === 'cancelled';
                           const missingRecurringIds =
@@ -830,17 +784,7 @@ export default function SubscribersDashboard() {
                           </TableCell>
                           <TableCell className="font-mono text-xs">{r.transactionId}</TableCell>
                           <TableCell>{r.fullName || '-'}</TableCell>
-                          <TableCell dir="ltr" className="text-start">
-                            {r.idNumber || '-'}
-                          </TableCell>
-                          <TableCell>{r.organizationName || '-'}</TableCell>
-                          <TableCell>{r.agentName || '-'}</TableCell>
-                          <TableCell>{r.productName || '—'}</TableCell>
-                          <TableCell>{r.planType || '-'}</TableCell>
                           <TableCell>{formatCurrency(r.amount)}</TableCell>
-                          <TableCell>{formatCurrency(r.vendorCost)}</TableCell>
-                          <TableCell>{formatCurrency(r.agentCommission)}</TableCell>
-                          <TableCell className="font-semibold text-emerald-700 dark:text-emerald-400">{formatCurrency(r.netProfit)}</TableCell>
                           <TableCell className="whitespace-nowrap text-xs">
                             {r.createdAt ? new Date(r.createdAt).toLocaleString('he-IL') : '-'}
                           </TableCell>

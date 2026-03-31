@@ -154,6 +154,7 @@ export default function BeneficiaryForm({ showBackLink = true }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
   const [submitted, setSubmitted] = useState(false);
+  const [alreadyHasBeneficiaries, setAlreadyHasBeneficiaries] = useState(false);
 
   /** מספר הזמנה מהמסד לפי LowProfileCode (אחרי תשלום) — ללא מילוי אוטומטי של פרטי מוטבים */
   useEffect(() => {
@@ -227,6 +228,10 @@ export default function BeneficiaryForm({ showBackLink = true }) {
         if (!r.success || cancelled) return;
         if (r.organizationName) setOrganizationName(r.organizationName);
         if (r.agentName) setAgentName(r.agentName);
+        if (r.hasBeneficiaries) {
+          setAlreadyHasBeneficiaries(true);
+          return;
+        }
         setPrimaryMember((prev) => {
           const name = splitFullName(r.fullName);
           return {
@@ -337,7 +342,7 @@ export default function BeneficiaryForm({ showBackLink = true }) {
             <div />
           )}
           <div className="h-9 px-4 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-sm">
-            אופל
+            אופאל
           </div>
         </div>
       </header>
@@ -350,6 +355,15 @@ export default function BeneficiaryForm({ showBackLink = true }) {
           </p>
         </div>
 
+        {alreadyHasBeneficiaries ? (
+          <Card>
+            <CardContent className="py-8">
+              <p className="text-center text-base font-medium">
+                פרטי המוטבים עבור עסקה זו כבר מולאו במערכת. תודה!
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-6">
           <Card>
             <CardHeader>
@@ -425,6 +439,7 @@ export default function BeneficiaryForm({ showBackLink = true }) {
             </Button>
           </div>
         </form>
+        )}
       </main>
     </div>
   );

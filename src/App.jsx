@@ -16,7 +16,7 @@ export default function App() {
             אנו משדרגים את האתר. בקרוב יחזרו כל השירותים והמידע.
           </p>
         </div>
-        <p className="text-sm text-muted-foreground">אופל — בית ליזמות רפואית</p>
+        <p className="text-sm text-muted-foreground">אופאל — בית ליזמות רפואית</p>
       </div>
     </div>
   );
