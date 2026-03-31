@@ -351,7 +351,6 @@ export async function getLowProfileIndicator(terminalNumber, username, lowProfil
  * @returns {Promise<{ responseCode: number, description: string, lowProfileCode: string }>}
  */
 export async function stopRecurringProfile(opts = {}) {
-  const lowProfileCode = String(opts.lowProfileCode || '').trim();
   const accountId = String(opts.cardcomAccountId || '').trim();
   const recurringId = String(opts.cardcomRecurringId || '').trim();
   if (!accountId || !recurringId) {
@@ -378,7 +377,7 @@ export async function stopRecurringProfile(opts = {}) {
   if (!Number.isFinite(accountNum) || !Number.isFinite(recurringNum)) {
     throw new Error('Invalid Cardcom AccountId or RecurringId (must be numeric)');
   }
-  const rowKey = lowProfileCode || accountId;
+  const rowKey = accountId;
 
   const soap = `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
@@ -394,12 +393,10 @@ export async function stopRecurringProfile(opts = {}) {
           <AccountId>${accountNum}</AccountId>
           <RecurringPaymentsActive>false</RecurringPaymentsActive>
         </Account>
-        ${lowProfileCode ? `<LowProfileDealGuid>${escape(lowProfileCode)}</LowProfileDealGuid>` : ''}
         <RecurringPayments>
           <ExtRecurringPayments>
             <RecurringId>${recurringNum}</RecurringId>
             <IsActive>false</IsActive>
-            <ReturnValue>${escape(rowKey)}</ReturnValue>
             <InternalDecription>Stop recurring by admin request</InternalDecription>
           </ExtRecurringPayments>
         </RecurringPayments>
@@ -438,5 +435,5 @@ export async function stopRecurringProfile(opts = {}) {
     throw new Error(description || `Cardcom recurring stop failed (${responseCode || 'unknown'})`);
   }
 
-  return { responseCode, description, lowProfileCode };
+  return { responseCode, description, accountId };
 }
