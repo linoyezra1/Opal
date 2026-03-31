@@ -74,6 +74,7 @@ function buildCreateLowProfileDealSoap(opts) {
   <username>${escape(username)}</username>
   <lowprofileParams>
     <Operation>BillOnly</Operation>
+    <LpMode>1</LpMode>
     <ReturnValue>${escape(returnValue)}</ReturnValue>
     <SumToBill>${Number(sumToBill)}</SumToBill>
     <Language>${escape(language)}</Language>
@@ -192,6 +193,11 @@ export async function createRecurringProfileFromLowProfile(opts = {}) {
   form.set('RecurringPayments.TotalNumOfBills', '999999');
   form.set('RecurringPayments.FlexItem.Price', String(Number(opts.monthlyAmount || 0)));
   form.set('RecurringPayments.ReturnValue', String(opts.returnValue || '').trim());
+  const ccToken = String(opts.cardToken || '').trim();
+  if (ccToken) {
+    // Fallback for cases where LowProfileDealGuid is not linked to token in Cardcom.
+    form.set('CreditCard.Token', ccToken);
+  }
 
   const response = await axios.post(CARDCOM_RECURRING_NTV_URL, form.toString(), {
     headers: {

@@ -360,7 +360,11 @@ app.post('/api/cardcom-webhook', (req, res) => {
   }
 
   res.status(200).send('OK');
-  setImmediate(() => handleWebhookSuccess(lowProfileCode).catch((err) => console.error(`[${ts()}] Webhook error:`, err)));
+  setImmediate(() =>
+    handleWebhookSuccess(lowProfileCode, req.body, req.query).catch((err) =>
+      console.error(`[${ts()}] Webhook error:`, err)
+    )
+  );
 });
 
 /** GET webhook (some gateways call with GET + query params) */
@@ -376,7 +380,11 @@ app.get('/api/cardcom-webhook', (req, res) => {
   }
 
   res.status(200).send('OK');
-  setImmediate(() => handleWebhookSuccess(lowProfileCode).catch((e) => console.error(`[${ts()}] Webhook error:`, e)));
+  setImmediate(() =>
+    handleWebhookSuccess(lowProfileCode, req.body, req.query).catch((e) =>
+      console.error(`[${ts()}] Webhook error:`, e)
+    )
+  );
 });
 
 /** Cardcom "MasterRecurring" external report (BillGold recurring events). */
@@ -393,7 +401,7 @@ app.post('/api/cardcom-master-recurring-webhook', (req, res) => {
  * Process webhook in background: confirm deal with Cardcom, then persist to MongoDB.
  * Uses fallbacks everywhere so missing metadata does not crash.
  */
-async function handleWebhookSuccess(lowProfileCode) {
+async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQuery = {}) {
   try {
     const terminal = parseInt(process.env.CARDCOM_TERMINAL, 10) || 0;
     const user = process.env.CARDCOM_USER ?? '';
@@ -491,6 +499,15 @@ async function handleWebhookSuccess(lowProfileCode) {
 
     const dealPayload = buildDealPayloadFromFormState(finalForm);
 
+    const webhookCardToken = firstDefined(
+      webhookBody?.CardToken,
+      webhookBody?.cardToken,
+      webhookBody?.['ExtShvaParams.CardToken'],
+      webhookQuery?.CardToken,
+      webhookQuery?.cardToken,
+      webhookQuery?.['ExtShvaParams.CardToken']
+    );
+
     // Step 2 (required): create BillGold recurring profile from successful Low Profile charge.
     let step2Recurring = null;
     try {
@@ -503,6 +520,7 @@ async function handleWebhookSuccess(lowProfileCode) {
         phone: String(finalForm?.phone || '').trim(),
         monthlyAmount: payerAmount,
         returnValue: lowProfileCode,
+        cardToken: webhookCardToken,
       });
       console.log(`[${ts()}] RecurringPayment Step2 created`, {
         lowProfileCode,
