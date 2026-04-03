@@ -69,6 +69,7 @@ const emptyEditForm = () => ({
   agentName: '',
   productName: '',
   payerAmount: '',
+  beneficiaries: [],
 });
 
 export default function SubscribersDashboard() {
@@ -211,6 +212,12 @@ export default function SubscribersDashboard() {
   function openEdit(row) {
     const fs = row.raw?.formState || {};
     const primary = row.raw?.beneficiaryUpdate?.primaryMember || {};
+    const additional =
+      Array.isArray(row.raw?.beneficiaryUpdate?.additionalMembers) && row.raw.beneficiaryUpdate.additionalMembers.length
+        ? row.raw.beneficiaryUpdate.additionalMembers
+        : Array.isArray(fs.beneficiaries)
+          ? fs.beneficiaries
+          : [];
     setEditDealId(row.id);
     setEditForm({
       firstName: primary.firstName || '',
@@ -227,6 +234,12 @@ export default function SubscribersDashboard() {
       agentName: row.raw?.beneficiaryUpdate?.agentName || fs.agentName || row.agentName || '',
       productName: fs.productName || row.productName || '',
       payerAmount: String(row.amount ?? ''),
+      beneficiaries: additional.map((m) => ({
+        firstName: String(m?.firstName || '').trim(),
+        lastName: String(m?.lastName || '').trim(),
+        id: String(m?.id || '').trim(),
+        relation: String(m?.relation || m?.relationship || '').trim(),
+      })),
     });
     setEditOpen(true);
   }
@@ -256,6 +269,13 @@ export default function SubscribersDashboard() {
               email: editForm.email,
               address: editForm.address,
             },
+            additionalMembers: (editForm.beneficiaries || []).map((b) => ({
+              firstName: b.firstName,
+              lastName: b.lastName,
+              id: b.id,
+              relation: b.relation,
+              relationship: b.relation,
+            })),
           },
           formState: {
             fullName: [editForm.firstName, editForm.lastName].filter(Boolean).join(' ').trim(),
@@ -270,6 +290,14 @@ export default function SubscribersDashboard() {
             organizationName: editForm.organizationName,
             agentName: editForm.agentName,
             productName: editForm.productName,
+            beneficiaries: (editForm.beneficiaries || []).map((b) => ({
+              firstName: b.firstName,
+              lastName: b.lastName,
+              id: b.id,
+              relation: b.relation,
+              relationship: b.relation,
+            })),
+            beneficiaryCount: Array.isArray(editForm.beneficiaries) ? editForm.beneficiaries.length : 0,
           },
           payerAmount: editForm.payerAmount,
         }),
@@ -508,6 +536,93 @@ export default function SubscribersDashboard() {
                     <FieldLabel>מוצר (טקסט)</FieldLabel>
                     <Input value={editForm.productName} onChange={(e) => setEditForm((p) => ({ ...p, productName: e.target.value }))} />
                   </Field>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <FieldLabel>מוטבים נוספים (ניתן לעריכה)</FieldLabel>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setEditForm((p) => ({
+                          ...p,
+                          beneficiaries: [...(p.beneficiaries || []), { firstName: '', lastName: '', id: '', relation: '' }],
+                        }))
+                      }
+                    >
+                      הוסף מוטב
+                    </Button>
+                  </div>
+                  {(editForm.beneficiaries || []).length === 0 ? (
+                    <p className="text-xs text-muted-foreground">אין מוטבים נוספים.</p>
+                  ) : (
+                    (editForm.beneficiaries || []).map((b, idx) => (
+                      <div key={`ben-edit-${idx}`} className="rounded-lg border p-3 grid grid-cols-1 md:grid-cols-4 gap-2">
+                        <Input
+                          placeholder="שם פרטי"
+                          value={b.firstName}
+                          onChange={(e) =>
+                            setEditForm((p) => {
+                              const list = [...(p.beneficiaries || [])];
+                              list[idx] = { ...list[idx], firstName: e.target.value };
+                              return { ...p, beneficiaries: list };
+                            })
+                          }
+                        />
+                        <Input
+                          placeholder="שם משפחה"
+                          value={b.lastName}
+                          onChange={(e) =>
+                            setEditForm((p) => {
+                              const list = [...(p.beneficiaries || [])];
+                              list[idx] = { ...list[idx], lastName: e.target.value };
+                              return { ...p, beneficiaries: list };
+                            })
+                          }
+                        />
+                        <Input
+                          dir="ltr"
+                          placeholder="ת.ז"
+                          value={b.id}
+                          onChange={(e) =>
+                            setEditForm((p) => {
+                              const list = [...(p.beneficiaries || [])];
+                              list[idx] = { ...list[idx], id: e.target.value };
+                              return { ...p, beneficiaries: list };
+                            })
+                          }
+                        />
+                        <div className="flex items-center gap-2">
+                          <Input
+                            placeholder="קרבה"
+                            value={b.relation}
+                            onChange={(e) =>
+                              setEditForm((p) => {
+                                const list = [...(p.beneficiaries || [])];
+                                list[idx] = { ...list[idx], relation: e.target.value };
+                                return { ...p, beneficiaries: list };
+                              })
+                            }
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setEditForm((p) => {
+                                const list = [...(p.beneficiaries || [])];
+                                list.splice(idx, 1);
+                                return { ...p, beneficiaries: list };
+                              })
+                            }
+                          >
+                            הסר
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </FieldGroup>
               {error ? <p className="text-destructive text-sm">{error}</p> : null}

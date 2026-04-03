@@ -58,7 +58,10 @@ function buildOrderConfirmationHtml(payload, logoDataUri = '') {
   );
 
   const servicePhone = escapeHtml(String(process.env.MEDICAL_SERVICES_PHONE || '00-0000000').trim());
-  const claimsLink = String(process.env.CLAIMS_ONLINE_URL || '#').trim() || '#';
+  const claimsLink = String(
+    process.env.CLAIMS_ONLINE_URL ||
+      'https://medi-care.org.il/online-claim/#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjQzNiIsInRvZ2dsZSI6ZmFsc2V9'
+  ).trim() || '#';
   const salesPhone = escapeHtml(String(process.env.OPAL_SALES_PHONE || '054-4261369').trim());
   const contactEmail = escapeHtml(String(process.env.OPAL_CONTACT_EMAIL || 'opal2000@zahav.net.il').trim());
 
@@ -114,8 +117,8 @@ function buildOrderConfirmationHtml(payload, logoDataUri = '') {
                   <span dir="ltr" style="unicode-bidi:embed;">${servicePhone}</span>
                 </p>
                 <p style="margin:0 0 6px;text-align:right;">
-                  <span style="color:${OPAL_BLUE};font-weight:500;">הגשת מסמכים:</span>
-                  <a href="${escapeAttr(claimsLink)}" style="color:${OPAL_GOLD};text-decoration:none;">תביעה און ליין</a>
+                  <span style="color:${OPAL_BLUE};font-weight:500;">לינק להגשת מסמכים רפואיים — תביעה און ליין:</span>
+                  <a href="${escapeAttr(claimsLink)}" style="color:${OPAL_GOLD};text-decoration:none;">לינק</a>
                 </p>
                 <p style="margin:0;text-align:right;">
                   <span style="color:${OPAL_BLUE};font-weight:500;">מכירות:</span>
@@ -182,7 +185,10 @@ function buildBeneficiaryCompletionHtml(payload, logoDataUri = '') {
       : '';
 
   const medicalPhone = String(process.env.MEDICAL_SERVICES_PHONE || '00-0000000').trim();
-  const claimsLink = String(process.env.CLAIMS_ONLINE_URL || '#').trim() || '#';
+  const claimsLink = String(
+    process.env.CLAIMS_ONLINE_URL ||
+      'https://medi-care.org.il/online-claim/#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjQzNiIsInRvZ2dsZSI6ZmFsc2V9'
+  ).trim() || '#';
   const medicalPhoneEsc = escapeHtml(medicalPhone);
   const tel = escapeAttr(telHref(medicalPhone));
 
@@ -240,9 +246,8 @@ function buildBeneficiaryCompletionHtml(payload, logoDataUri = '') {
                   <span dir="ltr" style="unicode-bidi:embed;">${medicalPhoneEsc}</span>
                 </a>
                 <div style="margin-top:16px;text-align:right;">
-                  <a href="${escapeAttr(claimsLink)}" style="color:${OPAL_GOLD};font-size:14px;font-weight:500;text-decoration:none;">
-                    להגשת מסמכים רפואיים - תביעה און ליין
-                  </a>
+                  <span style="color:${OPAL_BLUE};font-weight:500;">לינק להגשת מסמכים רפואיים — תביעה און ליין:</span>
+                  <a href="${escapeAttr(claimsLink)}" style="color:${OPAL_GOLD};font-size:14px;font-weight:500;text-decoration:none;"> לינק</a>
                 </div>
               </div>
               <div dir="rtl" style="border-right:3px solid ${OPAL_GOLD};padding-right:12px;font-size:13px;color:#555;line-height:1.6;text-align:right;">

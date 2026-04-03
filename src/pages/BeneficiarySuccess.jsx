@@ -1,7 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { CheckCircle2 } from 'lucide-react';
-import { Button } from '../components/ui/button.jsx';
 import { Card, CardContent } from '../components/ui/card.jsx';
 
 export default function BeneficiarySuccess() {
@@ -16,11 +14,7 @@ export default function BeneficiarySuccess() {
             <h1 className="text-2xl font-bold tracking-tight">הפרטים נשמרו בהצלחה</h1>
             <p className="text-muted-foreground text-lg">תודה שהצטרפת למשפחת אופאל</p>
           </div>
-          <div className="flex justify-center">
-            <Button asChild>
-              <Link to="/">חזרה לדף הבית</Link>
-            </Button>
-          </div>
+          <p className="text-sm text-muted-foreground">הטופס נקלט בהצלחה. נמשיך בעיבוד הבקשה ונעדכן אותך בהמשך.</p>
         </CardContent>
       </Card>
     </div>

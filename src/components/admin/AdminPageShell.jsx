@@ -7,7 +7,6 @@ import {
   Users,
   Receipt,
   UserCheck,
-  Gem,
   LogOut,
   PanelRightClose,
   PanelRightOpen,
@@ -58,12 +57,10 @@ export default function AdminPageShell({ children }) {
         )}
       >
         <div className="flex h-14 items-center gap-2 border-b px-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Gem className="size-4" />
-          </div>
+          <img src="/branding/opal-logo.jpeg" alt="אופאל" className="h-9 w-auto shrink-0 object-contain" />
           {!collapsed && (
             <div className="flex flex-col min-w-0">
-              <span className="font-semibold text-sm truncate">Opal</span>
+              <span className="font-semibold text-sm truncate">אופאל</span>
               <span className="text-xs text-muted-foreground truncate">ניהול מנויים</span>
             </div>
           )}

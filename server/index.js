@@ -221,6 +221,8 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' })); // Cardcom may POST as form-urlencoded
 
 const STATIC_DIR = resolve(process.cwd(), 'dist');
+const BRANDING_DIR = resolve(process.cwd(), 'server', 'assets', 'branding');
+app.use('/branding', express.static(BRANDING_DIR));
 app.use(express.static(STATIC_DIR));
 
 /** Pending deals: lowProfileCode → { formState, payerAmount, createdAt } */

@@ -341,9 +341,7 @@ export default function BeneficiaryForm({ showBackLink = true }) {
           ) : (
             <div />
           )}
-          <div className="h-9 px-4 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-sm">
-            אופאל
-          </div>
+          <img src="/branding/opal-logo.jpeg" alt="אופאל" className="h-9 w-auto object-contain" />
         </div>
       </header>
 

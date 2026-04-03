@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Spinner } from '../components/ui/spinner.jsx';
 import { API_BASE } from '../apiBase.js';
 
-const DOCUMENTS_LINK = '#';
+const DOCUMENTS_LINK =
+  'https://medi-care.org.il/online-claim/#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjQzNiIsInRvZ2dsZSI6ZmFsc2V9';
 
 export default function Success() {
   const [transactionId, setTransactionId] = useState('');
@@ -65,9 +66,7 @@ export default function Success() {
     <div dir="rtl" className="min-h-screen flex flex-col bg-gradient-to-b from-primary/5 via-background to-muted/30 font-sans">
       <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="container max-w-3xl mx-auto px-4 py-5 flex justify-center">
-          <div className="h-11 px-6 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-lg">
-            אופאל
-          </div>
+          <img src="/branding/opal-logo.jpeg" alt="אופאל" className="h-11 w-auto object-contain" />
         </div>
       </header>
 
