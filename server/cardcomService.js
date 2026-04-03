@@ -372,15 +372,21 @@ export async function stopRecurringProfile(opts = {}) {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
 
-  const accountNum = parseInt(accountId, 10);
-  const recurringNum = parseInt(recurringId, 10);
-  if (!Number.isFinite(accountNum) || !Number.isFinite(recurringNum)) {
-    throw new Error('Invalid Cardcom AccountId or RecurringId (must be numeric)');
+  if (!/^\d+$/.test(accountId) || !/^\d+$/.test(recurringId)) {
+    throw new Error('Invalid Cardcom AccountId or RecurringId (must be numeric strings)');
   }
   const rowKey = accountId;
+  const recurringIdXml = escape(recurringId);
+  const accountIdXml = escape(accountId);
 
   const soap = `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Header>
+    <BillGoldAuth xmlns="BillGoldService">
+      <UserName>${escape(apiName)}</UserName>
+      <Password>${escape(apiPassword)}</Password>
+    </BillGoldAuth>
+  </soap:Header>
   <soap:Body>
     <AddUpdateRecurringOrder xmlns="BillGoldService">
       <TerminalNumber>${terminalNumber}</TerminalNumber>
@@ -390,13 +396,14 @@ export async function stopRecurringProfile(opts = {}) {
         <InternalUsageRowID>${escape(rowKey)}</InternalUsageRowID>
         <Operation>Update</Operation>
         <Account>
-          <AccountId>${accountNum}</AccountId>
+          <AccountId>${accountIdXml}</AccountId>
           <RecurringPaymentsActive>false</RecurringPaymentsActive>
         </Account>
         <RecurringPayments>
           <ExtRecurringPayments>
-            <RecurringId>${recurringNum}</RecurringId>
+            <RecurringId>${recurringIdXml}</RecurringId>
             <IsActive>false</IsActive>
+            <RecurringPaymentsActive>false</RecurringPaymentsActive>
             <InternalDecription>Stop recurring by admin request</InternalDecription>
           </ExtRecurringPayments>
         </RecurringPayments>
@@ -423,12 +430,14 @@ export async function stopRecurringProfile(opts = {}) {
   const responseCode = Number(getVal('ResponseCode'));
   const description = getVal('Description') || '';
 
+  console.log('[cardcom] stopRecurringProfile responseXml (full)', xml);
+
   if (responseCode !== 0) {
     console.error('[cardcom] stopRecurringProfile failed', {
       terminalNumber,
-      lowProfileCode: lowProfileCode || null,
       cardcomAccountId: accountId,
       cardcomRecurringId: recurringId,
+      responseCode,
       requestXml: soap,
       responseXml: xml,
     });
