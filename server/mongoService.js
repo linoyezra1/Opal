@@ -183,7 +183,7 @@ export async function getPublicDealContext(transactionId) {
   if (!tid) return null;
   const doc = await db.collection('deals').findOne(
     { transactionId: tid },
-    { projection: { transactionId: 1, formState: 1, 'beneficiaryUpdate.additionalMembers': 1 } }
+    { projection: { transactionId: 1, formState: 1, beneficiaryUpdate: 1 } }
   );
   if (!doc) return null;
   const fs = doc.formState && typeof doc.formState === 'object' ? doc.formState : {};
@@ -191,7 +191,19 @@ export async function getPublicDealContext(transactionId) {
   const submittedBeneficiaries = Array.isArray(doc?.beneficiaryUpdate?.additionalMembers)
     ? doc.beneficiaryUpdate.additionalMembers
     : [];
-  const hasBeneficiaries = formBeneficiaries.length > 0 || submittedBeneficiaries.length > 0;
+  const primary = doc?.beneficiaryUpdate?.primaryMember && typeof doc.beneficiaryUpdate.primaryMember === 'object'
+    ? doc.beneficiaryUpdate.primaryMember
+    : {};
+  const primaryFilled = !!(
+    String(primary.firstName || '').trim() ||
+    String(primary.lastName || '').trim() ||
+    String(primary.id || '').trim()
+  );
+  const hasBeneficiaries =
+    formBeneficiaries.length > 0 ||
+    submittedBeneficiaries.length > 0 ||
+    primaryFilled ||
+    !!doc?.beneficiaryUpdate?.submittedAt;
   const n = Math.max(0, Math.min(5, Number(fs.beneficiaryCount) || 0));
   return {
     transactionId: String(doc.transactionId),
@@ -898,6 +910,22 @@ export async function updateDealAdmin(dealId, body = {}) {
     formState: fs,
     updatedAt: new Date(),
   };
+  if (body.beneficiaryUpdate && typeof body.beneficiaryUpdate === 'object') {
+    const existingBU = existing.beneficiaryUpdate && typeof existing.beneficiaryUpdate === 'object'
+      ? existing.beneficiaryUpdate
+      : {};
+    const incomingBU = body.beneficiaryUpdate;
+    const mergedPrimary = {
+      ...(existingBU.primaryMember && typeof existingBU.primaryMember === 'object' ? existingBU.primaryMember : {}),
+      ...(incomingBU.primaryMember && typeof incomingBU.primaryMember === 'object' ? incomingBU.primaryMember : {}),
+    };
+    set.beneficiaryUpdate = {
+      ...existingBU,
+      ...incomingBU,
+      primaryMember: mergedPrimary,
+      submittedAt: existingBU.submittedAt || new Date(),
+    };
+  }
   if (body.payerAmount != null && body.payerAmount !== '') set.payerAmount = Number(body.payerAmount);
   if (body.paymentStatus != null && String(body.paymentStatus).trim() !== '') set.paymentStatus = String(body.paymentStatus).trim();
 

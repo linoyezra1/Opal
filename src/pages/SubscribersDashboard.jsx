@@ -55,10 +55,16 @@ function formatCurrency(value) {
 const checkboxClass = 'h-4 w-4 rounded border border-input bg-background text-primary ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 const emptyEditForm = () => ({
-  fullName: '',
+  firstName: '',
+  lastName: '',
   phone: '',
   email: '',
   idNum: '',
+  dateOfBirth: '',
+  maritalStatus: '',
+  healthFund: '',
+  supplementalInsurance: '',
+  address: '',
   organizationName: '',
   agentName: '',
   productName: '',
@@ -204,14 +210,21 @@ export default function SubscribersDashboard() {
 
   function openEdit(row) {
     const fs = row.raw?.formState || {};
+    const primary = row.raw?.beneficiaryUpdate?.primaryMember || {};
     setEditDealId(row.id);
     setEditForm({
-      fullName: fs.fullName || row.fullName || '',
-      phone: fs.phone || '',
-      email: fs.email || '',
-      idNum: fs.id || row.idNumber || '',
-      organizationName: fs.organizationName || row.organizationName || '',
-      agentName: fs.agentName || row.agentName || '',
+      firstName: primary.firstName || '',
+      lastName: primary.lastName || '',
+      phone: primary.phone || fs.phone || '',
+      email: primary.email || fs.email || '',
+      idNum: primary.id || fs.id || row.idNumber || '',
+      dateOfBirth: primary.dateOfBirth || '',
+      maritalStatus: primary.maritalStatus || '',
+      healthFund: primary.healthFund || '',
+      supplementalInsurance: primary.supplementalInsurance || '',
+      address: primary.address || fs.address || '',
+      organizationName: row.raw?.beneficiaryUpdate?.organizationName || fs.organizationName || row.organizationName || '',
+      agentName: row.raw?.beneficiaryUpdate?.agentName || fs.agentName || row.agentName || '',
       productName: fs.productName || row.productName || '',
       payerAmount: String(row.amount ?? ''),
     });
@@ -228,11 +241,32 @@ export default function SubscribersDashboard() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
+          beneficiaryUpdate: {
+            organizationName: editForm.organizationName,
+            agentName: editForm.agentName,
+            primaryMember: {
+              firstName: editForm.firstName,
+              lastName: editForm.lastName,
+              id: editForm.idNum,
+              dateOfBirth: editForm.dateOfBirth,
+              maritalStatus: editForm.maritalStatus,
+              healthFund: editForm.healthFund,
+              supplementalInsurance: editForm.supplementalInsurance,
+              phone: editForm.phone,
+              email: editForm.email,
+              address: editForm.address,
+            },
+          },
           formState: {
-            fullName: editForm.fullName,
+            fullName: [editForm.firstName, editForm.lastName].filter(Boolean).join(' ').trim(),
             phone: editForm.phone,
             email: editForm.email,
             id: editForm.idNum,
+            dateOfBirth: editForm.dateOfBirth,
+            maritalStatus: editForm.maritalStatus,
+            healthFund: editForm.healthFund,
+            supplementalInsurance: editForm.supplementalInsurance,
+            address: editForm.address,
             organizationName: editForm.organizationName,
             agentName: editForm.agentName,
             productName: editForm.productName,
@@ -397,8 +431,12 @@ export default function SubscribersDashboard() {
             <form onSubmit={saveEdit} className="space-y-4">
               <FieldGroup>
                 <Field>
-                  <FieldLabel>שם מלא</FieldLabel>
-                  <Input value={editForm.fullName} onChange={(e) => setEditForm((p) => ({ ...p, fullName: e.target.value }))} />
+                  <FieldLabel>שם פרטי</FieldLabel>
+                  <Input value={editForm.firstName} onChange={(e) => setEditForm((p) => ({ ...p, firstName: e.target.value }))} />
+                </Field>
+                <Field>
+                  <FieldLabel>שם משפחה</FieldLabel>
+                  <Input value={editForm.lastName} onChange={(e) => setEditForm((p) => ({ ...p, lastName: e.target.value }))} />
                 </Field>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field>
@@ -421,6 +459,26 @@ export default function SubscribersDashboard() {
                     <Input dir="ltr" value={editForm.idNum} onChange={(e) => setEditForm((p) => ({ ...p, idNum: e.target.value }))} />
                   </Field>
                   <Field>
+                    <FieldLabel>תאריך לידה</FieldLabel>
+                    <Input type="date" value={editForm.dateOfBirth} onChange={(e) => setEditForm((p) => ({ ...p, dateOfBirth: e.target.value }))} />
+                  </Field>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field>
+                    <FieldLabel>מצב משפחתי</FieldLabel>
+                    <Input value={editForm.maritalStatus} onChange={(e) => setEditForm((p) => ({ ...p, maritalStatus: e.target.value }))} />
+                  </Field>
+                  <Field>
+                    <FieldLabel>קופת חולים</FieldLabel>
+                    <Input value={editForm.healthFund} onChange={(e) => setEditForm((p) => ({ ...p, healthFund: e.target.value }))} />
+                  </Field>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field>
+                    <FieldLabel>ביטוח משלים</FieldLabel>
+                    <Input value={editForm.supplementalInsurance} onChange={(e) => setEditForm((p) => ({ ...p, supplementalInsurance: e.target.value }))} />
+                  </Field>
+                  <Field>
                     <FieldLabel>סכום עסקה (₪)</FieldLabel>
                     <Input
                       type="number"
@@ -430,6 +488,10 @@ export default function SubscribersDashboard() {
                     />
                   </Field>
                 </div>
+                <Field>
+                  <FieldLabel>כתובת</FieldLabel>
+                  <Input value={editForm.address} onChange={(e) => setEditForm((p) => ({ ...p, address: e.target.value }))} />
+                </Field>
                 <Field>
                   <FieldLabel>שם ארגון</FieldLabel>
                   <Input
@@ -769,7 +831,7 @@ export default function SubscribersDashboard() {
                               </Badge>
                             ) : (
                               <Badge variant={isCancelled ? 'destructive' : 'default'}>
-                                {isCancelled ? 'Cancelled' : 'שולם'}
+                                {isCancelled ? 'Cancelled' : 'הושלם'}
                               </Badge>
                             )}
                           </TableCell>
