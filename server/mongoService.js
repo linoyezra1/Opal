@@ -616,11 +616,27 @@ function enrichDeal(d) {
   const beneficiaries = Array.isArray(d?.formState?.beneficiaries) ? d.formState.beneficiaries : [];
   const secondaryCount = beneficiaries.length;
   const primaryCount = 1;
+  const individualsCount = primaryCount + secondaryCount;
   const orgName = String(d?.formState?.organizationName || '').trim();
   const isCanceled = isCancelledStatus(d);
   const provider = d?.provider || 'Cardcom';
   const agentName = String(d?.formState?.agentName || '').trim();
   const isPaidSuccess = /success|paid|test_success/i.test(String(d?.paymentStatus || ''));
+  const statusRaw = String(d?.status || d?.subscriptionStatus || '').trim().toLowerCase();
+  const paymentMethodRaw = String(
+    d?.paymentMethod ||
+      d?.formState?.paymentMethod ||
+      d?.formState?.organizationPaymentMethod ||
+      d?.formState?.billingMethod ||
+      ''
+  ).trim().toLowerCase();
+  const paymentMethod =
+    paymentMethodRaw === 'private' || paymentMethodRaw === 'centralized'
+      ? paymentMethodRaw
+      : (orgName ? 'centralized' : 'private');
+  const isOrganization = d?.isOrganization === true || !!orgName;
+  const isCompleted =
+    statusRaw === 'completed' || (!isCanceled && isPaidSuccess);
   const benSub = d?.beneficiaryUpdate?.submittedAt;
   const beneficiarySubmitted =
     benSub instanceof Date || (benSub != null && !Number.isNaN(new Date(benSub).getTime()));
@@ -636,8 +652,12 @@ function enrichDeal(d) {
     organizationName: orgName,
     primaryCount,
     secondaryCount,
+    individualsCount,
     activeCustomersCount: primaryCount + secondaryCount,
     isCanceled,
+    isCompleted,
+    paymentMethod,
+    isOrganization,
     isPrivateOrg: !orgName,
     isCentralizedOrg: !!orgName,
     beneficiarySubmitted,
@@ -743,13 +763,27 @@ export async function getSalesDashboardData(filters = {}) {
   const totalVendorCost = econ.reduce((s, e) => s + e.vendorCost, 0);
   const totalAgentCommission = econ.reduce((s, e) => s + e.agentCommission, 0);
   const totalNetProfitFromDeals = econ.reduce((s, e) => s + e.netProfit, 0);
-  const totalPrimary = shown.reduce((sum, d) => sum + Number(d.primaryCount || 0), 0);
+  const completedDeals = shown.filter((d) => d.isCompleted);
+  const canceledDeals = shown.filter((d) => d.isCanceled);
+  const totalPrimary = completedDeals.length;
   const totalSecondary = shown.reduce((sum, d) => sum + Number(d.secondaryCount || 0), 0);
-  const totalActive = shown.reduce((sum, d) => sum + Number(d.activeCustomersCount || 0), 0);
-  const totalCanceled = shown.filter((d) => d.isCanceled).length;
-  const totalPrivateOrg = shown.filter((d) => d.isPrivateOrg).length;
-  const totalCentralizedOrg = shown.filter((d) => d.isCentralizedOrg).length;
-  const totalCentralizedCanceled = shown.filter((d) => d.isCentralizedOrg && d.isCanceled).length;
+  const totalActive = completedDeals.reduce((sum, d) => sum + Number(d.individualsCount || 0), 0);
+  const totalCanceled = canceledDeals.reduce((sum, d) => sum + Number(d.individualsCount || 0), 0);
+  const totalPrivateOrg = shown
+    .filter((d) => d.isOrganization && d.paymentMethod === 'private')
+    .reduce((sum, d) => sum + Number(d.individualsCount || 0), 0);
+  const totalCentralizedOrg = new Set(
+    shown
+      .filter((d) => d.paymentMethod === 'centralized')
+      .map((d) => String(d.organizationName || '').trim())
+      .filter(Boolean)
+  ).size;
+  const totalCentralizedCanceled = new Set(
+    shown
+      .filter((d) => d.isCanceled && d.paymentMethod === 'centralized')
+      .map((d) => String(d.organizationName || '').trim())
+      .filter(Boolean)
+  ).size;
 
   return {
     summary: {

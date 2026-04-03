@@ -27,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog.jsx';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs.jsx';
 import { Input } from '../components/ui/input.jsx';
 import { FieldGroup, Field, FieldLabel } from '../components/ui/field.jsx';
 import { Badge } from '../components/ui/badge.jsx';
@@ -65,10 +66,12 @@ const emptyEditForm = () => ({
   healthFund: '',
   supplementalInsurance: '',
   address: '',
-  organizationName: '',
   agentName: '',
-  productName: '',
+  agentCommission: '',
   payerAmount: '',
+  createdAt: '',
+  subscriptionStartDate: '',
+  productId: '',
   beneficiaries: [],
 });
 
@@ -80,7 +83,9 @@ export default function SubscribersDashboard() {
   const [filterDialogOpen, setFilterDialogOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editDealId, setEditDealId] = useState(null);
+  const [editTab, setEditTab] = useState('primary');
   const [editForm, setEditForm] = useState(emptyEditForm);
+  const [agentsMeta, setAgentsMeta] = useState([]);
   const [saveLoading, setSaveLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -178,7 +183,11 @@ export default function SubscribersDashboard() {
       const res = await fetch(`${API_BASE}/api/admin/subscribers-dashboard?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      const agentsRes = await fetch(`${API_BASE}/api/admin/agents`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const json = await res.json().catch(() => ({}));
+      const agentsJson = await agentsRes.json().catch(() => ({}));
       if (!res.ok || !json.success) {
         throw new Error(json.error || 'טעינת דשבורד נכשלה');
       }
@@ -187,6 +196,7 @@ export default function SubscribersDashboard() {
         filterOptions: json.filterOptions || { providers: [], agents: [] },
         rows: Array.isArray(json.rows) ? json.rows : [],
       });
+      setAgentsMeta(Array.isArray(agentsJson?.rows) ? agentsJson.rows : []);
     } catch (e) {
       setError(e.message || 'שגיאה');
     } finally {
@@ -207,6 +217,16 @@ export default function SubscribersDashboard() {
         summaryCategories: has ? prev.summaryCategories.filter((x) => x !== key) : [...prev.summaryCategories, key],
       };
     });
+  }
+
+  function applyAgentCommission(nextAgentName) {
+    const target = (agentsMeta || []).find((a) => String(a.agentName || '') === String(nextAgentName || ''));
+    if (!target) return;
+    const commissions = Array.isArray(target.productCommissions) ? target.productCommissions : [];
+    const byProduct = commissions.find((c) => String(c.productId || '') === String(editForm.productId || ''));
+    const fallback = commissions.length ? commissions[0] : null;
+    const commission = Number(byProduct?.commission ?? fallback?.commission ?? 0);
+    setEditForm((p) => ({ ...p, agentName: nextAgentName, agentCommission: String(commission) }));
   }
 
   function openEdit(row) {
@@ -230,17 +250,27 @@ export default function SubscribersDashboard() {
       healthFund: primary.healthFund || '',
       supplementalInsurance: primary.supplementalInsurance || '',
       address: primary.address || fs.address || '',
-      organizationName: row.raw?.beneficiaryUpdate?.organizationName || fs.organizationName || row.organizationName || '',
       agentName: row.raw?.beneficiaryUpdate?.agentName || fs.agentName || row.agentName || '',
-      productName: fs.productName || row.productName || '',
+      agentCommission: String(fs.resolvedAgentCommission ?? row.agentCommission ?? 0),
       payerAmount: String(row.amount ?? ''),
+      createdAt: String(row.createdAt || ''),
+      subscriptionStartDate: String(fs.subscriptionStartDate || ''),
+      productId: String(fs.productId || row.raw?.formState?.productId || ''),
       beneficiaries: additional.map((m) => ({
         firstName: String(m?.firstName || '').trim(),
         lastName: String(m?.lastName || '').trim(),
         id: String(m?.id || '').trim(),
         relation: String(m?.relation || m?.relationship || '').trim(),
+        phone: String(m?.phone || '').trim(),
+        email: String(m?.email || '').trim(),
+        address: String(m?.address || '').trim(),
+        dateOfBirth: String(m?.dateOfBirth || '').trim(),
+        maritalStatus: String(m?.maritalStatus || '').trim(),
+        healthFund: String(m?.healthFund || '').trim(),
+        supplementalInsurance: String(m?.supplementalInsurance || '').trim(),
       })),
     });
+    setEditTab('primary');
     setEditOpen(true);
   }
 
@@ -255,7 +285,6 @@ export default function SubscribersDashboard() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           beneficiaryUpdate: {
-            organizationName: editForm.organizationName,
             agentName: editForm.agentName,
             primaryMember: {
               firstName: editForm.firstName,
@@ -275,6 +304,13 @@ export default function SubscribersDashboard() {
               id: b.id,
               relation: b.relation,
               relationship: b.relation,
+              phone: b.phone,
+              email: b.email,
+              address: b.address,
+              dateOfBirth: b.dateOfBirth,
+              maritalStatus: b.maritalStatus,
+              healthFund: b.healthFund,
+              supplementalInsurance: b.supplementalInsurance,
             })),
           },
           formState: {
@@ -287,15 +323,22 @@ export default function SubscribersDashboard() {
             healthFund: editForm.healthFund,
             supplementalInsurance: editForm.supplementalInsurance,
             address: editForm.address,
-            organizationName: editForm.organizationName,
             agentName: editForm.agentName,
-            productName: editForm.productName,
+            resolvedAgentCommission: Number(editForm.agentCommission || 0),
+            subscriptionStartDate: editForm.subscriptionStartDate,
             beneficiaries: (editForm.beneficiaries || []).map((b) => ({
               firstName: b.firstName,
               lastName: b.lastName,
               id: b.id,
               relation: b.relation,
               relationship: b.relation,
+              phone: b.phone,
+              email: b.email,
+              address: b.address,
+              dateOfBirth: b.dateOfBirth,
+              maritalStatus: b.maritalStatus,
+              healthFund: b.healthFund,
+              supplementalInsurance: b.supplementalInsurance,
             })),
             beneficiaryCount: Array.isArray(editForm.beneficiaries) ? editForm.beneficiaries.length : 0,
           },
@@ -457,174 +500,104 @@ export default function SubscribersDashboard() {
               <DialogDescription>עדכון פרטים שנשמרו בעסקה (MongoDB)</DialogDescription>
             </DialogHeader>
             <form onSubmit={saveEdit} className="space-y-4">
-              <FieldGroup>
-                <Field>
-                  <FieldLabel>שם פרטי</FieldLabel>
-                  <Input value={editForm.firstName} onChange={(e) => setEditForm((p) => ({ ...p, firstName: e.target.value }))} />
-                </Field>
-                <Field>
-                  <FieldLabel>שם משפחה</FieldLabel>
-                  <Input value={editForm.lastName} onChange={(e) => setEditForm((p) => ({ ...p, lastName: e.target.value }))} />
-                </Field>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel>טלפון</FieldLabel>
-                    <Input dir="ltr" value={editForm.phone} onChange={(e) => setEditForm((p) => ({ ...p, phone: e.target.value }))} />
-                  </Field>
-                  <Field>
-                    <FieldLabel>אימייל</FieldLabel>
-                    <Input
-                      type="email"
-                      dir="ltr"
-                      value={editForm.email}
-                      onChange={(e) => setEditForm((p) => ({ ...p, email: e.target.value }))}
-                    />
-                  </Field>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel>תעודת זהות</FieldLabel>
-                    <Input dir="ltr" value={editForm.idNum} onChange={(e) => setEditForm((p) => ({ ...p, idNum: e.target.value }))} />
-                  </Field>
-                  <Field>
-                    <FieldLabel>תאריך לידה</FieldLabel>
-                    <Input type="date" value={editForm.dateOfBirth} onChange={(e) => setEditForm((p) => ({ ...p, dateOfBirth: e.target.value }))} />
-                  </Field>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel>מצב משפחתי</FieldLabel>
-                    <Input value={editForm.maritalStatus} onChange={(e) => setEditForm((p) => ({ ...p, maritalStatus: e.target.value }))} />
-                  </Field>
-                  <Field>
-                    <FieldLabel>קופת חולים</FieldLabel>
-                    <Input value={editForm.healthFund} onChange={(e) => setEditForm((p) => ({ ...p, healthFund: e.target.value }))} />
-                  </Field>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel>ביטוח משלים</FieldLabel>
-                    <Input value={editForm.supplementalInsurance} onChange={(e) => setEditForm((p) => ({ ...p, supplementalInsurance: e.target.value }))} />
-                  </Field>
-                  <Field>
-                    <FieldLabel>סכום עסקה (₪)</FieldLabel>
-                    <Input
-                      type="number"
-                      dir="ltr"
-                      value={editForm.payerAmount}
-                      onChange={(e) => setEditForm((p) => ({ ...p, payerAmount: e.target.value }))}
-                    />
-                  </Field>
-                </div>
-                <Field>
-                  <FieldLabel>כתובת</FieldLabel>
-                  <Input value={editForm.address} onChange={(e) => setEditForm((p) => ({ ...p, address: e.target.value }))} />
-                </Field>
-                <Field>
-                  <FieldLabel>שם ארגון</FieldLabel>
-                  <Input
-                    value={editForm.organizationName}
-                    onChange={(e) => setEditForm((p) => ({ ...p, organizationName: e.target.value }))}
-                  />
-                </Field>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel>סוכן</FieldLabel>
-                    <Input value={editForm.agentName} onChange={(e) => setEditForm((p) => ({ ...p, agentName: e.target.value }))} />
-                  </Field>
-                  <Field>
-                    <FieldLabel>מוצר (טקסט)</FieldLabel>
-                    <Input value={editForm.productName} onChange={(e) => setEditForm((p) => ({ ...p, productName: e.target.value }))} />
-                  </Field>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <FieldLabel>מוטבים נוספים (ניתן לעריכה)</FieldLabel>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setEditForm((p) => ({
-                          ...p,
-                          beneficiaries: [...(p.beneficiaries || []), { firstName: '', lastName: '', id: '', relation: '' }],
-                        }))
-                      }
-                    >
-                      הוסף מוטב
-                    </Button>
-                  </div>
+              <Tabs value={editTab} onValueChange={setEditTab} className="mt-0">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="primary">מוטב ראשי</TabsTrigger>
+                  <TabsTrigger value="secondary">מוטבים משניים</TabsTrigger>
+                  <TabsTrigger value="transaction">פרטי עסקה</TabsTrigger>
+                </TabsList>
+                <TabsContent value="primary" className="space-y-4 mt-4">
+                  <FieldGroup>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field>
+                        <FieldLabel>שם פרטי</FieldLabel>
+                        <Input value={editForm.firstName} onChange={(e) => setEditForm((p) => ({ ...p, firstName: e.target.value }))} />
+                      </Field>
+                      <Field>
+                        <FieldLabel>שם משפחה</FieldLabel>
+                        <Input value={editForm.lastName} onChange={(e) => setEditForm((p) => ({ ...p, lastName: e.target.value }))} />
+                      </Field>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field>
+                        <FieldLabel>תעודת זהות</FieldLabel>
+                        <Input dir="ltr" value={editForm.idNum} onChange={(e) => setEditForm((p) => ({ ...p, idNum: e.target.value }))} />
+                      </Field>
+                      <Field>
+                        <FieldLabel>טלפון</FieldLabel>
+                        <Input dir="ltr" value={editForm.phone} onChange={(e) => setEditForm((p) => ({ ...p, phone: e.target.value }))} />
+                      </Field>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field>
+                        <FieldLabel>אימייל</FieldLabel>
+                        <Input type="email" dir="ltr" value={editForm.email} onChange={(e) => setEditForm((p) => ({ ...p, email: e.target.value }))} />
+                      </Field>
+                      <Field>
+                        <FieldLabel>תאריך לידה</FieldLabel>
+                        <Input type="date" value={editForm.dateOfBirth} onChange={(e) => setEditForm((p) => ({ ...p, dateOfBirth: e.target.value }))} />
+                      </Field>
+                    </div>
+                    <Field>
+                      <FieldLabel>כתובת</FieldLabel>
+                      <Input value={editForm.address} onChange={(e) => setEditForm((p) => ({ ...p, address: e.target.value }))} />
+                    </Field>
+                  </FieldGroup>
+                </TabsContent>
+                <TabsContent value="secondary" className="space-y-4 mt-4">
                   {(editForm.beneficiaries || []).length === 0 ? (
-                    <p className="text-xs text-muted-foreground">אין מוטבים נוספים.</p>
+                    <p className="text-sm text-muted-foreground">אין מוטבים משניים בעסקה זו.</p>
                   ) : (
                     (editForm.beneficiaries || []).map((b, idx) => (
-                      <div key={`ben-edit-${idx}`} className="rounded-lg border p-3 grid grid-cols-1 md:grid-cols-4 gap-2">
-                        <Input
-                          placeholder="שם פרטי"
-                          value={b.firstName}
-                          onChange={(e) =>
-                            setEditForm((p) => {
-                              const list = [...(p.beneficiaries || [])];
-                              list[idx] = { ...list[idx], firstName: e.target.value };
-                              return { ...p, beneficiaries: list };
-                            })
-                          }
-                        />
-                        <Input
-                          placeholder="שם משפחה"
-                          value={b.lastName}
-                          onChange={(e) =>
-                            setEditForm((p) => {
-                              const list = [...(p.beneficiaries || [])];
-                              list[idx] = { ...list[idx], lastName: e.target.value };
-                              return { ...p, beneficiaries: list };
-                            })
-                          }
-                        />
-                        <Input
-                          dir="ltr"
-                          placeholder="ת.ז"
-                          value={b.id}
-                          onChange={(e) =>
-                            setEditForm((p) => {
-                              const list = [...(p.beneficiaries || [])];
-                              list[idx] = { ...list[idx], id: e.target.value };
-                              return { ...p, beneficiaries: list };
-                            })
-                          }
-                        />
-                        <div className="flex items-center gap-2">
-                          <Input
-                            placeholder="קרבה"
-                            value={b.relation}
-                            onChange={(e) =>
-                              setEditForm((p) => {
-                                const list = [...(p.beneficiaries || [])];
-                                list[idx] = { ...list[idx], relation: e.target.value };
-                                return { ...p, beneficiaries: list };
-                              })
-                            }
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              setEditForm((p) => {
-                                const list = [...(p.beneficiaries || [])];
-                                list.splice(idx, 1);
-                                return { ...p, beneficiaries: list };
-                              })
-                            }
-                          >
-                            הסר
-                          </Button>
-                        </div>
+                      <div key={`ben-edit-${idx}`} className="rounded-lg border p-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <Input placeholder="שם פרטי" value={b.firstName} onChange={(e) => setEditForm((p) => { const list=[...(p.beneficiaries||[])]; list[idx]={...list[idx],firstName:e.target.value}; return {...p,beneficiaries:list};})} />
+                        <Input placeholder="שם משפחה" value={b.lastName} onChange={(e) => setEditForm((p) => { const list=[...(p.beneficiaries||[])]; list[idx]={...list[idx],lastName:e.target.value}; return {...p,beneficiaries:list};})} />
+                        <Input dir="ltr" placeholder="ת.ז" value={b.id} onChange={(e) => setEditForm((p) => { const list=[...(p.beneficiaries||[])]; list[idx]={...list[idx],id:e.target.value}; return {...p,beneficiaries:list};})} />
+                        <Input placeholder="קרבה" value={b.relation} onChange={(e) => setEditForm((p) => { const list=[...(p.beneficiaries||[])]; list[idx]={...list[idx],relation:e.target.value}; return {...p,beneficiaries:list};})} />
+                        <Input dir="ltr" placeholder="טלפון" value={b.phone || ''} onChange={(e) => setEditForm((p) => { const list=[...(p.beneficiaries||[])]; list[idx]={...list[idx],phone:e.target.value}; return {...p,beneficiaries:list};})} />
+                        <Input type="email" dir="ltr" placeholder="אימייל" value={b.email || ''} onChange={(e) => setEditForm((p) => { const list=[...(p.beneficiaries||[])]; list[idx]={...list[idx],email:e.target.value}; return {...p,beneficiaries:list};})} />
                       </div>
                     ))
                   )}
-                </div>
-              </FieldGroup>
+                </TabsContent>
+                <TabsContent value="transaction" className="space-y-4 mt-4">
+                  <FieldGroup>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field>
+                        <FieldLabel>סכום עסקה (₪)</FieldLabel>
+                        <Input type="number" dir="ltr" value={editForm.payerAmount} onChange={(e) => setEditForm((p) => ({ ...p, payerAmount: e.target.value }))} />
+                      </Field>
+                      <Field>
+                        <FieldLabel>עמלת סוכן (₪)</FieldLabel>
+                        <Input type="number" dir="ltr" value={editForm.agentCommission} onChange={(e) => setEditForm((p) => ({ ...p, agentCommission: e.target.value }))} />
+                      </Field>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field>
+                        <FieldLabel>סוכן</FieldLabel>
+                        <select
+                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                          value={editForm.agentName}
+                          onChange={(e) => applyAgentCommission(e.target.value)}
+                        >
+                          <option value="">ללא סוכן</option>
+                          {(agentsMeta || []).map((a) => (
+                            <option key={a.id} value={a.agentName}>{a.agentName}</option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field>
+                        <FieldLabel>תחילת מנוי</FieldLabel>
+                        <Input type="date" value={editForm.subscriptionStartDate} onChange={(e) => setEditForm((p) => ({ ...p, subscriptionStartDate: e.target.value }))} />
+                      </Field>
+                    </div>
+                    <Field>
+                      <FieldLabel>תאריך יצירה</FieldLabel>
+                      <Input value={editForm.createdAt ? new Date(editForm.createdAt).toLocaleString('he-IL') : ''} readOnly />
+                    </Field>
+                  </FieldGroup>
+                </TabsContent>
+              </Tabs>
               {error ? <p className="text-destructive text-sm">{error}</p> : null}
               <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
                 <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
