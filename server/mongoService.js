@@ -21,6 +21,13 @@ async function getDb() {
   return client.db(DB_NAME);
 }
 
+/** חודש לדוחות בילינג — YYYY-MM */
+export function formatBillingMonthFromDate(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(dt.getTime())) return '';
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+}
+
 export async function saveDeal(params) {
   const db = await getDb();
   const transactionId = String(params.transactionId || '').trim();
@@ -35,6 +42,26 @@ export async function saveDeal(params) {
   const agentIdRaw = params.agentId != null ? params.agentId : fs.agentId;
   const agentId =
     agentIdRaw != null && String(agentIdRaw).trim() !== '' ? String(agentIdRaw).trim() : null;
+
+  let commissionAmount = Number(fs.resolvedAgentCommission ?? 0);
+  let mergedFormState = params.formState && typeof params.formState === 'object' ? { ...params.formState } : {};
+  try {
+    const { resolveCheckoutEconomics } = await import('./adminMongooseService.js');
+    const econ = await resolveCheckoutEconomics(fs);
+    commissionAmount = Number(econ.resolvedAgentCommission ?? commissionAmount);
+    mergedFormState = {
+      ...mergedFormState,
+      resolvedVendorCost: econ.resolvedVendorCost,
+      resolvedAgentCommission: econ.resolvedAgentCommission,
+      resolvedNetProfit: econ.resolvedNetProfit,
+    };
+    if (econ.productName && !String(mergedFormState.productName || '').trim()) {
+      mergedFormState.productName = econ.productName;
+    }
+  } catch {
+    /* עסקה ללא מחירון מלא — נשאר מ־formState */
+  }
+  const billingMonth = formatBillingMonthFromDate(now);
 
   const doc = {
     transactionId,
@@ -54,7 +81,7 @@ export async function saveDeal(params) {
         ? String(params.cardcomToken).trim()
         : '',
     payerAmount: Number(params.payerAmount || 0),
-    formState: params.formState || {},
+    formState: mergedFormState,
     /** מזהה סוכן (מנוי) — לספירת מכירות לפי סוכן */
     agentId,
     terminalNumber: Number(params.terminalNumber || 0),
@@ -62,6 +89,10 @@ export async function saveDeal(params) {
     source: params.source || 'webhook',
     indicator: params.indicator || null,
     normalizedPayload: params.normalizedPayload || null,
+    /** עמלת סוכן לעסקה (מחושב מפרופיל סוכן / מחירון) */
+    commissionAmount,
+    /** חודש שיוך לדוחות (תשלום מרוכז וכו׳) */
+    billingMonth,
     createdAt: now,
     updatedAt: now,
   };
@@ -963,6 +994,27 @@ export async function updateDealAdmin(dealId, body = {}) {
   if (body.payerAmount != null && body.payerAmount !== '') set.payerAmount = Number(body.payerAmount);
   if (body.paymentStatus != null && String(body.paymentStatus).trim() !== '') set.paymentStatus = String(body.paymentStatus).trim();
 
+  try {
+    const { resolveCheckoutEconomics } = await import('./adminMongooseService.js');
+    const econ = await resolveCheckoutEconomics(fs);
+    set.commissionAmount = Number(econ.resolvedAgentCommission ?? 0);
+    fs.resolvedVendorCost = econ.resolvedVendorCost;
+    fs.resolvedAgentCommission = econ.resolvedAgentCommission;
+    fs.resolvedNetProfit = econ.resolvedNetProfit;
+    if (econ.productName && !fs.productName) fs.productName = econ.productName;
+    set.formState = fs;
+  } catch {
+    set.commissionAmount = Number(
+      fs.resolvedAgentCommission ?? existing.commissionAmount ?? 0
+    );
+  }
+
+  if (existing.billingMonth && String(existing.billingMonth).trim()) {
+    set.billingMonth = String(existing.billingMonth).trim();
+  } else {
+    set.billingMonth = formatBillingMonthFromDate(existing.createdAt || new Date());
+  }
+
   await deals.updateOne({ _id: oid }, { $set: set });
   return { success: true };
 }
@@ -1040,4 +1092,188 @@ export async function deleteDealAdmin(dealId) {
   const r = await deals.deleteOne({ _id: oid });
   if (r.deletedCount === 0) throw new Error('עסקה לא נמצאה');
   return { success: true };
+}
+
+function parseMonthToRange(monthStr) {
+  const s = String(monthStr || '').trim();
+  const m = /^(\d{4})-(\d{2})$/.exec(s);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  if (mo < 1 || mo > 12) return null;
+  const start = new Date(y, mo - 1, 1);
+  const end = new Date(y, mo, 1);
+  return { start, end, label: s };
+}
+
+/** עסקאות שנוצרו בטווח תאריכים (לדוח מפעיל) */
+export async function findDealsCreatedInRange(fromDate, toDate) {
+  const db = await getDb();
+  const match = {};
+  if (fromDate || toDate) {
+    match.createdAt = {};
+    if (fromDate) {
+      const f = new Date(fromDate);
+      if (!Number.isNaN(f.getTime())) match.createdAt.$gte = f;
+    }
+    if (toDate) {
+      const t = new Date(toDate);
+      if (!Number.isNaN(t.getTime())) {
+        t.setHours(23, 59, 59, 999);
+        match.createdAt.$lte = t;
+      }
+    }
+  }
+  return db
+    .collection('deals')
+    .find(Object.keys(match).length ? match : {})
+    .sort({ createdAt: -1 })
+    .limit(10000)
+    .toArray();
+}
+
+/** עסקאות מבוטלות — סינון לפי cancellationDate או updatedAt */
+export async function findDealsCancelledInRange(fromDate, toDate) {
+  const db = await getDb();
+  const docs = await db
+    .collection('deals')
+    .find({
+      $or: [
+        { subscriptionStatus: { $regex: 'cancel', $options: 'i' } },
+        { paymentStatus: { $regex: 'cancel|בוטל', $options: 'i' } },
+      ],
+    })
+    .sort({ cancellationDate: -1, updatedAt: -1 })
+    .limit(10000)
+    .toArray();
+
+  const from = fromDate ? new Date(fromDate) : null;
+  const to = toDate ? new Date(toDate) : null;
+  if (to && !Number.isNaN(to.getTime())) to.setHours(23, 59, 59, 999);
+
+  return docs.filter((d) => {
+    const cd = d.cancellationDate ? new Date(d.cancellationDate) : null;
+    const ref =
+      cd && !Number.isNaN(cd.getTime())
+        ? cd
+        : d.updatedAt instanceof Date
+          ? d.updatedAt
+          : new Date(d.updatedAt || d.createdAt || 0);
+    if (Number.isNaN(ref.getTime())) return false;
+    if (from && !Number.isNaN(from.getTime()) && ref < from) return false;
+    if (to && !Number.isNaN(to.getTime()) && ref > to) return false;
+    return true;
+  });
+}
+
+/** עסקאות של סוכן בחודש נתון (לפי createdAt) */
+export async function findDealsByAgentAndMonth(agentId, monthStr) {
+  const range = parseMonthToRange(monthStr);
+  if (!range) return [];
+  const db = await getDb();
+  const aid = String(agentId || '').trim();
+  return db
+    .collection('deals')
+    .find({
+      agentId: aid,
+      createdAt: { $gte: range.start, $lt: range.end },
+    })
+    .sort({ createdAt: -1 })
+    .limit(2000)
+    .toArray();
+}
+
+export async function listMonthlyInvoices(limit = 300) {
+  const db = await getDb();
+  const docs = await db
+    .collection('monthly_invoices')
+    .find({})
+    .sort({ month: -1, organizationName: 1 })
+    .limit(limit)
+    .toArray();
+  return docs.map((d) => {
+    const { _id, ...rest } = d;
+    return {
+      id: String(_id),
+      ...rest,
+      createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+      updatedAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : d.updatedAt,
+    };
+  });
+}
+
+/**
+ * קיבוץ עסקאות תשלום מרוכז לפי ארגון לחודש — יוצר/מעדכן monthly_invoices
+ */
+export async function generateMonthlyInvoicesForMonth(monthStr) {
+  const target = String(monthStr || '').trim();
+  const range = parseMonthToRange(target);
+  if (!range) throw new Error('חודש לא תקין (נדרש YYYY-MM)');
+
+  const db = await getDb();
+  const deals = await db
+    .collection('deals')
+    .find({
+      paymentStatus: { $regex: /success|paid|test_success/i },
+      createdAt: { $gte: range.start, $lt: range.end },
+    })
+    .limit(20000)
+    .toArray();
+
+  const groups = new Map();
+  for (const d of deals) {
+    const e = enrichDeal(d);
+    if (e.paymentMethod !== 'centralized' || !String(e.organizationName || '').trim()) continue;
+    const org = String(e.organizationName).trim();
+    const bm = String(d.billingMonth || '').trim() || formatBillingMonthFromDate(d.createdAt);
+    if (bm !== target) continue;
+    if (!groups.has(org)) groups.set(org, { organizationName: org, totalAmount: 0, dealCount: 0 });
+    const g = groups.get(org);
+    g.totalAmount += Number(d.payerAmount || 0);
+    g.dealCount += 1;
+  }
+
+  const now = new Date();
+  for (const g of groups.values()) {
+    await db.collection('monthly_invoices').updateOne(
+      { organizationName: g.organizationName, month: target },
+      {
+        $set: {
+          organizationName: g.organizationName,
+          month: target,
+          totalAmount: g.totalAmount,
+          dealCount: g.dealCount,
+          updatedAt: now,
+        },
+        $setOnInsert: {
+          status: 'Pending',
+          invoiceNumber: '',
+          receiptNumber: '',
+          notes: '',
+          createdAt: now,
+        },
+      },
+      { upsert: true }
+    );
+  }
+
+  return { ok: true, month: target, organizationCount: groups.size };
+}
+
+export async function updateMonthlyInvoice(invoiceId, body = {}) {
+  const db = await getDb();
+  let oid;
+  try {
+    oid = new ObjectId(String(invoiceId));
+  } catch {
+    throw new Error('מזהה חשבונית לא תקין');
+  }
+  const set = { updatedAt: new Date() };
+  if (body.invoiceNumber != null) set.invoiceNumber = String(body.invoiceNumber);
+  if (body.receiptNumber != null) set.receiptNumber = String(body.receiptNumber);
+  if (body.notes != null) set.notes = String(body.notes);
+  if (body.status === 'Paid' || body.status === 'Pending') set.status = body.status;
+  const r = await db.collection('monthly_invoices').updateOne({ _id: oid }, { $set: set });
+  if (!r.matchedCount) throw new Error('רשומה לא נמצאה');
+  return { ok: true };
 }

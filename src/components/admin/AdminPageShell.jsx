@@ -12,6 +12,7 @@ import {
   PanelRightOpen,
   LayoutTemplate,
   Phone,
+  FileBarChart2,
 } from 'lucide-react';
 import { cn } from '../../lib/cn.js';
 import { Button } from '../ui/button.jsx';
@@ -35,7 +36,10 @@ const groups = [
   },
   {
     title: 'דוחות',
-    items: [{ label: 'מנויים', to: '/admin/subscribers', icon: UserCheck }],
+    items: [
+      { label: 'מנויים', to: '/admin/subscribers', icon: UserCheck },
+      { label: 'דוחות ובילינג', to: '/admin/reports', icon: FileBarChart2 },
+    ],
   },
 ];
 

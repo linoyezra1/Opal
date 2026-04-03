@@ -44,6 +44,12 @@ import {
   getDealEmailSentAt,
   getDealByTransactionId,
   markDealOrderEmailSent,
+  findDealsCreatedInRange,
+  findDealsCancelledInRange,
+  findDealsByAgentAndMonth,
+  listMonthlyInvoices,
+  generateMonthlyInvoicesForMonth,
+  updateMonthlyInvoice,
 } from './mongoService.js';
 import {
   createLandingPage,
@@ -84,6 +90,7 @@ import {
   updateVendor,
   upsertCheckoutDraft,
 } from './adminMongooseService.js';
+import { buildSubscribersCsv, buildCancellationsCsv, buildAgentCommissionPayload } from './reportController.js';
 import fs from 'fs/promises';
 import { resolve } from 'path';
 import { candidateDocPdfPaths, readFirstExistingFile } from './repoAssets.js';
@@ -1717,6 +1724,84 @@ app.get('/api/admin/sales-dashboard', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(`[${ts()}] admin/sales-dashboard error:`, e);
     res.status(500).json({ success: false, error: 'Failed to load sales dashboard' });
+  }
+});
+
+/** דוחות ובילינג — אופאל */
+app.get('/api/admin/reports/subscribers-export', requireAdmin, async (req, res) => {
+  try {
+    const fromDate = req.query.fromDate || req.query.from || '';
+    const toDate = req.query.toDate || req.query.to || '';
+    const deals = await findDealsCreatedInRange(fromDate || null, toDate || null);
+    const csv = buildSubscribersCsv(deals);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="opal-subscribers-by-person.csv"');
+    res.send(csv);
+  } catch (e) {
+    console.error(`[${ts()}] reports/subscribers-export error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to build export' });
+  }
+});
+
+app.get('/api/admin/reports/cancellations-export', requireAdmin, async (req, res) => {
+  try {
+    const fromDate = req.query.fromDate || req.query.from || '';
+    const toDate = req.query.toDate || req.query.to || '';
+    const deals = await findDealsCancelledInRange(fromDate || null, toDate || null);
+    const csv = buildCancellationsCsv(deals);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="opal-cancellations.csv"');
+    res.send(csv);
+  } catch (e) {
+    console.error(`[${ts()}] reports/cancellations-export error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to build export' });
+  }
+});
+
+app.get('/api/admin/reports/agent-commissions', requireAdmin, async (req, res) => {
+  try {
+    const agentId = String(req.query.agentId || '').trim();
+    const month = String(req.query.month || '').trim();
+    if (!agentId || !month) {
+      return res.status(400).json({ success: false, error: 'נדרשים agentId ו-month (YYYY-MM)' });
+    }
+    const deals = await findDealsByAgentAndMonth(agentId, month);
+    const payload = buildAgentCommissionPayload(deals);
+    res.json({ success: true, ...payload });
+  } catch (e) {
+    console.error(`[${ts()}] reports/agent-commissions error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to load agent commissions' });
+  }
+});
+
+app.get('/api/admin/monthly-invoices', requireAdmin, async (req, res) => {
+  try {
+    const list = await listMonthlyInvoices(Number(req.query.limit) || 300);
+    res.json({ success: true, invoices: list });
+  } catch (e) {
+    console.error(`[${ts()}] monthly-invoices list error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to list invoices' });
+  }
+});
+
+app.post('/api/admin/monthly-invoices/generate', requireAdmin, async (req, res) => {
+  try {
+    const month = String(req.body?.month || req.query.month || '').trim();
+    const result = await generateMonthlyInvoicesForMonth(month);
+    res.json({ success: true, ...result });
+  } catch (e) {
+    console.error(`[${ts()}] monthly-invoices generate error:`, e);
+    res.status(400).json({ success: false, error: e?.message || 'Generate failed' });
+  }
+});
+
+app.put('/api/admin/monthly-invoices/:id', requireAdmin, async (req, res) => {
+  try {
+    await updateMonthlyInvoice(req.params.id, req.body || {});
+    res.json({ success: true });
+  } catch (e) {
+    console.error(`[${ts()}] monthly-invoices update error:`, e);
+    res.status(400).json({ success: false, error: e?.message || 'Update failed' });
   }
 });
 

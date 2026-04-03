@@ -15,6 +15,7 @@ import AdminControlPanel from './pages/AdminControlPanel.jsx';
 import VendorDashboard from './pages/VendorDashboard.jsx';
 import PricingDashboard from './pages/PricingDashboard.jsx';
 import LandingPagesManagement from './pages/LandingPagesManagement.jsx';
+import ReportsDashboard from './pages/ReportsDashboard.jsx';
 import ContactManagement from './pages/ContactManagement.jsx';
 import OrganizationsDashboard from './pages/OrganizationsDashboard.jsx';
 import OrganizationJoinRequest from './pages/OrganizationJoinRequest.jsx';
@@ -45,6 +46,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/admin/organizations" element={<OrganizationsDashboard />} />
         <Route path="/admin/agents" element={<AgentSetup />} />
         <Route path="/admin/landing-pages" element={<LandingPagesManagement />} />
+        <Route path="/admin/reports" element={<ReportsDashboard />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>
