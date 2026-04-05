@@ -37,7 +37,7 @@ const groups = [
   {
     title: 'דוחות',
     items: [
-      { label: 'מנויים', to: '/admin/subscribers', icon: UserCheck },
+      { label: 'לקוחות', to: '/admin/subscribers', icon: UserCheck },
       { label: 'דוחות ובילינג', to: '/admin/reports', icon: FileBarChart2 },
     ],
   },

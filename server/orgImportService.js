@@ -65,10 +65,6 @@ const FIELD_HEADER_PATTERNS = [
     field: 'maritalStatus',
     patterns: ['מצב משפחתי', 'משפחתי', 'marital', 'מצבמשפחתי'],
   },
-  {
-    field: 'medicalNotes',
-    patterns: ['רקע רפואי', 'הערות רפואיות', 'מצב רפואי', 'medical', 'conditions', 'הערות', 'notes'],
-  },
 ];
 
 export { HEALTH_FUND_OPTIONS_HE, GENDER_OPTIONS_HE } from './beneficiaryConstants.js';
@@ -239,7 +235,6 @@ export function normalizeAndValidateImportRow(raw, lineNumber) {
     healthFund,
     supplementalInsurance: normalizeSupplemental(raw.supplementalInsurance),
     maritalStatus: normalizeMarital(raw.maritalStatus),
-    medicalNotes: String(raw.medicalNotes || '').trim(),
   };
 
   return { profile, messages, lineNumber, ok: messages.length === 0 };
@@ -315,7 +310,6 @@ export function parseOrgMemberImportBuffer(buffer) {
       healthFund: '',
       supplementalInsurance: '',
       maritalStatus: '',
-      medicalNotes: '',
     };
     Object.keys(colMap).forEach((ci) => {
       const field = colMap[ci];
@@ -342,7 +336,6 @@ export function buildOrgImportTemplateBuffer() {
     'קופת חולים',
     'ביטוח משלים',
     'מצב משפחתי',
-    'רקע רפואי / הערות',
   ];
   const sample = [
     'ישראל ישראלי',
@@ -355,7 +348,6 @@ export function buildOrgImportTemplateBuffer() {
     'כללית',
     'זהב',
     'נשוי/אה',
-    'ללא ממצאים מיוחדים',
   ];
   const ws = xlsx.utils.aoa_to_sheet([headers, sample]);
   const wb = xlsx.utils.book_new();

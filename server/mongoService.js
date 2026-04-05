@@ -289,7 +289,6 @@ export async function saveBeneficiaryUpdate(params) {
     healthFund: String(m.healthFund || '').trim(),
     supplementalInsurance: String(m.supplementalInsurance || '').trim(),
     gender: String(m.gender || '').trim(),
-    medicalNotes: String(m.medicalNotes || '').trim(),
   }));
   await deals.updateOne(
     { transactionId },
@@ -311,7 +310,6 @@ export async function saveBeneficiaryUpdate(params) {
         'formState.maritalStatus': String(primary.maritalStatus || '').trim(),
         'formState.healthFund': String(primary.healthFund || '').trim(),
         'formState.supplementalInsurance': String(primary.supplementalInsurance || '').trim(),
-        'formState.medicalNotes': String(primary.medicalNotes || '').trim(),
         'formState.phone': String(primary.phone || '').trim(),
         'formState.email': String(primary.email || '').trim(),
         'formState.address': String(primary.address || '').trim(),
@@ -631,7 +629,6 @@ export async function insertOrganizationImportedDeal({
   healthFund = '',
   supplementalInsurance = '',
   maritalStatus = '',
-  medicalNotes = '',
 }) {
   const dup = await findActiveDealByOrgAndNationalId(organizationId, idNum);
   if (dup) return { skipped: true, reason: 'duplicate_id' };
@@ -661,7 +658,6 @@ export async function insertOrganizationImportedDeal({
     healthFund: String(healthFund || '').trim(),
     supplementalInsurance: String(supplementalInsurance || '').trim(),
     address: String(address || '').trim(),
-    medicalNotes: String(medicalNotes || '').trim(),
     organizationName: orgNm,
     organizationId: String(organizationId),
     paymentMethod: 'centralized',
@@ -708,7 +704,6 @@ export async function insertOrganizationImportedDeal({
         healthFund: String(healthFund || '').trim(),
         supplementalInsurance: String(supplementalInsurance || '').trim(),
         gender: String(gender || '').trim(),
-        medicalNotes: String(medicalNotes || '').trim(),
       },
       additionalMembers: [],
       submittedAt: now,
@@ -979,6 +974,18 @@ function enrichDeal(d) {
   };
 }
 
+function isOrganizationLinkedDeal(d) {
+  const fs = d?.formState && typeof d.formState === 'object' ? d.formState : {};
+  const oid = String(d.organizationId || fs.organizationId || '').trim();
+  return !!(oid || d.isOrganizationDeal === true || String(d.source || '') === 'org-bulk-import');
+}
+
+function isCentralizedOrgPayment(d) {
+  const fs = d?.formState && typeof d.formState === 'object' ? d.formState : {};
+  const pm = String(fs.paymentMethod || fs.organizationPaymentMethod || '').toLowerCase();
+  return pm === 'centralized' || String(d.source || '') === 'org-bulk-import';
+}
+
 function applyCategoryFilters(deals, categories = []) {
   if (!Array.isArray(categories) || !categories.length) return deals;
   const set = new Set(categories);
@@ -1068,7 +1075,13 @@ export async function getSalesDashboardData(filters = {}) {
 
   const baseDeals = await dealsCol.aggregate(pipeline).toArray();
   const enriched = baseDeals.map(enrichDeal);
-  const shown = applyCategoryFilters(enriched, filters.summaryCategories);
+  let shown = applyCategoryFilters(enriched, filters.summaryCategories);
+  const seg = String(filters.customerSegment || 'all').toLowerCase();
+  if (seg === 'private') {
+    shown = shown.filter((d) => !isOrganizationLinkedDeal(d));
+  } else if (seg === 'organization') {
+    shown = shown.filter((d) => isOrganizationLinkedDeal(d));
+  }
 
   const amountDue = Number(filters.amountDue || 0);
   const totalRevenue = shown.reduce((sum, d) => sum + Number(d.payerAmount || 0), 0);
@@ -1129,12 +1142,28 @@ export async function getSalesDashboardData(filters = {}) {
     rows: shown.slice(0, 500).map((d) => {
       const e = economicsFromDeal(d);
       const cancellationDateRaw = d.cancellationDate instanceof Date ? d.cancellationDate : (d.cancellationDate ? new Date(d.cancellationDate) : null);
+      const orgLinked = isOrganizationLinkedDeal(d);
+      const centralized = isCentralizedOrgPayment(d);
+      const orgBadge = orgLinked
+        ? String(d.organizationName || d.formState?.organizationName || '').trim() || 'ארגון'
+        : '';
+      const displayPaymentStatus = centralized
+        ? 'משולם ע״י ארגון'
+        : String(d.paymentStatus || '');
+      const displaySubscriptionStatus = centralized
+        ? `חיוב מרוכז · ${String(d.subscriptionStatus || '—')}`
+        : String(d.subscriptionStatus || '');
       return {
         id: String(d._id),
         transactionId: d.transactionId || '',
         status: d.isCanceled ? 'canceled' : 'paid',
         paymentStatus: d.paymentStatus || '',
         subscriptionStatus: String(d.subscriptionStatus || ''),
+        isOrganizationMember: orgLinked,
+        organizationBadge: orgBadge,
+        displayPaymentStatus,
+        displaySubscriptionStatus,
+        dealSource: String(d.source || ''),
         cancellationDate:
           cancellationDateRaw && !Number.isNaN(cancellationDateRaw.getTime()) ? cancellationDateRaw.toISOString() : null,
         internalDealNumber: String(d.indicator?.internalDealNumber || '').trim(),
@@ -1266,11 +1295,11 @@ export async function updateDealAdmin(dealId, body = {}) {
       ...(existingBU.primaryMember && typeof existingBU.primaryMember === 'object' ? existingBU.primaryMember : {}),
       ...(incomingBU.primaryMember && typeof incomingBU.primaryMember === 'object' ? incomingBU.primaryMember : {}),
     };
+    // Do not set submittedAt to "now" on admin edits — preserves completion / pending-docs state.
     set.beneficiaryUpdate = {
       ...existingBU,
       ...incomingBU,
       primaryMember: mergedPrimary,
-      submittedAt: existingBU.submittedAt || new Date(),
     };
   }
   if (body.payerAmount != null && body.payerAmount !== '') set.payerAmount = Number(body.payerAmount);

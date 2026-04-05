@@ -244,6 +244,28 @@ const BRANDING_DIR = resolve(process.cwd(), 'server', 'assets', 'branding');
 app.use('/branding', express.static(BRANDING_DIR));
 app.use(express.static(STATIC_DIR));
 
+const LEGAL_DOC_FILES = {
+  'service-terms': 'כתב שירות.pdf',
+  'privacy-disclosure': 'גילוי נאות.pdf',
+};
+
+/** Same PDF assets as post-purchase emails (server/assets/docs or DOC). Public, no auth. */
+app.get('/api/legal-document/:key', async (req, res) => {
+  const filename = LEGAL_DOC_FILES[String(req.params.key || '').trim()];
+  if (!filename) {
+    return res.status(404).type('text/plain').send('Unknown document');
+  }
+  try {
+    const { buffer } = await readFirstExistingFile(candidateDocPdfPaths(filename), filename);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.send(buffer);
+  } catch (e) {
+    console.error(`[${ts()}] legal-document missing ${filename}:`, e?.message || e);
+    res.status(404).type('text/plain').send('Document not available');
+  }
+});
+
 /** Pending deals: lowProfileCode → { formState, payerAmount, createdAt } */
 const pendingDeals = new Map();
 const PENDING_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -970,6 +992,7 @@ app.post('/api/update-beneficiaries', async (req, res) => {
         lastName: String(m.lastName ?? '').trim(),
         id: String(m.id ?? '').trim(),
         dateOfBirth: String(m.dateOfBirth ?? '').trim(),
+        gender: String(m.gender ?? '').trim(),
         maritalStatus: String(m.maritalStatus ?? '').trim(),
         healthFund: String(m.healthFund ?? '').trim(),
         supplementalInsurance: String(m.supplementalInsurance ?? '').trim(),
@@ -991,6 +1014,7 @@ app.post('/api/update-beneficiaries', async (req, res) => {
         phone: String(pm.phone ?? '').trim(),
         address: String(pm.address ?? '').trim(),
         dateOfBirth: String(pm.dateOfBirth ?? '').trim(),
+        gender: String(pm.gender ?? '').trim(),
         maritalStatus: String(pm.maritalStatus ?? '').trim(),
         healthFund: String(pm.healthFund ?? '').trim(),
         supplementalInsurance: String(pm.supplementalInsurance ?? '').trim(),
@@ -1011,6 +1035,7 @@ app.post('/api/update-beneficiaries', async (req, res) => {
         phone: String(pm.phone ?? '').trim(),
         address: String(pm.address ?? '').trim(),
         dateOfBirth: String(pm.dateOfBirth ?? '').trim(),
+        gender: String(pm.gender ?? '').trim(),
         maritalStatus: String(pm.maritalStatus ?? '').trim(),
         healthFund: String(pm.healthFund ?? '').trim(),
         supplementalInsurance: String(pm.supplementalInsurance ?? '').trim(),
@@ -1826,6 +1851,7 @@ function subscribersDashboardQuery(req) {
     agentNameSearch: req.query.agentNameSearch || '',
     amountDue: req.query.amountDue || '0',
     summaryCategories,
+    customerSegment: req.query.customerSegment || 'all',
   };
 }
 

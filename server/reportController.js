@@ -52,7 +52,6 @@ export function generateFlattenedSubscriberRows(deals) {
     const primaryGender = firstNonEmpty(primary.gender, fs.gender);
     const primaryHealthFund = firstNonEmpty(primary.healthFund, fs.healthFund);
     const primarySupplemental = firstNonEmpty(primary.supplementalInsurance, fs.supplementalInsurance);
-    const primaryMedicalNotes = firstNonEmpty(primary.medicalNotes, fs.medicalNotes);
 
     rows.push({
       dealId,
@@ -71,7 +70,6 @@ export function generateFlattenedSubscriberRows(deals) {
       gender: primaryGender,
       healthFund: primaryHealthFund,
       supplementalInsurance: primarySupplemental,
-      medicalNotes: primaryMedicalNotes,
       payerAmount,
       billingMonth,
       commissionAmount,
@@ -129,7 +127,6 @@ export function generateFlattenedSubscriberRows(deals) {
         gender: '',
         healthFund: String(m.healthFund || '').trim(),
         supplementalInsurance: String(m.supplementalInsurance || '').trim(),
-        medicalNotes: '',
         payerAmount,
         billingMonth,
         commissionAmount,
@@ -199,7 +196,6 @@ const SUBSCRIBER_FIELDS = [
   { label: 'מין', value: 'gender' },
   { label: 'קופת חולים', value: 'healthFund' },
   { label: 'ביטוח משלים', value: 'supplementalInsurance' },
-  { label: 'רקע רפואי / הערות', value: 'medicalNotes' },
   { label: 'סכום תשלום', value: 'payerAmount' },
   { label: 'חודש בילינג', value: 'billingMonth' },
   { label: 'עמלה', value: 'commissionAmount' },

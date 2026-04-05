@@ -240,9 +240,9 @@ export default function OrganizationDetailPage() {
             <TabsTrigger value="settings">הגדרות</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="members" className="mt-4">
-            <Card>
-              <CardHeader>
+          <TabsContent value="members" className="mt-4" dir="rtl">
+            <Card dir="rtl" className="text-right">
+              <CardHeader className="text-right">
                 <CardTitle>חברים מקושרים</CardTitle>
                 <CardDescription>עסקאות עם organizationId של ארגון זה</CardDescription>
               </CardHeader>
@@ -256,43 +256,45 @@ export default function OrganizationDetailPage() {
                     <EmptyDescription>השתמשו ביבוא או בהרשמה ציבורית לפי קישור הארגון</EmptyDescription>
                   </Empty>
                 ) : (
-                  <div className="rounded-md border overflow-x-auto">
-                    <Table>
+                  <div className="rounded-md border overflow-x-auto" dir="rtl">
+                    <Table className="text-right">
                       <TableHeader>
-                        <TableRow>
-                          <TableHead>שם</TableHead>
-                          <TableHead>ת״ז</TableHead>
-                          <TableHead>לידה</TableHead>
-                          <TableHead>מין</TableHead>
-                          <TableHead>קופה</TableHead>
-                          <TableHead>אימייל</TableHead>
-                          <TableHead>טלפון</TableHead>
-                          <TableHead>סכום</TableHead>
-                          <TableHead>סטטוס</TableHead>
-                          <TableHead>מקור</TableHead>
+                        <TableRow className="[&_th]:text-right">
+                          <TableHead className="text-right">שם</TableHead>
+                          <TableHead className="text-right">ת״ז</TableHead>
+                          <TableHead className="text-right">לידה</TableHead>
+                          <TableHead className="text-right">מין</TableHead>
+                          <TableHead className="text-right">קופה</TableHead>
+                          <TableHead className="text-right">אימייל</TableHead>
+                          <TableHead className="text-right">טלפון</TableHead>
+                          <TableHead className="text-right">סכום</TableHead>
+                          <TableHead className="text-right">סטטוס</TableHead>
+                          <TableHead className="text-right">מקור</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {deals.map((d) => (
                           <TableRow key={d.id}>
-                            <TableCell className="font-medium">{d.fullName || '—'}</TableCell>
-                            <TableCell dir="ltr" className="font-mono text-xs">
+                            <TableCell className="font-medium text-right">{d.fullName || '—'}</TableCell>
+                            <TableCell dir="ltr" className="font-mono text-xs text-end">
                               {d.idNumber || '—'}
                             </TableCell>
-                            <TableCell className="text-xs whitespace-nowrap">{d.dateOfBirth || '—'}</TableCell>
-                            <TableCell className="text-xs">{d.gender || '—'}</TableCell>
-                            <TableCell className="text-xs">{d.healthFund || '—'}</TableCell>
-                            <TableCell dir="ltr" className="text-sm">
+                            <TableCell className="text-xs whitespace-nowrap text-right">{d.dateOfBirth || '—'}</TableCell>
+                            <TableCell className="text-xs text-right">{d.gender || '—'}</TableCell>
+                            <TableCell className="text-xs text-right">{d.healthFund || '—'}</TableCell>
+                            <TableCell dir="ltr" className="text-sm text-end">
                               {d.email || '—'}
                             </TableCell>
-                            <TableCell dir="ltr">{d.phone || '—'}</TableCell>
-                            <TableCell>₪{Number(d.payerAmount || 0)}</TableCell>
-                            <TableCell>
+                            <TableCell dir="ltr" className="text-end">
+                              {d.phone || '—'}
+                            </TableCell>
+                            <TableCell className="text-right">₪{Number(d.payerAmount || 0)}</TableCell>
+                            <TableCell className="text-right">
                               <Badge variant="outline" className="text-xs">
                                 {d.subscriptionStatus || d.paymentStatus || '—'}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{d.source || '—'}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground text-right">{d.source || '—'}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -309,7 +311,7 @@ export default function OrganizationDetailPage() {
                 <CardTitle>יבוא עובדים (Excel)</CardTitle>
                 <CardDescription>
                   עמודות: שם מלא, ת״ז, תאריך לידה (DD/MM/YYYY), מין, אימייל, טלפון, כתובת, קופת חולים
-                  (כללית/מכבי/מאוחדת/לאומית), ביטוח משלים, מצב משפחתי, רקע רפואי. כפילות לפי ת״ז תידלג.
+                  (כללית/מכבי/מאוחדת/לאומית), ביטוח משלים, מצב משפחתי. כפילות לפי ת״ז תידלג.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">

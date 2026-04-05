@@ -30,7 +30,6 @@ function emptyMember() {
     phone: '',
     email: '',
     address: '',
-    medicalNotes: '',
   };
 }
 
@@ -147,25 +146,8 @@ function MemberFields({ title, member, onChange, errors = {}, includeContact = f
               <FieldLabel>כתובת</FieldLabel>
               <Input value={member.address} onChange={(e) => set('address')(e.target.value)} placeholder="עיר, רחוב, מספר בית" />
             </Field>
-            <Field className="sm:col-span-2">
-              <FieldLabel>רקע רפואי / הערות</FieldLabel>
-              <Input
-                value={member.medicalNotes}
-                onChange={(e) => set('medicalNotes')(e.target.value)}
-                placeholder="מצב רפואי, אלרגיות, תרופות קבועות…"
-              />
-            </Field>
           </>
-        ) : (
-          <Field className="sm:col-span-2">
-            <FieldLabel>רקע רפואי / הערות</FieldLabel>
-            <Input
-              value={member.medicalNotes}
-              onChange={(e) => set('medicalNotes')(e.target.value)}
-              placeholder="מצב רפואי, אלרגיות…"
-            />
-          </Field>
-        )}
+        ) : null}
       </div>
     </div>
   );

@@ -896,11 +896,23 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                   />
                   <label htmlFor="terms-landing" className="text-sm leading-relaxed text-muted-foreground cursor-pointer">
                     הנני מאשר את{' '}
-                    <a href="#" className="text-primary underline hover:no-underline font-medium" onClick={(e) => e.preventDefault()}>
-                      כתב השרות
-                    </a>{' '}
-                    וה
-                    <a href="#" className="text-primary underline hover:no-underline font-medium" onClick={(e) => e.preventDefault()}>
+                    <a
+                      href={`${API_BASE}/api/legal-document/service-terms`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline hover:no-underline font-medium"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      כתב השירות
+                    </a>
+                    {' '}ואת{' '}
+                    <a
+                      href={`${API_BASE}/api/legal-document/privacy-disclosure`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline hover:no-underline font-medium"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       גילוי נאות
                     </a>
                     .
