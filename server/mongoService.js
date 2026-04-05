@@ -45,6 +45,7 @@ export async function saveDeal(params) {
 
   let commissionAmount = Number(fs.resolvedAgentCommission ?? 0);
   let mergedFormState = params.formState && typeof params.formState === 'object' ? { ...params.formState } : {};
+  delete mergedFormState.subscriptionStartDate;
   try {
     const { resolveCheckoutEconomics } = await import('./adminMongooseService.js');
     const econ = await resolveCheckoutEconomics(fs);
@@ -315,6 +316,7 @@ export async function saveBeneficiaryUpdate(params) {
         'formState.address': String(primary.address || '').trim(),
         'formState.beneficiaries': normalizedBeneficiaries,
         'formState.beneficiaryCount': normalizedBeneficiaries.length,
+        'formState.subscriptionStartDate': new Date().toLocaleDateString('he-IL'),
         updatedAt: now,
       },
       $setOnInsert: { createdAt: now },
@@ -658,6 +660,7 @@ export async function insertOrganizationImportedDeal({
     healthFund: String(healthFund || '').trim(),
     supplementalInsurance: String(supplementalInsurance || '').trim(),
     address: String(address || '').trim(),
+    subscriptionStartDate: now.toLocaleDateString('he-IL'),
     organizationName: orgNm,
     organizationId: String(organizationId),
     paymentMethod: 'centralized',
@@ -1281,7 +1284,9 @@ export async function updateDealAdmin(dealId, body = {}) {
   const existing = await deals.findOne({ _id: oid });
   if (!existing) throw new Error('עסקה לא נמצאה');
 
-  const fs = { ...(existing.formState || {}), ...(body.formState && typeof body.formState === 'object' ? body.formState : {}) };
+  const incomingFs = body.formState && typeof body.formState === 'object' ? { ...body.formState } : {};
+  delete incomingFs.subscriptionStartDate;
+  const fs = { ...(existing.formState || {}), ...incomingFs };
   const set = {
     formState: fs,
     updatedAt: new Date(),
@@ -1494,11 +1499,13 @@ export async function findDealsByAgentAndMonth(agentId, monthStr) {
     .toArray();
 }
 
-export async function listMonthlyInvoices(limit = 300) {
+export async function listMonthlyInvoices(limit = 300, monthFilter = null) {
   const db = await getDb();
+  const mf = String(monthFilter || '').trim();
+  const query = mf && /^\d{4}-\d{2}$/.test(mf) ? { month: mf } : {};
   const docs = await db
     .collection('monthly_invoices')
-    .find({})
+    .find(query)
     .sort({ month: -1, organizationName: 1 })
     .limit(limit)
     .toArray();
@@ -1525,8 +1532,9 @@ export async function generateMonthlyInvoicesForMonth(monthStr) {
   const deals = await db
     .collection('deals')
     .find({
+      billingMonth: target,
       paymentStatus: { $regex: /success|paid|test_success/i },
-      createdAt: { $gte: range.start, $lt: range.end },
+      subscriptionStatus: { $ne: 'Cancelled' },
     })
     .limit(20000)
     .toArray();
@@ -1536,12 +1544,19 @@ export async function generateMonthlyInvoicesForMonth(monthStr) {
     const e = enrichDeal(d);
     if (e.paymentMethod !== 'centralized' || !String(e.organizationName || '').trim()) continue;
     const org = String(e.organizationName).trim();
-    const bm = String(d.billingMonth || '').trim() || formatBillingMonthFromDate(d.createdAt);
-    if (bm !== target) continue;
     if (!groups.has(org)) groups.set(org, { organizationName: org, totalAmount: 0, dealCount: 0 });
     const g = groups.get(org);
     g.totalAmount += Number(d.payerAmount || 0);
     g.dealCount += 1;
+  }
+
+  const orgsCentralized = await getOrganizationCompaniesWithMemberCounts(500);
+  for (const o of orgsCentralized) {
+    if (o.billingType !== 'Centralized') continue;
+    if (Number(o.activeMemberCount || 0) <= 0) continue;
+    const name = String(o.companyName || '').trim();
+    if (!name) continue;
+    if (!groups.has(name)) groups.set(name, { organizationName: name, totalAmount: 0, dealCount: 0 });
   }
 
   const now = new Date();

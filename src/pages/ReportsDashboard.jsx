@@ -83,6 +83,7 @@ export default function ReportsDashboard() {
   const [invoices, setInvoices] = useState([]);
   const [invLoading, setInvLoading] = useState(false);
   const [invErr, setInvErr] = useState('');
+  const [invoiceListMonth, setInvoiceListMonth] = useState(currentMonthStr());
   const [genMonth, setGenMonth] = useState(currentMonthStr());
   const [genBusy, setGenBusy] = useState(false);
 
@@ -106,23 +107,29 @@ export default function ReportsDashboard() {
     setAgents(Array.isArray(j.rows) ? j.rows : []);
   }, [token]);
 
-  const loadInvoices = useCallback(async () => {
-    if (!token) return;
-    setInvLoading(true);
-    setInvErr('');
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/monthly-invoices`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j.error || 'טעינה נכשלה');
-      setInvoices(Array.isArray(j.invoices) ? j.invoices : []);
-    } catch (e) {
-      setInvErr(e?.message || 'שגיאה');
-    } finally {
-      setInvLoading(false);
-    }
-  }, [token]);
+  const loadInvoices = useCallback(
+    async (monthOverride) => {
+      if (!token) return;
+      setInvLoading(true);
+      setInvErr('');
+      try {
+        const m = String(monthOverride ?? invoiceListMonth ?? '').trim();
+        const q = new URLSearchParams();
+        if (m) q.set('month', m);
+        const res = await fetch(`${API_BASE}/api/admin/monthly-invoices?${q.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(j.error || 'טעינה נכשלה');
+        setInvoices(Array.isArray(j.invoices) ? j.invoices : []);
+      } catch (e) {
+        setInvErr(e?.message || 'שגיאה');
+      } finally {
+        setInvLoading(false);
+      }
+    },
+    [token, invoiceListMonth]
+  );
 
   useEffect(() => {
     loadAgents();
@@ -200,7 +207,8 @@ export default function ReportsDashboard() {
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error || 'שגיאה');
-      await loadInvoices();
+      setInvoiceListMonth(genMonth);
+      await loadInvoices(genMonth);
     } catch (e) {
       setInvErr(e?.message || 'שגיאה');
     } finally {
@@ -249,9 +257,9 @@ export default function ReportsDashboard() {
 
   return (
     <AdminPageShell>
-      <div className="space-y-6 p-4 md:p-6 max-w-7xl mx-auto">
+      <div className="space-y-6 p-4 md:p-6 max-w-7xl mx-auto text-right" dir="rtl">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">דוחות ובילינג</h1>
+          <h1 className="text-2xl font-bold tracking-tight">דוחות ובילינג אופאל</h1>
           <p className="text-muted-foreground text-sm mt-1">
             מרכז הדוחות והבילינג של אופאל — ייצוא למפעיל, עמלות סוכנים וגבייה מארגונים
           </p>
@@ -273,9 +281,9 @@ export default function ReportsDashboard() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="provider" className="mt-4">
-            <Card>
-              <CardHeader>
+          <TabsContent value="provider" className="mt-4" dir="rtl">
+            <Card className="text-right" dir="rtl">
+              <CardHeader className="text-right">
                 <CardTitle>ייצוא למפעיל</CardTitle>
                 <CardDescription>בחרו טווח תאריכים לפי תאריך יצירת העסקה במערכת</CardDescription>
               </CardHeader>
@@ -304,9 +312,9 @@ export default function ReportsDashboard() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="agents" className="mt-4">
-            <Card>
-              <CardHeader>
+          <TabsContent value="agents" className="mt-4" dir="rtl">
+            <Card className="text-right" dir="rtl">
+              <CardHeader className="text-right">
                 <CardTitle>עמלות סוכנים</CardTitle>
                 <CardDescription>עסקאות לפי מזהה סוכן וחודש (תאריך יצירת העסקה)</CardDescription>
               </CardHeader>
@@ -354,15 +362,15 @@ export default function ReportsDashboard() {
                         מספר עסקאות: <strong>{agentData.dealCount}</strong>
                       </span>
                     </div>
-                    <div className="rounded-md border overflow-x-auto">
-                      <Table>
+                    <div className="rounded-md border overflow-x-auto" dir="rtl">
+                      <Table className="text-right">
                         <TableHeader>
-                          <TableRow>
-                            <TableHead>הזמנה</TableHead>
-                            <TableHead>תאריך</TableHead>
-                            <TableHead>מוצר</TableHead>
-                            <TableHead>סכום</TableHead>
-                            <TableHead>עמלה</TableHead>
+                          <TableRow className="[&_th]:text-right">
+                            <TableHead className="text-right">הזמנה</TableHead>
+                            <TableHead className="text-right">תאריך</TableHead>
+                            <TableHead className="text-right">מוצר</TableHead>
+                            <TableHead className="text-right">סכום</TableHead>
+                            <TableHead className="text-right">עמלה</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -386,26 +394,34 @@ export default function ReportsDashboard() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="orgs" className="mt-4">
-            <Card>
-              <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <TabsContent value="orgs" className="mt-4" dir="rtl">
+            <Card className="text-right" dir="rtl">
+              <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between text-right">
                 <div>
                   <CardTitle>גבייה מארגונים (תשלום מרוכז)</CardTitle>
                   <CardDescription>
-                    חשבוניות חודשיות מקובצות לפי ארגון — עדכנו מספרי מסמכים וסטטוס תשלום
+                    חשבוניות חודשיות מקובצות לפי ארגון — עדכנו מספרי מסמכים וסטטוס תשלום. בחרו חודש לתצוגה ולחצו &quot;רענן טבלה&quot;.
                   </CardDescription>
                 </div>
-                <div className="flex flex-wrap items-end gap-2">
+                <div className="flex flex-wrap items-end justify-end gap-2">
                   <Field>
-                    <FieldLabel className="sr-only">חודש ליצירה</FieldLabel>
+                    <FieldLabel className="text-xs">חודש לתצוגה</FieldLabel>
+                    <Input
+                      type="month"
+                      value={invoiceListMonth}
+                      onChange={(e) => setInvoiceListMonth(e.target.value)}
+                    />
+                  </Field>
+                  <Button type="button" variant="outline" onClick={loadInvoices} disabled={invLoading}>
+                    רענן טבלה
+                  </Button>
+                  <Field>
+                    <FieldLabel className="text-xs">חודש ליצירה</FieldLabel>
                     <Input type="month" value={genMonth} onChange={(e) => setGenMonth(e.target.value)} />
                   </Field>
                   <Button type="button" variant="secondary" disabled={genBusy} onClick={runGenerateInvoices}>
                     {genBusy ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
                     צור / עדכן לפי חודש
-                  </Button>
-                  <Button type="button" variant="outline" onClick={loadInvoices} disabled={invLoading}>
-                    רענן טבלה
                   </Button>
                 </div>
               </CardHeader>
@@ -416,17 +432,17 @@ export default function ReportsDashboard() {
                     <Spinner className="size-8" />
                   </div>
                 ) : (
-                  <div className="rounded-md border overflow-x-auto">
-                    <Table>
+                  <div className="rounded-md border overflow-x-auto" dir="rtl">
+                    <Table className="text-right">
                       <TableHeader>
-                        <TableRow>
-                          <TableHead>ארגון</TableHead>
-                          <TableHead>חודש</TableHead>
-                          <TableHead>סכום</TableHead>
-                          <TableHead>סטטוס</TableHead>
-                          <TableHead>חשבונית</TableHead>
-                          <TableHead>קבלה</TableHead>
-                          <TableHead className="w-[100px]" />
+                        <TableRow className="[&_th]:text-right">
+                          <TableHead className="text-right">ארגון</TableHead>
+                          <TableHead className="text-right">חודש</TableHead>
+                          <TableHead className="text-right">סכום</TableHead>
+                          <TableHead className="text-right">סטטוס</TableHead>
+                          <TableHead className="text-right">חשבונית</TableHead>
+                          <TableHead className="text-right">קבלה</TableHead>
+                          <TableHead className="w-[100px] text-right" />
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -467,7 +483,7 @@ export default function ReportsDashboard() {
         </Tabs>
 
         <Dialog open={editOpen} onOpenChange={setEditOpen}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md text-right" dir="rtl">
             <DialogHeader>
               <DialogTitle>עריכת חשבונית ארגון</DialogTitle>
               <DialogDescription>

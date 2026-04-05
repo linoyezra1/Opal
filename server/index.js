@@ -667,7 +667,7 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
           orderDate: orderDateStr,
           customerName: primaryName || 'לקוח',
           customerId: primaryId,
-          subscriptionStartDate: String(finalForm?.subscriptionStartDate || '').trim() || orderDateStr,
+          subscriptionStartDate: orderDateStr,
           address: String(finalForm?.address || '').trim(),
           lastFourDigits: String(finalForm?.lastFourDigits || '').trim(),
           subscriptionType: String(finalForm?.productName || '').trim(),
@@ -1924,7 +1924,8 @@ app.get('/api/admin/reports/agent-commissions', requireAdmin, async (req, res) =
 
 app.get('/api/admin/monthly-invoices', requireAdmin, async (req, res) => {
   try {
-    const list = await listMonthlyInvoices(Number(req.query.limit) || 300);
+    const invMonth = String(req.query.month || '').trim();
+    const list = await listMonthlyInvoices(Number(req.query.limit) || 300, invMonth || null);
     res.json({ success: true, invoices: list });
   } catch (e) {
     console.error(`[${ts()}] monthly-invoices list error:`, e);

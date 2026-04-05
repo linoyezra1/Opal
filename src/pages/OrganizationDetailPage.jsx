@@ -13,12 +13,13 @@ import { Textarea } from '../components/ui/textarea.jsx';
 import { Badge } from '../components/ui/badge.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '../components/ui/empty.jsx';
+import ConfirmDialog from '../components/ConfirmDialog.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
 function ContactSection({ title, data, onChange }) {
   return (
-    <div className="space-y-3 border rounded-lg p-3">
+    <div className="space-y-3 border rounded-lg p-3 text-right" dir="rtl">
       <p className="font-medium text-sm">{title}</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field>
@@ -58,6 +59,8 @@ export default function OrganizationDetailPage() {
   const [importFile, setImportFile] = useState(null);
   const [importBusy, setImportBusy] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [billingConfirmOpen, setBillingConfirmOpen] = useState(false);
+  const [billingChangePending, setBillingChangePending] = useState(null);
 
   const load = useCallback(async () => {
     if (!token || !id) return;
@@ -194,7 +197,33 @@ export default function OrganizationDetailPage() {
 
   return (
     <AdminPageShell>
-      <div className="space-y-6 p-4 md:p-6 max-w-6xl mx-auto">
+      <ConfirmDialog
+        open={billingConfirmOpen}
+        title="שינוי סוג חיוב"
+        message="שינוי סוג החיוב עלול לשבש את נתוני הלקוחות שכבר משויכים לארגון ושילמו בפועל. אם נדרש תמחור או מודל שונה, מומלץ להקים ארגון חדש במערכת."
+        confirmLabel="אישור"
+        onConfirm={() => {
+          if (!billingChangePending) return;
+          const v = billingChangePending.next;
+          setOrg((p) =>
+            p
+              ? {
+                  ...p,
+                  billingType: v,
+                  billingMethod: v === 'Centralized' ? 'חיוב מרוכז חברה' : 'חיוב לקוח פרטי',
+                }
+              : p
+          );
+          setBillingConfirmOpen(false);
+          setBillingChangePending(null);
+        }}
+        onCancel={() => {
+          setBillingConfirmOpen(false);
+          setBillingChangePending(null);
+        }}
+        isLoading={false}
+      />
+      <div className="space-y-6 p-4 md:p-6 max-w-6xl mx-auto text-right" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <Button variant="ghost" size="sm" className="mb-2 -ms-2" asChild>
@@ -305,9 +334,9 @@ export default function OrganizationDetailPage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="import" className="mt-4">
-            <Card>
-              <CardHeader>
+          <TabsContent value="import" className="mt-4" dir="rtl">
+            <Card className="text-right" dir="rtl">
+              <CardHeader className="text-right">
                 <CardTitle>יבוא עובדים (Excel)</CardTitle>
                 <CardDescription>
                   עמודות: שם מלא, ת״ז, תאריך לידה (DD/MM/YYYY), מין, אימייל, טלפון, כתובת, קופת חולים
@@ -358,14 +387,14 @@ export default function OrganizationDetailPage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="settings" className="mt-4">
-            <Card>
-              <CardHeader>
+          <TabsContent value="settings" className="mt-4" dir="rtl">
+            <Card className="text-right" dir="rtl">
+              <CardHeader className="text-right">
                 <CardTitle>הגדרות ארגון</CardTitle>
-                <CardDescription>עדכון פרטים — אופאל מרכז ניהול ארגונים</CardDescription>
+                <CardDescription>עדכון פרטים — מרכז ניהול ארגונים אופאל</CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={saveOrg} className="space-y-6">
+                <form onSubmit={saveOrg} className="space-y-6 text-right">
                   <Tabs defaultValue="org">
                     <TabsList className="grid w-full grid-cols-3">
                       <TabsTrigger value="org">פרטי ארגון</TabsTrigger>
@@ -471,12 +500,10 @@ export default function OrganizationDetailPage() {
                             value={org.billingType === 'Centralized' ? 'Centralized' : 'Private'}
                             onChange={(e) => {
                               const v = e.target.value;
-                              setOrg((p) => ({
-                                ...p,
-                                billingType: v,
-                                billingMethod:
-                                  v === 'Centralized' ? 'חיוב מרוכז חברה' : 'חיוב לקוח פרטי',
-                              }));
+                              const prev = org.billingType === 'Centralized' ? 'Centralized' : 'Private';
+                              if (v === prev) return;
+                              setBillingChangePending({ next: v, prev });
+                              setBillingConfirmOpen(true);
                             }}
                           >
                             <option value="Private">תשלום פרטי (עם הנחת ארגון)</option>

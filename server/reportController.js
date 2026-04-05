@@ -3,6 +3,16 @@
  */
 import { Parser } from 'json2csv';
 
+/**
+ * סינון חודשי לדוחות בילינג ארגוני: רק עסקאות שחודש הבילינג שלהן (שדה billingMonth) תואם בדיוק ל־YYYY-MM.
+ * לא מספיק לסנן לפי createdAt בלבד — ייתכן פער בין תאריך יצירה לחודש שיוך.
+ */
+export function dealBelongsToBillingMonth(deal, monthStr) {
+  const t = String(monthStr || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(t)) return false;
+  return String(deal?.billingMonth || '').trim() === t;
+}
+
 function firstNonEmpty(...vals) {
   for (const v of vals) {
     if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();

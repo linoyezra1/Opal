@@ -158,7 +158,7 @@ export default function AdminControlPanel() {
   return (
     <TooltipProvider delayDuration={300}>
       <AdminPageShell>
-        <div className="space-y-6">
+        <div className="space-y-6 text-right" dir="rtl">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">

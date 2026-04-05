@@ -513,7 +513,7 @@ export default function SubscribersDashboard() {
         />
 
         <Dialog open={editOpen} onOpenChange={setEditOpen}>
-          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" dir="rtl">
             <DialogHeader>
               <DialogTitle>עריכת עסקה / מנוי</DialogTitle>
               <DialogDescription>עדכון פרטים שנשמרו בעסקה (MongoDB)</DialogDescription>
@@ -887,7 +887,7 @@ export default function SubscribersDashboard() {
         </Dialog>
 
         <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
-          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto text-right" dir="rtl">
             <DialogHeader>
               <DialogTitle>סינון מתקדם</DialogTitle>
               <DialogDescription>כל מסנני הדוח — זהה ללוגיקה הקודמת בשרת</DialogDescription>
@@ -1085,7 +1085,7 @@ export default function SubscribersDashboard() {
           </div>
 
           {/* שורת חיפוש + סינון */}
-          <Card>
+          <Card dir="rtl" className="text-right">
             <CardContent className="pt-6">
               <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center flex-wrap">
                 <div className="relative flex-1 min-w-[200px]">
@@ -1132,19 +1132,21 @@ export default function SubscribersDashboard() {
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-            <Card className="xl:col-span-4 h-fit">
-              <CardHeader>
-                <CardTitle className="text-lg">כמות / סנן לפי</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {SUMMARY_ITEMS.map((item) => (
-                  <label
-                    key={item.key}
-                    className="flex items-center justify-between gap-2 text-sm border-b border-border pb-2 last:border-0"
-                  >
-                    <span>{item.label}</span>
-                    <div className="flex items-center gap-2">
+          <Card>
+            <CardHeader className="space-y-4 pb-2">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div className="text-right">
+                  <CardTitle>לקוחות</CardTitle>
+                  <CardDescription>תצוגה מקוצרת; פרטים מלאים ב״הצג״ או ״ערוך״</CardDescription>
+                </div>
+                <div className="flex flex-wrap gap-x-3 gap-y-2 items-center justify-end text-xs rounded-lg border bg-muted/30 px-3 py-2 max-w-full xl:max-w-[min(100%,52rem)]">
+                  <span className="font-medium text-foreground shrink-0">כמות / סינון קטגוריות:</span>
+                  {SUMMARY_ITEMS.map((item) => (
+                    <label
+                      key={item.key}
+                      className="inline-flex items-center gap-1.5 whitespace-nowrap"
+                    >
+                      <span className="text-muted-foreground">{item.label}</span>
                       <strong>{s[item.key] ?? 0}</strong>
                       <input
                         type="checkbox"
@@ -1152,25 +1154,26 @@ export default function SubscribersDashboard() {
                         checked={filters.summaryCategories.includes(item.key)}
                         onChange={() => toggleSummaryCategory(item.key)}
                       />
-                    </div>
-                  </label>
-                ))}
-                <div className="pt-2 text-sm border-t">
-                  סה&quot;כ בכסף: <strong>{formatCurrency(s.totalRevenue || 0)}</strong>
+                    </label>
+                  ))}
+                  <span className="border-s border-border ps-3 ms-1 whitespace-nowrap">
+                    סה״כ: <strong>{formatCurrency(s.totalRevenue || 0)}</strong>
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="h-8 shrink-0"
+                    onClick={loadDashboard}
+                    disabled={loading}
+                  >
+                    {loading && <Spinner className="size-3 me-1" />}
+                    עדכן דוח
+                  </Button>
                 </div>
-                <Button type="button" variant="secondary" className="w-full mt-2" onClick={loadDashboard} disabled={loading}>
-                  עדכן דוח
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>לקוחות</CardTitle>
-              <CardDescription>תצוגה מקוצרת; פרטים מלאים ב״הצג״ או ״ערוך״</CardDescription>
+              </div>
             </CardHeader>
-            <CardContent className="overflow-auto" dir="rtl">
+            <CardContent className="overflow-auto pt-2" dir="rtl">
               {error && !editOpen ? <p className="text-destructive text-sm mb-2">{error}</p> : null}
               {loading ? <p className="text-muted-foreground text-sm mb-2">טוען…</p> : null}
               {visibleRows.length === 0 && !loading ? (
@@ -1188,7 +1191,6 @@ export default function SubscribersDashboard() {
                       <TableRow className="[&_th]:text-right">
                         <TableHead className="text-right">סטטוס השלמה</TableHead>
                         <TableHead className="text-right">סטטוס תשלום</TableHead>
-                        <TableHead className="text-right">סטטוס מנוי</TableHead>
                         <TableHead className="text-right">סטטוס חיוב עתידי</TableHead>
                         <TableHead className="text-right">מס&apos; הזמנה</TableHead>
                         <TableHead className="text-right">לקוח</TableHead>
@@ -1226,11 +1228,8 @@ export default function SubscribersDashboard() {
                               </Badge>
                             )}
                           </TableCell>
-                          <TableCell className="text-right text-sm whitespace-pre-wrap max-w-[10rem]">
-                            {r.displayPaymentStatus || r.paymentStatus || '—'}
-                          </TableCell>
                           <TableCell className="text-right text-sm whitespace-pre-wrap max-w-[12rem]">
-                            {r.displaySubscriptionStatus || r.subscriptionStatus || '—'}
+                            {r.displayPaymentStatus || r.paymentStatus || '—'}
                           </TableCell>
                           <TableCell className="text-right whitespace-nowrap">
                             {isCancelled ? (

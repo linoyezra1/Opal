@@ -53,6 +53,8 @@ export default function OrganizationsDashboard() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [addTab, setAddTab] = useState('org');
   const [addForm, setAddForm] = useState(() => emptyForm());
+  const [billingEditConfirmOpen, setBillingEditConfirmOpen] = useState(false);
+  const [billingEditPending, setBillingEditPending] = useState(null);
 
   const loadRows = useCallback(async () => {
     if (!token) return;
@@ -189,9 +191,35 @@ export default function OrganizationsDashboard() {
         onCancel={() => setDeleteOrg(null)}
         isLoading={loading}
       />
+      <ConfirmDialog
+        open={billingEditConfirmOpen}
+        title="שינוי סוג חיוב"
+        message="שינוי סוג החיוב עלול לשבש את נתוני הלקוחות שכבר משויכים לארגון ושילמו בפועל. אם נדרש תמחור או מודל שונה, מומלץ להקים ארגון חדש במערכת."
+        confirmLabel="אישור"
+        onConfirm={() => {
+          if (!billingEditPending) return;
+          const v = billingEditPending.next;
+          setEditOrg((p) =>
+            p
+              ? {
+                  ...p,
+                  billingType: v,
+                  billingMethod: v === 'Centralized' ? 'חיוב מרוכז חברה' : 'חיוב לקוח פרטי',
+                }
+              : p
+          );
+          setBillingEditConfirmOpen(false);
+          setBillingEditPending(null);
+        }}
+        onCancel={() => {
+          setBillingEditConfirmOpen(false);
+          setBillingEditPending(null);
+        }}
+        isLoading={false}
+      />
 
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto text-right" dir="rtl">
           <DialogHeader>
             <DialogTitle>ארגון חדש</DialogTitle>
             <DialogDescription>פרטי ארגון, אנשי קשר וצורת חיוב</DialogDescription>
@@ -292,7 +320,7 @@ export default function OrganizationsDashboard() {
       </Dialog>
 
       <Dialog open={!!editOrg} onOpenChange={(o) => !o && setEditOrg(null)}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto text-right" dir="rtl">
           <DialogHeader>
             <DialogTitle>עריכת ארגון</DialogTitle>
             <DialogDescription>עדכנו פרטים, אנשי קשר וחיוב</DialogDescription>
@@ -330,14 +358,13 @@ export default function OrganizationsDashboard() {
                       <select
                         className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                         value={editOrg.billingType === 'Centralized' ? 'Centralized' : 'Private'}
-                        onChange={(e) =>
-                          setEditOrg((p) => ({
-                            ...p,
-                            billingType: e.target.value,
-                            billingMethod:
-                              e.target.value === 'Centralized' ? 'חיוב מרוכז חברה' : 'חיוב לקוח פרטי',
-                          }))
-                        }
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          const prev = editOrg.billingType === 'Centralized' ? 'Centralized' : 'Private';
+                          if (v === prev) return;
+                          setBillingEditPending({ next: v, prev });
+                          setBillingEditConfirmOpen(true);
+                        }}
                       >
                         <option value="Private">תשלום פרטי (הנחת ארגון)</option>
                         <option value="Centralized">תשלום מרוכז</option>
@@ -367,12 +394,12 @@ export default function OrganizationsDashboard() {
         </DialogContent>
       </Dialog>
 
-      <div className="space-y-6">
+      <div className="space-y-6 text-right" dir="rtl">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
               <Building2 className="size-6 text-primary" />
-              מרכז ניהול ארגונים
+              מרכז ניהול ארגונים אופאל
             </h1>
             <p className="text-muted-foreground">אופאל — ארגונים, חברים פעילים, יבוא והרשמה</p>
           </div>
@@ -409,17 +436,17 @@ export default function OrganizationsDashboard() {
                 <Button className="mt-4" type="button" onClick={openAdd}><Plus className="size-4 me-2" />הוסף ארגון חדש</Button>
               </Empty>
             ) : (
-              <div className="overflow-x-auto rounded-md border">
-                <Table>
+              <div className="overflow-x-auto rounded-md border" dir="rtl">
+                <Table className="text-right">
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>שם חברה</TableHead>
-                      <TableHead>ח.פ</TableHead>
-                      <TableHead>סוג חיוב</TableHead>
-                      <TableHead>חברים פעילים</TableHead>
-                      <TableHead>מחיר לחבר</TableHead>
-                      <TableHead>אימייל</TableHead>
-                      <TableHead className="w-40">פעולות</TableHead>
+                    <TableRow className="[&_th]:text-right">
+                      <TableHead className="text-right">שם חברה</TableHead>
+                      <TableHead className="text-right">ח.פ</TableHead>
+                      <TableHead className="text-right">סוג חיוב</TableHead>
+                      <TableHead className="text-right">חברים פעילים</TableHead>
+                      <TableHead className="text-right">מחיר לחבר</TableHead>
+                      <TableHead className="text-right">אימייל</TableHead>
+                      <TableHead className="w-40 text-right">פעולות</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -470,7 +497,7 @@ export default function OrganizationsDashboard() {
 
 function ContactSection({ title, data, onChange }) {
   return (
-    <div className="space-y-3 border rounded-lg p-3">
+    <div className="space-y-3 border rounded-lg p-3 text-right" dir="rtl">
       <p className="font-medium text-sm">{title}</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field><FieldLabel>שם</FieldLabel><Input value={data?.name || ''} onChange={(e) => onChange('name', e.target.value)} /></Field>
