@@ -9,6 +9,7 @@ import { FieldGroup, Field, FieldLabel } from '../components/ui/field.jsx';
 
 const MARITAL_OPTIONS = ['', 'רווק/ה', 'נשוי/אה', 'גרוש/ה', 'אלמן/ה', 'ידוע/ה בציבור'];
 const HEALTH_FUNDS = ['', 'כללית', 'מכבי', 'מאוחדת', 'לאומית'];
+const GENDER_OPTIONS = ['', 'זכר', 'נקבה', 'אחר'];
 const SUPPLEMENTAL_OPTIONS = ['', 'אין', 'כסף', 'זהב', 'פלטינום', 'אחר'];
 
 function validateId(value) {
@@ -22,12 +23,14 @@ function emptyMember() {
     lastName: '',
     id: '',
     dateOfBirth: '',
+    gender: '',
     maritalStatus: '',
     healthFund: '',
     supplementalInsurance: '',
     phone: '',
     email: '',
     address: '',
+    medicalNotes: '',
   };
 }
 
@@ -73,6 +76,20 @@ function MemberFields({ title, member, onChange, errors = {}, includeContact = f
           <FieldLabel>תאריך לידה *</FieldLabel>
           <Input type="date" value={member.dateOfBirth} onChange={(e) => set('dateOfBirth')(e.target.value)} />
           {errors.dateOfBirth ? <p className="text-destructive text-xs">{errors.dateOfBirth}</p> : null}
+        </Field>
+        <Field>
+          <FieldLabel>מין</FieldLabel>
+          <select
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={member.gender}
+            onChange={(e) => set('gender')(e.target.value)}
+          >
+            {GENDER_OPTIONS.map((o) => (
+              <option key={o || 'g-empty'} value={o}>
+                {o || 'בחר'}
+              </option>
+            ))}
+          </select>
         </Field>
         <Field>
           <FieldLabel>מצב משפחתי</FieldLabel>
@@ -130,8 +147,25 @@ function MemberFields({ title, member, onChange, errors = {}, includeContact = f
               <FieldLabel>כתובת</FieldLabel>
               <Input value={member.address} onChange={(e) => set('address')(e.target.value)} placeholder="עיר, רחוב, מספר בית" />
             </Field>
+            <Field className="sm:col-span-2">
+              <FieldLabel>רקע רפואי / הערות</FieldLabel>
+              <Input
+                value={member.medicalNotes}
+                onChange={(e) => set('medicalNotes')(e.target.value)}
+                placeholder="מצב רפואי, אלרגיות, תרופות קבועות…"
+              />
+            </Field>
           </>
-        ) : null}
+        ) : (
+          <Field className="sm:col-span-2">
+            <FieldLabel>רקע רפואי / הערות</FieldLabel>
+            <Input
+              value={member.medicalNotes}
+              onChange={(e) => set('medicalNotes')(e.target.value)}
+              placeholder="מצב רפואי, אלרגיות…"
+            />
+          </Field>
+        )}
       </div>
     </div>
   );

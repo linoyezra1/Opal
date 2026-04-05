@@ -638,6 +638,19 @@ export async function getAgentCommissionForProduct(agentId, productId, lineDefau
 export async function resolveCheckoutEconomics(formState) {
   await ensureConnection();
   const fs = formState && typeof formState === 'object' ? formState : {};
+  /** הרשמה ציבורית עם הנחת ארגון (תשלום פרטי) — מחיר חודשי מהארגון */
+  if (fs.orgPrivateEnrollment === true && Number(fs.orgPrivatePrice) > 0) {
+    const p = Number(fs.orgPrivatePrice);
+    return {
+      payerAmount: p,
+      resolvedVendorCost: 0,
+      resolvedAgentCommission: 0,
+      resolvedNetProfit: p,
+      productName: String(fs.productName || 'מנוי ארגוני — אופאל'),
+      productId: '',
+      priceListId: '',
+    };
+  }
   const priceListId = String(fs.priceListId || '').trim();
   const productId = String(fs.productId || '').trim();
 

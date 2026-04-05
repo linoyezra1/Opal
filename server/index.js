@@ -19,7 +19,12 @@ import {
   clearAbandonedCheckoutLeadsByContact,
   deleteOrganizationCompany,
   getDeals,
-  getOrganizationCompanies,
+  getOrganizationCompaniesWithMemberCounts,
+  getOrganizationCompanyById,
+  findDealsByOrganizationId,
+  insertOrganizationImportedDeal,
+  getPublicOrganizationForRegistration,
+  countActiveMembersByOrganizationId,
   getSalesDashboardData,
   saveBeneficiaryUpdate,
   saveContactLead,
@@ -91,6 +96,8 @@ import {
   upsertCheckoutDraft,
 } from './adminMongooseService.js';
 import { buildSubscribersCsv, buildCancellationsCsv, buildAgentCommissionPayload } from './reportController.js';
+import multer from 'multer';
+import { parseOrgMemberImportBuffer, buildOrgImportTemplateBuffer } from './orgImportService.js';
 import fs from 'fs/promises';
 import { resolve } from 'path';
 import { candidateDocPdfPaths, readFirstExistingFile } from './repoAssets.js';
@@ -227,6 +234,11 @@ app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' })); // Cardcom may POST as form-urlencoded
 
+const orgImportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 6 * 1024 * 1024 },
+});
+
 const STATIC_DIR = resolve(process.cwd(), 'dist');
 const BRANDING_DIR = resolve(process.cwd(), 'server', 'assets', 'branding');
 app.use('/branding', express.static(BRANDING_DIR));
@@ -277,11 +289,21 @@ function buildDealPayloadFromFormState(formState) {
 app.post('/api/create-checkout-session', async (req, res) => {
   try {
     const { formState } = req.body;
-    if (!formState || !formState.selectedPlanId) {
+    const fs0 = formState && typeof formState === 'object' ? formState : {};
+    const orgPrivateOk = fs0.orgPrivateEnrollment === true && Number(fs0.orgPrivatePrice) > 0;
+    if (!formState || (!fs0.selectedPlanId && !orgPrivateOk)) {
       return res.status(400).json({
         success: false,
         error: 'Missing formState with selectedPlanId.',
       });
+    }
+    if (orgPrivateOk) {
+      if (!String(fs0.fullName || '').trim() || !String(fs0.id || '').trim() || !String(fs0.email || '').trim()) {
+        return res.status(400).json({
+          success: false,
+          error: 'בהרשמה ארגונית נדרשים שם מלא, תעודת זהות ואימייל.',
+        });
+      }
     }
 
     const terminal = parseInt(process.env.CARDCOM_TERMINAL, 10);
@@ -1458,15 +1480,115 @@ app.get('/api/admin/org-pricing', requireAdmin, async (req, res) => {
   }
 });
 
+app.get('/api/public/organization/:id', async (req, res) => {
+  try {
+    const o = await getPublicOrganizationForRegistration(req.params.id);
+    if (!o) return res.status(404).json({ success: false, error: 'ארגון לא נמצא' });
+    res.json({ success: true, organization: o });
+  } catch (e) {
+    console.error(`[${ts()}] public/organization error:`, e);
+    res.status(500).json({ success: false, error: 'שגיאה' });
+  }
+});
+
 app.get('/api/admin/organizations', requireAdmin, async (req, res) => {
   try {
-    const rows = await getOrganizationCompanies(400);
+    const rows = await getOrganizationCompaniesWithMemberCounts(400);
     res.json({ success: true, rows });
   } catch (e) {
     console.error(`[${ts()}] admin/organizations list error:`, e);
     res.status(500).json({ success: false, error: 'Failed to fetch organizations' });
   }
 });
+
+app.get('/api/admin/organizations/import-template-xlsx', requireAdmin, (req, res) => {
+  try {
+    const buf = buildOrgImportTemplateBuffer();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="opal-org-import-template.xlsx"');
+    res.send(buf);
+  } catch (e) {
+    console.error(`[${ts()}] org import template error:`, e);
+    res.status(500).json({ success: false, error: 'Failed' });
+  }
+});
+
+app.get('/api/admin/organizations/:id', requireAdmin, async (req, res) => {
+  try {
+    const o = await getOrganizationCompanyById(req.params.id);
+    if (!o) return res.status(404).json({ success: false, error: 'לא נמצא' });
+    const activeMemberCount = await countActiveMembersByOrganizationId(req.params.id);
+    res.json({ success: true, organization: { ...o, activeMemberCount } });
+  } catch (e) {
+    console.error(`[${ts()}] admin/organizations/:id error:`, e);
+    res.status(500).json({ success: false, error: 'Failed' });
+  }
+});
+
+app.get('/api/admin/organizations/:id/deals', requireAdmin, async (req, res) => {
+  try {
+    const deals = await findDealsByOrganizationId(req.params.id, 500);
+    res.json({ success: true, deals });
+  } catch (e) {
+    console.error(`[${ts()}] admin/organizations/:id/deals error:`, e);
+    res.status(500).json({ success: false, error: 'Failed' });
+  }
+});
+
+app.post(
+  '/api/admin/organizations/:id/import-members',
+  requireAdmin,
+  orgImportUpload.single('file'),
+  async (req, res) => {
+    try {
+      if (!req.file?.buffer) {
+        return res.status(400).json({ success: false, error: 'לא הועלה קובץ' });
+      }
+      const org = await getOrganizationCompanyById(req.params.id);
+      if (!org) return res.status(404).json({ success: false, error: 'ארגון לא נמצא' });
+      const price = Number(org.monthlyPricePerMember || 0);
+      if (!price || price <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'הגדרו מחיר חודשי לחבר בפרופיל הארגון לפני ייבוא',
+        });
+      }
+      const { headerErrors, normalizedRows } = parseOrgMemberImportBuffer(req.file.buffer);
+      if (headerErrors.length) {
+        return res.status(400).json({
+          success: false,
+          error: 'שגיאות בכותרות הקובץ',
+          headerErrors,
+          created: 0,
+          skippedDuplicates: 0,
+          validationFailures: [],
+        });
+      }
+      const orgName = org.companyName || org.name || '';
+      let created = 0;
+      let skippedDuplicates = 0;
+      const validationFailures = [];
+      for (const nr of normalizedRows) {
+        if (!nr.ok) {
+          validationFailures.push({ line: nr.lineNumber, messages: nr.messages });
+          continue;
+        }
+        const r = await insertOrganizationImportedDeal({
+          organizationId: org.id,
+          organizationName: orgName,
+          monthlyPrice: price,
+          ...nr.profile,
+        });
+        if (r.skipped) skippedDuplicates += 1;
+        else created += 1;
+      }
+      res.json({ success: true, created, skippedDuplicates, validationFailures });
+    } catch (e) {
+      console.error(`[${ts()}] org import-members error:`, e);
+      res.status(500).json({ success: false, error: e?.message || 'ייבוא נכשל' });
+    }
+  }
+);
 
 app.post('/api/admin/organizations', requireAdmin, async (req, res) => {
   try {

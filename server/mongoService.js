@@ -63,6 +63,24 @@ export async function saveDeal(params) {
   }
   const billingMonth = formatBillingMonthFromDate(now);
 
+  const orgIdFromParams =
+    params.organizationId != null && String(params.organizationId).trim() !== ''
+      ? String(params.organizationId).trim()
+      : null;
+  const orgIdFromFs =
+    mergedFormState.organizationId != null && String(mergedFormState.organizationId).trim() !== ''
+      ? String(mergedFormState.organizationId).trim()
+      : null;
+  const organizationId = orgIdFromParams || orgIdFromFs || null;
+  const isOrganizationDeal = Boolean(
+    params.isOrganizationDeal === true ||
+      mergedFormState.isOrganizationDeal === true ||
+      mergedFormState.orgPrivateEnrollment === true ||
+      !!organizationId
+  );
+  const memberTypeRaw = String(params.memberType || mergedFormState.memberType || 'Primary').trim();
+  const memberType = memberTypeRaw === 'Secondary' ? 'Secondary' : 'Primary';
+
   const doc = {
     transactionId,
     /** מזהה Cardcom LowProfile — לחיפוש עסקה לפני קבלת מס׳ הזמנה סופי */
@@ -93,8 +111,12 @@ export async function saveDeal(params) {
     commissionAmount,
     /** חודש שיוך לדוחות (תשלום מרוכז וכו׳) */
     billingMonth,
+    organizationId: organizationId || null,
+    isOrganizationDeal,
+    memberType,
     createdAt: now,
     updatedAt: now,
+    ...(params.status != null ? { status: String(params.status) } : {}),
   };
 
   const result = await deals.insertOne(doc);
@@ -266,6 +288,8 @@ export async function saveBeneficiaryUpdate(params) {
     maritalStatus: String(m.maritalStatus || '').trim(),
     healthFund: String(m.healthFund || '').trim(),
     supplementalInsurance: String(m.supplementalInsurance || '').trim(),
+    gender: String(m.gender || '').trim(),
+    medicalNotes: String(m.medicalNotes || '').trim(),
   }));
   await deals.updateOne(
     { transactionId },
@@ -283,9 +307,11 @@ export async function saveBeneficiaryUpdate(params) {
         'formState.fullName': [String(primary.firstName || '').trim(), String(primary.lastName || '').trim()].filter(Boolean).join(' '),
         'formState.id': String(primary.id || '').trim(),
         'formState.dateOfBirth': String(primary.dateOfBirth || '').trim(),
+        'formState.gender': String(primary.gender || '').trim(),
         'formState.maritalStatus': String(primary.maritalStatus || '').trim(),
         'formState.healthFund': String(primary.healthFund || '').trim(),
         'formState.supplementalInsurance': String(primary.supplementalInsurance || '').trim(),
+        'formState.medicalNotes': String(primary.medicalNotes || '').trim(),
         'formState.phone': String(primary.phone || '').trim(),
         'formState.email': String(primary.email || '').trim(),
         'formState.address': String(primary.address || '').trim(),
@@ -401,6 +427,11 @@ export async function saveOrganizationLead(params) {
 export async function createOrganizationCompany(params) {
   const db = await getDb();
   const now = new Date();
+  const billingMethod = String(params.billingMethod || '').trim();
+  const billingType =
+    params.billingType === 'Centralized' || params.billingType === 'Private'
+      ? params.billingType
+      : mapBillingMethodToBillingType(billingMethod);
   const result = await db.collection('organizations').insertOne({
     companyName: params.companyName || '',
     companyId: params.companyId || '',
@@ -408,7 +439,12 @@ export async function createOrganizationCompany(params) {
     companyEmail: params.companyEmail || '',
     fieldOfActivity: params.fieldOfActivity || '',
     employeesCount: Number(params.employeesCount || 0),
-    billingMethod: params.billingMethod || '',
+    billingMethod: billingMethod,
+    billingType,
+    monthlyPricePerMember: Number(params.monthlyPricePerMember || 0),
+    contactEmail: String(params.contactEmail || params.companyEmail || '').trim(),
+    contactPhone: String(params.contactPhone || '').trim(),
+    notes: String(params.notes || '').trim(),
     contactPerson: params.contactPerson || null,
     accounting: params.accounting || null,
     additionalContact: params.additionalContact || null,
@@ -423,7 +459,53 @@ export async function createOrganizationCompany(params) {
 export async function getOrganizationCompanies(limit = 300) {
   const db = await getDb();
   const docs = await db.collection('organizations').find({}).sort({ createdAt: -1 }).limit(limit).toArray();
-  return docs.map(serializeDocDates);
+  return docs.map((d) => serializeOrgDoc(d));
+}
+
+export async function getOrganizationCompaniesWithMemberCounts(limit = 400) {
+  const db = await getDb();
+  const orgs = await db.collection('organizations').find({}).sort({ createdAt: -1 }).limit(limit).toArray();
+  if (!orgs.length) return [];
+  const ids = orgs.map((o) => String(o._id));
+  const agg = await db
+    .collection('deals')
+    .aggregate([
+      {
+        $match: {
+          organizationId: { $in: ids },
+          paymentStatus: { $regex: /success|paid|test_success/i },
+          subscriptionStatus: { $ne: 'Cancelled' },
+        },
+      },
+      { $group: { _id: '$organizationId', count: { $sum: 1 } } },
+    ])
+    .toArray();
+  const map = Object.fromEntries(agg.map((a) => [a._id, a.count]));
+  return orgs.map((d) => serializeOrgDoc(d, map[String(d._id)] || 0));
+}
+
+export async function getOrganizationCompanyById(id) {
+  const db = await getDb();
+  let oid;
+  try {
+    oid = new ObjectId(String(id));
+  } catch {
+    return null;
+  }
+  const doc = await db.collection('organizations').findOne({ _id: oid });
+  if (!doc) return null;
+  return serializeOrgDoc(doc);
+}
+
+export async function getPublicOrganizationForRegistration(orgId) {
+  const o = await getOrganizationCompanyById(orgId);
+  if (!o || String(o.status || 'active').toLowerCase() !== 'active') return null;
+  return {
+    id: o.id,
+    name: o.companyName || o.name || '',
+    billingType: o.billingType,
+    monthlyPricePerMember: o.monthlyPricePerMember,
+  };
 }
 
 export async function updateOrganizationCompany(id, params) {
@@ -444,6 +526,11 @@ export async function updateOrganizationCompany(id, params) {
   if (params.fieldOfActivity != null) set.fieldOfActivity = String(params.fieldOfActivity || '').trim();
   if (params.employeesCount != null) set.employeesCount = Number(params.employeesCount || 0);
   if (params.billingMethod != null) set.billingMethod = String(params.billingMethod || '').trim();
+  if (params.billingType === 'Centralized' || params.billingType === 'Private') set.billingType = params.billingType;
+  if (params.monthlyPricePerMember != null) set.monthlyPricePerMember = Number(params.monthlyPricePerMember || 0);
+  if (params.contactEmail != null) set.contactEmail = String(params.contactEmail || '').trim();
+  if (params.contactPhone != null) set.contactPhone = String(params.contactPhone || '').trim();
+  if (params.notes != null) set.notes = String(params.notes || '').trim();
   if (params.contactPerson != null) set.contactPerson = params.contactPerson || null;
   if (params.accounting != null) set.accounting = params.accounting || null;
   if (params.additionalContact != null) set.additionalContact = params.additionalContact || null;
@@ -463,6 +550,174 @@ export async function deleteOrganizationCompany(id) {
   const r = await db.collection('organizations').deleteOne({ _id: oid });
   if (!r.deletedCount) throw new Error('ארגון לא נמצא');
   return { ok: true };
+}
+
+function normalizeNationalIdDigits(idRaw) {
+  return String(idRaw || '').replace(/\D/g, '');
+}
+
+export async function findActiveDealByOrgAndNationalId(organizationId, idRaw) {
+  const db = await getDb();
+  const oid = String(organizationId || '').trim();
+  const norm = normalizeNationalIdDigits(idRaw);
+  const raw = String(idRaw || '').trim();
+  const variants = [...new Set([raw, norm, norm && norm.length < 9 ? norm.padStart(9, '0') : norm].filter(Boolean))];
+  if (!oid || !variants.length) return null;
+  return db.collection('deals').findOne({
+    organizationId: oid,
+    'formState.id': { $in: variants },
+    paymentStatus: { $regex: /success|paid|test_success|completed/i },
+    subscriptionStatus: { $ne: 'Cancelled' },
+  });
+}
+
+export async function countActiveMembersByOrganizationId(organizationId) {
+  const db = await getDb();
+  const oid = String(organizationId || '').trim();
+  if (!oid) return 0;
+  return db.collection('deals').countDocuments({
+    organizationId: oid,
+    paymentStatus: { $regex: /success|paid|test_success/i },
+    subscriptionStatus: { $ne: 'Cancelled' },
+  });
+}
+
+export async function findDealsByOrganizationId(organizationId, limit = 500) {
+  const db = await getDb();
+  const oid = String(organizationId || '').trim();
+  if (!oid) return [];
+  const docs = await db
+    .collection('deals')
+    .find({ organizationId: oid })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .toArray();
+  return docs.map((d) => ({
+    id: String(d._id),
+    transactionId: d.transactionId,
+    payerAmount: d.payerAmount,
+    paymentStatus: d.paymentStatus,
+    subscriptionStatus: d.subscriptionStatus,
+    status: d.status,
+    memberType: d.memberType || 'Primary',
+    isOrganizationDeal: !!d.isOrganizationDeal,
+    fullName: d.formState?.fullName,
+    idNumber: d.formState?.id,
+    email: d.formState?.email,
+    phone: d.formState?.phone,
+    dateOfBirth: d.formState?.dateOfBirth,
+    gender: d.formState?.gender,
+    healthFund: d.formState?.healthFund,
+    address: d.formState?.address,
+    createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+    source: d.source,
+  }));
+}
+
+/**
+ * ייבוא עובדים — עסקה הושלמה, תשלום מרוכז, פרופיל מוטב מלא (כמו טופס ידני)
+ */
+export async function insertOrganizationImportedDeal({
+  organizationId,
+  organizationName,
+  monthlyPrice,
+  fullName,
+  idNum,
+  email,
+  phone,
+  dateOfBirth = '',
+  gender = '',
+  address = '',
+  healthFund = '',
+  supplementalInsurance = '',
+  maritalStatus = '',
+  medicalNotes = '',
+}) {
+  const dup = await findActiveDealByOrgAndNationalId(organizationId, idNum);
+  if (dup) return { skipped: true, reason: 'duplicate_id' };
+
+  const db = await getDb();
+  const transactionId = `IMP-ORG-${String(organizationId).replace(/\W/g, '').slice(-10)}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const now = new Date();
+  const idClean = String(idNum || '')
+    .replace(/\D/g, '')
+    .slice(0, 9);
+  const nameParts = String(fullName || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const firstName = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : nameParts[0] || '';
+  const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : nameParts.length === 1 ? '' : '';
+
+  const orgNm = String(organizationName || '').trim();
+  const fs = {
+    fullName: String(fullName || '').trim(),
+    id: idClean || String(idNum || '').trim(),
+    email: String(email || '').trim(),
+    phone: String(phone || '').trim(),
+    dateOfBirth: String(dateOfBirth || '').trim(),
+    gender: String(gender || '').trim(),
+    maritalStatus: String(maritalStatus || '').trim(),
+    healthFund: String(healthFund || '').trim(),
+    supplementalInsurance: String(supplementalInsurance || '').trim(),
+    address: String(address || '').trim(),
+    medicalNotes: String(medicalNotes || '').trim(),
+    organizationName: orgNm,
+    organizationId: String(organizationId),
+    paymentMethod: 'centralized',
+    organizationPaymentMethod: 'centralized',
+    productName: 'ייבוא מרכז ארגונים — אופאל',
+    beneficiaries: [],
+    beneficiaryCount: 0,
+  };
+
+  const doc = {
+    transactionId,
+    lowProfileCode: '',
+    cardcomAccountId: '',
+    cardcomRecurringId: '',
+    cardcomToken: '',
+    payerAmount: Number(monthlyPrice || 0),
+    formState: fs,
+    agentId: null,
+    terminalNumber: 0,
+    paymentStatus: 'success',
+    source: 'org-bulk-import',
+    indicator: null,
+    normalizedPayload: null,
+    commissionAmount: 0,
+    billingMonth: formatBillingMonthFromDate(now),
+    organizationId: String(organizationId),
+    isOrganizationDeal: true,
+    memberType: 'Primary',
+    status: 'Completed',
+    subscriptionStatus: 'Active',
+    beneficiaryUpdate: {
+      transactionId,
+      organizationName: orgNm,
+      agentName: '',
+      primaryMember: {
+        firstName,
+        lastName,
+        id: idClean || String(idNum || '').trim(),
+        email: String(email || '').trim(),
+        phone: String(phone || '').trim(),
+        address: String(address || '').trim(),
+        dateOfBirth: String(dateOfBirth || '').trim(),
+        maritalStatus: String(maritalStatus || '').trim(),
+        healthFund: String(healthFund || '').trim(),
+        supplementalInsurance: String(supplementalInsurance || '').trim(),
+        gender: String(gender || '').trim(),
+        medicalNotes: String(medicalNotes || '').trim(),
+      },
+      additionalMembers: [],
+      submittedAt: now,
+    },
+    createdAt: now,
+    updatedAt: now,
+  };
+  const result = await db.collection('deals').insertOne(doc);
+  return { skipped: false, id: String(result.insertedId), transactionId };
 }
 
 export async function updateLeadAdmin(kind, id, params) {
@@ -517,7 +772,34 @@ function serializeDocDates(doc) {
   const out = { ...doc, id: String(doc._id) };
   delete out._id;
   if (out.createdAt instanceof Date) out.createdAt = out.createdAt.toISOString();
+  if (out.updatedAt instanceof Date) out.updatedAt = out.updatedAt.toISOString();
   return out;
+}
+
+function mapBillingMethodToBillingType(billingMethod) {
+  const s = String(billingMethod || '');
+  if (/מרוכז|Centralized/i.test(s)) return 'Centralized';
+  return 'Private';
+}
+
+function serializeOrgDoc(doc, activeMemberCount = undefined) {
+  if (!doc) return null;
+  const o = serializeDocDates(doc);
+  o.billingType =
+    doc.billingType === 'Centralized' || doc.billingType === 'Private'
+      ? doc.billingType
+      : mapBillingMethodToBillingType(doc.billingMethod);
+  o.name = o.companyName || '';
+  o.taxId = o.companyId || '';
+  o.monthlyPricePerMember = Number(doc.monthlyPricePerMember || 0);
+  o.contactEmail =
+    doc.contactEmail != null && String(doc.contactEmail).trim()
+      ? String(doc.contactEmail).trim()
+      : o.companyEmail || '';
+  o.contactPhone = String(doc.contactPhone || '').trim();
+  o.notes = String(doc.notes || '').trim();
+  if (activeMemberCount !== undefined) o.activeMemberCount = activeMemberCount;
+  return o;
 }
 
 /** B2C contact form leads */

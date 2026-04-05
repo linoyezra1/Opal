@@ -18,6 +18,8 @@ import LandingPagesManagement from './pages/LandingPagesManagement.jsx';
 import ReportsDashboard from './pages/ReportsDashboard.jsx';
 import ContactManagement from './pages/ContactManagement.jsx';
 import OrganizationsDashboard from './pages/OrganizationsDashboard.jsx';
+import OrganizationDetailPage from './pages/OrganizationDetailPage.jsx';
+import OrgRegisterPage from './pages/OrgRegisterPage.jsx';
 import OrganizationJoinRequest from './pages/OrganizationJoinRequest.jsx';
 import BeneficiarySuccess from './pages/BeneficiarySuccess.jsx';
 import './index.css';
@@ -44,6 +46,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/admin/control-panel" element={<AdminControlPanel />} />
         <Route path="/admin/contacts" element={<ContactManagement />} />
         <Route path="/admin/organizations" element={<OrganizationsDashboard />} />
+        <Route path="/admin/organizations/:id" element={<OrganizationDetailPage />} />
+        <Route path="/register" element={<OrgRegisterPage />} />
         <Route path="/admin/agents" element={<AgentSetup />} />
         <Route path="/admin/landing-pages" element={<LandingPagesManagement />} />
         <Route path="/admin/reports" element={<ReportsDashboard />} />

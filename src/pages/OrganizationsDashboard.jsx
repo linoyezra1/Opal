@@ -32,6 +32,11 @@ const emptyForm = () => ({
   fieldOfActivity: '',
   employeesCount: '',
   billingMethod: 'חיוב מרוכז חברה',
+  billingType: 'Centralized',
+  monthlyPricePerMember: '',
+  contactEmail: '',
+  contactPhone: '',
+  notes: '',
   contactPerson: { name: '', role: '', phone: '', mobile: '', email: '' },
   accounting: { name: '', role: '', phone: '', mobile: '', email: '' },
   additionalContact: { name: '', role: '', phone: '', mobile: '', email: '' },
@@ -89,7 +94,13 @@ export default function OrganizationsDashboard() {
         companyEmail: addForm.companyEmail.trim(),
         fieldOfActivity: addForm.fieldOfActivity.trim(),
         employeesCount: Number(addForm.employeesCount || 0),
-        billingMethod: addForm.billingMethod,
+        billingType: addForm.billingType === 'Centralized' ? 'Centralized' : 'Private',
+        billingMethod:
+          addForm.billingType === 'Centralized' ? 'חיוב מרוכז חברה' : 'חיוב לקוח פרטי',
+        monthlyPricePerMember: Number(addForm.monthlyPricePerMember || 0),
+        contactEmail: addForm.contactEmail.trim(),
+        contactPhone: addForm.contactPhone.trim(),
+        notes: addForm.notes.trim(),
         contactPerson: addForm.contactPerson,
         accounting: addForm.accounting,
         additionalContact: addForm.additionalContact,
@@ -117,7 +128,12 @@ export default function OrganizationsDashboard() {
     setLoading(true);
     setError('');
     try {
-      const { id, ...body } = editOrg;
+      const { id, activeMemberCount, name, taxId, ...rest } = editOrg;
+      const body = {
+        ...rest,
+        monthlyPricePerMember: Number(rest.monthlyPricePerMember || 0),
+        employeesCount: Number(rest.employeesCount || 0),
+      };
       const res = await fetch(`${API_BASE}/api/admin/organizations/${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -206,6 +222,18 @@ export default function OrganizationsDashboard() {
                     <Input dir="ltr" value={addForm.companyEmail} onChange={(e) => setAddForm((p) => ({ ...p, companyEmail: e.target.value }))} />
                   </Field>
                   <Field>
+                    <FieldLabel>אימייל ליצירת קשר</FieldLabel>
+                    <Input dir="ltr" value={addForm.contactEmail} onChange={(e) => setAddForm((p) => ({ ...p, contactEmail: e.target.value }))} />
+                  </Field>
+                  <Field>
+                    <FieldLabel>טלפון ליצירת קשר</FieldLabel>
+                    <Input dir="ltr" value={addForm.contactPhone} onChange={(e) => setAddForm((p) => ({ ...p, contactPhone: e.target.value }))} />
+                  </Field>
+                  <Field>
+                    <FieldLabel>הערות</FieldLabel>
+                    <Input value={addForm.notes} onChange={(e) => setAddForm((p) => ({ ...p, notes: e.target.value }))} />
+                  </Field>
+                  <Field>
                     <FieldLabel>תחום פעילות</FieldLabel>
                     <Input value={addForm.fieldOfActivity} onChange={(e) => setAddForm((p) => ({ ...p, fieldOfActivity: e.target.value }))} />
                   </Field>
@@ -223,15 +251,33 @@ export default function OrganizationsDashboard() {
               <TabsContent value="billing" className="mt-4">
                 <FieldGroup>
                   <Field>
-                    <FieldLabel>צורת חיוב</FieldLabel>
+                    <FieldLabel>סוג חיוב</FieldLabel>
                     <select
                       className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
-                      value={addForm.billingMethod}
-                      onChange={(e) => setAddForm((p) => ({ ...p, billingMethod: e.target.value }))}
+                      value={addForm.billingType}
+                      onChange={(e) =>
+                        setAddForm((p) => ({
+                          ...p,
+                          billingType: e.target.value,
+                          billingMethod:
+                            e.target.value === 'Centralized' ? 'חיוב מרוכז חברה' : 'חיוב לקוח פרטי',
+                        }))
+                      }
                     >
-                      <option value="חיוב לקוח פרטי">חיוב לקוח פרטי</option>
-                      <option value="חיוב מרוכז חברה">חיוב מרוכז חברה</option>
+                      <option value="Private">תשלום פרטי (הנחת ארגון — קישור /register)</option>
+                      <option value="Centralized">תשלום מרוכז (יבוא עובדים)</option>
                     </select>
+                  </Field>
+                  <Field>
+                    <FieldLabel>מחיר חודשי לחבר (₪)</FieldLabel>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      dir="ltr"
+                      value={addForm.monthlyPricePerMember}
+                      onChange={(e) => setAddForm((p) => ({ ...p, monthlyPricePerMember: e.target.value }))}
+                    />
                   </Field>
                 </FieldGroup>
               </TabsContent>
@@ -265,6 +311,9 @@ export default function OrganizationsDashboard() {
                     <Field><FieldLabel>ח.פ</FieldLabel><Input value={editOrg.companyId || ''} onChange={(e) => setEditOrg((p) => ({ ...p, companyId: e.target.value }))} /></Field>
                     <Field><FieldLabel>כתובת רשמית</FieldLabel><Input value={editOrg.officialAddress || ''} onChange={(e) => setEditOrg((p) => ({ ...p, officialAddress: e.target.value }))} /></Field>
                     <Field><FieldLabel>אימייל חברה</FieldLabel><Input dir="ltr" value={editOrg.companyEmail || ''} onChange={(e) => setEditOrg((p) => ({ ...p, companyEmail: e.target.value }))} /></Field>
+                    <Field><FieldLabel>אימייל ליצירת קשר</FieldLabel><Input dir="ltr" value={editOrg.contactEmail || ''} onChange={(e) => setEditOrg((p) => ({ ...p, contactEmail: e.target.value }))} /></Field>
+                    <Field><FieldLabel>טלפון ליצירת קשר</FieldLabel><Input dir="ltr" value={editOrg.contactPhone || ''} onChange={(e) => setEditOrg((p) => ({ ...p, contactPhone: e.target.value }))} /></Field>
+                    <Field><FieldLabel>הערות</FieldLabel><Input value={editOrg.notes || ''} onChange={(e) => setEditOrg((p) => ({ ...p, notes: e.target.value }))} /></Field>
                     <Field><FieldLabel>תחום פעילות</FieldLabel><Input value={editOrg.fieldOfActivity || ''} onChange={(e) => setEditOrg((p) => ({ ...p, fieldOfActivity: e.target.value }))} /></Field>
                     <Field><FieldLabel>מספר עובדים</FieldLabel><Input type="number" value={editOrg.employeesCount || ''} onChange={(e) => setEditOrg((p) => ({ ...p, employeesCount: e.target.value }))} /></Field>
                   </FieldGroup>
@@ -277,11 +326,33 @@ export default function OrganizationsDashboard() {
                 <TabsContent value="billing" className="mt-4">
                   <FieldGroup>
                     <Field>
-                      <FieldLabel>צורת חיוב</FieldLabel>
-                      <select className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm" value={editOrg.billingMethod || 'חיוב מרוכז חברה'} onChange={(e) => setEditOrg((p) => ({ ...p, billingMethod: e.target.value }))}>
-                        <option value="חיוב לקוח פרטי">חיוב לקוח פרטי</option>
-                        <option value="חיוב מרוכז חברה">חיוב מרוכז חברה</option>
+                      <FieldLabel>סוג חיוב</FieldLabel>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                        value={editOrg.billingType === 'Centralized' ? 'Centralized' : 'Private'}
+                        onChange={(e) =>
+                          setEditOrg((p) => ({
+                            ...p,
+                            billingType: e.target.value,
+                            billingMethod:
+                              e.target.value === 'Centralized' ? 'חיוב מרוכז חברה' : 'חיוב לקוח פרטי',
+                          }))
+                        }
+                      >
+                        <option value="Private">תשלום פרטי (הנחת ארגון)</option>
+                        <option value="Centralized">תשלום מרוכז</option>
                       </select>
+                    </Field>
+                    <Field>
+                      <FieldLabel>מחיר חודשי לחבר (₪)</FieldLabel>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        dir="ltr"
+                        value={editOrg.monthlyPricePerMember ?? ''}
+                        onChange={(e) => setEditOrg((p) => ({ ...p, monthlyPricePerMember: e.target.value }))}
+                      />
                     </Field>
                   </FieldGroup>
                 </TabsContent>
@@ -301,9 +372,9 @@ export default function OrganizationsDashboard() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
               <Building2 className="size-6 text-primary" />
-              ניהול ארגונים
+              מרכז ניהול ארגונים
             </h1>
-            <p className="text-muted-foreground">ניהול ארגונים, אנשי קשר וחיוב</p>
+            <p className="text-muted-foreground">אופאל — ארגונים, חברים פעילים, יבוא והרשמה</p>
           </div>
           <Button onClick={openAdd}><Plus className="size-4 me-2" />הוסף ארגון</Button>
         </div>
@@ -344,11 +415,11 @@ export default function OrganizationsDashboard() {
                     <TableRow>
                       <TableHead>שם חברה</TableHead>
                       <TableHead>ח.פ</TableHead>
+                      <TableHead>סוג חיוב</TableHead>
+                      <TableHead>חברים פעילים</TableHead>
+                      <TableHead>מחיר לחבר</TableHead>
                       <TableHead>אימייל</TableHead>
-                      <TableHead>תחום</TableHead>
-                      <TableHead>עובדים</TableHead>
-                      <TableHead>צורת חיוב</TableHead>
-                      <TableHead className="w-28">פעולות</TableHead>
+                      <TableHead className="w-40">פעולות</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -356,13 +427,26 @@ export default function OrganizationsDashboard() {
                       <TableRow key={r.id}>
                         <TableCell className="font-medium">{r.companyName || '—'}</TableCell>
                         <TableCell>{r.companyId || '—'}</TableCell>
-                        <TableCell dir="ltr" className="text-start">{r.companyEmail || '—'}</TableCell>
-                        <TableCell>{r.fieldOfActivity || '—'}</TableCell>
-                        <TableCell>{r.employeesCount || 0}</TableCell>
-                        <TableCell><Badge variant="secondary">{r.billingMethod || '—'}</Badge></TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="icon" type="button" onClick={() => { setEditTab('org'); setEditOrg({ ...emptyForm(), ...r }); }}>
+                          <Badge variant="outline">
+                            {r.billingType === 'Centralized' ? 'מרוכז' : 'פרטי'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{r.activeMemberCount ?? 0}</TableCell>
+                        <TableCell dir="ltr">
+                          {r.monthlyPricePerMember != null && Number(r.monthlyPricePerMember) > 0
+                            ? `₪${Number(r.monthlyPricePerMember)}`
+                            : '—'}
+                        </TableCell>
+                        <TableCell dir="ltr" className="text-start text-sm">
+                          {r.contactEmail || r.companyEmail || '—'}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <Button variant="outline" size="sm" type="button" asChild>
+                              <Link to={`/admin/organizations/${encodeURIComponent(r.id)}`}>פרופיל</Link>
+                            </Button>
+                            <Button variant="ghost" size="icon" type="button" onClick={() => { setEditTab('org'); setEditOrg({ ...emptyForm(), ...r, billingType: r.billingType || (r.billingMethod?.includes('מרוכז') ? 'Centralized' : 'Private') }); }}>
                               <Edit2 className="size-4" />
                             </Button>
                             <Button variant="ghost" size="icon" type="button" onClick={() => setDeleteOrg(r)}>

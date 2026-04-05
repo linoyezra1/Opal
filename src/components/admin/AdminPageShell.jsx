@@ -30,7 +30,7 @@ const groups = [
       { label: 'מחירונים', to: '/admin/price-list', icon: Receipt },
       { label: 'דפי נחיתה', to: '/admin/landing-pages', icon: LayoutTemplate },
       { label: 'צור קשר', to: '/admin/contacts', icon: Phone },
-      { label: 'ארגונים', to: '/admin/organizations', icon: Building2 },
+      { label: 'מרכז ניהול ארגונים', to: '/admin/organizations', icon: Building2 },
       { label: 'מחירון ארגונים', to: '/admin/pricing', icon: Receipt },
     ],
   },
