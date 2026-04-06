@@ -19,6 +19,8 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
+
+const ORG_JOIN_REQUEST_URL = 'https://opal-production-5fee.up.railway.app/organization-join-request';
 import { cn } from '../lib/cn.js';
 import { Button } from '../components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.jsx';
@@ -221,7 +223,7 @@ function ContactLandingView({ slug, content, whatYouGetRows, whatYouGetTitle, wh
             </CardHeader>
             <CardContent className="p-6">
               {done ? (
-                <p className="text-center text-green-700 font-medium py-6">הפנייה נשלחה בהצלחה. נחזור אליכם בהקדם.</p>
+                <p className="text-center text-primary font-medium py-6">הפנייה נשלחה בהצלחה. נחזור אליכם בהקדם.</p>
               ) : (
                 <form onSubmit={submitContact} className="space-y-4">
                   <div>
@@ -267,9 +269,14 @@ function ContactLandingView({ slug, content, whatYouGetRows, whatYouGetTitle, wh
       <footer className="py-8 border-t bg-muted/30">
         <div className="container text-center max-w-5xl mx-auto px-4">
           <p className="text-sm text-muted-foreground">כל הזכויות שמורות לאופאל - בית ליזמות רפואית</p>
-          <Link to="/" className="text-sm text-primary underline mt-4 inline-block">
-            דף הבית
-          </Link>
+          <a
+            href={ORG_JOIN_REQUEST_URL}
+            className="text-sm text-primary underline mt-4 inline-block"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            בקשה להצטרפות ארגון
+          </a>
         </div>
       </footer>
     </div>
@@ -699,7 +706,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                   key={product.productId}
                   className={cn(
                     'relative transition-all hover:shadow-lg cursor-pointer overflow-hidden pt-0',
-                    popular && 'border-primary shadow-lg md:scale-[1.02]',
+                    popular && 'border-2 border-opal-gold shadow-lg md:scale-[1.02]',
                     selected && 'ring-2 ring-primary'
                   )}
                   onClick={() => setProductId(product.productId)}
@@ -727,7 +734,9 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                     </div>
                   ) : null}
                   {popular ? (
-                    <Badge className="absolute top-3 start-1/2 -translate-x-1/2 z-10">הכי פופולרי</Badge>
+                    <Badge className="absolute top-3 start-1/2 -translate-x-1/2 z-10 border-0 bg-opal-gold text-opal-gold-foreground hover:bg-opal-gold/90">
+                      הכי פופולרי
+                    </Badge>
                   ) : null}
                   <CardHeader className="text-center pb-2">
                     <CardTitle className="text-xl">{product.productName}</CardTitle>
@@ -933,6 +942,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                 <Button
                   type="submit"
                   size="lg"
+                  variant="opalGold"
                   className="w-full text-lg"
                   disabled={submitting || !selectedProduct || !acceptedTerms}
                 >
@@ -979,9 +989,14 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
       <footer className="py-8 border-t bg-muted/30">
         <div className="container text-center max-w-5xl mx-auto px-4">
           <p className="text-sm text-muted-foreground">כל הזכויות שמורות לאופאל - בית ליזמות רפואית</p>
-          <Link to="/" className="text-sm text-primary underline mt-4 inline-block">
-            דף הבית
-          </Link>
+          <a
+            href={ORG_JOIN_REQUEST_URL}
+            className="text-sm text-primary underline mt-4 inline-block"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            בקשה להצטרפות ארגון
+          </a>
         </div>
       </footer>
     </div>

@@ -28,6 +28,18 @@ function splitFullName(full) {
   return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
 }
 
+/** שם מוצר לדוח מפעיל — ייבוא מרכזי משתמש בשם מהארגון / שדה מפורש */
+function subscriberExportProductName(d, fs) {
+  const src = String(d.source || '');
+  const pn = String(fs.productName || '').trim();
+  if (src !== 'org-bulk-import') return pn;
+  const explicit = String(fs.subscriptionProductName || '').trim();
+  if (explicit) return explicit;
+  const orgNm = firstNonEmpty(fs.organizationName, '');
+  if (pn && !/ייבוא מרכז/i.test(pn)) return pn;
+  return orgNm ? `מנוי ארגוני — ${orgNm}` : 'מנוי ארגוני';
+}
+
 /**
  * שורה מפורטת לכל נפש: מוטב ראשי + מוטבים נוספים
  * @param {object[]} deals — מסמכי deals ממונגו
@@ -45,6 +57,7 @@ export function generateFlattenedSubscriberRows(deals) {
     const payerAmount = Number(d.payerAmount || 0);
     const billingMonth = String(d.billingMonth || '').trim();
     const commissionAmount = Number(d.commissionAmount ?? fs.resolvedAgentCommission ?? 0);
+    const productName = subscriberExportProductName(d, fs);
     const createdAt =
       d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt || '';
     const org = firstNonEmpty(bu.organizationName, fs.organizationName);
@@ -85,7 +98,7 @@ export function generateFlattenedSubscriberRows(deals) {
       commissionAmount,
       paymentStatus: String(d.paymentStatus || ''),
       subscriptionStatus: String(d.subscriptionStatus || ''),
-      productName: String(fs.productName || ''),
+      productName,
       createdAt,
     });
 
@@ -142,7 +155,7 @@ export function generateFlattenedSubscriberRows(deals) {
         commissionAmount,
         paymentStatus: String(d.paymentStatus || ''),
         subscriptionStatus: String(d.subscriptionStatus || ''),
-        productName: String(fs.productName || ''),
+        productName,
         createdAt,
       });
     }
@@ -251,23 +264,36 @@ export function buildCancellationsCsv(deals) {
   return rowsToCsv(rows, CANCEL_FIELDS);
 }
 
-export function buildAgentCommissionPayload(deals) {
-  const rows = deals.map((d) => {
-    const fs = d.formState && typeof d.formState === 'object' ? d.formState : {};
-    const payerAmount = Number(d.payerAmount || 0);
-    const commissionAmount = Number(d.commissionAmount ?? fs.resolvedAgentCommission ?? 0);
-    const createdAt =
-      d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt || '';
-    return {
-      dealId: String(d._id || ''),
-      transactionId: String(d.transactionId || ''),
-      createdAt,
-      payerAmount,
-      commissionAmount,
-      productName: String(fs.productName || ''),
-      paymentStatus: String(d.paymentStatus || ''),
-    };
-  });
+export async function buildAgentCommissionPayload(deals) {
+  const { resolveCheckoutEconomics } = await import('./adminMongooseService.js');
+  const rows = await Promise.all(
+    deals.map(async (d) => {
+      const fs = d.formState && typeof d.formState === 'object' ? d.formState : {};
+      const payerAmount = Number(d.payerAmount || 0);
+      let commissionAmount = Number(d.commissionAmount ?? fs.resolvedAgentCommission ?? 0);
+      if (!Number.isFinite(commissionAmount) || commissionAmount < 0) commissionAmount = 0;
+      if (commissionAmount === 0) {
+        try {
+          const econ = await resolveCheckoutEconomics(fs);
+          const c = Number(econ.resolvedAgentCommission ?? 0);
+          if (Number.isFinite(c) && c >= 0) commissionAmount = c;
+        } catch {
+          /* עסקה ללא מחירון מלא */
+        }
+      }
+      const createdAt =
+        d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt || '';
+      return {
+        dealId: String(d._id || ''),
+        transactionId: String(d.transactionId || ''),
+        createdAt,
+        payerAmount,
+        commissionAmount,
+        productName: String(fs.productName || ''),
+        paymentStatus: String(d.paymentStatus || ''),
+      };
+    })
+  );
   const totalCommission = rows.reduce((s, r) => s + r.commissionAmount, 0);
   const totalSales = rows.reduce((s, r) => s + r.payerAmount, 0);
   return {

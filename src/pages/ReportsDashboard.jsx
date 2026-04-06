@@ -83,8 +83,7 @@ export default function ReportsDashboard() {
   const [invoices, setInvoices] = useState([]);
   const [invLoading, setInvLoading] = useState(false);
   const [invErr, setInvErr] = useState('');
-  const [invoiceListMonth, setInvoiceListMonth] = useState(currentMonthStr());
-  const [genMonth, setGenMonth] = useState(currentMonthStr());
+  const [billingMonth, setBillingMonth] = useState(currentMonthStr());
   const [genBusy, setGenBusy] = useState(false);
 
   const [editOpen, setEditOpen] = useState(false);
@@ -113,7 +112,7 @@ export default function ReportsDashboard() {
       setInvLoading(true);
       setInvErr('');
       try {
-        const m = String(monthOverride ?? invoiceListMonth ?? '').trim();
+        const m = String(monthOverride ?? billingMonth ?? '').trim();
         const q = new URLSearchParams();
         if (m) q.set('month', m);
         const res = await fetch(`${API_BASE}/api/admin/monthly-invoices?${q.toString()}`, {
@@ -128,7 +127,7 @@ export default function ReportsDashboard() {
         setInvLoading(false);
       }
     },
-    [token, invoiceListMonth]
+    [token, billingMonth]
   );
 
   useEffect(() => {
@@ -203,12 +202,11 @@ export default function ReportsDashboard() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ month: genMonth }),
+        body: JSON.stringify({ month: billingMonth }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error || 'שגיאה');
-      setInvoiceListMonth(genMonth);
-      await loadInvoices(genMonth);
+      await loadInvoices(billingMonth);
     } catch (e) {
       setInvErr(e?.message || 'שגיאה');
     } finally {
@@ -400,25 +398,21 @@ export default function ReportsDashboard() {
                 <div>
                   <CardTitle>גבייה מארגונים (תשלום מרוכז)</CardTitle>
                   <CardDescription>
-                    חשבוניות חודשיות מקובצות לפי ארגון — עדכנו מספרי מסמכים וסטטוס תשלום. בחרו חודש לתצוגה ולחצו &quot;רענן טבלה&quot;.
+                    חשבוניות חודשיות מקובצות לפי ארגון — עדכנו מספרי מסמכים וסטטוס תשלום. בחרו חודש לחיוב ולחצו &quot;רענן טבלה&quot; או &quot;צור / עדכן&quot;.
                   </CardDescription>
                 </div>
                 <div className="flex flex-wrap items-end justify-end gap-2">
                   <Field>
-                    <FieldLabel className="text-xs">חודש לתצוגה</FieldLabel>
+                    <FieldLabel className="text-xs">חודש לחיוב</FieldLabel>
                     <Input
                       type="month"
-                      value={invoiceListMonth}
-                      onChange={(e) => setInvoiceListMonth(e.target.value)}
+                      value={billingMonth}
+                      onChange={(e) => setBillingMonth(e.target.value)}
                     />
                   </Field>
-                  <Button type="button" variant="outline" onClick={loadInvoices} disabled={invLoading}>
+                  <Button type="button" variant="outline" onClick={() => loadInvoices()} disabled={invLoading}>
                     רענן טבלה
                   </Button>
-                  <Field>
-                    <FieldLabel className="text-xs">חודש ליצירה</FieldLabel>
-                    <Input type="month" value={genMonth} onChange={(e) => setGenMonth(e.target.value)} />
-                  </Field>
                   <Button type="button" variant="secondary" disabled={genBusy} onClick={runGenerateInvoices}>
                     {genBusy ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
                     צור / עדכן לפי חודש

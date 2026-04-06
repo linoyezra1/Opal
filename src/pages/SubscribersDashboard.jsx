@@ -1189,14 +1189,30 @@ export default function SubscribersDashboard() {
                   <Table className="text-right">
                     <TableHeader>
                       <TableRow className="[&_th]:text-right">
-                        <TableHead className="text-right">סטטוס השלמה</TableHead>
-                        <TableHead className="text-right">סטטוס תשלום</TableHead>
-                        <TableHead className="text-right">סטטוס חיוב עתידי</TableHead>
-                        <TableHead className="text-right">מס&apos; הזמנה</TableHead>
-                        <TableHead className="text-right">לקוח</TableHead>
-                        <TableHead className="text-right">סכום</TableHead>
-                        <TableHead className="text-right">תאריך</TableHead>
-                        <TableHead className="w-28 text-right">פעולות</TableHead>
+                        <TableHead dir="rtl" className="text-right">
+                          סטטוס השלמה
+                        </TableHead>
+                        <TableHead dir="rtl" className="text-right">
+                          סטטוס תשלום
+                        </TableHead>
+                        <TableHead dir="rtl" className="text-right">
+                          סטטוס חיוב עתידי
+                        </TableHead>
+                        <TableHead dir="rtl" className="text-right">
+                          מס&apos; הזמנה
+                        </TableHead>
+                        <TableHead dir="rtl" className="text-right">
+                          לקוח
+                        </TableHead>
+                        <TableHead dir="rtl" className="text-right">
+                          סכום
+                        </TableHead>
+                        <TableHead dir="rtl" className="text-right">
+                          תאריך
+                        </TableHead>
+                        <TableHead dir="rtl" className="w-28 text-right">
+                          פעולות
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1217,7 +1233,7 @@ export default function SubscribersDashboard() {
                               : undefined
                           }
                         >
-                          <TableCell className="text-right align-top">
+                          <TableCell dir="rtl" className="text-right align-top">
                             {r.pendingBeneficiaryCompletion ? (
                               <Badge className="bg-orange-500 hover:bg-orange-500 text-white border-0">
                                 ממתין להשלמת מסמכים
@@ -1228,10 +1244,10 @@ export default function SubscribersDashboard() {
                               </Badge>
                             )}
                           </TableCell>
-                          <TableCell className="text-right text-sm whitespace-pre-wrap max-w-[12rem]">
+                          <TableCell dir="rtl" className="text-right text-sm whitespace-pre-wrap max-w-[12rem]">
                             {r.displayPaymentStatus || r.paymentStatus || '—'}
                           </TableCell>
-                          <TableCell className="text-right whitespace-nowrap">
+                          <TableCell dir="rtl" className="text-right whitespace-nowrap">
                             {isCancelled ? (
                               <Badge variant="destructive" className="font-normal">
                                 {`בוטל מול קארדקום${cancelledAtText ? ` ב-${cancelledAtText}` : ''}`}
@@ -1240,8 +1256,10 @@ export default function SubscribersDashboard() {
                               <Badge variant="secondary">פעיל</Badge>
                             )}
                           </TableCell>
-                          <TableCell className="font-mono text-xs text-end">{r.transactionId}</TableCell>
-                          <TableCell className="text-right">
+                          <TableCell dir="rtl" className="font-mono text-xs text-end">
+                            {r.transactionId}
+                          </TableCell>
+                          <TableCell dir="rtl" className="text-right">
                             <div className="flex flex-col items-end gap-1">
                               <span>{r.fullName || '—'}</span>
                               {r.organizationBadge ? (
@@ -1251,11 +1269,13 @@ export default function SubscribersDashboard() {
                               ) : null}
                             </div>
                           </TableCell>
-                          <TableCell className="text-right">{formatCurrency(r.amount)}</TableCell>
-                          <TableCell className="whitespace-nowrap text-xs text-right">
+                          <TableCell dir="rtl" className="text-right">
+                            {formatCurrency(r.amount)}
+                          </TableCell>
+                          <TableCell dir="rtl" className="whitespace-nowrap text-xs text-right">
                             {r.createdAt ? new Date(r.createdAt).toLocaleString('he-IL') : '-'}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell dir="rtl" className="text-right">
                             <div className="flex items-center justify-end gap-1 flex-wrap">
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -1334,7 +1354,7 @@ export default function SubscribersDashboard() {
                 <div className="border rounded-lg p-3">
                   סה&quot;כ עמלות סוכנים: <strong>{formatCurrency(s.totalAgentCommission || 0)}</strong>
                 </div>
-                <div className="border rounded-lg p-3 bg-emerald-50 dark:bg-emerald-950/30">
+                <div className="border rounded-lg p-3 bg-primary/5 dark:bg-primary/15">
                   סה&quot;כ רווח נקי: <strong>{formatCurrency(s.totalNetProfit || 0)}</strong>
                 </div>
                 <div className="border rounded-lg p-3">
@@ -1401,7 +1421,7 @@ export default function SubscribersDashboard() {
                   </div>
                   <div className="rounded-lg border p-3">
                     <p className="text-xs text-muted-foreground mb-1">רווח נקי</p>
-                    <p className="font-semibold text-emerald-700 dark:text-emerald-400">
+                    <p className="font-semibold text-primary">
                       {formatCurrency(selected?.formState?.resolvedNetProfit ?? 0)}
                     </p>
                   </div>

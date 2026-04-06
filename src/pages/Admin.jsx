@@ -120,7 +120,7 @@ export default function Admin() {
           <div className="flex gap-2">
             <Link to="/admin/subscribers" className="px-4 py-2 rounded-lg bg-medical-teal text-white">לקוחות</Link>
             <Link to="/admin/control-panel" className="px-4 py-2 rounded-lg bg-amber-600 text-white">לוח בקרה</Link>
-            <Link to="/admin/products" className="px-4 py-2 rounded-lg bg-emerald-700 text-white">מוצרים</Link>
+            <Link to="/admin/products" className="px-4 py-2 rounded-lg bg-primary text-primary-foreground">מוצרים</Link>
             <Link to="/admin/vendors" className="px-4 py-2 rounded-lg bg-amber-800 text-white">ספקים</Link>
             <Link to="/admin/price-list" className="px-4 py-2 rounded-lg bg-indigo-700 text-white">מחירון</Link>
             <Link to="/admin/pricing" className="px-4 py-2 rounded-lg bg-medical-blue-dark text-white">מחירון ארגונים</Link>

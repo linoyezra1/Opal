@@ -238,6 +238,11 @@ export default function OrganizationDetailPage() {
             </h1>
             <p className="text-muted-foreground text-sm mt-1 flex flex-wrap gap-2 items-center">
               <Badge variant="secondary">{billingLabel}</Badge>
+              {String(org.status || 'active').toLowerCase() === 'pending' ? (
+                <Badge variant="outline" className="border-amber-600 text-amber-900 bg-amber-50">
+                  ממתין לאישור
+                </Badge>
+              ) : null}
               <span>ח.פ {org.companyId || org.taxId || '—'}</span>
               <span>·</span>
               <span>{org.activeMemberCount != null ? `${org.activeMemberCount} חברים פעילים` : ''}</span>
@@ -522,6 +527,28 @@ export default function OrganizationDetailPage() {
                               setOrg((p) => ({ ...p, monthlyPricePerMember: e.target.value }))
                             }
                           />
+                        </Field>
+                        <Field>
+                          <FieldLabel>שם מוצר לחברים (דוחות / ייצוא למפעיל)</FieldLabel>
+                          <Input
+                            value={org.subscriptionProductName || ''}
+                            onChange={(e) =>
+                              setOrg((p) => ({ ...p, subscriptionProductName: e.target.value }))
+                            }
+                            placeholder="למשל: מנוי זהב"
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel>סטטוס ארגון</FieldLabel>
+                          <select
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            value={org.status || 'active'}
+                            onChange={(e) => setOrg((p) => ({ ...p, status: e.target.value }))}
+                          >
+                            <option value="Pending">ממתין לאישור</option>
+                            <option value="Lead">ליד</option>
+                            <option value="active">פעיל</option>
+                          </select>
                         </Field>
                       </FieldGroup>
                     </TabsContent>

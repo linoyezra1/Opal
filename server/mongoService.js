@@ -278,6 +278,7 @@ export async function saveBeneficiaryUpdate(params) {
 
   const deals = db.collection('deals');
   const now = new Date();
+  const subscriptionStartDate = now.toLocaleDateString('he-IL');
   const primary = params.primaryMember || {};
   const additional = Array.isArray(params.additionalMembers) ? params.additionalMembers : [];
   const normalizedBeneficiaries = additional.map((m) => ({
@@ -316,7 +317,7 @@ export async function saveBeneficiaryUpdate(params) {
         'formState.address': String(primary.address || '').trim(),
         'formState.beneficiaries': normalizedBeneficiaries,
         'formState.beneficiaryCount': normalizedBeneficiaries.length,
-        'formState.subscriptionStartDate': new Date().toLocaleDateString('he-IL'),
+        'formState.subscriptionStartDate': subscriptionStartDate,
         updatedAt: now,
       },
       $setOnInsert: { createdAt: now },
@@ -439,6 +440,7 @@ export async function createOrganizationCompany(params) {
     companyEmail: params.companyEmail || '',
     fieldOfActivity: params.fieldOfActivity || '',
     employeesCount: Number(params.employeesCount || 0),
+    subscriptionProductName: String(params.subscriptionProductName || '').trim(),
     billingMethod: billingMethod,
     billingType,
     monthlyPricePerMember: Number(params.monthlyPricePerMember || 0),
@@ -528,6 +530,9 @@ export async function updateOrganizationCompany(id, params) {
   if (params.billingMethod != null) set.billingMethod = String(params.billingMethod || '').trim();
   if (params.billingType === 'Centralized' || params.billingType === 'Private') set.billingType = params.billingType;
   if (params.monthlyPricePerMember != null) set.monthlyPricePerMember = Number(params.monthlyPricePerMember || 0);
+  if (params.subscriptionProductName != null)
+    set.subscriptionProductName = String(params.subscriptionProductName || '').trim();
+  if (params.status != null) set.status = String(params.status || '').trim();
   if (params.contactEmail != null) set.contactEmail = String(params.contactEmail || '').trim();
   if (params.contactPhone != null) set.contactPhone = String(params.contactPhone || '').trim();
   if (params.notes != null) set.notes = String(params.notes || '').trim();
@@ -621,6 +626,7 @@ export async function insertOrganizationImportedDeal({
   organizationId,
   organizationName,
   monthlyPrice,
+  subscriptionProductName = '',
   fullName,
   idNum,
   email,
@@ -649,6 +655,9 @@ export async function insertOrganizationImportedDeal({
   const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : nameParts.length === 1 ? '' : '';
 
   const orgNm = String(organizationName || '').trim();
+  const productLabel =
+    String(subscriptionProductName || '').trim() ||
+    (orgNm ? `מנוי ארגוני — ${orgNm}` : 'מנוי ארגוני');
   const fs = {
     fullName: String(fullName || '').trim(),
     id: idClean || String(idNum || '').trim(),
@@ -665,7 +674,8 @@ export async function insertOrganizationImportedDeal({
     organizationId: String(organizationId),
     paymentMethod: 'centralized',
     organizationPaymentMethod: 'centralized',
-    productName: 'ייבוא מרכז ארגונים — אופאל',
+    subscriptionProductName: String(subscriptionProductName || '').trim() || productLabel,
+    productName: productLabel,
     beneficiaries: [],
     beneficiaryCount: 0,
   };
@@ -790,6 +800,8 @@ function serializeOrgDoc(doc, activeMemberCount = undefined) {
   o.name = o.companyName || '';
   o.taxId = o.companyId || '';
   o.monthlyPricePerMember = Number(doc.monthlyPricePerMember || 0);
+  o.subscriptionProductName = String(doc.subscriptionProductName || '').trim();
+  o.status = String(doc.status || 'active').trim();
   o.contactEmail =
     doc.contactEmail != null && String(doc.contactEmail).trim()
       ? String(doc.contactEmail).trim()
@@ -1488,11 +1500,20 @@ export async function findDealsByAgentAndMonth(agentId, monthStr) {
   if (!range) return [];
   const db = await getDb();
   const aid = String(agentId || '').trim();
+  const or = [{ agentId: aid }, { 'formState.agentId': aid }];
+  if (ObjectId.isValid(aid)) {
+    try {
+      const oid = new ObjectId(aid);
+      or.push({ agentId: oid });
+      or.push({ 'formState.agentId': oid });
+    } catch {
+      /* ignore */
+    }
+  }
   return db
     .collection('deals')
     .find({
-      agentId: aid,
-      createdAt: { $gte: range.start, $lt: range.end },
+      $and: [{ $or: or }, { createdAt: { $gte: range.start, $lt: range.end } }],
     })
     .sort({ createdAt: -1 })
     .limit(2000)

@@ -34,6 +34,8 @@ const emptyForm = () => ({
   billingMethod: 'חיוב מרוכז חברה',
   billingType: 'Centralized',
   monthlyPricePerMember: '',
+  subscriptionProductName: '',
+  status: 'active',
   contactEmail: '',
   contactPhone: '',
   notes: '',
@@ -100,6 +102,8 @@ export default function OrganizationsDashboard() {
         billingMethod:
           addForm.billingType === 'Centralized' ? 'חיוב מרוכז חברה' : 'חיוב לקוח פרטי',
         monthlyPricePerMember: Number(addForm.monthlyPricePerMember || 0),
+        subscriptionProductName: String(addForm.subscriptionProductName || '').trim(),
+        status: 'active',
         contactEmail: addForm.contactEmail.trim(),
         contactPhone: addForm.contactPhone.trim(),
         notes: addForm.notes.trim(),
@@ -307,6 +311,14 @@ export default function OrganizationsDashboard() {
                       onChange={(e) => setAddForm((p) => ({ ...p, monthlyPricePerMember: e.target.value }))}
                     />
                   </Field>
+                  <Field>
+                    <FieldLabel>שם מוצר לחברים (דוחות)</FieldLabel>
+                    <Input
+                      value={addForm.subscriptionProductName}
+                      onChange={(e) => setAddForm((p) => ({ ...p, subscriptionProductName: e.target.value }))}
+                      placeholder="למשל: מנוי זהב"
+                    />
+                  </Field>
                 </FieldGroup>
               </TabsContent>
             </Tabs>
@@ -344,6 +356,18 @@ export default function OrganizationsDashboard() {
                     <Field><FieldLabel>הערות</FieldLabel><Input value={editOrg.notes || ''} onChange={(e) => setEditOrg((p) => ({ ...p, notes: e.target.value }))} /></Field>
                     <Field><FieldLabel>תחום פעילות</FieldLabel><Input value={editOrg.fieldOfActivity || ''} onChange={(e) => setEditOrg((p) => ({ ...p, fieldOfActivity: e.target.value }))} /></Field>
                     <Field><FieldLabel>מספר עובדים</FieldLabel><Input type="number" value={editOrg.employeesCount || ''} onChange={(e) => setEditOrg((p) => ({ ...p, employeesCount: e.target.value }))} /></Field>
+                    <Field>
+                      <FieldLabel>סטטוס ארגון</FieldLabel>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                        value={editOrg.status || 'active'}
+                        onChange={(e) => setEditOrg((p) => ({ ...p, status: e.target.value }))}
+                      >
+                        <option value="Pending">ממתין לאישור</option>
+                        <option value="Lead">ליד</option>
+                        <option value="active">פעיל</option>
+                      </select>
+                    </Field>
                   </FieldGroup>
                 </TabsContent>
                 <TabsContent value="contacts" className="mt-4 space-y-5">
@@ -379,6 +403,14 @@ export default function OrganizationsDashboard() {
                         dir="ltr"
                         value={editOrg.monthlyPricePerMember ?? ''}
                         onChange={(e) => setEditOrg((p) => ({ ...p, monthlyPricePerMember: e.target.value }))}
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>שם מוצר לחברים (דוחות)</FieldLabel>
+                      <Input
+                        value={editOrg.subscriptionProductName || ''}
+                        onChange={(e) => setEditOrg((p) => ({ ...p, subscriptionProductName: e.target.value }))}
+                        placeholder="למשל: מנוי זהב"
                       />
                     </Field>
                   </FieldGroup>
@@ -442,6 +474,7 @@ export default function OrganizationsDashboard() {
                     <TableRow className="[&_th]:text-right">
                       <TableHead className="text-right">שם חברה</TableHead>
                       <TableHead className="text-right">ח.פ</TableHead>
+                      <TableHead className="text-right">סטטוס</TableHead>
                       <TableHead className="text-right">סוג חיוב</TableHead>
                       <TableHead className="text-right">חברים פעילים</TableHead>
                       <TableHead className="text-right">מחיר לחבר</TableHead>
@@ -454,6 +487,17 @@ export default function OrganizationsDashboard() {
                       <TableRow key={r.id}>
                         <TableCell className="font-medium">{r.companyName || '—'}</TableCell>
                         <TableCell>{r.companyId || '—'}</TableCell>
+                        <TableCell>
+                          {String(r.status || 'active').toLowerCase() === 'pending' ? (
+                            <Badge variant="outline" className="border-amber-600 text-amber-900">
+                              ממתין
+                            </Badge>
+                          ) : String(r.status || '').toLowerCase() === 'lead' ? (
+                            <Badge variant="secondary">ליד</Badge>
+                          ) : (
+                            <Badge variant="default">פעיל</Badge>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <Badge variant="outline">
                             {r.billingType === 'Centralized' ? 'מרוכז' : 'פרטי'}

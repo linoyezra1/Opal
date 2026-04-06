@@ -899,20 +899,22 @@ app.post('/api/organization-join-request', async (req, res) => {
       return res.status(400).json({ success: false, error: 'נדרשים שם וטלפון של איש הקשר הראשי' });
     }
 
-    await saveOrganizationLead({
-      organizationName: String(company.companyName || '').trim(),
-      contactName: String(contactPerson.name || '').trim(),
-      phone: String(contactPerson.phone || '').trim(),
-      email: String(contactPerson.email || '').trim(),
+    const billingType =
+      String(billingMethod || '').toLowerCase() === 'private' ? 'Private' : 'Centralized';
+    await createOrganizationCompany({
+      companyName: String(company.companyName || '').trim(),
+      companyId: String(company.companyId || '').trim(),
+      officialAddress: String(company.officialAddress || '').trim(),
+      companyEmail: String(company.companyEmail || '').trim(),
+      fieldOfActivity: String(generalData.fieldOfActivity || '').trim(),
+      employeesCount: Number(generalData.employeesCount || 0),
+      billingType,
+      billingMethod:
+        billingType === 'Centralized' ? 'חיוב מרוכז חברה' : 'חיוב לקוח פרטי',
+      monthlyPricePerMember: 0,
+      contactEmail: String(contactPerson.email || company.companyEmail || '').trim(),
+      contactPhone: String(contactPerson.phone || '').trim(),
       notes: '',
-      source: 'organization_join_request',
-      requestType: 'onboarding',
-      company: {
-        companyName: String(company.companyName || '').trim(),
-        companyId: String(company.companyId || '').trim(),
-        officialAddress: String(company.officialAddress || '').trim(),
-        companyEmail: String(company.companyEmail || '').trim(),
-      },
       contactPerson: {
         name: String(contactPerson.name || '').trim(),
         role: String(contactPerson.role || '').trim(),
@@ -934,11 +936,8 @@ app.post('/api/organization-join-request', async (req, res) => {
         mobile: String(additionalContact.mobile || '').trim(),
         email: String(additionalContact.email || '').trim(),
       },
-      billingMethod,
-      generalData: {
-        fieldOfActivity: String(generalData.fieldOfActivity || '').trim(),
-        employeesCount: Number(generalData.employeesCount || 0),
-      },
+      source: 'organization_join_request',
+      status: 'Pending',
     });
 
     res.json({ success: true, message: 'הבקשה נקלטה בהצלחה' });
@@ -1603,6 +1602,7 @@ app.post(
           organizationName: orgName,
           monthlyPrice: price,
           ...nr.profile,
+          subscriptionProductName: String(org.subscriptionProductName || '').trim(),
         });
         if (r.skipped) skippedDuplicates += 1;
         else created += 1;
@@ -1914,7 +1914,7 @@ app.get('/api/admin/reports/agent-commissions', requireAdmin, async (req, res) =
       return res.status(400).json({ success: false, error: 'נדרשים agentId ו-month (YYYY-MM)' });
     }
     const deals = await findDealsByAgentAndMonth(agentId, month);
-    const payload = buildAgentCommissionPayload(deals);
+    const payload = await buildAgentCommissionPayload(deals);
     res.json({ success: true, ...payload });
   } catch (e) {
     console.error(`[${ts()}] reports/agent-commissions error:`, e);

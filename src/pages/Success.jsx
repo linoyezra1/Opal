@@ -72,7 +72,7 @@ export default function Success() {
 
       <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-10 md:py-14 text-right">
         <div className="flex flex-col items-center text-center mb-10">
-          <div className="flex size-16 items-center justify-center rounded-full bg-green-500/15 text-green-600 mb-6">
+          <div className="flex size-16 items-center justify-center rounded-full bg-primary/15 text-primary mb-6">
             <CheckCircle2 className="size-10" strokeWidth={2} />
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-balance">
@@ -114,7 +114,7 @@ export default function Success() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Button asChild size="lg" className="w-full sm:w-auto min-w-[240px]">
+            <Button asChild size="lg" variant="opalGold" className="w-full sm:w-auto min-w-[240px]">
               <Link to={beneficiaryTo}>
                 עדכון מוטבים
                 <ArrowRight className="size-4 me-2 rotate-180" />

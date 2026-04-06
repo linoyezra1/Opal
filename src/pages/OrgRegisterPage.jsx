@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Building2, CreditCard } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import { Button } from '../components/ui/button.jsx';
@@ -212,11 +212,6 @@ export default function OrgRegisterPage() {
             ) : (
               <p className="text-sm text-muted-foreground">לא ניתן להמשיך בהרשמה מקישור זה.</p>
             )}
-            <p className="text-xs text-muted-foreground mt-6 text-center">
-              <Link to="/" className="underline hover:text-foreground">
-                חזרה לדף הבית
-              </Link>
-            </p>
           </CardContent>
         </Card>
       </div>

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { API_BASE } from '../apiBase.js';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -153,7 +153,7 @@ function MemberFields({ title, member, onChange, errors = {}, includeContact = f
   );
 }
 
-export default function BeneficiaryForm({ showBackLink = true }) {
+export default function BeneficiaryForm() {
   const navigate = useNavigate();
   const location = useLocation();
   const query = useMemo(() => new URLSearchParams(location.search), [location.search]);
@@ -349,14 +349,7 @@ export default function BeneficiaryForm({ showBackLink = true }) {
   return (
     <div dir="rtl" className="min-h-screen flex flex-col bg-muted/30">
       <header className="border-b bg-card">
-        <div className="container max-w-3xl mx-auto px-4 py-4 flex justify-between items-center gap-3">
-          {showBackLink ? (
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/">חזרה לדף הבית</Link>
-            </Button>
-          ) : (
-            <div />
-          )}
+        <div className="container max-w-3xl mx-auto px-4 py-4 flex justify-center items-center">
           <img src="/branding/opal-logo.jpeg" alt="אופאל" className="h-9 w-auto object-contain" />
         </div>
       </header>

@@ -114,7 +114,7 @@ export default function OrganizationJoinRequest() {
           </Card>
 
           {error ? <p className="text-destructive text-sm">{error}</p> : null}
-          {done ? <p className="text-emerald-700 text-sm font-medium">הבקשה נשלחה בהצלחה.</p> : null}
+          {done ? <p className="text-primary text-sm font-medium">הבקשה נשלחה בהצלחה.</p> : null}
           <Button type="submit" size="lg" className="w-full sm:w-auto bg-[#1A365D] hover:bg-[#152d4e]" disabled={loading}>
             {loading ? 'שולח…' : 'שליחת בקשה'}
           </Button>

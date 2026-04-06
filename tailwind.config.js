@@ -30,6 +30,10 @@ export default {
           DEFAULT: 'hsl(var(--accent))',
           foreground: 'hsl(var(--accent-foreground))',
         },
+        opal: {
+          gold: 'hsl(var(--opal-gold))',
+          'gold-foreground': 'hsl(var(--opal-gold-foreground))',
+        },
         card: {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
