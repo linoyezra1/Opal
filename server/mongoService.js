@@ -28,6 +28,13 @@ export function formatBillingMonthFromDate(d) {
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
 }
 
+function firstNonEmpty(...vals) {
+  for (const v of vals) {
+    if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+  }
+  return '';
+}
+
 export async function saveDeal(params) {
   const db = await getDb();
   const transactionId = String(params.transactionId || '').trim();
@@ -669,7 +676,6 @@ export async function insertOrganizationImportedDeal({
     healthFund: String(healthFund || '').trim(),
     supplementalInsurance: String(supplementalInsurance || '').trim(),
     address: String(address || '').trim(),
-    subscriptionStartDate: now.toLocaleDateString('he-IL'),
     organizationName: orgNm,
     organizationId: String(organizationId),
     paymentMethod: 'centralized',
@@ -943,7 +949,7 @@ function enrichDeal(d) {
   const orgName = String(d?.formState?.organizationName || '').trim();
   const isCanceled = isCancelledStatus(d);
   const provider = d?.provider || 'Cardcom';
-  const agentName = String(d?.formState?.agentName || '').trim();
+  const agentName = String(d?.formState?.agentName || d?.beneficiaryUpdate?.agentName || '').trim();
   const isPaidSuccess = /success|paid|test_success/i.test(String(d?.paymentStatus || ''));
   const statusRaw = String(d?.status || d?.subscriptionStatus || '').trim().toLowerCase();
   const paymentMethodRaw = String(
@@ -1041,14 +1047,53 @@ export async function getSalesDashboardData(filters = {}) {
   const dealsCol = db.collection('deals');
 
   const match = {};
+  const andClauses = [];
   const dateRange = getDateRange(filters);
   if (dateRange) match.createdAt = dateRange;
 
   if (filters.providerEnabled && filters.providerValue) {
-    match.provider = String(filters.providerValue).trim();
+    const pv = String(filters.providerValue).trim();
+    if (/^cardcom$/i.test(pv)) {
+      andClauses.push({
+        $or: [
+        { provider: pv },
+        { provider: { $exists: false } },
+        { provider: '' },
+        { provider: null },
+        ],
+      });
+    } else {
+      match.provider = pv;
+    }
   }
   if (filters.agentEnabled && filters.agentValue) {
-    match['formState.agentName'] = String(filters.agentValue).trim();
+    const av = String(filters.agentValue).trim();
+    const matchedAgentDocs = await db
+      .collection('sales_agents')
+      .find({ agentName: av })
+      .project({ _id: 1 })
+      .toArray();
+    const matchedIds = matchedAgentDocs.map((a) => String(a._id));
+    const matchedObjIds = matchedIds
+      .map((id) => {
+        try {
+          return new ObjectId(id);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+    andClauses.push({
+      $or: [
+        { 'formState.agentName': av },
+        { agentId: av },
+        { 'formState.agentId': av },
+        ...(matchedIds.length ? [{ agentId: { $in: matchedIds } }, { 'formState.agentId': { $in: matchedIds } }] : []),
+        ...(matchedObjIds.length
+          ? [{ agentId: { $in: matchedObjIds } }, { 'formState.agentId': { $in: matchedObjIds } }]
+          : []),
+      ],
+    });
   }
   if (filters.organizationSearch) {
     match['formState.organizationName'] = { $regex: String(filters.organizationSearch).trim(), $options: 'i' };
@@ -1057,10 +1102,12 @@ export async function getSalesDashboardData(filters = {}) {
     match.fullTextCustomer = { $regex: String(filters.customerSearch).trim(), $options: 'i' };
   }
   if (filters.idSearch) {
-    match.$or = [
+    andClauses.push({
+      $or: [
       { 'formState.id': { $regex: String(filters.idSearch).trim(), $options: 'i' } },
       { 'formState.beneficiaries.id': { $regex: String(filters.idSearch).trim(), $options: 'i' } },
-    ];
+      ],
+    });
   }
   if (filters.productNameSearch) {
     match['formState.productName'] = { $regex: String(filters.productNameSearch).trim(), $options: 'i' };
@@ -1068,6 +1115,7 @@ export async function getSalesDashboardData(filters = {}) {
   if (filters.agentNameSearch) {
     match['formState.agentName'] = { $regex: String(filters.agentNameSearch).trim(), $options: 'i' };
   }
+  if (andClauses.length) match.$and = andClauses;
 
   const pipeline = [
     {
@@ -1089,7 +1137,40 @@ export async function getSalesDashboardData(filters = {}) {
   ];
 
   const baseDeals = await dealsCol.aggregate(pipeline).toArray();
-  const enriched = baseDeals.map(enrichDeal);
+  const agentIds = [...new Set(
+    baseDeals
+      .map((d) => String(d?.agentId || d?.formState?.agentId || '').trim())
+      .filter(Boolean)
+  )];
+  const agentDocs = agentIds.length
+    ? await db
+        .collection('sales_agents')
+        .find({ _id: { $in: agentIds.map((id) => {
+          try {
+            return new ObjectId(id);
+          } catch {
+            return null;
+          }
+        }).filter(Boolean) } })
+        .project({ agentName: 1 })
+        .toArray()
+    : [];
+  const agentNameMap = new Map(agentDocs.map((a) => [String(a._id), String(a.agentName || '').trim()]));
+
+  const enriched = baseDeals.map((d) => {
+    const e = enrichDeal(d);
+    const aid = String(d?.agentId || d?.formState?.agentId || '').trim();
+    const resolvedAgentName = firstNonEmpty(
+      e.agentName,
+      aid ? agentNameMap.get(aid) : '',
+      ''
+    );
+    return {
+      ...e,
+      agentName: resolvedAgentName,
+      resolvedAgentId: aid,
+    };
+  });
   let shown = applyCategoryFilters(enriched, filters.summaryCategories);
   const seg = String(filters.customerSegment || 'all').toLowerCase();
   if (seg === 'private') {
@@ -1151,7 +1232,7 @@ export async function getSalesDashboardData(filters = {}) {
       totalSalesAmount: totalRevenue,
     },
     filterOptions: {
-      providers: [...new Set(enriched.map((d) => d.provider).filter(Boolean))],
+      providers: [...new Set(enriched.map((d) => d.provider || 'Cardcom').filter(Boolean))],
       agents: [...new Set(enriched.map((d) => d.agentName).filter(Boolean))],
     },
     rows: shown.slice(0, 500).map((d) => {
@@ -1191,6 +1272,7 @@ export async function getSalesDashboardData(filters = {}) {
         organizationName: d.organizationName || '',
         provider: d.provider || '',
         agentName: d.agentName || '',
+        agentId: d.resolvedAgentId || String(d.agentId || d.formState?.agentId || '').trim(),
         planType: d.formState?.selectedPlanId || '',
         productName: e.productName,
         vendorCost: e.vendorCost,
@@ -1201,6 +1283,7 @@ export async function getSalesDashboardData(filters = {}) {
         secondaryCount: d.secondaryCount,
         activeCustomersCount: d.activeCustomersCount,
         createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : null,
+        subscriptionStartDate: String(d.formState?.subscriptionStartDate || ''),
         beneficiarySubmitted: !!d.beneficiarySubmitted,
         pendingBeneficiaryCompletion: !!d.pendingBeneficiaryCompletion,
         completionStatus: d.completionStatus || '—',

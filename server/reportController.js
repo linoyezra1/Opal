@@ -270,11 +270,15 @@ export async function buildAgentCommissionPayload(deals) {
     deals.map(async (d) => {
       const fs = d.formState && typeof d.formState === 'object' ? d.formState : {};
       const payerAmount = Number(d.payerAmount || 0);
+      const agentId = String(d.agentId || fs.agentId || '').trim();
       let commissionAmount = Number(d.commissionAmount ?? fs.resolvedAgentCommission ?? 0);
       if (!Number.isFinite(commissionAmount) || commissionAmount < 0) commissionAmount = 0;
-      if (commissionAmount === 0) {
+      if (agentId || commissionAmount === 0) {
         try {
-          const econ = await resolveCheckoutEconomics(fs);
+          const econ = await resolveCheckoutEconomics({
+            ...fs,
+            ...(agentId ? { agentId } : {}),
+          });
           const c = Number(econ.resolvedAgentCommission ?? 0);
           if (Number.isFinite(c) && c >= 0) commissionAmount = c;
         } catch {

@@ -7,14 +7,14 @@ export default function BeneficiarySuccess() {
     <div dir="rtl" className="min-h-screen bg-gradient-to-b from-primary/5 via-background to-muted/30 flex items-center justify-center p-4">
       <Card className="w-full max-w-xl border-primary/20 shadow-lg">
         <CardContent className="pt-10 pb-8 text-center space-y-6">
-          <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-primary/15 text-primary">
+          <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600">
             <CheckCircle2 className="size-10" />
           </div>
           <div className="space-y-2">
             <h1 className="text-2xl font-bold tracking-tight">הפרטים נשמרו בהצלחה</h1>
             <p className="text-muted-foreground text-lg">תודה שהצטרפת למשפחת אופאל</p>
           </div>
-          <p className="text-sm text-muted-foreground">הטופס נקלט בהצלחה. נמשיך בעיבוד הבקשה ונעדכן אותך בהמשך.</p>
+          <p className="text-sm text-muted-foreground">הטופס נקלט בהצלחה.</p>
         </CardContent>
       </Card>
     </div>

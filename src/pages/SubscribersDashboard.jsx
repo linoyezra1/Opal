@@ -267,7 +267,7 @@ export default function SubscribersDashboard() {
       supplementalInsurance: primary.supplementalInsurance || fs.supplementalInsurance || '',
       address: primary.address || fs.address || '',
       agentName: row.raw?.beneficiaryUpdate?.agentName || fs.agentName || row.agentName || '',
-      agentCommission: String(fs.resolvedAgentCommission ?? row.agentCommission ?? 0),
+      agentCommission: String(row.raw?.commissionAmount ?? fs.resolvedAgentCommission ?? row.agentCommission ?? 0),
       payerAmount: String(row.amount ?? ''),
       createdAt: String(row.createdAt || ''),
       subscriptionStartDate: String(fs.subscriptionStartDate || ''),
@@ -516,7 +516,7 @@ export default function SubscribersDashboard() {
           <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" dir="rtl">
             <DialogHeader>
               <DialogTitle>עריכת עסקה / מנוי</DialogTitle>
-              <DialogDescription>עדכון פרטים שנשמרו בעסקה (MongoDB)</DialogDescription>
+              <DialogDescription>עדכון פרטי העסקה</DialogDescription>
             </DialogHeader>
             <form onSubmit={saveEdit} className="space-y-4" dir="rtl">
               {editOrganizationName ? (
@@ -890,7 +890,7 @@ export default function SubscribersDashboard() {
           <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto text-right" dir="rtl">
             <DialogHeader>
               <DialogTitle>סינון מתקדם</DialogTitle>
-              <DialogDescription>כל מסנני הדוח — זהה ללוגיקה הקודמת בשרת</DialogDescription>
+              <DialogDescription>הגדרות סינון</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1059,7 +1059,6 @@ export default function SubscribersDashboard() {
                 <UserCheck className="size-7 text-primary" />
                 לקוחות
               </h1>
-              <p className="text-muted-foreground">רשימת לקוחות — נתונים ממסד (כולל עריכה ומחיקה)</p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <Button type="button" variant="outline" disabled title="בקרוב">
@@ -1126,9 +1125,6 @@ export default function SubscribersDashboard() {
                   ) : null}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                החיפוש מסנן מיידית את הרשימה הנוכחית. לאחר שינוי &quot;סוג לקוח&quot; לחצו &quot;רענון&quot;. לסינונים נוספים השתמשו ב&quot;סינון מתקדם&quot;.
-              </p>
             </CardContent>
           </Card>
 
@@ -1137,7 +1133,6 @@ export default function SubscribersDashboard() {
               <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 <div className="text-right">
                   <CardTitle>לקוחות</CardTitle>
-                  <CardDescription>תצוגה מקוצרת; פרטים מלאים ב״הצג״ או ״ערוך״</CardDescription>
                 </div>
                 <div className="flex flex-wrap gap-x-3 gap-y-2 items-center justify-end text-xs rounded-lg border bg-muted/30 px-3 py-2 max-w-full xl:max-w-[min(100%,52rem)]">
                   <span className="font-medium text-foreground shrink-0">כמות / סינון קטגוריות:</span>
@@ -1239,7 +1234,7 @@ export default function SubscribersDashboard() {
                                 ממתין להשלמת מסמכים
                               </Badge>
                             ) : (
-                              <Badge variant={isCancelled ? 'destructive' : 'default'}>
+                              <Badge className={isCancelled ? '' : 'bg-emerald-600 hover:bg-emerald-600 text-white border-0'} variant={isCancelled ? 'destructive' : 'default'}>
                                 {isCancelled ? 'בוטל' : 'הושלם'}
                               </Badge>
                             )}
@@ -1424,6 +1419,10 @@ export default function SubscribersDashboard() {
                     <p className="font-semibold text-primary">
                       {formatCurrency(selected?.formState?.resolvedNetProfit ?? 0)}
                     </p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="text-xs text-muted-foreground mb-1">תאריך תחילת מנוי</p>
+                    <p className="font-semibold">{selected?.formState?.subscriptionStartDate || selected?.subscriptionStartDate || '—'}</p>
                   </div>
                 </CardContent>
               </Card>

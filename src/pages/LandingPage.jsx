@@ -485,7 +485,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
         id: '',
         email: email.trim(),
         organizationName: ctx?.organizationName || 'לקוח פרטי',
-        agentId: '',
+        agentId: String(selectedProduct?.agentId || ''),
         agentName: '',
         beneficiaryCount: Math.max(0, Math.min(5, Number(beneficiaryCount) || 0)),
         beneficiaries: [],
@@ -666,7 +666,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                   className="group border-border bg-card transition-all duration-300 hover:border-primary/30 hover:shadow-lg"
                 >
                   <CardContent className="p-6">
-                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[#D9EAF3] transition-colors group-hover:bg-primary/20">
+                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[#D9EAF3] transition-colors group-hover:bg-opal-gold/35">
                       <Ico className="h-6 w-6 text-primary" />
                     </div>
                     <h3 className="mb-2 text-lg font-semibold text-card-foreground">{service.title}</h3>

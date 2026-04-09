@@ -1091,6 +1091,7 @@ export async function getPublicPriceListById(id) {
       sku: p.sku || '',
       imageUrl: p.imageUrl || '',
       retailPrice: Number(line.retailPrice || 0),
+      agentId: line.agentId ? String(line.agentId) : '',
     });
   }
   return {

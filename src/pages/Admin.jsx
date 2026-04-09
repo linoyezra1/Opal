@@ -123,7 +123,6 @@ export default function Admin() {
             <Link to="/admin/products" className="px-4 py-2 rounded-lg bg-primary text-primary-foreground">מוצרים</Link>
             <Link to="/admin/vendors" className="px-4 py-2 rounded-lg bg-amber-800 text-white">ספקים</Link>
             <Link to="/admin/price-list" className="px-4 py-2 rounded-lg bg-indigo-700 text-white">מחירון</Link>
-            <Link to="/admin/pricing" className="px-4 py-2 rounded-lg bg-medical-blue-dark text-white">מחירון ארגונים</Link>
             <Link to="/admin/agents" className="px-4 py-2 rounded-lg bg-medical-blue text-white">סוכנים</Link>
             <button onClick={() => loadDeals()} className="px-4 py-2 rounded-lg bg-medical-blue text-white">רענון</button>
             <button

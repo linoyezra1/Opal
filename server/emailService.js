@@ -80,7 +80,7 @@ function buildOrderConfirmationHtml(payload, logoDataUri = '') {
           <tr>
             <td align="center" dir="rtl" style="background-color:${OPAL_BLUE};padding:20px 32px;text-align:center;">
               <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;line-height:1.4;text-align:center;direction:rtl;">
-                שמחים על הצטרפותך למנוי ${productTitle}
+                סיכום הצטרפות והפעלת שירות
               </h1>
             </td>
           </tr>
@@ -206,7 +206,7 @@ function buildBeneficiaryCompletionHtml(payload, logoDataUri = '') {
           </tr>
           <tr>
             <td align="center" dir="rtl" style="background-color:${OPAL_BLUE};padding:20px 32px;text-align:center;">
-              <h1 style="color:#ffffff;font-size:20px;font-weight:600;margin:0;text-align:center;direction:rtl;">סיכום הצטרפות ופרטי מנוי</h1>
+              <h1 style="color:#ffffff;font-size:20px;font-weight:600;margin:0;text-align:center;direction:rtl;">סיכום הצטרפות והפעלת שירות</h1>
               <p style="color:rgba(255,255,255,0.8);font-size:14px;margin:8px 0 0;text-align:center;direction:rtl;">אופאל - רופא עד הבית</p>
             </td>
           </tr>
@@ -281,7 +281,7 @@ export async function sendOrderConfirmationEmail(payload) {
   const resend = new Resend(apiKey);
   const fromAddress = process.env.MAIL_FROM_ADDRESS || 'onboarding@resend.dev';
   const fromName = process.env.MAIL_FROM_NAME || 'OPAL';
-  const subject = `אישור הזמנה - ${payload.orderNumber || ''}`.trim();
+  const subject = `סיכום הצטרפות והפעלת שירות - ${payload.orderNumber || ''}`.trim();
   const logoDataUri = await getOpalLogoDataUriForEmail();
   const html = buildOrderConfirmationHtml(payload, logoDataUri);
   const attachments = Array.isArray(payload.attachments) ? payload.attachments : [];
@@ -328,7 +328,7 @@ export async function sendBeneficiaryCompletionEmail(payload) {
   const resend = new Resend(apiKey);
   const fromAddress = process.env.MAIL_FROM_ADDRESS || 'onboarding@resend.dev';
   const fromName = process.env.MAIL_FROM_NAME || 'OPAL';
-  const subject = `סיכום מוטבים והזמנה - ${payload.orderNumber || ''}`.trim();
+  const subject = `סיכום הצטרפות והפעלת שירות - ${payload.orderNumber || ''}`.trim();
   const logoDataUri = await getOpalLogoDataUriForEmail();
   const html = buildBeneficiaryCompletionHtml(payload, logoDataUri);
 

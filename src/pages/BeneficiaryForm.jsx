@@ -357,9 +357,7 @@ export default function BeneficiaryForm() {
       <main className="flex-1 container max-w-3xl mx-auto w-full px-4 py-8 md:py-10">
         <div className="mb-8 text-right space-y-2">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">עדכון פרטי מוטבים</h1>
-          <p className="text-muted-foreground leading-relaxed">
-            נא למלא את פרטי המבוטח הראשי והמוטבים הנוספים. שם מלא/טלפון/אימייל של המבוטח הראשי נטענים מההזמנה וניתנים לעריכה.
-          </p>
+          <p className="text-muted-foreground leading-relaxed">נא למלא את הפרטים ולהגיש את הטופס.</p>
         </div>
 
         {alreadyHasBeneficiaries ? (

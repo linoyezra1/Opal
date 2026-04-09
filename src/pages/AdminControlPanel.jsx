@@ -175,7 +175,6 @@ export default function AdminControlPanel() {
 
           {error ? <p className="text-destructive text-sm">{error}</p> : null}
 
-          {/* Overview — נתוני MongoDB אמיתיים */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatsCard
               title="סה״כ הכנסות (עסקאות ששולמו)"
@@ -258,7 +257,7 @@ export default function AdminControlPanel() {
                   <ShoppingCart className="size-5" />
                   פעילות אחרונה
                 </CardTitle>
-                <CardDescription>טיוטות צ׳ק-אאוט, תשלומים ופניות — ממוין לפי זמן</CardDescription>
+                <CardDescription />
               </CardHeader>
               <CardContent className="max-h-[280px] overflow-y-auto space-y-2">
                 {recentActivity.length === 0 ? (

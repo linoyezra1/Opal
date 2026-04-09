@@ -148,9 +148,11 @@ export default function OrgRegisterPage() {
     <div dir="rtl" className="min-h-screen bg-gradient-to-b from-[#D9EAF3]/40 to-background flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center size-14 rounded-2xl bg-primary/10 border border-primary/20 mb-2">
-            <span className="text-lg font-bold text-primary">אופאל</span>
-          </div>
+          <img
+            src="/branding/opal-logo.jpeg"
+            alt="אופאל"
+            className="mx-auto h-14 w-auto object-contain rounded-md bg-white px-2 py-1 border"
+          />
           <h1 className="text-2xl font-bold tracking-tight">הרשמה ארגונית</h1>
           <p className="text-sm text-muted-foreground">שירותי בריאות דיגיטליים</p>
         </div>

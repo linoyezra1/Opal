@@ -8,7 +8,6 @@ import Error from './pages/Error.jsx';
 import Admin from './pages/Admin.jsx';
 import SubscribersDashboard from './pages/SubscribersDashboard.jsx';
 import LandingPage from './pages/LandingPage.jsx';
-import OrganizationPricing from './pages/OrganizationPricing.jsx';
 import AgentSetup from './pages/AgentSetup.jsx';
 import ProductManagement from './pages/ProductManagement.jsx';
 import AdminControlPanel from './pages/AdminControlPanel.jsx';
@@ -39,7 +38,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/admin" element={<Admin />} />
         <Route path="/admin/subscribers" element={<SubscribersDashboard />} />
         <Route path="/admin/sales-dashboard" element={<Navigate to="/admin/subscribers" replace />} />
-        <Route path="/admin/pricing" element={<OrganizationPricing />} />
         <Route path="/admin/products" element={<ProductManagement />} />
         <Route path="/admin/vendors" element={<VendorDashboard />} />
         <Route path="/admin/price-list" element={<PricingDashboard />} />

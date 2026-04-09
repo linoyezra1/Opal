@@ -57,17 +57,24 @@ export default function OrganizationsDashboard() {
   const [addForm, setAddForm] = useState(() => emptyForm());
   const [billingEditConfirmOpen, setBillingEditConfirmOpen] = useState(false);
   const [billingEditPending, setBillingEditPending] = useState(null);
+  const [products, setProducts] = useState([]);
 
   const loadRows = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     setError('');
     try {
-      const orgRes = await fetch(`${API_BASE}/api/admin/organizations`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }).then((r) => r.json());
+      const [orgRes, prRes] = await Promise.all([
+        fetch(`${API_BASE}/api/admin/organizations`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then((r) => r.json()),
+        fetch(`${API_BASE}/api/admin/products`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then((r) => r.json()),
+      ]);
       if (!orgRes.success) throw new Error(orgRes.error || 'טעינה נכשלה');
       setRows(Array.isArray(orgRes.rows) ? orgRes.rows : []);
+      setProducts(Array.isArray(prRes?.products) ? prRes.products : []);
     } catch (e) {
       setError(e.message || 'שגיאה');
     } finally {
@@ -313,11 +320,22 @@ export default function OrganizationsDashboard() {
                   </Field>
                   <Field>
                     <FieldLabel>שם מוצר לחברים (דוחות)</FieldLabel>
-                    <Input
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                       value={addForm.subscriptionProductName}
                       onChange={(e) => setAddForm((p) => ({ ...p, subscriptionProductName: e.target.value }))}
-                      placeholder="למשל: מנוי זהב"
-                    />
+                    >
+                      <option value="">בחר מוצר</option>
+                      {products.map((pr) => {
+                        const name = String(pr.productName || pr.name || '').trim();
+                        if (!name) return null;
+                        return (
+                          <option key={pr.id || pr._id || name} value={name}>
+                            {name}
+                          </option>
+                        );
+                      })}
+                    </select>
                   </Field>
                 </FieldGroup>
               </TabsContent>
@@ -407,11 +425,22 @@ export default function OrganizationsDashboard() {
                     </Field>
                     <Field>
                       <FieldLabel>שם מוצר לחברים (דוחות)</FieldLabel>
-                      <Input
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                         value={editOrg.subscriptionProductName || ''}
                         onChange={(e) => setEditOrg((p) => ({ ...p, subscriptionProductName: e.target.value }))}
-                        placeholder="למשל: מנוי זהב"
-                      />
+                      >
+                        <option value="">בחר מוצר</option>
+                        {products.map((pr) => {
+                          const name = String(pr.productName || pr.name || '').trim();
+                          if (!name) return null;
+                          return (
+                            <option key={pr.id || pr._id || name} value={name}>
+                              {name}
+                            </option>
+                          );
+                        })}
+                      </select>
                     </Field>
                   </FieldGroup>
                 </TabsContent>

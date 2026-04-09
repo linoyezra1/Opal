@@ -52,7 +52,7 @@ export default function OrganizationJoinRequest() {
     <div
       dir="rtl"
       className="min-h-screen p-3 sm:p-4 md:p-8"
-      style={{ background: 'linear-gradient(180deg, #f6f3ed 0%, #efe8db 48%, #e7e2d8 100%)' }}
+      style={{ background: 'linear-gradient(180deg, #f8fbff 0%, #f3f7fc 48%, #eef4fb 100%)' }}
     >
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex justify-end">
@@ -69,7 +69,7 @@ export default function OrganizationJoinRequest() {
         </div>
 
         <form onSubmit={submit} className="space-y-6">
-          <Card className="bg-[#f8f4ea] border-[#dacdaf] shadow-sm">
+          <Card className="bg-white border-border shadow-sm">
             <CardHeader><CardTitle className="text-[#1A365D]">פרטי ארגון</CardTitle></CardHeader>
             <CardContent>
               <FieldGroup>
@@ -81,22 +81,22 @@ export default function OrganizationJoinRequest() {
             </CardContent>
           </Card>
 
-          <Card className="bg-[#f8f4ea] border-[#dacdaf] shadow-sm">
+          <Card className="bg-white border-border shadow-sm">
             <CardHeader><CardTitle className="text-[#1A365D]">איש קשר ראשי</CardTitle></CardHeader>
             <CardContent><PersonFields person={contactPerson} setPerson={setPerson} setter={setContactPerson} requiredName requiredPhone /></CardContent>
           </Card>
 
-          <Card className="bg-[#f8f4ea] border-[#dacdaf] shadow-sm">
+          <Card className="bg-white border-border shadow-sm">
             <CardHeader><CardTitle className="text-[#1A365D]">הנהלת חשבונות</CardTitle></CardHeader>
             <CardContent><PersonFields person={accounting} setPerson={setPerson} setter={setAccounting} /></CardContent>
           </Card>
 
-          <Card className="bg-[#f8f4ea] border-[#dacdaf] shadow-sm">
+          <Card className="bg-white border-border shadow-sm">
             <CardHeader><CardTitle className="text-[#1A365D]">איש קשר נוסף</CardTitle></CardHeader>
             <CardContent><PersonFields person={additionalContact} setPerson={setPerson} setter={setAdditionalContact} /></CardContent>
           </Card>
 
-          <Card className="bg-[#f8f4ea] border-[#dacdaf] shadow-sm">
+          <Card className="bg-white border-border shadow-sm">
             <CardHeader><CardTitle className="text-[#1A365D]">נתונים כלליים</CardTitle></CardHeader>
             <CardContent>
               <FieldGroup>

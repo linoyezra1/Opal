@@ -61,23 +61,28 @@ export default function OrganizationDetailPage() {
   const [importResult, setImportResult] = useState(null);
   const [billingConfirmOpen, setBillingConfirmOpen] = useState(false);
   const [billingChangePending, setBillingChangePending] = useState(null);
+  const [products, setProducts] = useState([]);
 
   const load = useCallback(async () => {
     if (!token || !id) return;
     setLoading(true);
     setErr('');
     try {
-      const [oRes, dRes] = await Promise.all([
+      const [oRes, dRes, prRes] = await Promise.all([
         fetch(`${API_BASE}/api/admin/organizations/${encodeURIComponent(id)}`, {
           headers: { Authorization: `Bearer ${token}` },
         }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/organizations/${encodeURIComponent(id)}/deals`, {
           headers: { Authorization: `Bearer ${token}` },
         }).then((r) => r.json()),
+        fetch(`${API_BASE}/api/admin/products`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then((r) => r.json()),
       ]);
       if (!oRes.success) throw new Error(oRes.error || 'טעינת ארגון נכשלה');
       setOrg(oRes.organization);
       setDeals(Array.isArray(dRes.deals) ? dRes.deals : []);
+      setProducts(Array.isArray(prRes?.products) ? prRes.products : []);
     } catch (e) {
       setErr(e.message || 'שגיאה');
     } finally {
@@ -530,13 +535,24 @@ export default function OrganizationDetailPage() {
                         </Field>
                         <Field>
                           <FieldLabel>שם מוצר לחברים (דוחות / ייצוא למפעיל)</FieldLabel>
-                          <Input
+                          <select
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                             value={org.subscriptionProductName || ''}
                             onChange={(e) =>
                               setOrg((p) => ({ ...p, subscriptionProductName: e.target.value }))
                             }
-                            placeholder="למשל: מנוי זהב"
-                          />
+                          >
+                            <option value="">בחר מוצר</option>
+                            {products.map((pr) => {
+                              const name = String(pr.productName || pr.name || '').trim();
+                              if (!name) return null;
+                              return (
+                                <option key={pr.id || pr._id || name} value={name}>
+                                  {name}
+                                </option>
+                              );
+                            })}
+                          </select>
                         </Field>
                         <Field>
                           <FieldLabel>סטטוס ארגון</FieldLabel>
