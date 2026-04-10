@@ -149,7 +149,7 @@ function buildBeneficiaryPdfModelFromDeal({ transactionId, deal, primaryMember, 
       fsState.fullName
     ),
     customerId: firstDefined(primary.id, fsState.id),
-    subscriptionStartDate: fsState.subscriptionStartDate || new Date().toLocaleDateString('he-IL'),
+    subscriptionStartDate: fsState.subscriptionStartDate || new Date().toISOString().slice(0, 10),
     address: firstDefined(primary.address, fsState.address),
     phone: firstDefined(primary.phone, fsState.phone),
     email: firstDefined(primary.email, fsState.email),

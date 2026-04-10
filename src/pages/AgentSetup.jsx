@@ -602,11 +602,6 @@ export default function AgentSetup() {
           </Button>
         </div>
 
-        <p className="text-sm text-muted-foreground">
-          מנויים מקושרים ל־<code className="bg-muted px-1 rounded text-xs">agentId</code>. עמלות למוצר נספרות בדוח
-          &quot;מנויים&quot; (רווח = הכנסה − ספק − עמלה).
-        </p>
-
         <Card>
           <CardHeader>
             <CardTitle>רשימת סוכנים</CardTitle>

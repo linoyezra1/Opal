@@ -1251,7 +1251,7 @@ export default function SubscribersDashboard() {
                               <Badge variant="secondary">פעיל</Badge>
                             )}
                           </TableCell>
-                          <TableCell dir="rtl" className="font-mono text-xs text-end">
+                          <TableCell dir="rtl" className="font-mono text-xs text-right">
                             {r.transactionId}
                           </TableCell>
                           <TableCell dir="rtl" className="text-right">

@@ -192,15 +192,15 @@ export default function AdminControlPanel() {
               <TooltipTrigger asChild>
                 <div className="outline-none rounded-lg">
                   <StatsCard
-                    title="עסקאות הושלמו"
-                    value={overview ? formatCompact(overview.completedSales) : '—'}
+                    title="מנויים פעילים"
+                    value={overview ? formatCompact(overview.activeMembers ?? overview.completedSales) : '—'}
                     icon={Users}
                     loading={loading && !overview}
                   />
                 </div>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="max-w-xs">
-                מספר עסקאות ללא סטטוס ביטול/כשלון (לפי paymentStatus)
+                ספירת מנויים פעילים בלבד (שולמו ואינם מבוטלים)
               </TooltipContent>
             </Tooltip>
             <Tooltip>

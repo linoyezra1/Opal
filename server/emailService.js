@@ -80,7 +80,7 @@ function buildOrderConfirmationHtml(payload, logoDataUri = '') {
           <tr>
             <td align="center" dir="rtl" style="background-color:${OPAL_BLUE};padding:20px 32px;text-align:center;">
               <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;line-height:1.4;text-align:center;direction:rtl;">
-                סיכום הצטרפות והפעלת שירות
+                אישור הזמנה - ${productTitle}
               </h1>
             </td>
           </tr>
@@ -281,7 +281,8 @@ export async function sendOrderConfirmationEmail(payload) {
   const resend = new Resend(apiKey);
   const fromAddress = process.env.MAIL_FROM_ADDRESS || 'onboarding@resend.dev';
   const fromName = process.env.MAIL_FROM_NAME || 'OPAL';
-  const subject = `סיכום הצטרפות והפעלת שירות - ${payload.orderNumber || ''}`.trim();
+  const productName = String(payload.productName || payload.subscriptionType || '').trim() || 'מנוי';
+  const subject = `אישור הזמנה - ${productName}`.trim();
   const logoDataUri = await getOpalLogoDataUriForEmail();
   const html = buildOrderConfirmationHtml(payload, logoDataUri);
   const attachments = Array.isArray(payload.attachments) ? payload.attachments : [];

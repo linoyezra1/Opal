@@ -63,10 +63,13 @@ function prepareVisualText(value) {
   return String(value || '')
     .split('\n')
     .map((lineText) => {
-      if (/[\u0590-\u05FF]/.test(lineText)) {
-        return lineText.split('').reverse().join('');
-      }
-      return lineText;
+      if (!/[\u0590-\u05FF]/.test(lineText)) return lineText;
+      const chunks = lineText.match(/[\u0590-\u05FF"'״׳\s]+|[^\u0590-\u05FF]+/g) || [lineText];
+      const visual = chunks
+        .reverse()
+        .map((chunk) => (/[\u0590-\u05FF]/.test(chunk) ? chunk.split('').reverse().join('') : chunk))
+        .join('');
+      return `\u200F${visual}`;
     })
     .join('\n');
 }

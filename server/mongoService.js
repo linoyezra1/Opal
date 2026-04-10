@@ -285,7 +285,7 @@ export async function saveBeneficiaryUpdate(params) {
 
   const deals = db.collection('deals');
   const now = new Date();
-  const subscriptionStartDate = now.toLocaleDateString('he-IL');
+  const subscriptionStartDate = now.toISOString().slice(0, 10);
   const primary = params.primaryMember || {};
   const additional = Array.isArray(params.additionalMembers) ? params.additionalMembers : [];
   const normalizedBeneficiaries = additional.map((m) => ({
@@ -1051,21 +1051,6 @@ export async function getSalesDashboardData(filters = {}) {
   const dateRange = getDateRange(filters);
   if (dateRange) match.createdAt = dateRange;
 
-  if (filters.providerEnabled && filters.providerValue) {
-    const pv = String(filters.providerValue).trim();
-    if (/^cardcom$/i.test(pv)) {
-      andClauses.push({
-        $or: [
-        { provider: pv },
-        { provider: { $exists: false } },
-        { provider: '' },
-        { provider: null },
-        ],
-      });
-    } else {
-      match.provider = pv;
-    }
-  }
   if (filters.agentEnabled && filters.agentValue) {
     const av = String(filters.agentValue).trim();
     const matchedAgentDocs = await db
@@ -1137,6 +1122,23 @@ export async function getSalesDashboardData(filters = {}) {
   ];
 
   const baseDeals = await dealsCol.aggregate(pipeline).toArray();
+  const vendors = await db
+    .collection('vendors')
+    .find({})
+    .project({ vendorName: 1, productLinks: 1 })
+    .toArray();
+  const vendorNames = [...new Set(vendors.map((v) => String(v.vendorName || '').trim()).filter(Boolean))];
+  const productVendorMap = new Map();
+  for (const v of vendors) {
+    const vn = String(v.vendorName || '').trim();
+    if (!vn) continue;
+    const links = Array.isArray(v.productLinks) ? v.productLinks : [];
+    for (const l of links) {
+      const pid = String(l?.productId || '').trim();
+      if (!pid || productVendorMap.has(pid)) continue;
+      productVendorMap.set(pid, vn);
+    }
+  }
   const agentIds = [...new Set(
     baseDeals
       .map((d) => String(d?.agentId || d?.formState?.agentId || '').trim())
@@ -1160,6 +1162,8 @@ export async function getSalesDashboardData(filters = {}) {
   const enriched = baseDeals.map((d) => {
     const e = enrichDeal(d);
     const aid = String(d?.agentId || d?.formState?.agentId || '').trim();
+    const pid = String(d?.formState?.productId || '').trim();
+    const resolvedVendorName = firstNonEmpty(String(d?.provider || '').trim(), productVendorMap.get(pid), '');
     const resolvedAgentName = firstNonEmpty(
       e.agentName,
       aid ? agentNameMap.get(aid) : '',
@@ -1167,11 +1171,16 @@ export async function getSalesDashboardData(filters = {}) {
     );
     return {
       ...e,
+      vendorName: resolvedVendorName,
       agentName: resolvedAgentName,
       resolvedAgentId: aid,
     };
   });
   let shown = applyCategoryFilters(enriched, filters.summaryCategories);
+  if (filters.providerEnabled && filters.providerValue) {
+    const pv = String(filters.providerValue).trim();
+    shown = shown.filter((d) => String(d.vendorName || '').trim() === pv);
+  }
   const seg = String(filters.customerSegment || 'all').toLowerCase();
   if (seg === 'private') {
     shown = shown.filter((d) => !isOrganizationLinkedDeal(d));
@@ -1232,7 +1241,7 @@ export async function getSalesDashboardData(filters = {}) {
       totalSalesAmount: totalRevenue,
     },
     filterOptions: {
-      providers: [...new Set(enriched.map((d) => d.provider || 'Cardcom').filter(Boolean))],
+      providers: vendorNames,
       agents: [...new Set(enriched.map((d) => d.agentName).filter(Boolean))],
     },
     rows: shown.slice(0, 500).map((d) => {
@@ -1270,7 +1279,7 @@ export async function getSalesDashboardData(filters = {}) {
         fullName: d.formState?.fullName || '',
         idNumber: d.formState?.id || '',
         organizationName: d.organizationName || '',
-        provider: d.provider || '',
+        provider: d.vendorName || '',
         agentName: d.agentName || '',
         agentId: d.resolvedAgentId || String(d.agentId || d.formState?.agentId || '').trim(),
         planType: d.formState?.selectedPlanId || '',
@@ -1306,6 +1315,7 @@ export async function getControlPanelOverviewStats() {
   let totalRevenue = 0;
   let totalNetProfit = 0;
   let paidDealsCount = 0;
+  let activeMembers = 0;
   let canceledDealsCount = 0;
 
   const dayKey = (d) => {
@@ -1327,10 +1337,14 @@ export async function getControlPanelOverviewStats() {
   for (const d of docs) {
     const e = enrichDeal(d);
     const econ = economicsFromDeal(d);
-    if (!e.isCanceled) {
+    const paidSuccess = /success|paid|test_success/i.test(String(d?.paymentStatus || ''));
+    const subStatus = String(d?.subscriptionStatus || '').toLowerCase();
+    const isActive = paidSuccess && subStatus !== 'cancelled' && !e.isCanceled;
+    if (isActive) {
       totalRevenue += Number(d.payerAmount || 0);
       totalNetProfit += econ.netProfit;
       paidDealsCount += 1;
+      activeMembers += Number(e.individualsCount || 1);
       const k = dayKey(d);
       if (k && chartBuckets.has(k)) {
         const b = chartBuckets.get(k);
@@ -1359,6 +1373,7 @@ export async function getControlPanelOverviewStats() {
     totalRevenue,
     totalNetProfit,
     completedSales: paidDealsCount,
+    activeMembers,
     canceledDeals: canceledDealsCount,
     pendingPayments,
     totalDealsInDb: docs.length,

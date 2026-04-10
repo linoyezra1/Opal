@@ -154,7 +154,6 @@ export default function OrgRegisterPage() {
             className="mx-auto h-14 w-auto object-contain rounded-md bg-white px-2 py-1 border"
           />
           <h1 className="text-2xl font-bold tracking-tight">הרשמה ארגונית</h1>
-          <p className="text-sm text-muted-foreground">שירותי בריאות דיגיטליים</p>
         </div>
 
         <Card>
