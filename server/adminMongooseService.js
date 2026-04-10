@@ -5,6 +5,7 @@ const MONGO_URL = process.env.MONGODB_URI || process.env.MONGO_URL || '';
 const DB_NAME = process.env.MONGO_DB_NAME || 'opal';
 
 let isConnected = false;
+const PRODUCT_FLOW_TYPE = '\u05e8\u05d5\u05e4\u05d0 \u05e2\u05d3 \u05d4\u05d1\u05d9\u05ea';
 
 async function ensureConnection() {
   if (!MONGO_URL) throw new Error('MONGODB_URI/MONGO_URL is not set');
@@ -13,7 +14,7 @@ async function ensureConnection() {
   isConnected = true;
 }
 
-/** Legacy flat schema (collection organization_pricings) — kept for DB compatibility */
+/** Legacy flat schema (collection organization_pricings) ? kept for DB compatibility */
 const organizationPricingSchema = new mongoose.Schema(
   {
     orgName: { type: String, required: true, trim: true },
@@ -29,17 +30,19 @@ const organizationPricingSchema = new mongoose.Schema(
 const productSchema = new mongoose.Schema(
   {
     productName: { type: String, trim: true },
-    /** @deprecated legacy field — use productName */
+    /** @deprecated legacy field ? use productName */
     name: { type: String, trim: true },
     sku: { type: String, required: true, trim: true, unique: true },
     baseDescription: { type: String, default: '' },
+    /** ????? ????? ???? ?????? ?????? ?????? ???? */
+    flowType: { type: String, enum: [PRODUCT_FLOW_TYPE], default: PRODUCT_FLOW_TYPE },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
   },
   { versionKey: false }
 );
 
-/** Mongoose 8+: avoid `next` callback — use async middleware (next is not always a function). */
+/** Mongoose 8+: avoid `next` callback ? use async middleware (next is not always a function). */
 productSchema.pre('validate', async function productValidate() {
   const pn = String(this.productName || this.name || '').trim();
   if (pn) {
@@ -49,6 +52,8 @@ productSchema.pre('validate', async function productValidate() {
   if (!String(this.productName || '').trim()) {
     this.invalidate('productName', 'productName is required');
   }
+  // Locked flow policy: only the Doctor-to-Home flow is allowed.
+  this.flowType = PRODUCT_FLOW_TYPE;
 });
 
 productSchema.pre('save', async function productPreSave() {
@@ -139,7 +144,7 @@ const salesAgentSchema = new mongoose.Schema(
       branchNum: { type: String, default: '' },
       accountNum: { type: String, default: '' },
     },
-    /** עמלה ייחודית לכל מוצר (משמש בדוחות רווח) */
+    /** ???? ??????? ??? ???? (???? ?????? ????) */
     productCommissions: { type: [agentProductCommissionSchema], default: [] },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
@@ -160,7 +165,7 @@ const relatedProductLineSchema = new mongoose.Schema(
     agentCommission: { type: Number, required: true, min: 0, default: 0 },
     profitBeforeAgent: { type: Number, default: 0 },
     netProfit: { type: Number, default: 0 },
-    /** legacy — same as netProfit */
+    /** legacy ? same as netProfit */
     profit: { type: Number, default: 0 },
   },
   { _id: false }
@@ -193,16 +198,16 @@ orgPricingPolicySchema.pre('save', async function orgPricingPreSave() {
   this.updatedAt = new Date();
 });
 
-/** מחירון רב-מוצרי לדפי נחיתה (שורות עם עלות ספק ועמלה — אוטומטית מפרופיל סוכן אם נבחר) */
+/** ?????? ??-????? ???? ????? (????? ?? ???? ??? ????? ? ???????? ??????? ???? ?? ????) */
 const priceListLineSchema = new mongoose.Schema(
   {
     vendorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vendor', required: true },
     productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
-    /** סוכן לשורה — אם מוגדר, עמלת ברירת המחדל נגזרת מ־productCommissions */
+    /** ???? ????? ? ?? ?????, ???? ????? ????? ????? ??productCommissions */
     agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'SalesAgent', required: false },
     retailPrice: { type: Number, required: true, min: 0, default: 0 },
     vendorCost: { type: Number, required: true, min: 0, default: 0 },
-    /** ברירת מחדל לעסקה: מחושב מסוכן או ידני אם אין סוכן */
+    /** ????? ???? ?????: ????? ????? ?? ???? ?? ??? ???? */
     defaultAgentCommission: { type: Number, default: 0, min: 0 },
     profitBeforeAgent: { type: Number, default: 0 },
     netProfit: { type: Number, default: 0 },
@@ -246,12 +251,12 @@ priceListSchema.pre('save', async function priceListPreSave() {
   this.updatedAt = new Date();
 });
 
-/** דף נחיתה מעוצב — מקושר למחירון */
+/** ?? ????? ????? ? ????? ??????? */
 const whatYouGetItemSchema = new mongoose.Schema(
   {
     title: { type: String, default: '' },
     description: { type: String, default: '' },
-    /** מפתח אייקון לצד הלקוח: phone | users | pill | stethoscope | syringe | file */
+    /** ???? ?????? ??? ?????: phone | users | pill | stethoscope | syringe | file */
     icon: { type: String, default: 'phone' },
   },
   { _id: false }
@@ -260,7 +265,7 @@ const whatYouGetItemSchema = new mongoose.Schema(
 const landingPageSchema = new mongoose.Schema(
   {
     slug: { type: String, required: true, unique: true, trim: true, lowercase: true },
-    /** sales = מחירון + צ׳ק-אאוט; contact = דף צור קשר בלבד */
+    /** sales = ?????? + ???-????; contact = ?? ??? ??? ???? */
     pageType: { type: String, enum: ['sales', 'contact'], default: 'sales' },
     pageTitle: { type: String, default: '' },
     subTitle: { type: String, default: '' },
@@ -357,7 +362,7 @@ const PriceList = mongoose.models.PriceList || mongoose.model('PriceList', price
 
 const LandingPage = mongoose.models.LandingPage || mongoose.model('LandingPage', landingPageSchema, 'landing_pages');
 
-/** @deprecated — legacy flat pricing row */
+/** @deprecated ? legacy flat pricing row */
 export async function createOrganizationPricing(payload) {
   await ensureConnection();
   const doc = await OrganizationPricing.create({
@@ -394,6 +399,7 @@ export async function createProduct(payload) {
     name: productName,
     sku: String(payload.sku || '').trim(),
     baseDescription: String(payload.baseDescription || ''),
+    flowType: PRODUCT_FLOW_TYPE,
   });
   return { id: String(doc._id) };
 }
@@ -409,6 +415,7 @@ export async function listProducts() {
       name: productName,
       sku: d.sku,
       baseDescription: d.baseDescription || '',
+      flowType: String(d.flowType || PRODUCT_FLOW_TYPE),
       createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
     };
   });
@@ -429,6 +436,7 @@ export async function updateProduct(id, payload) {
         name: productName,
         sku,
         baseDescription: String(payload.baseDescription || ''),
+        flowType: PRODUCT_FLOW_TYPE,
         updatedAt: new Date(),
       },
     },
@@ -448,7 +456,7 @@ export async function deleteProduct(id) {
   if (!mongoose.isValidObjectId(id)) throw new Error('Invalid product id');
   const oid = new mongoose.Types.ObjectId(id);
   const pl = await PriceList.findOne({ 'lines.productId': oid }).lean();
-  if (pl) throw new Error('לא ניתן למחוק מוצר המשויך למחירון דינמי — עדכנו את המחירון תחילה');
+  if (pl) throw new Error('?? ???? ????? ???? ?????? ??????? ????? ? ????? ?? ??????? ?????');
   await SalesAgent.updateMany({}, { $pull: { productCommissions: { productId: oid } } });
   await Vendor.updateMany({}, { $pull: { productLinks: { productId: oid } } });
   await PricingEntry.deleteMany({ productId: oid });
@@ -572,11 +580,11 @@ export async function deleteVendor(id) {
   if (!mongoose.isValidObjectId(id)) throw new Error('Invalid vendor id');
   const oid = new mongoose.Types.ObjectId(id);
   const pe = await PricingEntry.findOne({ vendorId: oid }).lean();
-  if (pe) throw new Error('לא ניתן למחוק ספק המשויך לשורות מחירון');
+  if (pe) throw new Error('?? ???? ????? ??? ?????? ?????? ??????');
   const pl = await PriceList.findOne({ 'lines.vendorId': oid }).lean();
-  if (pl) throw new Error('לא ניתן למחוק ספק המשויך למחירון דינמי');
+  if (pl) throw new Error('?? ???? ????? ??? ?????? ??????? ?????');
   const op = await OrgPricingPolicy.findOne({ 'relatedProducts.vendorId': oid }).lean();
-  if (op) throw new Error('לא ניתן למחוק ספק המשויך למחירון ארגון');
+  if (op) throw new Error('?? ???? ????? ??? ?????? ??????? ?????');
   const r = await Vendor.findByIdAndDelete(oid);
   if (!r) throw new Error('Vendor not found');
   return { ok: true };
@@ -595,7 +603,7 @@ function productLinkIdToString(productIdRef) {
   return String(productIdRef);
 }
 
-/** מחיר ספק למוצר — ללא populate: אחרת productId הופך לאובייקט וההשוואה נכשלת */
+/** ???? ??? ????? ? ??? populate: ???? productId ???? ???????? ???????? ????? */
 export async function getVendorCostForProduct(vendorId, productId) {
   await ensureConnection();
   if (!mongoose.isValidObjectId(vendorId) || !mongoose.isValidObjectId(productId)) return null;
@@ -616,10 +624,10 @@ export async function getVendorCostForProduct(vendorId, productId) {
   };
 }
 
-/** סכומי תשלום legacy (דף הבית הישן) */
+/** ????? ????? legacy (?? ???? ????) */
 const LEGACY_PLAN_AMOUNTS = { 'plan-a': 59, 'plan-b': 29, 'plan-fg': 0 };
 
-/** עמלת סוכן למוצר: אם הוגדרה בפרופיל — משתמשים בה; אחרת ברירת מחירון */
+/** ???? ???? ?????: ?? ?????? ??????? ? ??????? ??; ???? ????? ?????? */
 export async function getAgentCommissionForProduct(agentId, productId, lineDefaultCommission = 0) {
   await ensureConnection();
   const def = Number(lineDefaultCommission || 0);
@@ -633,12 +641,12 @@ export async function getAgentCommissionForProduct(agentId, productId, lineDefau
 }
 
 /**
- * חישוב סכום לחיוב ושדות כלכליים לשמירה ב-deal (עקביות: רווח = קמעוני - ספק - עמלת סוכן)
+ * ????? ???? ????? ????? ??????? ?????? ?-deal (??????: ???? = ?????? - ??? - ???? ????)
  */
 export async function resolveCheckoutEconomics(formState) {
   await ensureConnection();
   const fs = formState && typeof formState === 'object' ? formState : {};
-  /** הרשמה ציבורית עם הנחת ארגון (תשלום פרטי) — מחיר חודשי מהארגון */
+  /** ????? ??????? ?? ???? ????? (????? ????) ? ???? ????? ??????? */
   if (fs.orgPrivateEnrollment === true && Number(fs.orgPrivatePrice) > 0) {
     const p = Number(fs.orgPrivatePrice);
     return {
@@ -646,7 +654,7 @@ export async function resolveCheckoutEconomics(formState) {
       resolvedVendorCost: 0,
       resolvedAgentCommission: 0,
       resolvedNetProfit: p,
-      productName: String(fs.productName || 'מנוי ארגוני — אופאל'),
+      productName: String(fs.productName || '???? ?????? ? ?????'),
       productId: '',
       priceListId: '',
     };
@@ -870,7 +878,7 @@ function assertValidLandingSlug(slug) {
   const s = String(slug || '').trim().toLowerCase();
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s) || s.length < 2 || s.length > 80) {
     throw new Error(
-      'מזהה URL (slug) חייב להיות באנגלית קטנה, מספרים ומקפים בלבד — לדוגמה: doctor-plan-2025'
+      '???? URL (slug) ???? ????? ??????? ????, ?????? ?????? ???? ? ??????: doctor-plan-2025'
     );
   }
   return s;
@@ -940,14 +948,14 @@ export async function createLandingPage(payload) {
   const slug = assertValidLandingSlug(payload.slug);
   const pageType = payload.pageType === 'contact' ? 'contact' : 'sales';
   const exists = await LandingPage.findOne({ slug }).lean();
-  if (exists) throw new Error('מזהה URL כבר בשימוש');
+  if (exists) throw new Error('???? URL ??? ??????');
 
   let priceListId = null;
   if (pageType === 'sales') {
     const pid = payload.priceListId;
-    if (!mongoose.isValidObjectId(pid)) throw new Error('נדרש מחירון תקין');
+    if (!mongoose.isValidObjectId(pid)) throw new Error('???? ?????? ????');
     const pl = await PriceList.findById(pid).lean();
-    if (!pl) throw new Error('מחירון לא נמצא');
+    if (!pl) throw new Error('?????? ?? ????');
     priceListId = pid;
   }
 
@@ -977,7 +985,7 @@ export async function updateLandingPage(id, payload) {
   if (payload.slug != null) {
     const newSlug = assertValidLandingSlug(payload.slug);
     const clash = await LandingPage.findOne({ slug: newSlug, _id: { $ne: id } }).lean();
-    if (clash) throw new Error('מזהה URL כבר בשימוש');
+    if (clash) throw new Error('???? URL ??? ??????');
     set.slug = newSlug;
   }
   if (payload.pageTitle != null) set.pageTitle = String(payload.pageTitle).trim();
@@ -999,14 +1007,14 @@ export async function updateLandingPage(id, payload) {
     if (payload.priceListId === '' || payload.priceListId === null) {
       set.priceListId = null;
     } else {
-      if (!mongoose.isValidObjectId(payload.priceListId)) throw new Error('מחירון לא תקין');
+      if (!mongoose.isValidObjectId(payload.priceListId)) throw new Error('?????? ?? ????');
       const pl = await PriceList.findById(payload.priceListId).lean();
-      if (!pl) throw new Error('מחירון לא נמצא');
+      if (!pl) throw new Error('?????? ?? ????');
       set.priceListId = payload.priceListId;
     }
   }
   const doc = await LandingPage.findByIdAndUpdate(id, { $set: set }, { returnDocument: 'after' }).lean();
-  if (!doc) throw new Error('דף לא נמצא');
+  if (!doc) throw new Error('?? ?? ????');
   return serializeLandingPageDoc(doc);
 }
 
@@ -1014,11 +1022,11 @@ export async function deleteLandingPage(id) {
   await ensureConnection();
   if (!mongoose.isValidObjectId(id)) throw new Error('Invalid id');
   const r = await LandingPage.findByIdAndDelete(id);
-  if (!r) throw new Error('דף לא נמצא');
+  if (!r) throw new Error('?? ?? ????');
   return { ok: true };
 }
 
-/** דף נחיתה ציבורי — תוכן + מחירון (מכירות) או דף צור קשר */
+/** ?? ????? ?????? ? ???? + ?????? (??????) ?? ?? ??? ??? */
 export async function getPublicLandingPageBySlug(slug) {
   await ensureConnection();
   const s = String(slug || '').trim().toLowerCase();
@@ -1072,7 +1080,7 @@ export async function getPublicLandingPageBySlug(slug) {
   };
 }
 
-/** דף נחיתה ציבורי — ללא עלויות פנימיות */
+/** ?? ????? ?????? ? ??? ?????? ??????? */
 export async function getPublicPriceListById(id) {
   await ensureConnection();
   if (!mongoose.isValidObjectId(id)) return null;
@@ -1330,13 +1338,13 @@ export async function deleteSalesAgent(id) {
   if (!mongoose.isValidObjectId(id)) throw new Error('Invalid agent id');
   const oid = new mongoose.Types.ObjectId(id);
   const n = await countDealsByAgentId(String(id));
-  if (n > 0) throw new Error(`לא ניתן למחוק סוכן עם ${n} עסקאות מקושרות`);
+  if (n > 0) throw new Error(`?? ???? ????? ???? ?? ${n} ?????? ???????`);
   const r = await SalesAgent.findByIdAndDelete(oid);
   if (!r) throw new Error('Agent not found');
   return { ok: true };
 }
 
-/** לשימוש ב-webhook: קישור מנוי לסוכן */
+/** ?????? ?-webhook: ????? ???? ????? */
 export async function resolveAgentIdFromFormState(formState) {
   await ensureConnection();
   const fs = formState && typeof formState === 'object' ? formState : {};
