@@ -1520,6 +1520,26 @@ export async function deleteDealAdmin(dealId) {
   return { success: true };
 }
 
+export async function bulkDeleteDealsAdmin(dealIds = []) {
+  const db = await getDb();
+  const ids = Array.isArray(dealIds) ? dealIds : [];
+  const objectIds = ids
+    .map((id) => {
+      try {
+        return new ObjectId(String(id));
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+  if (!objectIds.length) return { requested: 0, deleted: 0 };
+  const r = await db.collection('deals').deleteMany({ _id: { $in: objectIds } });
+  return {
+    requested: objectIds.length,
+    deleted: Number(r.deletedCount || 0),
+  };
+}
+
 function parseMonthToRange(monthStr) {
   const s = String(monthStr || '').trim();
   const m = /^(\d{4})-(\d{2})$/.exec(s);

@@ -64,12 +64,9 @@ function prepareVisualText(value) {
     .split('\n')
     .map((lineText) => {
       if (!/[\u0590-\u05FF]/.test(lineText)) return lineText;
-      const chunks = lineText.match(/[\u0590-\u05FF"'״׳\s]+|[^\u0590-\u05FF]+/g) || [lineText];
-      const visual = chunks
-        .reverse()
-        .map((chunk) => (/[\u0590-\u05FF]/.test(chunk) ? chunk.split('').reverse().join('') : chunk))
-        .join('');
-      return `\u200F${visual}`;
+      // pdf-lib אינו תומך bidi מלא; עבור עברית אנו כותבים בסדר ויזואלי
+      // כדי שהמסמך ייראה RTL תקין בקובץ הסופי.
+      return lineText.split('').reverse().join('');
     })
     .join('\n');
 }

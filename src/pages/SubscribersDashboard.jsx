@@ -114,6 +114,10 @@ export default function SubscribersDashboard() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [selectedSubscriptionIds, setSelectedSubscriptionIds] = useState([]);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+  const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('');
 
   const [data, setData] = useState({
     summary: {},
@@ -456,6 +460,67 @@ export default function SubscribersDashboard() {
       return hay.includes(q);
     });
   }, [data.rows, liveSearch]);
+  const visibleRowIds = useMemo(
+    () => visibleRows.map((r) => String(r.id || '')).filter(Boolean),
+    [visibleRows]
+  );
+  const allVisibleSelected = visibleRowIds.length > 0 && visibleRowIds.every((id) => selectedSubscriptionIds.includes(id));
+  const selectedCount = selectedSubscriptionIds.length;
+  const requireDeletePhrase = selectedCount >= 50;
+  const bulkDeleteDisabled = bulkDeleteLoading || selectedCount === 0 || (requireDeletePhrase && bulkDeleteConfirmText !== 'DELETE');
+
+  useEffect(() => {
+    const allRowIds = new Set((data.rows || []).map((r) => String(r.id || '')).filter(Boolean));
+    setSelectedSubscriptionIds((prev) => prev.filter((id) => allRowIds.has(id)));
+  }, [data.rows]);
+
+  function toggleSubscriptionSelection(id, checked) {
+    const sid = String(id || '').trim();
+    if (!sid) return;
+    setSelectedSubscriptionIds((prev) => {
+      if (checked) {
+        if (prev.includes(sid)) return prev;
+        return [...prev, sid];
+      }
+      return prev.filter((x) => x !== sid);
+    });
+  }
+
+  function toggleSelectAllVisible(checked) {
+    if (!checked) {
+      const visibleSet = new Set(visibleRowIds);
+      setSelectedSubscriptionIds((prev) => prev.filter((id) => !visibleSet.has(id)));
+      return;
+    }
+    setSelectedSubscriptionIds((prev) => {
+      const next = new Set(prev);
+      visibleRowIds.forEach((id) => next.add(id));
+      return Array.from(next);
+    });
+  }
+
+  async function confirmBulkDelete() {
+    if (!selectedCount || !token || bulkDeleteDisabled) return;
+    setBulkDeleteLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/subscriptions/bulk-delete`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ids: selectedSubscriptionIds }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) throw new Error(json.error || 'מחיקה מרוכזת נכשלה');
+      setBulkDeleteOpen(false);
+      setBulkDeleteConfirmText('');
+      setSelectedSubscriptionIds([]);
+      await loadDashboard();
+    } catch (err) {
+      setError(err.message || 'שגיאה');
+    } finally {
+      setBulkDeleteLoading(false);
+    }
+  }
   const selectedBeneficiary = selected?.beneficiaryUpdate || {};
   const formState = selected?.formState || {};
   const selectedPrimaryFromUpdate = selectedBeneficiary?.primaryMember || {};
@@ -511,6 +576,53 @@ export default function SubscribersDashboard() {
           onCancel={() => setCancelTarget(null)}
           isLoading={cancelLoading}
         />
+        <Dialog
+          open={bulkDeleteOpen}
+          onOpenChange={(open) => {
+            setBulkDeleteOpen(open);
+            if (!open) setBulkDeleteConfirmText('');
+          }}
+        >
+          <DialogContent className="sm:max-w-md" dir="rtl">
+            <DialogHeader>
+              <DialogTitle>מחיקה מרוכזת של מנויים</DialogTitle>
+              <DialogDescription>
+                {`פעולה זו תמחק לצמיתות ${selectedCount} מנויים ממסד הנתונים.`}
+              </DialogDescription>
+            </DialogHeader>
+            {requireDeletePhrase ? (
+              <div className="space-y-2">
+                <p className="text-sm text-destructive">
+                  למחיקה של 50 מנויים ומעלה יש להקליד בדיוק DELETE כדי לאשר.
+                </p>
+                <Input
+                  value={bulkDeleteConfirmText}
+                  onChange={(e) => setBulkDeleteConfirmText(e.target.value)}
+                  placeholder="הקלד/י DELETE"
+                  className="text-left"
+                  dir="ltr"
+                />
+              </div>
+            ) : null}
+            {selectedCount > 100 && bulkDeleteLoading ? (
+              <div className="space-y-2">
+                <div className="h-2 w-full rounded bg-muted overflow-hidden">
+                  <div className="h-full w-1/2 animate-pulse bg-primary" />
+                </div>
+                <p className="text-xs text-muted-foreground">מעבד מחיקה מרוכזת של מעל 100 מנויים…</p>
+              </div>
+            ) : null}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setBulkDeleteOpen(false)} disabled={bulkDeleteLoading}>
+                ביטול
+              </Button>
+              <Button type="button" variant="destructive" onClick={confirmBulkDelete} disabled={bulkDeleteDisabled}>
+                {bulkDeleteLoading ? <Spinner className="me-2" /> : null}
+                מחיקת נבחרים
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={editOpen} onOpenChange={setEditOpen}>
           <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" dir="rtl">
@@ -1169,6 +1281,22 @@ export default function SubscribersDashboard() {
               </div>
             </CardHeader>
             <CardContent className="overflow-auto pt-2" dir="rtl">
+              {selectedCount > 0 ? (
+                <div className="fixed bottom-4 left-1/2 z-40 w-[min(96vw,48rem)] -translate-x-1/2 rounded-lg border bg-background/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium">{`${selectedCount} מנויים נבחרו`}</p>
+                    <div className="flex items-center gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setSelectedSubscriptionIds([])} disabled={bulkDeleteLoading}>
+                        נקה בחירה
+                      </Button>
+                      <Button type="button" variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)} disabled={bulkDeleteLoading}>
+                        {bulkDeleteLoading ? <Spinner className="me-2" /> : <Trash2 className="size-4 me-1" />}
+                        מחיקת נבחרים
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
               {error && !editOpen ? <p className="text-destructive text-sm mb-2">{error}</p> : null}
               {loading ? <p className="text-muted-foreground text-sm mb-2">טוען…</p> : null}
               {visibleRows.length === 0 && !loading ? (
@@ -1184,6 +1312,15 @@ export default function SubscribersDashboard() {
                   <Table className="text-right">
                     <TableHeader>
                       <TableRow className="[&_th]:text-right">
+                        <TableHead dir="rtl" className="w-12 text-right">
+                          <input
+                            type="checkbox"
+                            className={checkboxClass}
+                            checked={allVisibleSelected}
+                            onChange={(e) => toggleSelectAllVisible(e.target.checked)}
+                            aria-label="בחר הכל"
+                          />
+                        </TableHead>
                         <TableHead dir="rtl" className="text-right">
                           סטטוס השלמה
                         </TableHead>
@@ -1228,6 +1365,15 @@ export default function SubscribersDashboard() {
                               : undefined
                           }
                         >
+                          <TableCell dir="rtl" className="text-right align-top">
+                            <input
+                              type="checkbox"
+                              className={checkboxClass}
+                              checked={selectedSubscriptionIds.includes(String(r.id || ''))}
+                              onChange={(e) => toggleSubscriptionSelection(r.id, e.target.checked)}
+                              aria-label={`בחר מנוי ${r.transactionId || r.id}`}
+                            />
+                          </TableCell>
                           <TableCell dir="rtl" className="text-right align-top">
                             {r.pendingBeneficiaryCompletion ? (
                               <Badge className="bg-orange-500 hover:bg-orange-500 text-white border-0">

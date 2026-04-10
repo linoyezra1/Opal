@@ -44,6 +44,7 @@ import {
   getControlPanelOverviewStats,
   updateDealAdmin,
   deleteDealAdmin,
+  bulkDeleteDealsAdmin,
   getDealForRecurringCancellation,
   markDealCancelledByAdmin,
   getDealEmailSentAt,
@@ -1716,6 +1717,17 @@ app.delete('/api/admin/deals/:id', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(`[${ts()}] admin/deals delete error:`, e);
     res.status(400).json({ success: false, error: e.message || 'Failed to delete deal' });
+  }
+});
+
+app.delete('/api/subscriptions/bulk-delete', requireAdmin, async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    const out = await bulkDeleteDealsAdmin(ids);
+    res.json({ success: true, ...out });
+  } catch (e) {
+    console.error(`[${ts()}] subscriptions/bulk-delete error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to bulk delete subscriptions' });
   }
 });
 
