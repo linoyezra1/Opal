@@ -382,9 +382,15 @@ app.post('/api/create-checkout-session', async (req, res) => {
     });
   } catch (err) {
     console.error(`[${ts()}] create-checkout-session error:`, err);
+    const msg = String(err?.message || '');
+    const authBlocked =
+      /Cardcom/i.test(msg) &&
+      (/הזדהות|חסומ|authentication|authorization|invalid username|invalid password|blocked/i.test(msg));
     res.status(500).json({
       success: false,
-      error: err.message ?? 'Failed to create payment link.',
+      error: authBlocked
+        ? 'מערכת הסליקה זמנית אינה זמינה עקב שגיאת הזדהות. אנא נסו שוב מאוחר יותר או פנו לתמיכה.'
+        : err.message ?? 'Failed to create payment link.',
     });
   }
 });

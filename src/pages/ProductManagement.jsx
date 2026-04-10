@@ -22,8 +22,9 @@ import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '../components/u
 import { Spinner } from '../components/ui/spinner.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
+const PRODUCT_FLOW_TYPE_LABEL = 'רופא עד הבית';
 
-const EMPTY_FORM = { productName: '', sku: '', baseDescription: '' };
+const EMPTY_FORM = { productName: '', sku: '', baseDescription: '', flowType: PRODUCT_FLOW_TYPE_LABEL };
 
 export default function ProductManagement() {
   const [token] = React.useState(() => localStorage.getItem(TOKEN_KEY) || '');
@@ -141,6 +142,7 @@ export default function ProductManagement() {
       productName: p.productName || p.name,
       sku: p.sku,
       baseDescription: p.baseDescription || '',
+      flowType: p.flowType || PRODUCT_FLOW_TYPE_LABEL,
     });
   }
 
@@ -180,6 +182,10 @@ export default function ProductManagement() {
           </DialogHeader>
           <form onSubmit={submit} className="space-y-4">
             <FieldGroup>
+              <Field>
+                <FieldLabel>סוג זרימה</FieldLabel>
+                <Input value={PRODUCT_FLOW_TYPE_LABEL} disabled readOnly className="bg-muted" />
+              </Field>
               <Field>
                 <FieldLabel>שם מוצר *</FieldLabel>
                 <Input
@@ -232,6 +238,10 @@ export default function ProductManagement() {
           {editProduct ? (
             <form onSubmit={saveEdit} className="space-y-4">
               <FieldGroup>
+                <Field>
+                  <FieldLabel>סוג זרימה</FieldLabel>
+                  <Input value={editProduct.flowType || PRODUCT_FLOW_TYPE_LABEL} disabled readOnly className="bg-muted" />
+                </Field>
                 <Field>
                   <FieldLabel>שם מוצר *</FieldLabel>
                   <Input
