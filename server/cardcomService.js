@@ -13,8 +13,6 @@ import axios from 'axios';
 const CARDCOM_SOAP_URL = 'https://secure.cardcom.co.il/service.asmx';
 const CARDCOM_RECURRING_SOAP_URL = 'https://secure.cardcom.co.il/Interface/BillGoldService.asmx';
 const CARDCOM_RECURRING_NTV_URL = 'https://secure.cardcom.solutions/interface/RecurringPayment.aspx';
-const AUTH_COOLDOWN_MS = 15 * 60 * 1000;
-let authBlockedUntil = 0;
 
 /**
  * Build SOAP envelope for CreateLowProfileDeal.
@@ -145,12 +143,6 @@ function isCardcomAuthErrorText(text) {
  * `lowprofileParams` below. Payment page look comes from Cardcom defaults + terminal dashboard.
  */
 export async function createLowProfileDeal(opts) {
-  const now = Date.now();
-  if (authBlockedUntil > now) {
-    const mins = Math.max(1, Math.ceil((authBlockedUntil - now) / 60000));
-    throw new Error(`סליקה חסומה זמנית עקב שגיאת הזדהות מול Cardcom. נסו שוב בעוד כ-${mins} דקות.`);
-  }
-
   const soap = buildCreateLowProfileDealSoap(opts);
 
   const auth =
@@ -170,7 +162,6 @@ export async function createLowProfileDeal(opts) {
 
   const data = parseCreateLowProfileDealResponse(response.data);
   if (isCardcomAuthErrorText(data.description)) {
-    authBlockedUntil = Date.now() + AUTH_COOLDOWN_MS;
     throw new Error('שגיאת הזדהות מול Cardcom. נדרשת בדיקת משתמש/סיסמה מול חברת הסליקה.');
   }
   if (data.responseCode !== 0 && data.responseCode !== 200) {
