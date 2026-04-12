@@ -14,6 +14,12 @@ import {
   Ban,
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
+import {
+  ISRAELI_ID_INVALID_MSG,
+  normalizeIsraeliIdDigitsInput,
+  validateIsraeliId,
+  shouldShowIsraeliIdChecksumError,
+} from '../utils/israeliId.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { StatsCard } from '../components/admin/stats-card.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -295,11 +301,48 @@ export default function SubscribersDashboard() {
     setEditOpen(true);
   }
 
+  function isEditBeneficiaryProvided(b) {
+    return !!(
+      String(b?.firstName || '').trim() ||
+      String(b?.lastName || '').trim() ||
+      normalizeIsraeliIdDigitsInput(b?.id) ||
+      String(b?.dateOfBirth || '').trim()
+    );
+  }
+
   async function saveEdit(e) {
     e.preventDefault();
     if (!editDealId || !token) return;
     setSaveLoading(true);
     setError('');
+    const primaryDigits = normalizeIsraeliIdDigitsInput(editForm.idNum);
+    if (!primaryDigits) {
+      setError('נא למלא תעודת זהות למוטב הראשי');
+      setSaveLoading(false);
+      return;
+    }
+    if (!validateIsraeliId(primaryDigits)) {
+      setError(ISRAELI_ID_INVALID_MSG);
+      setSaveLoading(false);
+      return;
+    }
+    const primaryIdNorm = primaryDigits.padStart(9, '0');
+    const list = editForm.beneficiaries || [];
+    for (let i = 0; i < list.length; i++) {
+      const b = list[i];
+      if (!isEditBeneficiaryProvided(b)) continue;
+      const bid = normalizeIsraeliIdDigitsInput(b.id);
+      if (!bid) {
+        setError(`נא למלא תעודת זהות למוטב משני ${i + 1}`);
+        setSaveLoading(false);
+        return;
+      }
+      if (!validateIsraeliId(bid)) {
+        setError(ISRAELI_ID_INVALID_MSG);
+        setSaveLoading(false);
+        return;
+      }
+    }
     try {
       const res = await fetch(`${API_BASE}/api/admin/deals/${encodeURIComponent(editDealId)}`, {
         method: 'PUT',
@@ -309,7 +352,7 @@ export default function SubscribersDashboard() {
             primaryMember: {
               firstName: editForm.firstName,
               lastName: editForm.lastName,
-              id: editForm.idNum,
+              id: primaryIdNorm,
               dateOfBirth: editForm.dateOfBirth,
               gender: editForm.gender,
               maritalStatus: editForm.maritalStatus,
@@ -322,7 +365,9 @@ export default function SubscribersDashboard() {
             additionalMembers: (editForm.beneficiaries || []).map((b) => ({
               firstName: b.firstName,
               lastName: b.lastName,
-              id: b.id,
+              id: isEditBeneficiaryProvided(b)
+                ? normalizeIsraeliIdDigitsInput(b.id).padStart(9, '0')
+                : b.id,
               relation: b.relation,
               relationship: b.relation,
               phone: b.phone,
@@ -339,7 +384,7 @@ export default function SubscribersDashboard() {
             fullName: [editForm.firstName, editForm.lastName].filter(Boolean).join(' ').trim(),
             phone: editForm.phone,
             email: editForm.email,
-            id: editForm.idNum,
+            id: primaryIdNorm,
             dateOfBirth: editForm.dateOfBirth,
             gender: editForm.gender,
             maritalStatus: editForm.maritalStatus,
@@ -349,7 +394,9 @@ export default function SubscribersDashboard() {
             beneficiaries: (editForm.beneficiaries || []).map((b) => ({
               firstName: b.firstName,
               lastName: b.lastName,
-              id: b.id,
+              id: isEditBeneficiaryProvided(b)
+                ? normalizeIsraeliIdDigitsInput(b.id).padStart(9, '0')
+                : b.id,
               relation: b.relation,
               relationship: b.relation,
               phone: b.phone,
@@ -658,7 +705,18 @@ export default function SubscribersDashboard() {
                     <div className="grid gap-4 sm:grid-cols-2">
                       <Field>
                         <FieldLabel>תעודת זהות</FieldLabel>
-                        <Input dir="ltr" value={editForm.idNum} onChange={(e) => setEditForm((p) => ({ ...p, idNum: e.target.value }))} />
+                        <Input
+                          dir="ltr"
+                          inputMode="numeric"
+                          maxLength={9}
+                          value={editForm.idNum}
+                          onChange={(e) =>
+                            setEditForm((p) => ({ ...p, idNum: normalizeIsraeliIdDigitsInput(e.target.value) }))
+                          }
+                        />
+                        {shouldShowIsraeliIdChecksumError(editForm.idNum) ? (
+                          <p className="text-destructive text-xs">{ISRAELI_ID_INVALID_MSG}</p>
+                        ) : null}
                       </Field>
                       <Field>
                         <FieldLabel>טלפון</FieldLabel>
@@ -782,15 +840,23 @@ export default function SubscribersDashboard() {
                               <FieldLabel>תעודת זהות</FieldLabel>
                               <Input
                                 dir="ltr"
+                                inputMode="numeric"
+                                maxLength={9}
                                 value={b.id}
                                 onChange={(e) =>
                                   setEditForm((p) => {
                                     const list = [...(p.beneficiaries || [])];
-                                    list[idx] = { ...list[idx], id: e.target.value };
+                                    list[idx] = {
+                                      ...list[idx],
+                                      id: normalizeIsraeliIdDigitsInput(e.target.value),
+                                    };
                                     return { ...p, beneficiaries: list };
                                   })
                                 }
                               />
+                              {shouldShowIsraeliIdChecksumError(b.id) ? (
+                                <p className="text-destructive text-xs">{ISRAELI_ID_INVALID_MSG}</p>
+                              ) : null}
                             </Field>
                             <Field>
                               <FieldLabel>תאריך לידה</FieldLabel>

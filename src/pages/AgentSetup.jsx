@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Edit2, Trash2, Users, Percent } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
+import { ISRAELI_ID_INVALID_MSG, validateIsraeliId } from '../utils/israeliId.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -23,6 +24,16 @@ import { Badge } from '../components/ui/badge.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
+
+/** ת״ז ישראלית (7–9 ספרות): ספרת ביקורת. מזהים שאינם ספרות בלבד — לא נבדקים כאן (למשל ח.פ). */
+function agentIsraeliIdHint(value) {
+  const compact = String(value || '')
+    .trim()
+    .replace(/\s/g, '');
+  if (compact.length < 7 || !/^\d{7,9}$/.test(compact)) return '';
+  if (!validateIsraeliId(compact)) return ISRAELI_ID_INVALID_MSG;
+  return '';
+}
 
 const emptyForm = () => ({
   agentName: '',
@@ -190,6 +201,18 @@ export default function AgentSetup() {
     e.preventDefault();
     setLoading(true);
     setError('');
+    const idRaw = String(addForm.idNum || '').trim();
+    if (!idRaw) {
+      setError('נא למלא תעודת זהות / ח.פ');
+      setLoading(false);
+      return;
+    }
+    const idCompact = idRaw.replace(/\s/g, '');
+    if (/^\d{7,9}$/.test(idCompact) && !validateIsraeliId(idCompact)) {
+      setError(ISRAELI_ID_INVALID_MSG);
+      setLoading(false);
+      return;
+    }
     try {
       const res = await fetch(`${API_BASE}/api/admin/agents`, {
         method: 'POST',
@@ -212,6 +235,18 @@ export default function AgentSetup() {
     if (!editAgent?.id) return;
     setLoading(true);
     setError('');
+    const idRaw = String(editAgent.idNum || '').trim();
+    if (!idRaw) {
+      setError('נא למלא תעודת זהות / ח.פ');
+      setLoading(false);
+      return;
+    }
+    const idCompact = idRaw.replace(/\s/g, '');
+    if (/^\d{7,9}$/.test(idCompact) && !validateIsraeliId(idCompact)) {
+      setError(ISRAELI_ID_INVALID_MSG);
+      setLoading(false);
+      return;
+    }
     try {
       const { id, ...body } = editAgent;
       const res = await fetch(`${API_BASE}/api/admin/agents/${encodeURIComponent(id)}`, {
@@ -340,6 +375,9 @@ export default function AgentSetup() {
                         dir="ltr"
                         required
                       />
+                      {agentIsraeliIdHint(addForm.idNum) ? (
+                        <p className="text-destructive text-xs">{agentIsraeliIdHint(addForm.idNum)}</p>
+                      ) : null}
                     </Field>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -487,6 +525,9 @@ export default function AgentSetup() {
                           dir="ltr"
                           required
                         />
+                        {agentIsraeliIdHint(editAgent.idNum) ? (
+                          <p className="text-destructive text-xs">{agentIsraeliIdHint(editAgent.idNum)}</p>
+                        ) : null}
                       </Field>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">

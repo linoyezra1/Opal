@@ -2,6 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Building2, CreditCard } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
+import {
+  ISRAELI_ID_INVALID_MSG,
+  normalizeIsraeliIdDigitsInput,
+  validateIsraeliId,
+  shouldShowIsraeliIdChecksumError,
+  formatIsraeliIdStored,
+} from '../utils/israeliId.js';
 import { Button } from '../components/ui/button.jsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Input } from '../components/ui/input.jsx';
@@ -77,8 +84,18 @@ export default function OrgRegisterPage() {
       setFormError('נא למלא שם מלא');
       return;
     }
-    if (!idNum.trim()) {
+    const idDigits = normalizeIsraeliIdDigitsInput(idNum);
+    if (!idDigits) {
       setFormError('נא למלא תעודת זהות');
+      return;
+    }
+    if (!validateIsraeliId(idDigits)) {
+      setFormError(ISRAELI_ID_INVALID_MSG);
+      return;
+    }
+    const idStored = formatIsraeliIdStored(idDigits);
+    if (!idStored) {
+      setFormError(ISRAELI_ID_INVALID_MSG);
       return;
     }
     if (!validateEmail(email)) {
@@ -98,7 +115,7 @@ export default function OrgRegisterPage() {
     const formState = {
       selectedPlanId: 'org-register',
       fullName: fullName.trim(),
-      id: idNum.trim(),
+      id: idStored,
       email: email.trim(),
       phone: phone.trim(),
       organizationName: org.name || '',
@@ -111,6 +128,7 @@ export default function OrgRegisterPage() {
       agentName: '',
       beneficiaryCount: 0,
       beneficiaries: [],
+      landingPageSlug: org?.id ? `org-private-${org.id}` : 'org-register',
     };
 
     setSubmitting(true);
@@ -193,7 +211,18 @@ export default function OrgRegisterPage() {
                   </Field>
                   <Field>
                     <FieldLabel>תעודת זהות</FieldLabel>
-                    <Input dir="ltr" value={idNum} onChange={(e) => setIdNum(e.target.value)} required />
+                    <Input
+                      dir="ltr"
+                      inputMode="numeric"
+                      maxLength={9}
+                      value={idNum}
+                      onChange={(e) => setIdNum(normalizeIsraeliIdDigitsInput(e.target.value))}
+                      placeholder="7–9 ספרות"
+                      required
+                    />
+                    {shouldShowIsraeliIdChecksumError(idNum) ? (
+                      <p className="text-sm text-destructive">{ISRAELI_ID_INVALID_MSG}</p>
+                    ) : null}
                   </Field>
                   <Field>
                     <FieldLabel>אימייל</FieldLabel>
@@ -205,7 +234,15 @@ export default function OrgRegisterPage() {
                   </Field>
                 </FieldGroup>
                 {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
-                <Button type="submit" className="w-full" disabled={submitting}>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={
+                    submitting ||
+                    !normalizeIsraeliIdDigitsInput(idNum) ||
+                    !validateIsraeliId(idNum)
+                  }
+                >
                   {submitting ? <Spinner className="size-4 me-2" /> : <CreditCard className="size-4 me-2" />}
                   המשך לתשלום מאובטח
                 </Button>

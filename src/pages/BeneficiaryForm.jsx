@@ -6,16 +6,17 @@ import { Button } from '../components/ui/button.jsx';
 import { Input } from '../components/ui/input.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 import { FieldGroup, Field, FieldLabel } from '../components/ui/field.jsx';
+import {
+  ISRAELI_ID_INVALID_MSG,
+  normalizeIsraeliIdDigitsInput,
+  validateIsraeliId,
+  shouldShowIsraeliIdChecksumError,
+} from '../utils/israeliId.js';
 
 const MARITAL_OPTIONS = ['', 'רווק/ה', 'נשוי/אה', 'גרוש/ה', 'אלמן/ה', 'ידוע/ה בציבור'];
 const HEALTH_FUNDS = ['', 'כללית', 'מכבי', 'מאוחדת', 'לאומית'];
 const GENDER_OPTIONS = ['', 'זכר', 'נקבה', 'אחר'];
 const SUPPLEMENTAL_OPTIONS = ['', 'אין', 'כסף', 'זהב', 'פלטינום', 'אחר'];
-
-function validateId(value) {
-  const digits = String(value || '').replace(/\D/g, '');
-  return digits.length === 9;
-}
 
 function emptyMember() {
   return {
@@ -43,8 +44,9 @@ function splitFullName(fullName) {
   return { firstName: parts.slice(0, -1).join(' '), lastName: parts[parts.length - 1] };
 }
 
-function MemberFields({ title, member, onChange, errors = {}, includeContact = false }) {
+function MemberFields({ title, member, onChange, errors = {}, includeContact = false, maxDateIso = '' }) {
   const set = (k) => (v) => onChange({ ...member, [k]: v });
+  const idChecksumHint = shouldShowIsraeliIdChecksumError(member.id);
 
   return (
     <div className="rounded-xl border bg-card p-4 space-y-3">
@@ -64,16 +66,24 @@ function MemberFields({ title, member, onChange, errors = {}, includeContact = f
           <FieldLabel>תעודת זהות *</FieldLabel>
           <Input
             value={member.id}
-            onChange={(e) => set('id')(String(e.target.value).replace(/\D/g, '').slice(0, 9))}
-            placeholder="9 ספרות"
+            onChange={(e) => set('id')(normalizeIsraeliIdDigitsInput(e.target.value))}
+            placeholder="7–9 ספרות"
             inputMode="numeric"
             maxLength={9}
           />
           {errors.id ? <p className="text-destructive text-xs">{errors.id}</p> : null}
+          {!errors.id && idChecksumHint ? (
+            <p className="text-destructive text-xs">{ISRAELI_ID_INVALID_MSG}</p>
+          ) : null}
         </Field>
         <Field>
           <FieldLabel>תאריך לידה *</FieldLabel>
-          <Input type="date" value={member.dateOfBirth} onChange={(e) => set('dateOfBirth')(e.target.value)} />
+          <Input
+            type="date"
+            value={member.dateOfBirth}
+            max={maxDateIso || undefined}
+            onChange={(e) => set('dateOfBirth')(e.target.value)}
+          />
           {errors.dateOfBirth ? <p className="text-destructive text-xs">{errors.dateOfBirth}</p> : null}
         </Field>
         <Field>
@@ -157,6 +167,7 @@ export default function BeneficiaryForm() {
   const navigate = useNavigate();
   const location = useLocation();
   const query = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const maxBirthDateIso = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   const [transactionId, setTransactionId] = useState('');
   const [resolvingTx, setResolvingTx] = useState(true);
@@ -269,21 +280,25 @@ export default function BeneficiaryForm() {
     };
   }, [transactionId, resolvingTx]);
 
-  const validateMemberRequired = useCallback((m) => {
-    const e = {};
-    if (!m.firstName?.trim()) e.firstName = 'שדה חובה';
-    if (!m.lastName?.trim()) e.lastName = 'שדה חובה';
-    if (!m.id?.trim()) e.id = 'שדה חובה';
-    else if (!validateId(m.id)) e.id = 'חייב להכיל 9 ספרות';
-    if (!m.dateOfBirth?.trim()) e.dateOfBirth = 'שדה חובה';
-    return e;
-  }, []);
+  const validateMemberRequired = useCallback(
+    (m) => {
+      const e = {};
+      if (!m.firstName?.trim()) e.firstName = 'שדה חובה';
+      if (!m.lastName?.trim()) e.lastName = 'שדה חובה';
+      if (!normalizeIsraeliIdDigitsInput(m.id)) e.id = 'שדה חובה';
+      else if (!validateIsraeliId(m.id)) e.id = ISRAELI_ID_INVALID_MSG;
+      if (!m.dateOfBirth?.trim()) e.dateOfBirth = 'שדה חובה';
+      else if (maxBirthDateIso && String(m.dateOfBirth) > maxBirthDateIso) e.dateOfBirth = 'תאריך לידה לא תקין';
+      return e;
+    },
+    [maxBirthDateIso]
+  );
 
   const isMemberProvided = useCallback((m) => {
     return !!(
       String(m.firstName || '').trim() ||
       String(m.lastName || '').trim() ||
-      String(m.id || '').trim() ||
+      normalizeIsraeliIdDigitsInput(m.id) ||
       String(m.dateOfBirth || '').trim()
     );
   }, []);
@@ -316,7 +331,13 @@ export default function BeneficiaryForm() {
       if (!validate()) return;
       const additionalMembersPayload = additionalMembers
         .map((m, index) => ({ relation: `additional_${index + 1}`, ...m }))
-        .filter((m) => isMemberProvided(m));
+        .filter((m) => isMemberProvided(m))
+        .map((m) => ({
+          ...m,
+          id: normalizeIsraeliIdDigitsInput(m.id).padStart(9, '0'),
+        }));
+      const primaryDigits = normalizeIsraeliIdDigitsInput(primaryMember.id);
+      const primaryForApi = { ...primaryMember, id: primaryDigits.padStart(9, '0') };
       setIsSubmitting(true);
       try {
         const res = await fetch(`${API_BASE}/api/update-beneficiaries`, {
@@ -326,7 +347,7 @@ export default function BeneficiaryForm() {
             transactionId: String(transactionId || '').trim(),
             organizationName: String(organizationName || '').trim(),
             agentName: String(agentName || '').trim(),
-            primaryMember,
+            primaryMember: primaryForApi,
             additionalMembers: additionalMembersPayload,
           }),
         });
@@ -403,6 +424,7 @@ export default function BeneficiaryForm() {
                 member={primaryMember}
                 onChange={setPrimaryMember}
                 includeContact
+                maxDateIso={maxBirthDateIso}
                 errors={errors.primaryMember || {}}
               />
             </CardContent>
@@ -429,6 +451,7 @@ export default function BeneficiaryForm() {
                         return copy;
                       })
                     }
+                    maxDateIso={maxBirthDateIso}
                     errors={(errors.additional && errors.additional[index]) || {}}
                   />
                 ))

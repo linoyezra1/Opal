@@ -399,14 +399,97 @@ export async function clearAbandonedCheckoutLeadsByContact(params) {
   const phone = String(params.phone || '').trim();
   const email = String(params.email || '').trim().toLowerCase();
   const landingSlug = String(params.landingSlug || '').trim().toLowerCase();
+  const landingSlugAlt = String(params.landingSlugAlt || '').trim().toLowerCase();
   if (!phone && !email) return { deleted: 0 };
-  const r = await db.collection('contactLeads').deleteMany({
-    source: 'abandoned_checkout',
-    phone,
-    email,
-    landingSlug,
-  });
+  const slugMatch = [landingSlug, landingSlugAlt].filter(Boolean);
+  const filter =
+    slugMatch.length > 0
+      ? {
+          source: 'abandoned_checkout',
+          phone,
+          email,
+          landingSlug: { $in: slugMatch },
+        }
+      : {
+          source: 'abandoned_checkout',
+          phone,
+          email,
+          landingSlug,
+        };
+  const r = await db.collection('contactLeads').deleteMany(filter);
   return { deleted: Number(r.deletedCount || 0) };
+}
+
+/** נוצר לפני מעבר לדף תשלום Cardcom; מקושר לעסקה אחרי תשלום מוצלח */
+export async function upsertPendingCheckoutLead(params = {}) {
+  const db = await getDb();
+  const lowProfileCode = String(params.lowProfileCode || '').trim();
+  if (!lowProfileCode) return { skipped: true };
+  const existing = await db
+    .collection('pending_checkout_leads')
+    .findOne({ lowProfileCode }, { projection: { status: 1 } });
+  if (existing?.status === 'converted') return { skipped: true };
+  const now = new Date();
+  const set = {
+    lowProfileCode,
+    name: String(params.name || '').trim(),
+    email: String(params.email || '').trim().toLowerCase(),
+    phone: String(params.phone || '').trim(),
+    productName: String(params.productName || '').trim(),
+    landingSlug: String(params.landingSlug || '').trim().toLowerCase(),
+    priceListId: String(params.priceListId || '').trim(),
+    status: 'awaiting_payment',
+    updatedAt: now,
+  };
+  await db.collection('pending_checkout_leads').updateOne(
+    { lowProfileCode },
+    { $set: set, $setOnInsert: { createdAt: now, dealId: null, convertedAt: null } },
+    { upsert: true }
+  );
+  return { ok: true };
+}
+
+export async function markPendingCheckoutLeadConverted(lowProfileCode, dealId) {
+  const db = await getDb();
+  const code = String(lowProfileCode || '').trim();
+  if (!code) return { matched: false };
+  const now = new Date();
+  const tid = String(dealId || '').trim();
+  const r = await db.collection('pending_checkout_leads').updateOne(
+    { lowProfileCode: code },
+    {
+      $set: {
+        status: 'converted',
+        dealId: tid || null,
+        convertedAt: now,
+        updatedAt: now,
+      },
+    }
+  );
+  return { matched: r.matchedCount > 0 };
+}
+
+export async function listAwaitingPaymentCheckoutLeads(limit = 100) {
+  const db = await getDb();
+  const lim = Math.min(Math.max(Number(limit) || 100, 1), 300);
+  const docs = await db
+    .collection('pending_checkout_leads')
+    .find({ status: 'awaiting_payment' })
+    .sort({ updatedAt: -1 })
+    .limit(lim)
+    .toArray();
+  return docs.map((d) => ({
+    id: String(d._id),
+    lowProfileCode: d.lowProfileCode || '',
+    name: d.name || '',
+    email: d.email || '',
+    phone: d.phone || '',
+    productName: d.productName || '',
+    landingSlug: d.landingSlug || '',
+    priceListId: d.priceListId || '',
+    createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+    updatedAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : d.updatedAt,
+  }));
 }
 
 export async function saveOrganizationLead(params) {

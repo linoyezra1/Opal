@@ -32,6 +32,9 @@ import {
   mergeDealCardcomRecurringIds,
   mergeDealCardcomRecurringIdsByLowProfileCode,
   saveOrUpdateAbandonedCheckoutLead,
+  upsertPendingCheckoutLead,
+  markPendingCheckoutLeadConverted,
+  listAwaitingPaymentCheckoutLeads,
   findDealByLowProfileCode,
   getPublicDealContext,
   saveOrganizationLead,
@@ -102,6 +105,12 @@ import { parseOrgMemberImportBuffer, buildOrgImportTemplateBuffer } from './orgI
 import fs from 'fs/promises';
 import { resolve } from 'path';
 import { candidateDocPdfPaths, readFirstExistingFile } from './repoAssets.js';
+import {
+  validateIsraeliId,
+  formatIsraeliIdStored,
+  ISRAELI_ID_INVALID_MSG,
+  validateDealPatchIsraeliIdsOrThrow,
+} from './israeliId.js';
 
 try {
   dotenv.config();
@@ -320,12 +329,33 @@ app.post('/api/create-checkout-session', async (req, res) => {
         error: 'Missing formState with selectedPlanId.',
       });
     }
+    const landingFlow = fs0.landingFlow === true;
     if (orgPrivateOk) {
-      if (!String(fs0.fullName || '').trim() || !String(fs0.id || '').trim() || !String(fs0.email || '').trim()) {
+      if (!String(fs0.fullName || '').trim() || !String(fs0.email || '').trim()) {
         return res.status(400).json({
           success: false,
           error: 'בהרשמה ארגונית נדרשים שם מלא, תעודת זהות ואימייל.',
         });
+      }
+    }
+    if (landingFlow && !String(fs0.fullName || '').trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'נא למלא שם מלא.',
+      });
+    }
+    if (orgPrivateOk || landingFlow) {
+      const idDigits = String(fs0.id || '').replace(/\D/g, '');
+      if (!idDigits) {
+        return res.status(400).json({
+          success: false,
+          error: orgPrivateOk
+            ? 'בהרשמה ארגונית נדרשים שם מלא, תעודת זהות ואימייל.'
+            : 'נא למלא תעודת זהות.',
+        });
+      }
+      if (!validateIsraeliId(idDigits)) {
+        return res.status(400).json({ success: false, error: ISRAELI_ID_INVALID_MSG });
       }
     }
 
@@ -357,6 +387,10 @@ app.post('/api/create-checkout-session', async (req, res) => {
       productId: econ.productId || formState.productId,
       priceListId: econ.priceListId || formState.priceListId,
     };
+    if (orgPrivateOk || landingFlow) {
+      const stored = formatIsraeliIdStored(enrichedForm.id);
+      if (stored) enrichedForm.id = stored;
+    }
 
     const result = await createLowProfilePage({
       terminalNumber: terminal,
@@ -375,6 +409,20 @@ app.post('/api/create-checkout-session', async (req, res) => {
       payerAmount,
       createdAt: Date.now(),
     });
+
+    try {
+      await upsertPendingCheckoutLead({
+        lowProfileCode: result.lowProfileCode,
+        name: String(enrichedForm.fullName || '').trim(),
+        email: String(enrichedForm.email || '').trim(),
+        phone: String(enrichedForm.phone || '').trim(),
+        productName: String(enrichedForm.productName || '').trim(),
+        landingSlug: String(enrichedForm.landingPageSlug || enrichedForm.priceListId || '').trim(),
+        priceListId: String(enrichedForm.priceListId || '').trim(),
+      });
+    } catch (leadErr) {
+      console.warn(`[${ts()}] upsertPendingCheckoutLead (non-blocking):`, leadErr?.message || leadErr);
+    }
 
     res.json({
       success: true,
@@ -630,6 +678,12 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
     }
 
     try {
+      await markPendingCheckoutLeadConverted(lowProfileCode, transactionId);
+    } catch (linkErr) {
+      console.warn(`[${ts()}] markPendingCheckoutLeadConverted (non-blocking):`, linkErr?.message || linkErr);
+    }
+
+    try {
       await mergeDealCardcomRecurringIds(transactionId, {
         cardcomAccountId: step2Recurring?.cardcomAccountId || indicator?.cardcomAccountId,
         cardcomRecurringId: step2Recurring?.cardcomRecurringId || indicator?.cardcomRecurringId,
@@ -705,6 +759,7 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
         phone: String(finalForm?.phone || '').trim(),
         email: String(finalForm?.email || '').trim(),
         landingSlug: String(finalForm?.priceListId || '').trim(),
+        landingSlugAlt: String(finalForm?.landingPageSlug || '').trim(),
       });
     } catch (clearErr) {
       console.warn(`[${ts()}] Failed clearing abandoned checkout leads (non-blocking):`, clearErr?.message || clearErr);
@@ -989,6 +1044,11 @@ app.post('/api/update-beneficiaries', async (req, res) => {
     if (!primaryId) {
       return res.status(400).json({ success: false, error: 'חסרה תעודת זהות למבוטח הראשי.' });
     }
+    const primaryDigits = String(primaryId).replace(/\D/g, '');
+    if (!validateIsraeliId(primaryDigits)) {
+      return res.status(400).json({ success: false, error: ISRAELI_ID_INVALID_MSG });
+    }
+    const primaryIdNorm = formatIsraeliIdStored(primaryDigits) || primaryDigits.padStart(9, '0');
 
     const additionalMembers = Array.isArray(body.additionalMembers) ? body.additionalMembers : [];
     const beneficiaries = additionalMembers
@@ -1008,6 +1068,20 @@ app.post('/api/update-beneficiaries', async (req, res) => {
         return !!(m.firstName || m.lastName || m.id || m.dateOfBirth);
       });
 
+    for (const m of beneficiaries) {
+      const d = String(m.id || '').replace(/\D/g, '');
+      if (!d) {
+        return res.status(400).json({ success: false, error: 'חסרה תעודת זהות לאחד המוטבים הנוספים.' });
+      }
+      if (!validateIsraeliId(d)) {
+        return res.status(400).json({ success: false, error: ISRAELI_ID_INVALID_MSG });
+      }
+    }
+    const beneficiariesNorm = beneficiaries.map((m) => {
+      const d = String(m.id || '').replace(/\D/g, '');
+      return { ...m, id: formatIsraeliIdStored(d) || d.padStart(9, '0') };
+    });
+
     const result = await saveBeneficiaryUpdate({
       transactionId,
       organizationName,
@@ -1015,7 +1089,7 @@ app.post('/api/update-beneficiaries', async (req, res) => {
       primaryMember: {
         firstName: primaryFirstName,
         lastName: primaryLastName,
-        id: primaryId,
+        id: primaryIdNorm,
         email: primaryEmail,
         phone: String(pm.phone ?? '').trim(),
         address: String(pm.address ?? '').trim(),
@@ -1025,7 +1099,7 @@ app.post('/api/update-beneficiaries', async (req, res) => {
         healthFund: String(pm.healthFund ?? '').trim(),
         supplementalInsurance: String(pm.supplementalInsurance ?? '').trim(),
       },
-      additionalMembers: beneficiaries,
+      additionalMembers: beneficiariesNorm,
     });
 
     // Generate beneficiary summary PDF from the consolidated subscription row.
@@ -1036,7 +1110,7 @@ app.post('/api/update-beneficiaries', async (req, res) => {
       primaryMember: {
         firstName: primaryFirstName,
         lastName: primaryLastName,
-        id: primaryId,
+        id: primaryIdNorm,
         email: primaryEmail,
         phone: String(pm.phone ?? '').trim(),
         address: String(pm.address ?? '').trim(),
@@ -1046,7 +1120,7 @@ app.post('/api/update-beneficiaries', async (req, res) => {
         healthFund: String(pm.healthFund ?? '').trim(),
         supplementalInsurance: String(pm.supplementalInsurance ?? '').trim(),
       },
-      additionalMembers: beneficiaries,
+      additionalMembers: beneficiariesNorm,
       payerAmount: deal?.payerAmount,
     });
     const beneficiaryPdfBuffer = await generateBeneficiarySummaryPdfBuffer(pdfModel);
@@ -1068,8 +1142,8 @@ app.post('/api/update-beneficiaries', async (req, res) => {
           productName: firstDefined(deal?.formState?.productName, deal?.formState?.selectedPlanId),
           subscriptionType: firstDefined(deal?.formState?.productName, deal?.formState?.selectedPlanId),
           monthlyTotal: Number(deal?.payerAmount || 0),
-          primaryBeneficiary: { name: primaryName || '—', idNumber: primaryId || '—' },
-          secondaryBeneficiaries: beneficiaries.map((b) => ({
+          primaryBeneficiary: { name: primaryName || '—', idNumber: primaryIdNorm || '—' },
+          secondaryBeneficiaries: beneficiariesNorm.map((b) => ({
             name: [String(b.firstName || '').trim(), String(b.lastName || '').trim()].filter(Boolean).join(' '),
             idNumber: String(b.id || '').trim(),
           })),
@@ -1673,20 +1747,30 @@ app.put('/api/admin/leads/:kind/:id', requireAdmin, async (req, res) => {
 /** Aggregated dashboard: לקוחות ללא טופס מוטבים, פיגור תשלום, פניות, וכו׳ */
 app.get('/api/admin/control-panel', requireAdmin, async (req, res) => {
   try {
-    const [pendingBeneficiaryCustomers, checkoutDrafts, paymentArrears, privateLeads, corporateLeads, registeredOrganizations, overview] =
-      await Promise.all([
-        getDealsPendingBeneficiaryCompletion(150),
-        listIncompleteCheckoutDrafts(80),
-        getPaymentArrearsDeals(150),
-        getContactLeads(150),
-        getOrganizationLeads(150),
-        listOrgPricingPolicies(),
-        getControlPanelOverviewStats(),
-      ]);
+    const [
+      pendingBeneficiaryCustomers,
+      checkoutDrafts,
+      pendingCheckoutLeads,
+      paymentArrears,
+      privateLeads,
+      corporateLeads,
+      registeredOrganizations,
+      overview,
+    ] = await Promise.all([
+      getDealsPendingBeneficiaryCompletion(150),
+      listIncompleteCheckoutDrafts(80),
+      listAwaitingPaymentCheckoutLeads(80),
+      getPaymentArrearsDeals(150),
+      getContactLeads(150),
+      getOrganizationLeads(150),
+      listOrgPricingPolicies(),
+      getControlPanelOverviewStats(),
+    ]);
     res.json({
       success: true,
       pendingBeneficiaryCustomers,
       checkoutDrafts,
+      pendingCheckoutLeads,
       paymentArrears,
       privateLeads,
       corporateLeads,
@@ -1702,6 +1786,11 @@ app.get('/api/admin/control-panel', requireAdmin, async (req, res) => {
 /** עדכון עסקה (מנוי) — מיזוג ל־formState */
 app.put('/api/admin/deals/:id', requireAdmin, async (req, res) => {
   try {
+    try {
+      validateDealPatchIsraeliIdsOrThrow(req.body || {});
+    } catch (idErr) {
+      return res.status(400).json({ success: false, error: idErr.message || ISRAELI_ID_INVALID_MSG });
+    }
     await updateDealAdmin(req.params.id, req.body || {});
     res.json({ success: true });
   } catch (e) {

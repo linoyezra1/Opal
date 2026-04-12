@@ -1,4 +1,9 @@
 import React from 'react'
+import {
+  ISRAELI_ID_INVALID_MSG,
+  normalizeIsraeliIdDigitsInput,
+  shouldShowIsraeliIdChecksumError,
+} from '../utils/israeliId.js'
 
 export default function BeneficiaryFields({ count, beneficiaries, onChange, errors = {} }) {
   if (count === 0) return null
@@ -40,11 +45,14 @@ export default function BeneficiaryFields({ count, beneficiaries, onChange, erro
                   inputMode="numeric"
                   maxLength={9}
                   value={beneficiaries[i]?.id ?? ''}
-                  onChange={(e) => onChange(i, 'id', e.target.value.replace(/\D/g, '').slice(0, 9))}
+                  onChange={(e) => onChange(i, 'id', normalizeIsraeliIdDigitsInput(e.target.value))}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-medical-blue text-right"
-                  placeholder="9 ספרות"
+                  placeholder="7–9 ספרות"
                 />
                 {getError(i, 'id') && <p className="text-red-600 text-sm mt-1 text-right">{getError(i, 'id')}</p>}
+                {!getError(i, 'id') && shouldShowIsraeliIdChecksumError(beneficiaries[i]?.id) ? (
+                  <p className="text-red-600 text-sm mt-1 text-right">{ISRAELI_ID_INVALID_MSG}</p>
+                ) : null}
               </div>
               <div>
                 <label className="block text-sm text-medical-grey-dark mb-1 text-right">תאריך לידה *</label>

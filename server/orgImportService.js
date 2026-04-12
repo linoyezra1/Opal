@@ -10,6 +10,7 @@ import {
   MARITAL_STATUS_OPTIONS_HE,
   SUPPLEMENTAL_INSURANCE_OPTIONS_HE,
 } from './beneficiaryConstants.js';
+import { validateIsraeliId, formatIsraeliIdStored, ISRAELI_ID_INVALID_MSG } from './israeliId.js';
 
 /** סדר התאמת כותרות — דפוסים ארוכים קודם */
 const FIELD_HEADER_PATTERNS = [
@@ -197,11 +198,15 @@ export function normalizeAndValidateImportRow(raw, lineNumber) {
   const messages = [];
   const fullName = String(raw.fullName || '').trim();
   const id = String(raw.id || '').trim();
+  let idNumNorm = '';
   if (!fullName) messages.push('חסר שם מלא');
   if (!id) messages.push('חסרה תעודת זהות');
   else {
     const idDigits = id.replace(/\D/g, '');
-    if (idDigits.length !== 9) messages.push('תעודת זהות חייבת להכיל 9 ספרות');
+    if (!idDigits) messages.push('חסרה תעודת זהות');
+    else if (idDigits.length > 9) messages.push(ISRAELI_ID_INVALID_MSG);
+    else if (!validateIsraeliId(idDigits)) messages.push(ISRAELI_ID_INVALID_MSG);
+    else idNumNorm = formatIsraeliIdStored(idDigits) || idDigits.padStart(9, '0');
   }
 
   const dateOfBirthIso = parseDateToIso(raw.dateOfBirth);
@@ -226,7 +231,7 @@ export function normalizeAndValidateImportRow(raw, lineNumber) {
 
   const profile = {
     fullName,
-    idNum: id,
+    idNum: idNumNorm || id,
     email: String(raw.email || '').trim(),
     phone: String(raw.phone || '').trim(),
     dateOfBirth: dateOfBirthIso,

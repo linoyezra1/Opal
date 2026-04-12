@@ -74,6 +74,7 @@ export default function AdminControlPanel() {
 
   const pendingBeneficiaryCustomers = data?.pendingBeneficiaryCustomers || [];
   const checkoutDrafts = data?.checkoutDrafts || [];
+  const pendingCheckoutLeads = data?.pendingCheckoutLeads || [];
   const arrears = data?.paymentArrears || [];
   const privateLeads = data?.privateLeads || [];
   const corporateLeads = data?.corporateLeads || [];
@@ -99,6 +100,16 @@ export default function AdminControlPanel() {
         type: 'draft',
         label: 'טיוטת צ׳ק-אאוט',
         detail: [snap.fullName, snap.phone].filter(Boolean).join(' · ') || row.sessionKey,
+        at: t,
+      });
+    }
+    for (const row of pendingCheckoutLeads) {
+      const t = row.updatedAt ? new Date(row.updatedAt).getTime() : 0;
+      items.push({
+        id: `pc-${row.id}`,
+        type: 'pending_checkout',
+        label: 'ממתין לתשלום בקארדקום',
+        detail: [row.name, row.phone, row.productName].filter(Boolean).join(' · ') || row.lowProfileCode,
         at: t,
       });
     }
@@ -133,7 +144,7 @@ export default function AdminControlPanel() {
       });
     }
     return items.filter((x) => x.at).sort((a, b) => b.at - a.at).slice(0, 16);
-  }, [pendingBeneficiaryCustomers, checkoutDrafts, arrears, privateLeads, corporateLeads]);
+  }, [pendingBeneficiaryCustomers, checkoutDrafts, pendingCheckoutLeads, arrears, privateLeads, corporateLeads]);
 
   const chartData = React.useMemo(() => {
     const s = overview?.chartSeries;
@@ -373,6 +384,63 @@ export default function AdminControlPanel() {
                         <TableRow>
                           <TableCell colSpan={4} className="text-center text-muted-foreground">
                             אין רשומות
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="xl:col-span-2">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ShoppingCart className="size-5" />
+                  עגלות נטושות — הועברו לדף תשלום (Cardcom)
+                </CardTitle>
+                <CardDescription>
+                  נרשמו לפני מעבר לדף הסליקה; לאחר תשלום מוצלח הרשומה מסומנת כמומרת ומקושרת למספר הזמנה במסד העסקאות
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="overflow-auto max-h-80">
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>שם</TableHead>
+                        <TableHead>טלפון</TableHead>
+                        <TableHead>אימייל</TableHead>
+                        <TableHead>מוצר</TableHead>
+                        <TableHead>דף / מחירון</TableHead>
+                        <TableHead>LowProfile</TableHead>
+                        <TableHead>עודכן</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pendingCheckoutLeads.map((row) => (
+                        <TableRow key={row.id} className="bg-amber-50/80 dark:bg-amber-950/25 border-amber-200/50">
+                          <TableCell className="text-sm">{row.name || '—'}</TableCell>
+                          <TableCell dir="ltr" className="text-start text-xs">
+                            {row.phone || '—'}
+                          </TableCell>
+                          <TableCell dir="ltr" className="text-start text-xs truncate max-w-[10rem]">
+                            {row.email || '—'}
+                          </TableCell>
+                          <TableCell className="text-sm">{row.productName || '—'}</TableCell>
+                          <TableCell className="text-xs font-mono">{row.landingSlug || row.priceListId || '—'}</TableCell>
+                          <TableCell className="font-mono text-[10px] max-w-[8rem] truncate" title={row.lowProfileCode}>
+                            {row.lowProfileCode || '—'}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-xs">
+                            {row.updatedAt ? new Date(row.updatedAt).toLocaleString('he-IL') : '—'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {!pendingCheckoutLeads.length ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center text-muted-foreground">
+                            אין רשומות — אף משתמש לא הגיע לדף תשלום מאז העדכון, או שכולם השלמו תשלום
                           </TableCell>
                         </TableRow>
                       ) : null}
