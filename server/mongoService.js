@@ -1500,6 +1500,295 @@ export async function getControlPanelOverviewStats() {
   };
 }
 
+function parseControlPanelDateRange({ fromDate, toDate, month } = {}) {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  startOfMonth.setHours(0, 0, 0, 0);
+  const range = { from: startOfMonth, to: now };
+  const monthVal = String(month || '').trim();
+  if (/^\d{4}-\d{2}$/.test(monthVal)) {
+    const [y, m] = monthVal.split('-').map(Number);
+    const from = new Date(y, m - 1, 1);
+    const to = new Date(y, m, 1);
+    to.setMilliseconds(-1);
+    range.from = from;
+    range.to = to;
+  }
+  const fromVal = String(fromDate || '').trim();
+  if (fromVal) {
+    const d = new Date(fromVal);
+    if (!Number.isNaN(d.getTime())) {
+      d.setHours(0, 0, 0, 0);
+      range.from = d;
+    }
+  }
+  const toVal = String(toDate || '').trim();
+  if (toVal) {
+    const d = new Date(toVal);
+    if (!Number.isNaN(d.getTime())) {
+      d.setHours(23, 59, 59, 999);
+      range.to = d;
+    }
+  }
+  return range;
+}
+
+export async function getControlPanelOverviewData(filters = {}) {
+  const db = await getDb();
+  const { from, to } = parseControlPanelDateRange(filters);
+  const deals = await db.collection('deals').aggregate([
+    { $match: { createdAt: { $gte: from, $lte: to } } },
+    {
+      $addFields: {
+        _productIdObj: {
+          $convert: { input: '$formState.productId', to: 'objectId', onError: null, onNull: null },
+        },
+        _agentIdObj: {
+          $convert: {
+            input: { $ifNull: ['$agentId', '$formState.agentId'] },
+            to: 'objectId',
+            onError: null,
+            onNull: null,
+          },
+        },
+        _orgName: { $ifNull: ['$organizationName', '$formState.organizationName'] },
+      },
+    },
+    { $lookup: { from: 'products', localField: '_productIdObj', foreignField: '_id', as: '_product' } },
+    { $lookup: { from: 'sales_agents', localField: '_agentIdObj', foreignField: '_id', as: '_agent' } },
+    {
+      $addFields: {
+        _product: { $arrayElemAt: ['$_product', 0] },
+        _agent: { $arrayElemAt: ['$_agent', 0] },
+      },
+    },
+    {
+      $addFields: {
+        _secondaryCount: { $size: { $ifNull: ['$formState.beneficiaries', []] } },
+        _paidSuccess: {
+          $regexMatch: {
+            input: { $toLower: { $ifNull: ['$paymentStatus', ''] } },
+            regex: '(success|paid|test_success)',
+          },
+        },
+        _isCancelled: {
+          $or: [
+            {
+              $regexMatch: {
+                input: { $toLower: { $ifNull: ['$subscriptionStatus', ''] } },
+                regex: 'cancel',
+              },
+            },
+            {
+              $regexMatch: {
+                input: { $toLower: { $ifNull: ['$status', ''] } },
+                regex: 'cancel',
+              },
+            },
+          ],
+        },
+      },
+    },
+    {
+      $addFields: {
+        _baseVendorCost: {
+          $ifNull: ['$formState.resolvedVendorCost', { $ifNull: ['$_product.providerCost', 0] }],
+        },
+        _baseAgentCommission: {
+          $ifNull: [
+            '$formState.resolvedAgentCommission',
+            {
+              $let: {
+                vars: {
+                  row: {
+                    $arrayElemAt: [
+                      {
+                        $filter: {
+                          input: { $ifNull: ['$_agent.productCommissions', []] },
+                          as: 'pc',
+                          cond: { $eq: ['$$pc.productId', '$_productIdObj'] },
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                },
+                in: { $ifNull: ['$$row.commission', 0] },
+              },
+            },
+          ],
+        },
+      },
+    },
+    {
+      $addFields: {
+        _individualsCount: { $add: [1, '$_secondaryCount'] },
+        _revenue: { $cond: [{ $and: ['$_paidSuccess', { $not: ['$_isCancelled'] }] }, { $ifNull: ['$payerAmount', 0] }, 0] },
+        _vendorCost: { $cond: [{ $and: ['$_paidSuccess', { $not: ['$_isCancelled'] }] }, { $ifNull: ['$_baseVendorCost', 0] }, 0] },
+        _agentCommission: { $cond: [{ $and: ['$_paidSuccess', { $not: ['$_isCancelled'] }] }, { $ifNull: ['$_baseAgentCommission', 0] }, 0] },
+        _isFailedPayment: {
+          $or: [
+            { $eq: [{ $toLower: { $ifNull: ['$paymentStatus', ''] } }, 'pending'] },
+            {
+              $regexMatch: {
+                input: { $toLower: { $ifNull: ['$paymentStatus', ''] } },
+                regex: '(fail|cancel|declin|error|void|refund|denied|נכשל|בוטל)',
+              },
+            },
+          ],
+        },
+        _providerName: { $ifNull: ['$_product.provider.vendorName', ''] },
+      },
+    },
+    {
+      $project: {
+        transactionId: 1,
+        createdAt: 1,
+        paymentStatus: 1,
+        payerAmount: 1,
+        formState: 1,
+        organizationId: 1,
+        organizationName: '$_orgName',
+        productName: { $ifNull: ['$_product.productName', { $ifNull: ['$_product.name', '$formState.productName'] }] },
+        providerCost: '$_vendorCost',
+        agentCommission: '$_agentCommission',
+        revenue: '$_revenue',
+        netProfit: { $subtract: [{ $subtract: ['$_revenue', '$_vendorCost'] }, '$_agentCommission'] },
+        individualsCount: '$_individualsCount',
+        isPaidSuccess: '$_paidSuccess',
+        isCancelled: '$_isCancelled',
+        isFailedPayment: '$_isFailedPayment',
+      },
+    },
+  ]).toArray();
+
+  const paidRows = deals.filter((d) => d.isPaidSuccess && !d.isCancelled);
+  const totalRevenue = paidRows.reduce((s, d) => s + Number(d.revenue || 0), 0);
+  const totalProviderPayments = paidRows.reduce((s, d) => s + Number(d.providerCost || 0), 0);
+  const totalAgentPayments = paidRows.reduce((s, d) => s + Number(d.agentCommission || 0), 0);
+  const totalNetProfit = totalRevenue - totalProviderPayments - totalAgentPayments;
+  const activeSubscribers = paidRows.reduce((s, d) => s + Number(d.individualsCount || 1), 0);
+  const totalTransactions = paidRows.length;
+  const failedPaymentRows = deals.filter((d) => d.isFailedPayment);
+
+  const orgDebtRows = await db.collection('organizations').aggregate([
+    { $match: { billingType: 'Centralized' } },
+    {
+      $lookup: {
+        from: 'deals',
+        let: { oid: { $toString: '$_id' } },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ['$organizationId', '$$oid'] },
+              createdAt: { $gte: from, $lte: to },
+              paymentStatus: { $regex: /success|paid|test_success/i },
+              subscriptionStatus: { $ne: 'Cancelled' },
+            },
+          },
+          { $count: 'activeEmployees' },
+        ],
+        as: '_active',
+      },
+    },
+    {
+      $addFields: {
+        activeEmployees: { $ifNull: [{ $arrayElemAt: ['$_active.activeEmployees', 0] }, 0] },
+        memberPrice: { $ifNull: ['$monthlyPricePerMember', 0] },
+      },
+    },
+    {
+      $project: {
+        organizationName: '$companyName',
+        activeEmployees: 1,
+        memberPrice: 1,
+        debt: { $multiply: ['$activeEmployees', '$memberPrice'] },
+      },
+    },
+    { $match: { debt: { $gt: 0 } } },
+    { $sort: { debt: -1 } },
+  ]).toArray();
+  const organizationCollectionsDebt = orgDebtRows.reduce((s, r) => s + Number(r.debt || 0), 0);
+
+  const dayMap = new Map();
+  for (const d of paidRows) {
+    const day = new Date(d.createdAt);
+    if (Number.isNaN(day.getTime())) continue;
+    const key = day.toISOString().slice(0, 10);
+    const prev = dayMap.get(key) || { date: key, revenue: 0, netProfit: 0, count: 0 };
+    prev.revenue += Number(d.revenue || 0);
+    prev.netProfit += Number(d.netProfit || 0);
+    prev.count += 1;
+    dayMap.set(key, prev);
+  }
+  const chartSeries = [...dayMap.values()].sort((a, b) => a.date.localeCompare(b.date)).map((d) => ({
+    ...d,
+    label: new Date(d.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }),
+  }));
+
+  return {
+    range: { fromDate: from.toISOString().slice(0, 10), toDate: to.toISOString().slice(0, 10) },
+    overview: {
+      totalRevenue,
+      totalNetProfit,
+      activeSubscribers,
+      totalTransactions,
+      totalProviderPayments,
+      totalAgentPayments,
+      failedPayments: failedPaymentRows.length,
+      organizationCollectionsDebt,
+      chartSeries,
+    },
+    drilldowns: {
+      activeSubscribers: paidRows.map((d) => ({
+        transactionId: d.transactionId || '',
+        fullName: d.formState?.fullName || '—',
+        individualsCount: Number(d.individualsCount || 1),
+        createdAt: d.createdAt,
+      })),
+      totalTransactions: paidRows.map((d) => ({
+        transactionId: d.transactionId || '',
+        fullName: d.formState?.fullName || '—',
+        amount: Number(d.revenue || 0),
+        createdAt: d.createdAt,
+      })),
+      totalProviderPayments: paidRows.map((d) => ({
+        transactionId: d.transactionId || '',
+        productName: d.productName || '—',
+        providerCost: Number(d.providerCost || 0),
+        createdAt: d.createdAt,
+      })),
+      totalAgentPayments: paidRows.map((d) => ({
+        transactionId: d.transactionId || '',
+        fullName: d.formState?.fullName || '—',
+        agentCommission: Number(d.agentCommission || 0),
+        createdAt: d.createdAt,
+      })),
+      failedPayments: failedPaymentRows.map((d) => ({
+        transactionId: d.transactionId || '',
+        fullName: d.formState?.fullName || '—',
+        paymentStatus: d.paymentStatus || '—',
+        amount: Number(d.payerAmount || 0),
+        createdAt: d.createdAt,
+      })),
+      organizationCollectionsDebt: orgDebtRows.map((r) => ({
+        organizationName: r.organizationName || '—',
+        activeEmployees: Number(r.activeEmployees || 0),
+        memberPrice: Number(r.memberPrice || 0),
+        debt: Number(r.debt || 0),
+      })),
+      totalNetProfit: paidRows.map((d) => ({
+        transactionId: d.transactionId || '',
+        revenue: Number(d.revenue || 0),
+        providerCost: Number(d.providerCost || 0),
+        agentCommission: Number(d.agentCommission || 0),
+        netProfit: Number(d.netProfit || 0),
+        createdAt: d.createdAt,
+      })),
+    },
+  };
+}
+
 export async function updateDealAdmin(dealId, body = {}) {
   const db = await getDb();
   const deals = db.collection('deals');

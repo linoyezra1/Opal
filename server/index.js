@@ -45,6 +45,7 @@ import {
   getOrganizationLeads,
   getPaymentArrearsDeals,
   getControlPanelOverviewStats,
+  getControlPanelOverviewData,
   updateDealAdmin,
   deleteDealAdmin,
   bulkDeleteDealsAdmin,
@@ -1747,35 +1748,11 @@ app.put('/api/admin/leads/:kind/:id', requireAdmin, async (req, res) => {
 /** Aggregated dashboard: לקוחות ללא טופס מוטבים, פיגור תשלום, פניות, וכו׳ */
 app.get('/api/admin/control-panel', requireAdmin, async (req, res) => {
   try {
-    const [
-      pendingBeneficiaryCustomers,
-      checkoutDrafts,
-      pendingCheckoutLeads,
-      paymentArrears,
-      privateLeads,
-      corporateLeads,
-      registeredOrganizations,
-      overview,
-    ] = await Promise.all([
-      getDealsPendingBeneficiaryCompletion(150),
-      listIncompleteCheckoutDrafts(80),
-      listAwaitingPaymentCheckoutLeads(80),
-      getPaymentArrearsDeals(150),
-      getContactLeads(150),
-      getOrganizationLeads(150),
-      listOrgPricingPolicies(),
-      getControlPanelOverviewStats(),
-    ]);
+    const { fromDate = '', toDate = '', month = '' } = req.query || {};
+    const dashboard = await getControlPanelOverviewData({ fromDate, toDate, month });
     res.json({
       success: true,
-      pendingBeneficiaryCustomers,
-      checkoutDrafts,
-      pendingCheckoutLeads,
-      paymentArrears,
-      privateLeads,
-      corporateLeads,
-      registeredOrganizations,
-      overview,
+      ...dashboard,
     });
   } catch (e) {
     console.error(`[${ts()}] admin/control-panel error:`, e);
