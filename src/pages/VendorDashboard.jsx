@@ -422,7 +422,11 @@ export default function VendorDashboard() {
       <ConfirmDialog
         open={!!deleteTarget}
         title="מחיקת ספק"
-        message={deleteTarget ? `למחוק את "${deleteTarget.vendorName}"?` : ''}
+        message={
+          deleteTarget
+            ? `למחוק את "${deleteTarget.vendorName}"? לא ניתן למחוק ספק זה אם יש מוצרים המשויכים אליו.`
+            : ''
+        }
         confirmLabel="מחק"
         danger
         onConfirm={confirmDelete}

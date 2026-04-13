@@ -523,6 +523,16 @@ export async function createOrganizationCompany(params) {
     params.billingType === 'Centralized' || params.billingType === 'Private'
       ? params.billingType
       : mapBillingMethodToBillingType(billingMethod);
+  const priceListIdRaw = String(params.priceListId || '').trim();
+  const priceListId = ObjectId.isValid(priceListIdRaw) ? priceListIdRaw : null;
+  const customPricing = Array.isArray(params.customPricing)
+    ? params.customPricing
+        .map((x) => ({
+          productId: String(x?.productId || '').trim(),
+          memberPrice: Math.max(0, Number(x?.memberPrice || 0)),
+        }))
+        .filter((x) => ObjectId.isValid(x.productId))
+    : [];
   const result = await db.collection('organizations').insertOne({
     companyName: params.companyName || '',
     companyId: params.companyId || '',
@@ -540,6 +550,8 @@ export async function createOrganizationCompany(params) {
     contactPerson: params.contactPerson || null,
     accounting: params.accounting || null,
     additionalContact: params.additionalContact || null,
+    priceListId,
+    customPricing,
     source: params.source || 'admin',
     status: params.status || 'active',
     createdAt: now,
@@ -629,6 +641,20 @@ export async function updateOrganizationCompany(id, params) {
   if (params.contactPerson != null) set.contactPerson = params.contactPerson || null;
   if (params.accounting != null) set.accounting = params.accounting || null;
   if (params.additionalContact != null) set.additionalContact = params.additionalContact || null;
+  if (params.priceListId != null) {
+    const pid = String(params.priceListId || '').trim();
+    set.priceListId = pid && ObjectId.isValid(pid) ? pid : null;
+  }
+  if (params.customPricing != null) {
+    set.customPricing = Array.isArray(params.customPricing)
+      ? params.customPricing
+          .map((x) => ({
+            productId: String(x?.productId || '').trim(),
+            memberPrice: Math.max(0, Number(x?.memberPrice || 0)),
+          }))
+          .filter((x) => ObjectId.isValid(x.productId))
+      : [];
+  }
   const r = await db.collection('organizations').updateOne({ _id: oid }, { $set: set });
   if (!r.matchedCount) throw new Error('ארגון לא נמצא');
   return { ok: true };
@@ -897,6 +923,15 @@ function serializeOrgDoc(doc, activeMemberCount = undefined) {
       : o.companyEmail || '';
   o.contactPhone = String(doc.contactPhone || '').trim();
   o.notes = String(doc.notes || '').trim();
+  o.priceListId = doc.priceListId ? String(doc.priceListId) : '';
+  o.customPricing = Array.isArray(doc.customPricing)
+    ? doc.customPricing
+        .map((x) => ({
+          productId: String(x?.productId || '').trim(),
+          memberPrice: Math.max(0, Number(x?.memberPrice || 0)),
+        }))
+        .filter((x) => ObjectId.isValid(x.productId))
+    : [];
   if (activeMemberCount !== undefined) o.activeMemberCount = activeMemberCount;
   return o;
 }

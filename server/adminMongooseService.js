@@ -36,6 +36,7 @@ const productSchema = new mongoose.Schema(
     baseDescription: { type: String, default: '' },
     providerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vendor', required: true },
     providerCost: { type: Number, min: 0, default: 0 },
+    /** @deprecated retail is defined by pricing modules */
     retailPrice: { type: Number, min: 0, default: 0 },
     /** ????? ????? ???? ?????? ?????? ?????? ???? */
     flowType: { type: String, enum: [PRODUCT_FLOW_TYPE], default: PRODUCT_FLOW_TYPE },
@@ -411,7 +412,6 @@ export async function createProduct(payload) {
     baseDescription: String(payload.baseDescription || ''),
     providerId: new mongoose.Types.ObjectId(providerId),
     providerCost: Math.max(0, Number(payload.providerCost || 0)),
-    retailPrice: Math.max(0, Number(payload.retailPrice || 0)),
     flowType: PRODUCT_FLOW_TYPE,
   });
   await Vendor.updateOne(
@@ -479,7 +479,6 @@ export async function updateProduct(id, payload) {
         baseDescription: String(payload.baseDescription || ''),
         providerId: nextProviderOid,
         providerCost: Math.max(0, Number(payload.providerCost || 0)),
-        retailPrice: Math.max(0, Number(payload.retailPrice || 0)),
         flowType: PRODUCT_FLOW_TYPE,
         updatedAt: new Date(),
       },
@@ -728,6 +727,67 @@ export async function getAgentCommissionForProduct(agentId, productId, lineDefau
 export async function resolveCheckoutEconomics(formState) {
   await ensureConnection();
   const fs = formState && typeof formState === 'object' ? formState : {};
+  const productId = String(fs.productId || '').trim();
+  const organizationId = String(fs.organizationId || '').trim();
+  if (organizationId && mongoose.isValidObjectId(organizationId) && productId && mongoose.isValidObjectId(productId)) {
+    const org = await mongoose.connection.db.collection('organizations').findOne({ _id: new mongoose.Types.ObjectId(organizationId) });
+    const productDoc = await Product.findById(productId).select('productName name providerCost retailPrice').lean();
+    const productName = productDoc ? String(productDoc.productName || productDoc.name || '').trim() : '';
+    const baseVendorCost = Math.max(0, Number(productDoc?.providerCost || 0));
+    const customPricing = Array.isArray(org?.customPricing) ? org.customPricing : [];
+    const cp = customPricing.find((x) => String(x?.productId || '') === String(productId));
+    if (cp) {
+      const memberPrice = Math.max(0, Number(cp.memberPrice || 0));
+      return {
+        payerAmount: memberPrice,
+        resolvedVendorCost: baseVendorCost,
+        resolvedAgentCommission: 0,
+        resolvedNetProfit: memberPrice - baseVendorCost,
+        productName,
+        productId,
+        priceListId: org?.priceListId ? String(org.priceListId) : '',
+      };
+    }
+    if (org?.priceListId && mongoose.isValidObjectId(org.priceListId)) {
+      const pl = await PriceList.findById(org.priceListId).lean();
+      const line = (pl?.lines || []).find((l) => String(l.productId) === String(productId));
+      if (line) {
+        const retail = Number(line.retailPrice || 0);
+        const vendorCost = Number(line.vendorCost || baseVendorCost || 0);
+        const lineDefault = Number(line.defaultAgentCommission || 0);
+        let agentId = String(fs.agentId || '').trim();
+        let agentCommission = lineDefault;
+        if (agentId && mongoose.isValidObjectId(agentId)) {
+          agentCommission = await getAgentCommissionForProduct(agentId, productId, lineDefault);
+        } else {
+          const resolved = await resolveAgentIdFromFormState(fs);
+          if (resolved && mongoose.isValidObjectId(resolved)) {
+            agentId = resolved;
+            agentCommission = await getAgentCommissionForProduct(resolved, productId, lineDefault);
+          }
+        }
+        return {
+          payerAmount: retail,
+          resolvedVendorCost: vendorCost,
+          resolvedAgentCommission: agentCommission,
+          resolvedNetProfit: retail - vendorCost - agentCommission,
+          productName,
+          productId,
+          priceListId: String(org.priceListId),
+        };
+      }
+    }
+    const defaultRetail = Math.max(0, Number(productDoc?.retailPrice || 0));
+    return {
+      payerAmount: defaultRetail,
+      resolvedVendorCost: baseVendorCost,
+      resolvedAgentCommission: 0,
+      resolvedNetProfit: defaultRetail - baseVendorCost,
+      productName,
+      productId,
+      priceListId: '',
+    };
+  }
   /** ????? ??????? ?? ???? ????? (????? ????) ? ???? ????? ??????? */
   if (fs.orgPrivateEnrollment === true && Number(fs.orgPrivatePrice) > 0) {
     const p = Number(fs.orgPrivatePrice);
@@ -742,7 +802,6 @@ export async function resolveCheckoutEconomics(formState) {
     };
   }
   const priceListId = String(fs.priceListId || '').trim();
-  const productId = String(fs.productId || '').trim();
 
   if (priceListId && productId && mongoose.isValidObjectId(priceListId) && mongoose.isValidObjectId(productId)) {
     const pl = await PriceList.findById(priceListId).lean();
@@ -860,13 +919,20 @@ export async function createPriceList(payload) {
   const linesIn = Array.isArray(payload.lines) ? payload.lines : [];
   const lines = [];
   for (const row of linesIn) {
-    const vid = row.vendorId;
     const pid = row.productId;
+    const productDoc = mongoose.isValidObjectId(pid)
+      ? await Product.findById(pid).select('providerId providerCost').lean()
+      : null;
+    const vid = row.vendorId || (productDoc?.providerId ? String(productDoc.providerId) : '');
     if (!mongoose.isValidObjectId(vid) || !mongoose.isValidObjectId(pid)) continue;
     let vendorCost = Number(row.vendorCost ?? NaN);
     if (Number.isNaN(vendorCost)) {
-      const vc = await getVendorCostForProduct(vid, pid);
-      vendorCost = vc ? vc.vendorCost : 0;
+      if (productDoc && Number.isFinite(Number(productDoc.providerCost))) {
+        vendorCost = Number(productDoc.providerCost || 0);
+      } else {
+        const vc = await getVendorCostForProduct(vid, pid);
+        vendorCost = vc ? vc.vendorCost : 0;
+      }
     }
     const retail = Number(row.retailPrice || 0);
     const agentId = row.agentId && mongoose.isValidObjectId(row.agentId) ? row.agentId : null;
@@ -903,13 +969,20 @@ export async function updatePriceList(id, payload) {
   const linesIn = Array.isArray(payload.lines) ? payload.lines : [];
   const lines = [];
   for (const row of linesIn) {
-    const vid = row.vendorId;
     const pid = row.productId;
+    const productDoc = mongoose.isValidObjectId(pid)
+      ? await Product.findById(pid).select('providerId providerCost').lean()
+      : null;
+    const vid = row.vendorId || (productDoc?.providerId ? String(productDoc.providerId) : '');
     if (!mongoose.isValidObjectId(vid) || !mongoose.isValidObjectId(pid)) continue;
     let vendorCost = Number(row.vendorCost ?? NaN);
     if (Number.isNaN(vendorCost)) {
-      const vc = await getVendorCostForProduct(vid, pid);
-      vendorCost = vc ? vc.vendorCost : 0;
+      if (productDoc && Number.isFinite(Number(productDoc.providerCost))) {
+        vendorCost = Number(productDoc.providerCost || 0);
+      } else {
+        const vc = await getVendorCostForProduct(vid, pid);
+        vendorCost = vc ? vc.vendorCost : 0;
+      }
     }
     const retail = Number(row.retailPrice || 0);
     const agentId = row.agentId && mongoose.isValidObjectId(row.agentId) ? row.agentId : null;

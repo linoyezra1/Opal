@@ -24,8 +24,9 @@ import { Spinner } from '../components/ui/spinner.jsx';
 const TOKEN_KEY = 'opal_admin_token';
 
 const emptyLine = () => ({
-  vendorId: '',
   productId: '',
+  vendorId: '',
+  providerName: '',
   agentId: '',
   retailPrice: '',
   defaultAgentCommission: '',
@@ -75,7 +76,23 @@ export default function PricingDashboard() {
 
   const fetchLineCost = useCallback(
     async (index, vendorId, productId) => {
-      if (!token || !vendorId || !productId) return;
+      if (!vendorId || !productId) return;
+      const selectedProduct = (products || []).find((p) => String(p.id) === String(productId));
+      if (selectedProduct) {
+        setLines((prev) => {
+          const next = [...prev];
+          if (!next[index]) return prev;
+          next[index] = {
+            ...next[index],
+            vendorId: String(selectedProduct.providerId || vendorId || ''),
+            providerName: String(selectedProduct.provider?.vendorName || ''),
+            vendorCost: String(selectedProduct.providerCost ?? ''),
+          };
+          return next;
+        });
+        return;
+      }
+      if (!token) return;
       try {
         const res = await fetch(`${API_BASE}/api/vendor-products/${encodeURIComponent(vendorId)}/${encodeURIComponent(productId)}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -93,7 +110,7 @@ export default function PricingDashboard() {
         /* ignore */
       }
     },
-    [token]
+    [token, products]
   );
 
   const fetchAgentCommission = useCallback(
@@ -136,8 +153,9 @@ export default function PricingDashboard() {
     const mapped =
       (row.lines || []).length > 0
         ? row.lines.map((l) => ({
-            vendorId: l.vendorId,
             productId: l.productId,
+            vendorId: l.vendorId,
+            providerName: '',
             agentId: l.agentId || '',
             retailPrice: String(l.retailPrice ?? ''),
             defaultAgentCommission: String(l.defaultAgentCommission ?? ''),
@@ -160,8 +178,18 @@ export default function PricingDashboard() {
       const next = [...prev];
       const cur = { ...next[i], [field]: value };
       next[i] = cur;
-      const vid = field === 'vendorId' ? value : cur.vendorId;
       const pid = field === 'productId' ? value : cur.productId;
+      let vid = field === 'vendorId' ? value : cur.vendorId;
+      if (field === 'productId') {
+        const p = (products || []).find((x) => String(x.id) === String(value));
+        if (p) {
+          vid = String(p.providerId || '');
+          cur.vendorId = vid;
+          cur.providerName = String(p.provider?.vendorName || '');
+          cur.vendorCost = String(p.providerCost ?? '');
+          next[i] = cur;
+        }
+      }
       const aid = field === 'agentId' ? value : cur.agentId;
       if (vid && pid) {
         queueMicrotask(() => fetchLineCost(i, vid, pid));
@@ -190,6 +218,18 @@ export default function PricingDashboard() {
         listName,
         orgName,
         lines: lines
+          .map((l) => {
+            const p = (products || []).find((x) => String(x.id) === String(l.productId));
+            const vendorId = String(l.vendorId || p?.providerId || '');
+            return {
+              vendorId,
+              productId: l.productId,
+              agentId: l.agentId || undefined,
+              retailPrice: Number(l.retailPrice || 0),
+              defaultAgentCommission: Number(l.defaultAgentCommission || 0),
+              vendorCost: l.vendorCost === '' ? undefined : Number(l.vendorCost),
+            };
+          })
           .filter((l) => l.vendorId && l.productId)
           .map((l) => ({
             vendorId: l.vendorId,
@@ -201,7 +241,7 @@ export default function PricingDashboard() {
           })),
       };
       if (!body.lines.length) {
-        throw new Error('יש להוסיף לפחות מוצר אחד עם ספק');
+        throw new Error('יש להוסיף לפחות מוצר אחד');
       }
       const url = editId ? `${API_BASE}/api/admin/price-lists/${editId}` : `${API_BASE}/api/admin/price-lists`;
       const res = await fetch(url, {
@@ -274,7 +314,7 @@ export default function PricingDashboard() {
           <DialogHeader>
             <DialogTitle>{editId ? 'עריכת מחירון' : 'מחירון חדש'}</DialogTitle>
             <DialogDescription>
-              לכל שורה: ספק, מוצר, ואופציונלית סוכן — העמלה תימשך אוטומטית מפרופיל הסוכן (productCommissions). בלי סוכן ניתן להזין
+              לכל שורה: מוצר, ספק נקבע אוטומטית מהמוצר, ואופציונלית סוכן — העמלה תימשך אוטומטית מפרופיל הסוכן (productCommissions). בלי סוכן ניתן להזין
               עמלה ידנית.
             </DialogDescription>
           </DialogHeader>
@@ -303,22 +343,6 @@ export default function PricingDashboard() {
                 <div key={i} className="border rounded-lg p-3 space-y-3 bg-card">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 items-end">
                     <Field className="gap-1.5">
-                      <FieldLabel className="text-xs">ספק</FieldLabel>
-                      <select
-                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                        value={line.vendorId}
-                        onChange={(e) => updateLine(i, 'vendorId', e.target.value)}
-                        required
-                      >
-                        <option value="">—</option>
-                        {vendors.map((v) => (
-                          <option key={v.id} value={v.id}>
-                            {v.vendorName}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field className="gap-1.5">
                       <FieldLabel className="text-xs">מוצר</FieldLabel>
                       <select
                         className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
@@ -333,6 +357,19 @@ export default function PricingDashboard() {
                           </option>
                         ))}
                       </select>
+                    </Field>
+                    <Field className="gap-1.5">
+                      <FieldLabel className="text-xs">ספק (אוטומטי)</FieldLabel>
+                      <Input
+                        className="bg-muted"
+                        readOnly
+                        value={
+                          line.providerName ||
+                          vendors.find((v) => String(v.id) === String(line.vendorId))?.vendorName ||
+                          ''
+                        }
+                        placeholder="ייבחר אוטומטית"
+                      />
                     </Field>
                     <Field className="gap-1.5">
                       <FieldLabel className="text-xs">סוכן (אופציונלי — עמלה אוטומטית)</FieldLabel>

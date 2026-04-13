@@ -30,7 +30,6 @@ const EMPTY_FORM = {
   baseDescription: '',
   providerId: '',
   providerCost: '',
-  retailPrice: '',
   flowType: PRODUCT_FLOW_TYPE_LABEL,
 };
 
@@ -104,7 +103,6 @@ export default function ProductManagement() {
           baseDescription: form.baseDescription,
           providerId: form.providerId,
           providerCost: Number(form.providerCost || 0),
-          retailPrice: Number(form.retailPrice || 0),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -137,7 +135,6 @@ export default function ProductManagement() {
           baseDescription: editProduct.baseDescription ?? '',
           providerId: editProduct.providerId,
           providerCost: Number(editProduct.providerCost || 0),
-          retailPrice: Number(editProduct.retailPrice || 0),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -179,7 +176,6 @@ export default function ProductManagement() {
       baseDescription: p.baseDescription || '',
       providerId: p.providerId || p.provider?.id || '',
       providerCost: String(p.providerCost ?? ''),
-      retailPrice: String(p.retailPrice ?? ''),
       provider: p.provider || null,
       flowType: p.flowType || PRODUCT_FLOW_TYPE_LABEL,
     });
@@ -286,30 +282,17 @@ export default function ProductManagement() {
                   rows={3}
                 />
               </Field>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field>
-                  <FieldLabel>עלות ספק (₪)</FieldLabel>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    dir="ltr"
-                    value={form.providerCost}
-                    onChange={(e) => setForm((p) => ({ ...p, providerCost: e.target.value }))}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel>מחיר מכירה (₪)</FieldLabel>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    dir="ltr"
-                    value={form.retailPrice}
-                    onChange={(e) => setForm((p) => ({ ...p, retailPrice: e.target.value }))}
-                  />
-                </Field>
-              </div>
+              <Field>
+                <FieldLabel>עלות ספק (₪)</FieldLabel>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  dir="ltr"
+                  value={form.providerCost}
+                  onChange={(e) => setForm((p) => ({ ...p, providerCost: e.target.value }))}
+                />
+              </Field>
             </FieldGroup>
             {error ? <p className="text-destructive text-sm">{error}</p> : null}
             <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
@@ -379,30 +362,17 @@ export default function ProductManagement() {
                     rows={3}
                   />
                 </Field>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel>עלות ספק (₪)</FieldLabel>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      dir="ltr"
-                      value={editProduct.providerCost ?? ''}
-                      onChange={(e) => setEditProduct((p) => ({ ...p, providerCost: e.target.value }))}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel>מחיר מכירה (₪)</FieldLabel>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      dir="ltr"
-                      value={editProduct.retailPrice ?? ''}
-                      onChange={(e) => setEditProduct((p) => ({ ...p, retailPrice: e.target.value }))}
-                    />
-                  </Field>
-                </div>
+                <Field>
+                  <FieldLabel>עלות ספק (₪)</FieldLabel>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    dir="ltr"
+                    value={editProduct.providerCost ?? ''}
+                    onChange={(e) => setEditProduct((p) => ({ ...p, providerCost: e.target.value }))}
+                  />
+                </Field>
               </FieldGroup>
               {error ? <p className="text-destructive text-sm">{error}</p> : null}
               <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
@@ -492,7 +462,6 @@ export default function ProductManagement() {
                       <TableHead>ספק</TableHead>
                       <TableHead>מק&quot;ט</TableHead>
                       <TableHead>עלות ספק</TableHead>
-                      <TableHead>מחיר מכירה</TableHead>
                       <TableHead>תיאור</TableHead>
                       <TableHead>נוצר</TableHead>
                       <TableHead className="w-28">פעולות</TableHead>
@@ -505,7 +474,6 @@ export default function ProductManagement() {
                         <TableCell>{p.provider?.vendorName || '—'}</TableCell>
                         <TableCell className="font-mono text-sm">{p.sku}</TableCell>
                         <TableCell dir="ltr">{Number(p.providerCost || 0)}</TableCell>
-                        <TableCell dir="ltr">{Number(p.retailPrice || 0)}</TableCell>
                         <TableCell className="max-w-xs truncate text-muted-foreground">
                           {p.baseDescription || '—'}
                         </TableCell>

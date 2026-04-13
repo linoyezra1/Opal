@@ -35,6 +35,9 @@ const emptyForm = () => ({
   billingType: 'Centralized',
   monthlyPricePerMember: '',
   subscriptionProductName: '',
+  pricingMethod: 'priceList',
+  priceListId: '',
+  customPricing: [],
   status: 'active',
   contactEmail: '',
   contactPhone: '',
@@ -58,6 +61,7 @@ export default function OrganizationsDashboard() {
   const [billingEditConfirmOpen, setBillingEditConfirmOpen] = useState(false);
   const [billingEditPending, setBillingEditPending] = useState(null);
   const [products, setProducts] = useState([]);
+  const [priceLists, setPriceLists] = useState([]);
   const [search, setSearch] = useState('');
   const [billingFilter, setBillingFilter] = useState('all');
 
@@ -66,17 +70,21 @@ export default function OrganizationsDashboard() {
     setLoading(true);
     setError('');
     try {
-      const [orgRes, prRes] = await Promise.all([
+      const [orgRes, prRes, plRes] = await Promise.all([
         fetch(`${API_BASE}/api/admin/organizations`, {
           headers: { Authorization: `Bearer ${token}` },
         }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/products`, {
           headers: { Authorization: `Bearer ${token}` },
         }).then((r) => r.json()),
+        fetch(`${API_BASE}/api/admin/price-lists`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then((r) => r.json()),
       ]);
       if (!orgRes.success) throw new Error(orgRes.error || 'טעינה נכשלה');
       setRows(Array.isArray(orgRes.rows) ? orgRes.rows : []);
       setProducts(Array.isArray(prRes?.products) ? prRes.products : []);
+      setPriceLists(Array.isArray(plRes?.lists) ? plRes.lists : []);
     } catch (e) {
       setError(e.message || 'שגיאה');
     } finally {
@@ -112,6 +120,13 @@ export default function OrganizationsDashboard() {
           addForm.billingType === 'Centralized' ? 'חיוב מרוכז חברה' : 'חיוב לקוח פרטי',
         monthlyPricePerMember: Number(addForm.monthlyPricePerMember || 0),
         subscriptionProductName: String(addForm.subscriptionProductName || '').trim(),
+        priceListId: addForm.pricingMethod === 'priceList' ? String(addForm.priceListId || '').trim() : '',
+        customPricing:
+          addForm.pricingMethod === 'custom'
+            ? (addForm.customPricing || [])
+                .filter((x) => x.productId)
+                .map((x) => ({ productId: x.productId, memberPrice: Number(x.memberPrice || 0) }))
+            : [],
         status: 'active',
         contactEmail: addForm.contactEmail.trim(),
         contactPhone: addForm.contactPhone.trim(),
@@ -148,6 +163,16 @@ export default function OrganizationsDashboard() {
         ...rest,
         monthlyPricePerMember: Number(rest.monthlyPricePerMember || 0),
         employeesCount: Number(rest.employeesCount || 0),
+        priceListId:
+          rest.pricingMethod === 'priceList'
+            ? String(rest.priceListId || '').trim()
+            : '',
+        customPricing:
+          rest.pricingMethod === 'custom'
+            ? (rest.customPricing || [])
+                .filter((x) => x.productId)
+                .map((x) => ({ productId: x.productId, memberPrice: Number(x.memberPrice || 0) }))
+            : [],
       };
       const res = await fetch(`${API_BASE}/api/admin/organizations/${encodeURIComponent(id)}`, {
         method: 'PUT',
@@ -190,6 +215,28 @@ export default function OrganizationsDashboard() {
     } else {
       setEditOrg((p) => (p ? { ...p, [section]: { ...(p[section] || {}), [field]: value } } : null));
     }
+  }
+
+  function addCustomPricingRow(target) {
+    const updater = (prev) => ({ ...prev, customPricing: [...(prev.customPricing || []), { productId: '', memberPrice: '' }] });
+    if (target === 'add') setAddForm(updater);
+    else setEditOrg((p) => (p ? updater(p) : p));
+  }
+
+  function updateCustomPricingRow(target, idx, field, value) {
+    const updater = (prev) => {
+      const list = [...(prev.customPricing || [])];
+      list[idx] = { ...(list[idx] || { productId: '', memberPrice: '' }), [field]: value };
+      return { ...prev, customPricing: list };
+    };
+    if (target === 'add') setAddForm(updater);
+    else setEditOrg((p) => (p ? updater(p) : p));
+  }
+
+  function removeCustomPricingRow(target, idx) {
+    const updater = (prev) => ({ ...prev, customPricing: (prev.customPricing || []).filter((_, i) => i !== idx) });
+    if (target === 'add') setAddForm(updater);
+    else setEditOrg((p) => (p ? updater(p) : p));
   }
 
   const filteredRows = React.useMemo(() => {
@@ -359,6 +406,76 @@ export default function OrganizationsDashboard() {
                       })}
                     </select>
                   </Field>
+                  <Field>
+                    <FieldLabel>שיטת תמחור לארגון</FieldLabel>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                      value={addForm.pricingMethod}
+                      onChange={(e) =>
+                        setAddForm((p) => ({
+                          ...p,
+                          pricingMethod: e.target.value === 'custom' ? 'custom' : 'priceList',
+                        }))
+                      }
+                    >
+                      <option value="priceList">מחירון קיים</option>
+                      <option value="custom">תמחור מותאם לארגון</option>
+                    </select>
+                  </Field>
+                  {addForm.pricingMethod === 'priceList' ? (
+                    <Field>
+                      <FieldLabel>בחר מחירון קיים</FieldLabel>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                        value={addForm.priceListId || ''}
+                        onChange={(e) => setAddForm((p) => ({ ...p, priceListId: e.target.value }))}
+                      >
+                        <option value="">ללא</option>
+                        {priceLists.map((pl) => (
+                          <option key={pl.id} value={pl.id}>
+                            {pl.listName}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  ) : (
+                    <div className="col-span-full space-y-2">
+                      <div className="flex items-center justify-between">
+                        <FieldLabel>מחיר מותאם למוצר</FieldLabel>
+                        <Button type="button" variant="link" className="h-auto p-0" onClick={() => addCustomPricingRow('add')}>
+                          + הוסף מוצר
+                        </Button>
+                      </div>
+                      {(addForm.customPricing || []).map((row, idx) => (
+                        <div key={`add-cp-${idx}`} className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end border rounded p-2">
+                          <select
+                            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                            value={row.productId || ''}
+                            onChange={(e) => updateCustomPricingRow('add', idx, 'productId', e.target.value)}
+                          >
+                            <option value="">בחר מוצר</option>
+                            {products.map((pr) => (
+                              <option key={pr.id} value={pr.id}>
+                                {pr.productName || pr.name}
+                              </option>
+                            ))}
+                          </select>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            dir="ltr"
+                            value={row.memberPrice ?? ''}
+                            onChange={(e) => updateCustomPricingRow('add', idx, 'memberPrice', e.target.value)}
+                            placeholder="מחיר חבר"
+                          />
+                          <Button type="button" variant="ghost" className="text-destructive" onClick={() => removeCustomPricingRow('add', idx)}>
+                            הסר
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </FieldGroup>
               </TabsContent>
             </Tabs>
@@ -464,6 +581,75 @@ export default function OrganizationsDashboard() {
                         })}
                       </select>
                     </Field>
+                    <Field>
+                      <FieldLabel>שיטת תמחור לארגון</FieldLabel>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                        value={editOrg.pricingMethod || 'priceList'}
+                        onChange={(e) =>
+                          setEditOrg((p) =>
+                            p ? { ...p, pricingMethod: e.target.value === 'custom' ? 'custom' : 'priceList' } : p
+                          )
+                        }
+                      >
+                        <option value="priceList">מחירון קיים</option>
+                        <option value="custom">תמחור מותאם לארגון</option>
+                      </select>
+                    </Field>
+                    {(editOrg.pricingMethod || 'priceList') === 'priceList' ? (
+                      <Field>
+                        <FieldLabel>בחר מחירון קיים</FieldLabel>
+                        <select
+                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                          value={editOrg.priceListId || ''}
+                          onChange={(e) => setEditOrg((p) => (p ? { ...p, priceListId: e.target.value } : p))}
+                        >
+                          <option value="">ללא</option>
+                          {priceLists.map((pl) => (
+                            <option key={pl.id} value={pl.id}>
+                              {pl.listName}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                    ) : (
+                      <div className="col-span-full space-y-2">
+                        <div className="flex items-center justify-between">
+                          <FieldLabel>מחיר מותאם למוצר</FieldLabel>
+                          <Button type="button" variant="link" className="h-auto p-0" onClick={() => addCustomPricingRow('edit')}>
+                            + הוסף מוצר
+                          </Button>
+                        </div>
+                        {(editOrg.customPricing || []).map((row, idx) => (
+                          <div key={`edit-cp-${idx}`} className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end border rounded p-2">
+                            <select
+                              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                              value={row.productId || ''}
+                              onChange={(e) => updateCustomPricingRow('edit', idx, 'productId', e.target.value)}
+                            >
+                              <option value="">בחר מוצר</option>
+                              {products.map((pr) => (
+                                <option key={pr.id} value={pr.id}>
+                                  {pr.productName || pr.name}
+                                </option>
+                              ))}
+                            </select>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              dir="ltr"
+                              value={row.memberPrice ?? ''}
+                              onChange={(e) => updateCustomPricingRow('edit', idx, 'memberPrice', e.target.value)}
+                              placeholder="מחיר חבר"
+                            />
+                            <Button type="button" variant="ghost" className="text-destructive" onClick={() => removeCustomPricingRow('edit', idx)}>
+                              הסר
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </FieldGroup>
                 </TabsContent>
               </Tabs>
@@ -589,7 +775,20 @@ export default function OrganizationsDashboard() {
                             <Button variant="outline" size="sm" type="button" asChild>
                               <Link to={`/admin/organizations/${encodeURIComponent(r.id)}`}>פרופיל</Link>
                             </Button>
-                            <Button variant="ghost" size="icon" type="button" onClick={() => { setEditTab('org'); setEditOrg({ ...emptyForm(), ...r, billingType: r.billingType || (r.billingMethod?.includes('מרוכז') ? 'Centralized' : 'Private') }); }}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              type="button"
+                              onClick={() => {
+                                setEditTab('org');
+                                setEditOrg({
+                                  ...emptyForm(),
+                                  ...r,
+                                  pricingMethod: Array.isArray(r.customPricing) && r.customPricing.length ? 'custom' : 'priceList',
+                                  billingType: r.billingType || (r.billingMethod?.includes('מרוכז') ? 'Centralized' : 'Private'),
+                                });
+                              }}
+                            >
                               <Edit2 className="size-4" />
                             </Button>
                             <Button variant="ghost" size="icon" type="button" onClick={() => setDeleteOrg(r)}>
