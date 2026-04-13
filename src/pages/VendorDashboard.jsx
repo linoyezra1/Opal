@@ -167,6 +167,8 @@ export default function VendorDashboard() {
   const [deleteTarget, setDeleteTarget] = React.useState(null);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [expandedVendor, setExpandedVendor] = React.useState(null);
+  const [search, setSearch] = React.useState('');
+  const [productFilter, setProductFilter] = React.useState('all');
 
   async function loadProducts() {
     const res = await fetch(`${API_BASE}/api/admin/products`, { headers: { Authorization: `Bearer ${token}` } });
@@ -384,6 +386,26 @@ export default function VendorDashboard() {
     );
   }
 
+  const filteredVendors = React.useMemo(() => {
+    const q = String(search || '').trim().toLowerCase();
+    return (vendors || []).filter((v) => {
+      const ownedProducts = Array.isArray(v.products) ? v.products : [];
+      if (productFilter === 'with_products' && ownedProducts.length === 0) return false;
+      if (productFilter === 'without_products' && ownedProducts.length > 0) return false;
+      if (!q) return true;
+      const hay = [
+        v.vendorName,
+        v.idNum,
+        v.phone,
+        v.email,
+        ...ownedProducts.map((p) => p.productName),
+      ]
+        .map((x) => String(x || '').toLowerCase())
+        .join(' | ');
+      return hay.includes(q);
+    });
+  }, [vendors, search, productFilter]);
+
   if (!token) {
     return (
       <div dir="rtl" className="min-h-screen bg-slate-50 p-6">
@@ -482,17 +504,38 @@ export default function VendorDashboard() {
         </div>
 
         <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="חיפוש חופשי: ספק, ח.פ, טלפון, אימייל, מוצר"
+              />
+              <select
+                className="flex h-10 min-w-56 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={productFilter}
+                onChange={(e) => setProductFilter(e.target.value)}
+              >
+                <option value="all">כל הספקים</option>
+                <option value="with_products">רק ספקים עם מוצרים</option>
+                <option value="without_products">ספקים ללא מוצרים</option>
+              </select>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
           <CardHeader>
             <CardTitle>רשימת ספקים</CardTitle>
             <CardDescription>
-              {vendors.length} ספקים במערכת
+              {filteredVendors.length} / {vendors.length} ספקים
               <Button variant="link" className="px-2 h-auto font-normal text-primary" type="button" onClick={() => loadVendors()}>
                 רענון
               </Button>
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {vendors.length === 0 && !loading ? (
+            {filteredVendors.length === 0 && !loading ? (
               <Empty>
                 <EmptyMedia variant="icon">
                   <Building2 className="size-8" />
@@ -518,7 +561,7 @@ export default function VendorDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {vendors.map((v) => (
+                    {filteredVendors.map((v) => (
                       <React.Fragment key={v.id}>
                         <TableRow>
                           <TableCell>
@@ -534,7 +577,7 @@ export default function VendorDashboard() {
                             {v.phone || '—'}
                           </TableCell>
                           <TableCell>
-                            <Badge variant="secondary">{(v.productLinks || []).length} מוצרים</Badge>
+                            <Badge variant="secondary">{(v.products || []).length} מוצרים</Badge>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
@@ -582,9 +625,9 @@ export default function VendorDashboard() {
                               <div className="mt-3 text-xs space-y-1">
                                 <span className="font-medium">מוצרים:</span>
                                 <ul className="list-disc list-inside">
-                                  {(v.productLinks || []).map((l, i) => (
+                                  {(v.products || []).map((l, i) => (
                                     <li key={i}>
-                                      {l.product?.productName || l.sku}: ₪{l.vendorCost} (מק&quot;ט {l.sku})
+                                      {l.productName || l.sku}: ₪{Number(l.providerCost || 0)} / ₪{Number(l.retailPrice || 0)} (מק&quot;ט {l.sku})
                                     </li>
                                   ))}
                                 </ul>

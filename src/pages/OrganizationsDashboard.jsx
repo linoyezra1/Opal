@@ -58,6 +58,8 @@ export default function OrganizationsDashboard() {
   const [billingEditConfirmOpen, setBillingEditConfirmOpen] = useState(false);
   const [billingEditPending, setBillingEditPending] = useState(null);
   const [products, setProducts] = useState([]);
+  const [search, setSearch] = useState('');
+  const [billingFilter, setBillingFilter] = useState('all');
 
   const loadRows = useCallback(async () => {
     if (!token) return;
@@ -189,6 +191,26 @@ export default function OrganizationsDashboard() {
       setEditOrg((p) => (p ? { ...p, [section]: { ...(p[section] || {}), [field]: value } } : null));
     }
   }
+
+  const filteredRows = React.useMemo(() => {
+    const q = String(search || '').trim().toLowerCase();
+    return (rows || []).filter((r) => {
+      if (billingFilter === 'centralized' && r.billingType !== 'Centralized') return false;
+      if (billingFilter === 'private' && r.billingType === 'Centralized') return false;
+      if (!q) return true;
+      const hay = [
+        r.companyName,
+        r.companyId,
+        r.contactEmail,
+        r.companyEmail,
+        r.contactPhone,
+        r.subscriptionProductName,
+      ]
+        .map((x) => String(x || '').toLowerCase())
+        .join(' | ');
+      return hay.includes(q);
+    });
+  }, [rows, search, billingFilter]);
 
   return (
     <AdminPageShell>
@@ -474,10 +496,31 @@ export default function OrganizationsDashboard() {
         </p>
 
         <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="חיפוש חופשי: ארגון, ח.פ, אימייל, טלפון, מוצר"
+              />
+              <select
+                className="flex h-10 min-w-56 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={billingFilter}
+                onChange={(e) => setBillingFilter(e.target.value)}
+              >
+                <option value="all">כל סוגי החיוב</option>
+                <option value="centralized">חיוב מרוכז</option>
+                <option value="private">חיוב פרטי</option>
+              </select>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
           <CardHeader>
             <CardTitle>רשימת ארגונים</CardTitle>
             <CardDescription>
-              {rows.length} ארגונים במערכת
+              {filteredRows.length} / {rows.length} ארגונים
               <Button
                 variant="link"
                 className="px-2 h-auto font-normal text-primary"
@@ -489,7 +532,7 @@ export default function OrganizationsDashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {rows.length === 0 && !loading ? (
+            {filteredRows.length === 0 && !loading ? (
               <Empty>
                 <EmptyMedia variant="icon"><Building2 className="size-8" /></EmptyMedia>
                 <EmptyTitle>אין ארגונים</EmptyTitle>
@@ -512,7 +555,7 @@ export default function OrganizationsDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {rows.map((r) => (
+                    {filteredRows.map((r) => (
                       <TableRow key={r.id}>
                         <TableCell className="font-medium">{r.companyName || '—'}</TableCell>
                         <TableCell>{r.companyId || '—'}</TableCell>

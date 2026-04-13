@@ -166,6 +166,8 @@ export default function AgentSetup() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [addTab, setAddTab] = useState('details');
   const [addForm, setAddForm] = useState(() => emptyForm());
+  const [search, setSearch] = useState('');
+  const [commissionFilter, setCommissionFilter] = useState('all');
 
   const loadAgents = useCallback(async () => {
     if (!token) return;
@@ -306,6 +308,26 @@ export default function AgentSetup() {
     const p = products.find((x) => x.id === productId);
     return p ? p.productName || p.name : productId;
   }
+
+  const filteredRows = React.useMemo(() => {
+    const q = String(search || '').trim().toLowerCase();
+    return (rows || []).filter((r) => {
+      const comms = Array.isArray(r.productCommissions) ? r.productCommissions : [];
+      if (commissionFilter === 'with_commission' && comms.length === 0) return false;
+      if (commissionFilter === 'without_commission' && comms.length > 0) return false;
+      if (!q) return true;
+      const hay = [
+        r.agentName,
+        r.idNum,
+        r.phone,
+        r.email,
+        ...comms.map((c) => getProductLabel(c.productId)),
+      ]
+        .map((x) => String(x || '').toLowerCase())
+        .join(' | ');
+      return hay.includes(q);
+    });
+  }, [rows, search, commissionFilter, products]);
 
   if (!token) {
     return (
@@ -644,17 +666,38 @@ export default function AgentSetup() {
         </div>
 
         <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="חיפוש חופשי: סוכן, ת״ז/ח.פ, טלפון, אימייל, מוצר"
+              />
+              <select
+                className="flex h-10 min-w-56 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={commissionFilter}
+                onChange={(e) => setCommissionFilter(e.target.value)}
+              >
+                <option value="all">כל הסוכנים</option>
+                <option value="with_commission">עם הגדרות עמלה</option>
+                <option value="without_commission">ללא הגדרות עמלה</option>
+              </select>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
           <CardHeader>
             <CardTitle>רשימת סוכנים</CardTitle>
             <CardDescription>
-              {rows.length} סוכנים במערכת
+              {filteredRows.length} / {rows.length} סוכנים
               <Button variant="link" className="px-2 h-auto font-normal text-primary" type="button" onClick={() => loadAgents()}>
                 רענון
               </Button>
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {rows.length === 0 && !loading ? (
+            {filteredRows.length === 0 && !loading ? (
               <Empty>
                 <EmptyMedia variant="icon">
                   <Users className="size-8" />
@@ -681,7 +724,7 @@ export default function AgentSetup() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {rows.map((r) => {
+                    {filteredRows.map((r) => {
                       const comms = r.productCommissions || [];
                       const preview = comms.slice(0, 2);
                       const rest = comms.length - preview.length;

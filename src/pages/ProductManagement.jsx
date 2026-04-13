@@ -24,17 +24,28 @@ import { Spinner } from '../components/ui/spinner.jsx';
 const TOKEN_KEY = 'opal_admin_token';
 const PRODUCT_FLOW_TYPE_LABEL = 'רופא עד הבית';
 
-const EMPTY_FORM = { productName: '', sku: '', baseDescription: '', flowType: PRODUCT_FLOW_TYPE_LABEL };
+const EMPTY_FORM = {
+  productName: '',
+  sku: '',
+  baseDescription: '',
+  providerId: '',
+  providerCost: '',
+  retailPrice: '',
+  flowType: PRODUCT_FLOW_TYPE_LABEL,
+};
 
 export default function ProductManagement() {
   const [token] = React.useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [form, setForm] = React.useState(EMPTY_FORM);
   const [products, setProducts] = React.useState([]);
+  const [providers, setProviders] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const [editProduct, setEditProduct] = React.useState(null);
   const [deleteTarget, setDeleteTarget] = React.useState(null);
   const [createOpen, setCreateOpen] = React.useState(false);
+  const [search, setSearch] = React.useState('');
+  const [providerFilter, setProviderFilter] = React.useState('all');
 
   async function loadProducts() {
     if (!token) return;
@@ -58,6 +69,24 @@ export default function ProductManagement() {
     loadProducts();
   }, [token]);
 
+  async function loadProviders() {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/vendors`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || 'טעינת ספקים נכשלה');
+      setProviders(Array.isArray(data.vendors) ? data.vendors : []);
+    } catch {
+      setProviders([]);
+    }
+  }
+
+  React.useEffect(() => {
+    loadProviders();
+  }, [token]);
+
   async function submit(e) {
     e.preventDefault();
     setLoading(true);
@@ -73,13 +102,16 @@ export default function ProductManagement() {
           productName: form.productName,
           sku: form.sku,
           baseDescription: form.baseDescription,
+          providerId: form.providerId,
+          providerCost: Number(form.providerCost || 0),
+          retailPrice: Number(form.retailPrice || 0),
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.error || 'שמירה נכשלה');
       setForm(EMPTY_FORM);
       setCreateOpen(false);
-      await loadProducts();
+      await Promise.all([loadProducts(), loadProviders()]);
     } catch (e2) {
       setError(e2.message || 'שגיאה');
     } finally {
@@ -103,12 +135,15 @@ export default function ProductManagement() {
           productName: editProduct.productName,
           sku: editProduct.sku,
           baseDescription: editProduct.baseDescription ?? '',
+          providerId: editProduct.providerId,
+          providerCost: Number(editProduct.providerCost || 0),
+          retailPrice: Number(editProduct.retailPrice || 0),
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.error || 'עדכון נכשל');
       setEditProduct(null);
-      await loadProducts();
+      await Promise.all([loadProducts(), loadProviders()]);
     } catch (e2) {
       setError(e2.message || 'שגיאה');
     } finally {
@@ -128,7 +163,7 @@ export default function ProductManagement() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.error || 'מחיקה נכשלה');
       setDeleteTarget(null);
-      await loadProducts();
+      await Promise.all([loadProducts(), loadProviders()]);
     } catch (e2) {
       setError(e2.message || 'שגיאה');
     } finally {
@@ -142,9 +177,30 @@ export default function ProductManagement() {
       productName: p.productName || p.name,
       sku: p.sku,
       baseDescription: p.baseDescription || '',
+      providerId: p.providerId || p.provider?.id || '',
+      providerCost: String(p.providerCost ?? ''),
+      retailPrice: String(p.retailPrice ?? ''),
+      provider: p.provider || null,
       flowType: p.flowType || PRODUCT_FLOW_TYPE_LABEL,
     });
   }
+
+  const filteredProducts = React.useMemo(() => {
+    const q = String(search || '').trim().toLowerCase();
+    return (products || []).filter((p) => {
+      if (providerFilter !== 'all' && String(p.providerId || p.provider?.id || '') !== providerFilter) return false;
+      if (!q) return true;
+      const hay = [
+        p.productName || p.name,
+        p.sku,
+        p.baseDescription,
+        p.provider?.vendorName,
+      ]
+        .map((x) => String(x || '').toLowerCase())
+        .join(' | ');
+      return hay.includes(q);
+    });
+  }, [products, search, providerFilter]);
 
   if (!token) {
     return (
@@ -206,6 +262,22 @@ export default function ProductManagement() {
                 />
               </Field>
               <Field>
+                <FieldLabel>ספק *</FieldLabel>
+                <select
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                  value={form.providerId}
+                  onChange={(e) => setForm((p) => ({ ...p, providerId: e.target.value }))}
+                  required
+                >
+                  <option value="">בחר ספק</option>
+                  {providers.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.vendorName}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field>
                 <FieldLabel>תיאור</FieldLabel>
                 <Textarea
                   value={form.baseDescription}
@@ -214,13 +286,37 @@ export default function ProductManagement() {
                   rows={3}
                 />
               </Field>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel>עלות ספק (₪)</FieldLabel>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    dir="ltr"
+                    value={form.providerCost}
+                    onChange={(e) => setForm((p) => ({ ...p, providerCost: e.target.value }))}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>מחיר מכירה (₪)</FieldLabel>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    dir="ltr"
+                    value={form.retailPrice}
+                    onChange={(e) => setForm((p) => ({ ...p, retailPrice: e.target.value }))}
+                  />
+                </Field>
+              </div>
             </FieldGroup>
             {error ? <p className="text-destructive text-sm">{error}</p> : null}
             <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
               <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
                 ביטול
               </Button>
-              <Button type="submit" disabled={loading || !form.productName.trim() || !form.sku.trim()}>
+              <Button type="submit" disabled={loading || !form.productName.trim() || !form.sku.trim() || !form.providerId}>
                 {loading && <Spinner className="me-2" />}
                 הוסף
               </Button>
@@ -251,6 +347,22 @@ export default function ProductManagement() {
                   />
                 </Field>
                 <Field>
+                  <FieldLabel>ספק *</FieldLabel>
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                    value={editProduct.providerId}
+                    onChange={(e) => setEditProduct((p) => ({ ...p, providerId: e.target.value }))}
+                    required
+                  >
+                    <option value="">בחר ספק</option>
+                    {providers.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.vendorName}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field>
                   <FieldLabel>מק&quot;ט *</FieldLabel>
                   <Input
                     value={editProduct.sku}
@@ -267,6 +379,30 @@ export default function ProductManagement() {
                     rows={3}
                   />
                 </Field>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field>
+                    <FieldLabel>עלות ספק (₪)</FieldLabel>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      dir="ltr"
+                      value={editProduct.providerCost ?? ''}
+                      onChange={(e) => setEditProduct((p) => ({ ...p, providerCost: e.target.value }))}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>מחיר מכירה (₪)</FieldLabel>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      dir="ltr"
+                      value={editProduct.retailPrice ?? ''}
+                      onChange={(e) => setEditProduct((p) => ({ ...p, retailPrice: e.target.value }))}
+                    />
+                  </Field>
+                </div>
               </FieldGroup>
               {error ? <p className="text-destructive text-sm">{error}</p> : null}
               <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
@@ -301,17 +437,41 @@ export default function ProductManagement() {
         </div>
 
         <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="חיפוש חופשי: מוצר, ספק, מק״ט, תיאור"
+              />
+              <select
+                className="flex h-10 min-w-48 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={providerFilter}
+                onChange={(e) => setProviderFilter(e.target.value)}
+              >
+                <option value="all">כל הספקים</option>
+                {providers.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.vendorName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
           <CardHeader>
             <CardTitle>רשימת מוצרים</CardTitle>
             <CardDescription>
-              {products.length} מוצרים במערכת
+              {filteredProducts.length} / {products.length} מוצרים
               <Button variant="link" className="px-2 h-auto font-normal text-primary" type="button" onClick={() => loadProducts()}>
                 רענון
               </Button>
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {products.length === 0 && !loading ? (
+            {filteredProducts.length === 0 && !loading ? (
               <Empty>
                 <EmptyMedia variant="icon">
                   <Package className="size-8" />
@@ -329,17 +489,23 @@ export default function ProductManagement() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>שם מוצר</TableHead>
+                      <TableHead>ספק</TableHead>
                       <TableHead>מק&quot;ט</TableHead>
+                      <TableHead>עלות ספק</TableHead>
+                      <TableHead>מחיר מכירה</TableHead>
                       <TableHead>תיאור</TableHead>
                       <TableHead>נוצר</TableHead>
                       <TableHead className="w-28">פעולות</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {products.map((p) => (
+                    {filteredProducts.map((p) => (
                       <TableRow key={p.id}>
                         <TableCell className="font-medium">{p.productName || p.name}</TableCell>
+                        <TableCell>{p.provider?.vendorName || '—'}</TableCell>
                         <TableCell className="font-mono text-sm">{p.sku}</TableCell>
+                        <TableCell dir="ltr">{Number(p.providerCost || 0)}</TableCell>
+                        <TableCell dir="ltr">{Number(p.retailPrice || 0)}</TableCell>
                         <TableCell className="max-w-xs truncate text-muted-foreground">
                           {p.baseDescription || '—'}
                         </TableCell>

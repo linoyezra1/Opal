@@ -34,6 +34,9 @@ const productSchema = new mongoose.Schema(
     name: { type: String, trim: true },
     sku: { type: String, required: true, trim: true, unique: true },
     baseDescription: { type: String, default: '' },
+    providerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vendor', required: true },
+    providerCost: { type: Number, min: 0, default: 0 },
+    retailPrice: { type: Number, min: 0, default: 0 },
     /** ????? ????? ???? ?????? ?????? ?????? ???? */
     flowType: { type: String, enum: [PRODUCT_FLOW_TYPE], default: PRODUCT_FLOW_TYPE },
     createdAt: { type: Date, default: Date.now },
@@ -51,6 +54,9 @@ productSchema.pre('validate', async function productValidate() {
   }
   if (!String(this.productName || '').trim()) {
     this.invalidate('productName', 'productName is required');
+  }
+  if (!this.providerId) {
+    this.invalidate('providerId', 'providerId is required');
   }
   // Locked flow policy: only the Doctor-to-Home flow is allowed.
   this.flowType = PRODUCT_FLOW_TYPE;
@@ -394,27 +400,54 @@ export async function listOrganizationPricings() {
 export async function createProduct(payload) {
   await ensureConnection();
   const productName = String(payload.productName || payload.name || '').trim();
+  const providerId = String(payload.providerId || '').trim();
+  if (!mongoose.isValidObjectId(providerId)) throw new Error('providerId is required');
+  const providerExists = await Vendor.exists({ _id: new mongoose.Types.ObjectId(providerId) });
+  if (!providerExists) throw new Error('Provider not found');
   const doc = await Product.create({
     productName,
     name: productName,
     sku: String(payload.sku || '').trim(),
     baseDescription: String(payload.baseDescription || ''),
+    providerId: new mongoose.Types.ObjectId(providerId),
+    providerCost: Math.max(0, Number(payload.providerCost || 0)),
+    retailPrice: Math.max(0, Number(payload.retailPrice || 0)),
     flowType: PRODUCT_FLOW_TYPE,
   });
+  await Vendor.updateOne(
+    { _id: new mongoose.Types.ObjectId(providerId), 'productLinks.productId': { $ne: doc._id } },
+    {
+      $push: {
+        productLinks: {
+          productId: doc._id,
+          sku: String(doc.sku || ''),
+          vendorCost: Math.max(0, Number(payload.providerCost || 0)),
+        },
+      },
+    }
+  );
   return { id: String(doc._id) };
 }
 
 export async function listProducts() {
   await ensureConnection();
-  const docs = await Product.find({}).sort({ createdAt: -1 }).lean();
+  const docs = await Product.find({}).sort({ createdAt: -1 }).populate('providerId').lean();
   return docs.map((d) => {
     const productName = d.productName || d.name || '';
+    const providerDoc = d.providerId && typeof d.providerId === 'object' ? d.providerId : null;
+    const provider = providerDoc
+      ? { id: String(providerDoc._id), vendorName: String(providerDoc.vendorName || '') }
+      : null;
     return {
       id: String(d._id),
       productName,
       name: productName,
       sku: d.sku,
       baseDescription: d.baseDescription || '',
+      providerId: provider?.id || (d.providerId ? String(d.providerId) : ''),
+      provider,
+      providerCost: Math.max(0, Number(d.providerCost || 0)),
+      retailPrice: Math.max(0, Number(d.retailPrice || 0)),
       flowType: String(d.flowType || PRODUCT_FLOW_TYPE),
       createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
     };
@@ -426,8 +459,16 @@ export async function updateProduct(id, payload) {
   if (!mongoose.isValidObjectId(id)) throw new Error('Invalid product id');
   const productName = String(payload.productName || payload.name || '').trim();
   const sku = String(payload.sku || '').trim();
-  if (!productName || !sku) throw new Error('productName and sku are required');
+  const providerId = String(payload.providerId || '').trim();
+  if (!productName || !sku || !mongoose.isValidObjectId(providerId)) {
+    throw new Error('productName, sku and providerId are required');
+  }
+  const providerExists = await Vendor.exists({ _id: new mongoose.Types.ObjectId(providerId) });
+  if (!providerExists) throw new Error('Provider not found');
   const oid = new mongoose.Types.ObjectId(id);
+  const prevExists = await Product.exists({ _id: oid });
+  if (!prevExists) throw new Error('Product not found');
+  const nextProviderOid = new mongoose.Types.ObjectId(providerId);
   const doc = await Product.findByIdAndUpdate(
     oid,
     {
@@ -436,17 +477,39 @@ export async function updateProduct(id, payload) {
         name: productName,
         sku,
         baseDescription: String(payload.baseDescription || ''),
+        providerId: nextProviderOid,
+        providerCost: Math.max(0, Number(payload.providerCost || 0)),
+        retailPrice: Math.max(0, Number(payload.retailPrice || 0)),
         flowType: PRODUCT_FLOW_TYPE,
         updatedAt: new Date(),
       },
     },
     { returnDocument: 'after', runValidators: true }
   );
-  if (!doc) throw new Error('Product not found');
   await Vendor.updateMany(
-    { 'productLinks.productId': oid },
-    { $set: { 'productLinks.$[elem].sku': sku } },
-    { arrayFilters: [{ 'elem.productId': oid }] }
+    { _id: { $ne: nextProviderOid } },
+    { $pull: { productLinks: { productId: oid } } }
+  );
+  await Vendor.updateOne(
+    { _id: nextProviderOid, 'productLinks.productId': { $ne: oid } },
+    {
+      $push: {
+        productLinks: {
+          productId: oid,
+          sku,
+          vendorCost: Math.max(0, Number(payload.providerCost || 0)),
+        },
+      },
+    }
+  );
+  await Vendor.updateOne(
+    { _id: nextProviderOid, 'productLinks.productId': oid },
+    {
+      $set: {
+        'productLinks.$.sku': sku,
+        'productLinks.$.vendorCost': Math.max(0, Number(payload.providerCost || 0)),
+      },
+    }
   );
   return { id: String(doc._id) };
 }
@@ -501,6 +564,22 @@ export async function createVendor(payload) {
 export async function listVendors() {
   await ensureConnection();
   const docs = await Vendor.find({}).sort({ createdAt: -1 }).populate('productLinks.productId').lean();
+  const vendorIds = docs.map((d) => d._id);
+  const ownedProducts = await Product.find({ providerId: { $in: vendorIds } })
+    .select('productName name sku providerId providerCost retailPrice')
+    .lean();
+  const ownedByVendor = new Map();
+  for (const p of ownedProducts) {
+    const key = String(p.providerId || '');
+    if (!ownedByVendor.has(key)) ownedByVendor.set(key, []);
+    ownedByVendor.get(key).push({
+      id: String(p._id),
+      productName: String(p.productName || p.name || ''),
+      sku: String(p.sku || ''),
+      providerCost: Math.max(0, Number(p.providerCost || 0)),
+      retailPrice: Math.max(0, Number(p.retailPrice || 0)),
+    });
+  }
   return docs.map((d) => ({
     id: String(d._id),
     vendorName: d.vendorName,
@@ -530,6 +609,7 @@ export async function listVendors() {
         product: prod,
       };
     }),
+    products: ownedByVendor.get(String(d._id)) || [],
     createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
   }));
 }
@@ -579,6 +659,8 @@ export async function deleteVendor(id) {
   await ensureConnection();
   if (!mongoose.isValidObjectId(id)) throw new Error('Invalid vendor id');
   const oid = new mongoose.Types.ObjectId(id);
+  const ownedProduct = await Product.findOne({ providerId: oid }).select('_id').lean();
+  if (ownedProduct) throw new Error('?? ???? ????? ??? ?? ?????? ???????. ?? ????? ?? ??????? ???? ??? ????');
   const pe = await PricingEntry.findOne({ vendorId: oid }).lean();
   if (pe) throw new Error('?? ???? ????? ??? ?????? ?????? ??????');
   const pl = await PriceList.findOne({ 'lines.vendorId': oid }).lean();
