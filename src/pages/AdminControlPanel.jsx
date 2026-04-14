@@ -105,10 +105,14 @@ export default function AdminControlPanel() {
       return;
     }
     if (key === 'pendingBeneficiaries' && row.id) {
-      navigate(`/admin/subscribers?editDealId=${encodeURIComponent(row.id)}`);
+      const search = String(row.transactionId || row.id || '').trim();
+      navigate(`/admin/subscribers?search=${encodeURIComponent(search)}&editId=${encodeURIComponent(row.id)}`);
       return;
     }
-    if ((key === 'activeSubscribers' || key === 'totalTransactions') && row.id) navigate(`/admin/subscribers?editDealId=${encodeURIComponent(row.id)}`);
+    if ((key === 'activeSubscribers' || key === 'totalTransactions') && row.id) {
+      const search = String(row.transactionId || row.id || '').trim();
+      navigate(`/admin/subscribers?search=${encodeURIComponent(search)}&editId=${encodeURIComponent(row.id)}`);
+    }
     if (key === 'totalAgentPayments' && row.agentId) navigate('/admin/agents');
     if (key === 'organizationCollectionsDebt' && row.organizationId) navigate('/admin/organizations');
   }
@@ -200,8 +204,8 @@ export default function AdminControlPanel() {
                           <Check className="size-4 me-1" />טופל
                         </Button>
                       ) : (
-                        <Button size="sm" variant="outline" onClick={() => openQuickEdit(modalKey, row)}>
-                          <Pencil className="size-4 me-1" />View/Edit
+                        <Button size="icon" variant="outline" onClick={() => openQuickEdit(modalKey, row)} aria-label="עריכה">
+                          <Pencil className="size-4" />
                         </Button>
                       )}
                     </TableCell>

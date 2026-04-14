@@ -243,12 +243,20 @@ export default function SubscribersDashboard() {
   }, []);
 
   useEffect(() => {
-    const editId = String(searchParams.get('editDealId') || '').trim();
+    const search = String(searchParams.get('search') || '').trim();
+    if (search && search !== liveSearch) {
+      setLiveSearch(search);
+    }
+  }, [searchParams, liveSearch]);
+
+  useEffect(() => {
+    const editId = String(searchParams.get('editId') || searchParams.get('editDealId') || '').trim();
     if (!editId) return;
     const row = (data.rows || []).find((r) => String(r.id || '') === editId);
     if (!row) return;
     openEdit(row);
     const next = new URLSearchParams(searchParams);
+    next.delete('editId');
     next.delete('editDealId');
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams, data.rows]);
