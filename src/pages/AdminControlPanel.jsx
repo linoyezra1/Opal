@@ -46,6 +46,36 @@ const CARD_META = {
   contactTasks: { title: 'פניות צור קשר', icon: CreditCard, task: true },
 };
 
+const HEADER_LABELS = {
+  id: 'מזהה',
+  orderId: 'מספר הזמנה',
+  transactionId: 'מספר הזמנה',
+  customerName: 'שם לקוח',
+  fullName: 'שם לקוח',
+  phoneNumber: 'טלפון',
+  phone: 'טלפון',
+  email: 'אימייל',
+  retailPrice: 'מחיר מכירה',
+  providerCost: 'עלות ספק',
+  providerId: 'ספק',
+  vendorName: 'ספק',
+  status: 'סטטוס',
+  cardcomStatus: 'סטטוס סליקה',
+  createdAt: 'תאריך',
+  updatedAt: 'תאריך',
+  date: 'תאריך',
+  isHandled: 'סטטוס טיפול',
+  agentName: 'סוכן',
+  orgName: 'ארגון',
+  organizationName: 'ארגון',
+  price: 'מחיר',
+  comments: 'הערות',
+};
+
+function labelForColumn(key) {
+  return HEADER_LABELS[key] || key;
+}
+
 export default function AdminControlPanel() {
   const navigate = useNavigate();
   const [token] = React.useState(() => localStorage.getItem(TOKEN_KEY) || '');
@@ -84,7 +114,8 @@ export default function AdminControlPanel() {
 
   function openQuickEdit(key, row) {
     if (key === 'abandonedCarts' && row.id) {
-      navigate(`/admin/contacts?search=${encodeURIComponent(row.id)}&editKind=abandoned&editId=${encodeURIComponent(row.id)}`);
+      const search = String(row.name || row.customerName || row.fullName || row.id || '').trim();
+      navigate(`/admin/contacts?search=${encodeURIComponent(search)}&editKind=abandoned&editId=${encodeURIComponent(row.id)}`);
       return;
     }
     if (key === 'contactTasks' && row.id) {
@@ -186,7 +217,7 @@ export default function AdminControlPanel() {
           </DialogHeader>
           <div className="max-h-[65vh] overflow-auto rounded-md border">
             <Table>
-              <TableHeader><TableRow>{columns.map((c) => <TableHead key={c}>{c}</TableHead>)}{modalKey !== 'totalProviderPayments' && modalKey !== 'totalAgentPayments' ? <TableHead>פעולה</TableHead> : null}</TableRow></TableHeader>
+              <TableHeader><TableRow>{columns.map((c) => <TableHead key={c}>{labelForColumn(c)}</TableHead>)}{modalKey !== 'totalProviderPayments' && modalKey !== 'totalAgentPayments' ? <TableHead>פעולה</TableHead> : null}</TableRow></TableHeader>
               <TableBody>
                 {rows.map((row, idx) => (
                   <TableRow key={`${modalKey}-${idx}`}>

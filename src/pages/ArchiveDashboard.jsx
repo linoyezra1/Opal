@@ -18,6 +18,34 @@ const TAB_CONFIG = [
   { key: 'orgContacts', label: 'פניות - ארגון' },
 ];
 
+const HEADER_LABELS = {
+  id: 'מזהה',
+  orderId: 'מספר הזמנה',
+  transactionId: 'מספר הזמנה',
+  customerName: 'שם לקוח',
+  fullName: 'שם לקוח',
+  phoneNumber: 'טלפון',
+  phone: 'טלפון',
+  email: 'אימייל',
+  retailPrice: 'מחיר מכירה',
+  providerCost: 'עלות ספק',
+  providerId: 'ספק',
+  vendorName: 'ספק',
+  status: 'סטטוס',
+  cardcomStatus: 'סטטוס סליקה',
+  createdAt: 'תאריך',
+  updatedAt: 'תאריך',
+  date: 'תאריך',
+  isHandled: 'סטטוס טיפול',
+  agentName: 'סוכן',
+  orgName: 'ארגון',
+  organizationName: 'ארגון',
+};
+
+function labelForColumn(key) {
+  return HEADER_LABELS[key] || key;
+}
+
 export default function ArchiveDashboard() {
   const [token] = React.useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [data, setData] = React.useState({});
@@ -83,7 +111,7 @@ export default function ArchiveDashboard() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          {columns.slice(0, 5).map((c) => <TableHead key={c}>{c}</TableHead>)}
+                          {columns.slice(0, 5).map((c) => <TableHead key={c}>{labelForColumn(c)}</TableHead>)}
                           <TableHead>פעולה</TableHead>
                         </TableRow>
                       </TableHeader>

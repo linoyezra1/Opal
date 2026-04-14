@@ -349,7 +349,7 @@ export default function AgentSetup() {
         title="מחיקת סוכן"
         message={
           deleteAgent
-            ? `להפוך את "${deleteAgent.agentName}" ללא פעיל?${deleteAgent.totalSales > 0 ? ' (לא ניתן אם יש עסקאות מקושרות)' : ''}`
+            ? `להפוך את "${deleteAgent.agentName}" ללא פעיל? פעולה זו תעביר את המידע לארכיון.${deleteAgent.totalSales > 0 ? ' (לא ניתן אם יש עסקאות מקושרות)' : ''}`
             : ''
         }
         confirmLabel="הפוך ללא פעיל"

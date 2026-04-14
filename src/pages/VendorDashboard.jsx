@@ -426,7 +426,7 @@ export default function VendorDashboard() {
         title="מחיקת ספק"
         message={
           deleteTarget
-            ? `להפוך את "${deleteTarget.vendorName}" ללא פעיל? לא ניתן לנטרל ספק זה אם יש מוצרים המשויכים אליו.`
+            ? `להפוך את "${deleteTarget.vendorName}" ללא פעיל? פעולה זו תעביר את המידע לארכיון. לא ניתן לנטרל ספק זה אם יש מוצרים המשויכים אליו.`
             : ''
         }
         confirmLabel="הפוך ללא פעיל"

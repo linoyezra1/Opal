@@ -266,7 +266,7 @@ export default function OrganizationsDashboard() {
       <ConfirmDialog
         open={!!deleteOrg}
         title="מחיקת ארגון"
-        message={deleteOrg ? `להפוך את "${deleteOrg.companyName}" ללא פעיל?` : ''}
+        message={deleteOrg ? `להפוך את "${deleteOrg.companyName}" ללא פעיל? פעולה זו תעביר את המידע לארכיון.` : ''}
         confirmLabel="הפוך ללא פעיל"
         danger
         onConfirm={confirmDelete}

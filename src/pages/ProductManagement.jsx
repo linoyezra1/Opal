@@ -218,7 +218,7 @@ export default function ProductManagement() {
         title="מחיקת מוצר"
         message={
           deleteTarget
-            ? `להפוך את "${deleteTarget.productName || deleteTarget.name}" (${deleteTarget.sku}) ללא פעיל?`
+            ? `להפוך את "${deleteTarget.productName || deleteTarget.name}" (${deleteTarget.sku}) ללא פעיל? פעולה זו תעביר את המידע לארכיון.`
             : ''
         }
         confirmLabel="הפוך ללא פעיל"
