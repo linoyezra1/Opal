@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   Plus,
   Edit2,
-  Trash2,
+  Archive,
   Building2,
   CreditCard,
   ChevronDown,
@@ -29,6 +29,7 @@ import { FieldGroup, Field, FieldLabel } from '../components/ui/field.jsx';
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '../components/ui/empty.jsx';
 import { Badge } from '../components/ui/badge.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -307,7 +308,7 @@ export default function VendorDashboard() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) throw new Error(data.error || 'מחיקה נכשלה');
+      if (!res.ok || !data.success) throw new Error(data.error || 'נטרול נכשל');
       setDeleteTarget(null);
       await loadVendors();
     } catch (e2) {
@@ -418,16 +419,17 @@ export default function VendorDashboard() {
   }
 
   return (
-    <AdminPageShell>
+    <TooltipProvider delayDuration={250}>
+      <AdminPageShell>
       <ConfirmDialog
         open={!!deleteTarget}
         title="מחיקת ספק"
         message={
           deleteTarget
-            ? `למחוק את "${deleteTarget.vendorName}"? לא ניתן למחוק ספק זה אם יש מוצרים המשויכים אליו.`
+            ? `להפוך את "${deleteTarget.vendorName}" ללא פעיל? לא ניתן לנטרל ספק זה אם יש מוצרים המשויכים אליו.`
             : ''
         }
-        confirmLabel="מחק"
+        confirmLabel="הפוך ללא פעיל"
         danger
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
@@ -588,9 +590,14 @@ export default function VendorDashboard() {
                               <Button variant="ghost" size="icon" type="button" onClick={() => setEditVendor(vendorToEditForm(v))}>
                                 <Edit2 className="size-4" />
                               </Button>
-                              <Button variant="ghost" size="icon" type="button" onClick={() => setDeleteTarget(v)}>
-                                <Trash2 className="size-4 text-destructive" />
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button variant="ghost" size="icon" type="button" onClick={() => setDeleteTarget(v)} aria-label="הפוך ללא פעיל">
+                                    <Archive className="size-4 text-destructive" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>הפוך ללא פעיל</TooltipContent>
+                              </Tooltip>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -648,6 +655,7 @@ export default function VendorDashboard() {
           </CardContent>
         </Card>
       </div>
-    </AdminPageShell>
+      </AdminPageShell>
+    </TooltipProvider>
   );
 }

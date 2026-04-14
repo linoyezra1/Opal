@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, Plus, Edit2, Trash2 } from 'lucide-react';
+import { Building2, Plus, Edit2, Archive } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -21,6 +21,7 @@ import { Field, FieldGroup, FieldLabel } from '../components/ui/field.jsx';
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '../components/ui/empty.jsx';
 import { Badge } from '../components/ui/badge.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -199,7 +200,7 @@ export default function OrganizationsDashboard() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) throw new Error(data.error || 'מחיקה נכשלה');
+      if (!res.ok || !data.success) throw new Error(data.error || 'נטרול נכשל');
       setDeleteOrg(null);
       await loadRows();
     } catch (e2) {
@@ -260,12 +261,13 @@ export default function OrganizationsDashboard() {
   }, [rows, search, billingFilter]);
 
   return (
-    <AdminPageShell>
+    <TooltipProvider delayDuration={250}>
+      <AdminPageShell>
       <ConfirmDialog
         open={!!deleteOrg}
         title="מחיקת ארגון"
-        message={deleteOrg ? `למחוק את "${deleteOrg.companyName}"?` : ''}
-        confirmLabel="מחק"
+        message={deleteOrg ? `להפוך את "${deleteOrg.companyName}" ללא פעיל?` : ''}
+        confirmLabel="הפוך ללא פעיל"
         danger
         onConfirm={confirmDelete}
         onCancel={() => setDeleteOrg(null)}
@@ -791,9 +793,14 @@ export default function OrganizationsDashboard() {
                             >
                               <Edit2 className="size-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" type="button" onClick={() => setDeleteOrg(r)}>
-                              <Trash2 className="size-4 text-destructive" />
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" type="button" onClick={() => setDeleteOrg(r)} aria-label="הפוך ללא פעיל">
+                                  <Archive className="size-4 text-destructive" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>הפוך ללא פעיל</TooltipContent>
+                            </Tooltip>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -806,7 +813,8 @@ export default function OrganizationsDashboard() {
           </CardContent>
         </Card>
       </div>
-    </AdminPageShell>
+      </AdminPageShell>
+    </TooltipProvider>
   );
 }
 

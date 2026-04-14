@@ -39,51 +39,31 @@ export function PostPaymentEmail({
         backgroundColor: 'white',
       }}
     >
-      {/* Logo above headline (not inside navy band) */}
+      {/* Header with Logo */}
       <div
-        dir="rtl"
-        style={{
-          padding: '24px 32px 16px',
-          textAlign: 'center',
-          backgroundColor: 'white',
-        }}
-      >
-        <img
-          src="/images/opal-logo.jpeg"
-          alt="אופאל"
-          width={150}
-          height="auto"
-          style={{
-            display: 'block',
-            margin: '0 auto',
-            width: '150px',
-            maxWidth: '150px',
-            height: 'auto',
-            backgroundColor: 'white',
-            borderRadius: '4px',
-            padding: '4px 8px',
-            objectFit: 'contain',
-            border: 0,
-            lineHeight: 0,
-          }}
-        />
-      </div>
-      <div
-        dir="rtl"
         style={{
           backgroundColor: OPAL_BLUE,
           padding: '20px 32px',
           textAlign: 'center',
         }}
       >
+        <img
+          src="/images/opal-logo.jpeg"
+          alt="אופאל"
+          style={{
+            height: '40px',
+            marginBottom: '12px',
+            backgroundColor: 'white',
+            borderRadius: '4px',
+            padding: '4px 8px',
+          }}
+        />
         <h1
           style={{
             margin: 0,
             color: 'white',
             fontSize: '20px',
             fontWeight: 600,
-            textAlign: 'center',
-            direction: 'rtl',
           }}
         >
           שמחים על הצטרפותך למנוי {productName}
@@ -91,7 +71,7 @@ export function PostPaymentEmail({
       </div>
 
       {/* Content */}
-      <div dir="rtl" style={{ padding: '28px 32px', textAlign: 'right', direction: 'rtl' }}>
+      <div style={{ padding: '28px 32px' }}>
         {/* Greeting */}
         <p
           style={{
@@ -100,115 +80,46 @@ export function PostPaymentEmail({
             marginTop: 0,
             marginBottom: '16px',
             lineHeight: 1.7,
-            textAlign: 'right',
-            direction: 'rtl',
           }}
         >
-          שלום {customerName}, כתב השירות וגילוי הנאות מצורפים למייל זה.
+          שלום {customerName},
+          <br />
+          טופס הזמנתך מצורף למייל זה.
+          <br />
+          כתב השירות וגילוי הנאות מצורפים למייל זה.
         </p>
 
         {/* Order Summary */}
         <table
-          dir="rtl"
-          align="right"
           style={{
             width: '100%',
             borderCollapse: 'collapse',
             marginBottom: '24px',
-            direction: 'rtl',
-            textAlign: 'right',
           }}
         >
           <tbody>
             <tr>
-              <td
-                align="right"
-                style={{
-                  padding: '10px 0',
-                  color: '#666',
-                  fontSize: '14px',
-                  borderBottom: '1px solid #eee',
-                  textAlign: 'right',
-                  direction: 'rtl',
-                }}
-              >
+              <td style={{ padding: '10px 0', color: '#666', fontSize: '14px', borderBottom: '1px solid #eee' }}>
                 מספר הזמנה
               </td>
-              <td
-                align="right"
-                style={{
-                  padding: '10px 0',
-                  color: OPAL_BLUE,
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  borderBottom: '1px solid #eee',
-                  textAlign: 'right',
-                  direction: 'rtl',
-                }}
-              >
-                <span dir="ltr" style={{ unicodeBidi: 'embed' }}>
-                  {orderId}
-                </span>
+              <td style={{ padding: '10px 0', color: OPAL_BLUE, fontSize: '14px', fontWeight: 600, textAlign: 'left', borderBottom: '1px solid #eee' }}>
+                {orderId}
               </td>
             </tr>
             <tr>
-              <td
-                align="right"
-                style={{
-                  padding: '10px 0',
-                  color: '#666',
-                  fontSize: '14px',
-                  borderBottom: '1px solid #eee',
-                  textAlign: 'right',
-                  direction: 'rtl',
-                }}
-              >
+              <td style={{ padding: '10px 0', color: '#666', fontSize: '14px', borderBottom: '1px solid #eee' }}>
                 תאריך
               </td>
-              <td
-                align="right"
-                style={{
-                  padding: '10px 0',
-                  color: OPAL_BLUE,
-                  fontSize: '14px',
-                  borderBottom: '1px solid #eee',
-                  textAlign: 'right',
-                  direction: 'rtl',
-                }}
-              >
-                <span dir="ltr" style={{ unicodeBidi: 'embed' }}>
-                  {orderDate}
-                </span>
+              <td style={{ padding: '10px 0', color: OPAL_BLUE, fontSize: '14px', textAlign: 'left', borderBottom: '1px solid #eee' }}>
+                {orderDate}
               </td>
             </tr>
             <tr>
-              <td
-                align="right"
-                style={{
-                  padding: '12px 0',
-                  color: OPAL_BLUE,
-                  fontSize: '15px',
-                  fontWeight: 600,
-                  textAlign: 'right',
-                  direction: 'rtl',
-                }}
-              >
+              <td style={{ padding: '12px 0', color: OPAL_BLUE, fontSize: '15px', fontWeight: 600 }}>
                 תשלום חודשי
               </td>
-              <td
-                align="right"
-                style={{
-                  padding: '12px 0',
-                  color: OPAL_GOLD,
-                  fontSize: '18px',
-                  fontWeight: 700,
-                  textAlign: 'right',
-                  direction: 'rtl',
-                }}
-              >
-                <span dir="ltr" style={{ unicodeBidi: 'embed' }}>
-                  {monthlyTotal}
-                </span>
+              <td style={{ padding: '12px 0', color: OPAL_GOLD, fontSize: '18px', fontWeight: 700, textAlign: 'left' }}>
+                {monthlyTotal}
               </td>
             </tr>
           </tbody>
@@ -216,12 +127,10 @@ export function PostPaymentEmail({
 
         {/* Beneficiary Notice */}
         <div
-          dir="rtl"
           style={{
             borderRight: `3px solid ${OPAL_GOLD}`,
             paddingRight: '16px',
             marginBottom: '28px',
-            textAlign: 'right',
           }}
         >
           <p
@@ -231,7 +140,6 @@ export function PostPaymentEmail({
               margin: 0,
               marginBottom: '8px',
               fontWeight: 600,
-              textAlign: 'right',
             }}
           >
             להפעלת השירות יש למלא את פרטי המוטבים
@@ -242,7 +150,6 @@ export function PostPaymentEmail({
               color: '#666',
               margin: 0,
               marginBottom: '14px',
-              textAlign: 'right',
             }}
           >
             ללא קבלת פרטי המוטבים לא יהיה ניתן לקבל את השירות
@@ -268,31 +175,26 @@ export function PostPaymentEmail({
         <div style={{ borderTop: '1px solid #eee', marginBottom: '20px' }} />
 
         {/* Contact Info */}
-        <div dir="rtl" style={{ fontSize: '14px', color: '#555', lineHeight: 1.8, textAlign: 'right' }}>
-          <p style={{ margin: 0, marginBottom: '6px', textAlign: 'right' }}>
+        <div style={{ fontSize: '14px', color: '#555', lineHeight: 1.8 }}>
+          <p style={{ margin: 0, marginBottom: '6px' }}>
             <span style={{ color: OPAL_BLUE, fontWeight: 500 }}>הזמנת שירותים רפואיים:</span>{' '}
-            <span dir="ltr" style={{ unicodeBidi: 'embed' }}>
-              {servicePhone}
-            </span>
+            <span dir="ltr">{servicePhone}</span>
           </p>
-          <p style={{ margin: 0, marginBottom: '6px', textAlign: 'right' }}>
+          <p style={{ margin: 0, marginBottom: '6px' }}>
             <span style={{ color: OPAL_BLUE, fontWeight: 500 }}>הגשת מסמכים:</span>{' '}
             <a href={claimsLink} style={{ color: OPAL_GOLD, textDecoration: 'none' }}>
               תביעה און ליין
             </a>
           </p>
-          <p style={{ margin: 0, textAlign: 'right' }}>
+          <p style={{ margin: 0 }}>
             <span style={{ color: OPAL_BLUE, fontWeight: 500 }}>מכירות:</span>{' '}
-            <span dir="ltr" style={{ unicodeBidi: 'embed' }}>
-              {salesPhone}
-            </span>
+            <span dir="ltr">{salesPhone}</span>
           </p>
         </div>
       </div>
 
       {/* Footer */}
       <div
-        dir="rtl"
         style={{
           backgroundColor: '#F5F5F5',
           padding: '16px 32px',
@@ -305,13 +207,17 @@ export function PostPaymentEmail({
             color: '#666',
             margin: 0,
             marginBottom: '4px',
-            textAlign: 'center',
-            direction: 'rtl',
           }}
         >
           החיוב החודשי דרך חברת אופאל תקשורת בע״מ
         </p>
-        <p dir="ltr" style={{ fontSize: '12px', color: '#888', margin: 0, textAlign: 'center' }}>
+        <p
+          style={{
+            fontSize: '12px',
+            color: '#888',
+            margin: 0,
+          }}
+        >
           {salesPhone} | {contactEmail}
         </p>
       </div>

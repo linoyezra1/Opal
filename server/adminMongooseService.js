@@ -40,6 +40,7 @@ const productSchema = new mongoose.Schema(
     retailPrice: { type: Number, min: 0, default: 0 },
     /** ????? ????? ???? ?????? ?????? ?????? ???? */
     flowType: { type: String, enum: [PRODUCT_FLOW_TYPE], default: PRODUCT_FLOW_TYPE },
+    isActive: { type: Boolean, default: true, index: true },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
   },
@@ -89,6 +90,7 @@ const vendorSchema = new mongoose.Schema(
     branchNum: { type: String, default: '' },
     accountNum: { type: String, default: '' },
     productLinks: { type: [vendorProductLinkSchema], default: [] },
+    isActive: { type: Boolean, default: true, index: true },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
   },
@@ -153,6 +155,7 @@ const salesAgentSchema = new mongoose.Schema(
     },
     /** ???? ??????? ??? ???? (???? ?????? ????) */
     productCommissions: { type: [agentProductCommissionSchema], default: [] },
+    isActive: { type: Boolean, default: true, index: true },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
   },
@@ -429,9 +432,13 @@ export async function createProduct(payload) {
   return { id: String(doc._id) };
 }
 
-export async function listProducts() {
+export async function listProducts(options = {}) {
   await ensureConnection();
-  const docs = await Product.find({}).sort({ createdAt: -1 }).populate('providerId').lean();
+  const activeOnly = options.activeOnly !== false;
+  const docs = await Product.find(activeOnly ? { isActive: { $ne: false } } : {})
+    .sort({ createdAt: -1 })
+    .populate('providerId')
+    .lean();
   return docs.map((d) => {
     const productName = d.productName || d.name || '';
     const providerDoc = d.providerId && typeof d.providerId === 'object' ? d.providerId : null;
@@ -449,6 +456,7 @@ export async function listProducts() {
       providerCost: Math.max(0, Number(d.providerCost || 0)),
       retailPrice: Math.max(0, Number(d.retailPrice || 0)),
       flowType: String(d.flowType || PRODUCT_FLOW_TYPE),
+      isActive: d.isActive !== false,
       createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
     };
   });
@@ -523,7 +531,7 @@ export async function deleteProduct(id) {
   await Vendor.updateMany({}, { $pull: { productLinks: { productId: oid } } });
   await PricingEntry.deleteMany({ productId: oid });
   await OrgPricingPolicy.updateMany({}, { $pull: { relatedProducts: { productId: oid } } });
-  const r = await Product.findByIdAndDelete(oid);
+  const r = await Product.findByIdAndUpdate(oid, { $set: { isActive: false, updatedAt: new Date() } }, { returnDocument: 'after' });
   if (!r) throw new Error('Product not found');
   return { ok: true };
 }
@@ -560,11 +568,18 @@ export async function createVendor(payload) {
   return { id: String(doc._id) };
 }
 
-export async function listVendors() {
+export async function listVendors(options = {}) {
   await ensureConnection();
-  const docs = await Vendor.find({}).sort({ createdAt: -1 }).populate('productLinks.productId').lean();
+  const activeOnly = options.activeOnly !== false;
+  const docs = await Vendor.find(activeOnly ? { isActive: { $ne: false } } : {})
+    .sort({ createdAt: -1 })
+    .populate('productLinks.productId')
+    .lean();
   const vendorIds = docs.map((d) => d._id);
-  const ownedProducts = await Product.find({ providerId: { $in: vendorIds } })
+  const ownedProducts = await Product.find({
+    providerId: { $in: vendorIds },
+    ...(activeOnly ? { isActive: { $ne: false } } : {}),
+  })
     .select('productName name sku providerId providerCost retailPrice')
     .lean();
   const ownedByVendor = new Map();
@@ -591,6 +606,7 @@ export async function listVendors() {
     accountHolder: d.accountHolder,
     branchNum: d.branchNum,
     accountNum: d.accountNum,
+    isActive: d.isActive !== false,
     productLinks: (d.productLinks || []).map((link) => {
       const p = link.productId;
       const prod =
@@ -666,7 +682,7 @@ export async function deleteVendor(id) {
   if (pl) throw new Error('?? ???? ????? ??? ?????? ??????? ?????');
   const op = await OrgPricingPolicy.findOne({ 'relatedProducts.vendorId': oid }).lean();
   if (op) throw new Error('?? ???? ????? ??? ?????? ??????? ?????');
-  const r = await Vendor.findByIdAndDelete(oid);
+  const r = await Vendor.findByIdAndUpdate(oid, { $set: { isActive: false, updatedAt: new Date() } }, { returnDocument: 'after' });
   if (!r) throw new Error('Vendor not found');
   return { ok: true };
 }
@@ -1421,9 +1437,12 @@ export async function createSalesAgent(payload) {
   return { id: String(doc._id) };
 }
 
-export async function listSalesAgentsWithSales() {
+export async function listSalesAgentsWithSales(options = {}) {
   await ensureConnection();
-  const docs = await SalesAgent.find({}).sort({ createdAt: -1 }).lean();
+  const activeOnly = options.activeOnly !== false;
+  const docs = await SalesAgent.find(activeOnly ? { isActive: { $ne: false } } : {})
+    .sort({ createdAt: -1 })
+    .lean();
   const rows = await Promise.all(
     docs.map(async (d) => {
       const id = String(d._id);
@@ -1450,6 +1469,7 @@ export async function listSalesAgentsWithSales() {
         address: d.address,
         bankDetails: d.bankDetails || {},
         productCommissions,
+        isActive: d.isActive !== false,
         totalSales,
         createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
       };
@@ -1494,7 +1514,7 @@ export async function deleteSalesAgent(id) {
   const oid = new mongoose.Types.ObjectId(id);
   const n = await countDealsByAgentId(String(id));
   if (n > 0) throw new Error(`?? ???? ????? ???? ?? ${n} ?????? ???????`);
-  const r = await SalesAgent.findByIdAndDelete(oid);
+  const r = await SalesAgent.findByIdAndUpdate(oid, { $set: { isActive: false, updatedAt: new Date() } }, { returnDocument: 'after' });
   if (!r) throw new Error('Agent not found');
   return { ok: true };
 }
@@ -1518,8 +1538,83 @@ export async function resolveAgentIdFromFormState(formState) {
 
 export async function listPublicSalesAgents() {
   await ensureConnection();
-  const docs = await SalesAgent.find({}).sort({ agentName: 1 }).select('agentName').lean();
+  const docs = await SalesAgent.find({ isActive: { $ne: false } }).sort({ agentName: 1 }).select('agentName').lean();
   return docs.map((d) => ({ id: String(d._id), agentName: d.agentName }));
+}
+
+export async function getArchiveSnapshot(limit = 300) {
+  await ensureConnection();
+  const db = mongoose.connection.db;
+  const [products, vendors, organizations, agents, personalContacts, orgContacts] = await Promise.all([
+    listProducts({ activeOnly: false }).then((rows) => rows.filter((r) => r.isActive === false).slice(0, limit)),
+    listVendors({ activeOnly: false }).then((rows) => rows.filter((r) => r.isActive === false).slice(0, limit)),
+    db
+      .collection('organizations')
+      .find({ isActive: false })
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .limit(limit)
+      .toArray(),
+    listSalesAgentsWithSales({ activeOnly: false }).then((rows) => rows.filter((r) => r.isActive === false).slice(0, limit)),
+    db
+      .collection('contactLeads')
+      .find({ isActive: false })
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .limit(limit)
+      .toArray(),
+    db
+      .collection('organizationLeads')
+      .find({ isActive: false })
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .limit(limit)
+      .toArray(),
+  ]);
+  return {
+    products,
+    vendors,
+    organizations: organizations.map((d) => ({ id: String(d._id), ...d })),
+    agents,
+    personalContacts: personalContacts.map((d) => ({ id: String(d._id), ...d })),
+    orgContacts: orgContacts.map((d) => ({ id: String(d._id), ...d })),
+  };
+}
+
+export async function restoreArchiveItem(entity, id) {
+  await ensureConnection();
+  if (!mongoose.isValidObjectId(id)) throw new Error('Invalid id');
+  const oid = new mongoose.Types.ObjectId(id);
+  const now = new Date();
+  const e = String(entity || '').trim();
+  if (e === 'products') {
+    const r = await Product.updateOne({ _id: oid }, { $set: { isActive: true, updatedAt: now } });
+    if (!r.matchedCount) throw new Error('Product not found');
+    return { ok: true };
+  }
+  if (e === 'vendors') {
+    const r = await Vendor.updateOne({ _id: oid }, { $set: { isActive: true, updatedAt: now } });
+    if (!r.matchedCount) throw new Error('Vendor not found');
+    return { ok: true };
+  }
+  if (e === 'organizations') {
+    const r = await mongoose.connection.db.collection('organizations').updateOne({ _id: oid }, { $set: { isActive: true, updatedAt: now } });
+    if (!r.matchedCount) throw new Error('Organization not found');
+    return { ok: true };
+  }
+  if (e === 'agents') {
+    const r = await SalesAgent.updateOne({ _id: oid }, { $set: { isActive: true, updatedAt: now } });
+    if (!r.matchedCount) throw new Error('Agent not found');
+    return { ok: true };
+  }
+  if (e === 'personalContacts') {
+    const r = await mongoose.connection.db.collection('contactLeads').updateOne({ _id: oid }, { $set: { isActive: true, updatedAt: now } });
+    if (!r.matchedCount) throw new Error('Contact not found');
+    return { ok: true };
+  }
+  if (e === 'orgContacts') {
+    const r = await mongoose.connection.db.collection('organizationLeads').updateOne({ _id: oid }, { $set: { isActive: true, updatedAt: now } });
+    if (!r.matchedCount) throw new Error('Organization contact not found');
+    return { ok: true };
+  }
+  throw new Error('Unsupported archive entity');
 }
 
 export async function createOrgPricingPolicy(payload) {

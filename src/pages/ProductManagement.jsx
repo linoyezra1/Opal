@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Edit2, Trash2, Package } from 'lucide-react';
+import { Plus, Edit2, Archive, Package } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -20,6 +20,7 @@ import { Textarea } from '../components/ui/textarea.jsx';
 import { FieldGroup, Field, FieldLabel } from '../components/ui/field.jsx';
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '../components/ui/empty.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 const PRODUCT_FLOW_TYPE_LABEL = 'רופא עד הבית';
@@ -158,7 +159,7 @@ export default function ProductManagement() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) throw new Error(data.error || 'מחיקה נכשלה');
+      if (!res.ok || !data.success) throw new Error(data.error || 'נטרול נכשל');
       setDeleteTarget(null);
       await Promise.all([loadProducts(), loadProviders()]);
     } catch (e2) {
@@ -210,16 +211,17 @@ export default function ProductManagement() {
   }
 
   return (
-    <AdminPageShell>
+    <TooltipProvider delayDuration={250}>
+      <AdminPageShell>
       <ConfirmDialog
         open={!!deleteTarget}
         title="מחיקת מוצר"
         message={
           deleteTarget
-            ? `האם למחוק את "${deleteTarget.productName || deleteTarget.name}" (${deleteTarget.sku})? פעולה זו תסיר קישורים מספקים וממחירונים.`
+            ? `להפוך את "${deleteTarget.productName || deleteTarget.name}" (${deleteTarget.sku}) ללא פעיל?`
             : ''
         }
-        confirmLabel="מחק"
+        confirmLabel="הפוך ללא פעיל"
         danger
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
@@ -485,15 +487,20 @@ export default function ProductManagement() {
                             <Button variant="ghost" size="icon" type="button" onClick={() => openEdit(p)} aria-label="ערוך">
                               <Edit2 className="size-4" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              type="button"
-                              onClick={() => setDeleteTarget(p)}
-                              aria-label="מחק"
-                            >
-                              <Trash2 className="size-4 text-destructive" />
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  type="button"
+                                  onClick={() => setDeleteTarget(p)}
+                                  aria-label="הפוך ללא פעיל"
+                                >
+                                  <Archive className="size-4 text-destructive" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>הפוך ללא פעיל</TooltipContent>
+                            </Tooltip>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -506,6 +513,7 @@ export default function ProductManagement() {
           </CardContent>
         </Card>
       </div>
-    </AdminPageShell>
+      </AdminPageShell>
+    </TooltipProvider>
   );
 }

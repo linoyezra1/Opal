@@ -1,6 +1,6 @@
 import React from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Phone, RefreshCw, Search, MessageSquare, ShoppingCart, Pencil } from 'lucide-react';
+import { Phone, RefreshCw, Search, MessageSquare, ShoppingCart, Pencil, Archive } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from '../components/ui/dialog.jsx';
 import { cn } from '../lib/cn.js';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -250,7 +251,8 @@ export default function ContactManagement() {
   }
 
   return (
-    <AdminPageShell>
+    <TooltipProvider delayDuration={250}>
+      <AdminPageShell>
       <div className="space-y-6">
         <Dialog open={editOpen} onOpenChange={setEditOpen}>
           <DialogContent className="sm:max-w-xl">
@@ -444,6 +446,20 @@ export default function ContactManagement() {
                         {lead.createdAt ? new Date(lead.createdAt).toLocaleString('he-IL') : '—'}
                       </TableCell>
                       <TableCell>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              type="button"
+                              onClick={() => updateLead(lead.kind, lead.id, { isActive: false })}
+                              aria-label="הפוך ללא פעיל"
+                            >
+                              <Archive className="size-4 text-destructive" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>הפוך ללא פעיל</TooltipContent>
+                        </Tooltip>
                         <Button size="icon" variant="ghost" type="button" onClick={() => openEdit(lead)} title="עריכה" aria-label="עריכה">
                           <Pencil className="size-4" />
                         </Button>
@@ -463,6 +479,7 @@ export default function ContactManagement() {
           </CardContent>
         </Card>
       </div>
-    </AdminPageShell>
+      </AdminPageShell>
+    </TooltipProvider>
   );
 }

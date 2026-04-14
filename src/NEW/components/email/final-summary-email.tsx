@@ -43,44 +43,13 @@ export function FinalSummaryEmail({
         maxWidth: '560px',
         margin: '0 auto',
         backgroundColor: 'white',
-        textAlign: 'right',
-        direction: 'rtl',
       }}
     >
-      {/* Logo above headline — matches post-payment-email */}
+      {/* Header */}
       <div
-        dir="rtl"
-        style={{
-          padding: '24px 32px 16px',
-          textAlign: 'center',
-          backgroundColor: 'white',
-        }}
-      >
-        <img
-          src="/images/opal-logo.jpeg"
-          alt="אופאל"
-          width={150}
-          height="auto"
-          style={{
-            display: 'block',
-            margin: '0 auto',
-            width: '150px',
-            maxWidth: '150px',
-            height: 'auto',
-            backgroundColor: 'white',
-            borderRadius: '4px',
-            padding: '4px 8px',
-            objectFit: 'contain',
-            border: 0,
-            lineHeight: 0,
-          }}
-        />
-      </div>
-      <div
-        dir="rtl"
         style={{
           backgroundColor: OPAL_BLUE,
-          padding: '20px 32px',
+          padding: '28px 32px',
           textAlign: 'center',
         }}
       >
@@ -90,8 +59,6 @@ export function FinalSummaryEmail({
             fontSize: '20px',
             fontWeight: 600,
             margin: 0,
-            textAlign: 'center',
-            direction: 'rtl',
           }}
         >
           סיכום הצטרפות ופרטי מנוי
@@ -101,8 +68,6 @@ export function FinalSummaryEmail({
             color: 'rgba(255, 255, 255, 0.8)',
             fontSize: '14px',
             margin: '8px 0 0',
-            textAlign: 'center',
-            direction: 'rtl',
           }}
         >
           אופאל - רופא עד הבית
@@ -110,71 +75,34 @@ export function FinalSummaryEmail({
       </div>
 
       {/* Content */}
-      <div dir="rtl" style={{ padding: '28px 32px', textAlign: 'right', direction: 'rtl' }}>
+      <div style={{ padding: '28px 32px' }}>
         {/* Order Info */}
         <table
-          dir="rtl"
-          align="right"
           style={{
             width: '100%',
             borderCollapse: 'collapse',
             marginBottom: '24px',
-            direction: 'rtl',
-            textAlign: 'right',
           }}
         >
           <tbody>
             <tr>
-              <td
-                align="right"
-                style={{ padding: '8px 0', color: '#666', fontSize: '14px', textAlign: 'right', direction: 'rtl' }}
-              >
-                מספר הזמנה
-              </td>
-              <td
-                align="right"
-                style={{
-                  padding: '8px 0',
-                  color: OPAL_BLUE,
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  textAlign: 'right',
-                  direction: 'rtl',
-                }}
-              >
-                <span dir="ltr" style={{ unicodeBidi: 'embed' }}>
-                  {orderId}
-                </span>
-              </td>
+              <td style={{ padding: '8px 0', color: '#666', fontSize: '14px' }}>מספר הזמנה</td>
+              <td style={{ padding: '8px 0', color: OPAL_BLUE, fontSize: '14px', fontWeight: 600, textAlign: 'left' }}>{orderId}</td>
             </tr>
             <tr>
-              <td
-                align="right"
-                style={{ padding: '8px 0', color: '#666', fontSize: '14px', textAlign: 'right', direction: 'rtl' }}
-              >
-                תאריך
-              </td>
-              <td
-                align="right"
-                style={{ padding: '8px 0', color: OPAL_BLUE, fontSize: '14px', textAlign: 'right', direction: 'rtl' }}
-              >
-                <span dir="ltr" style={{ unicodeBidi: 'embed' }}>
-                  {orderDate}
-                </span>
-              </td>
+              <td style={{ padding: '8px 0', color: '#666', fontSize: '14px' }}>תאריך</td>
+              <td style={{ padding: '8px 0', color: OPAL_BLUE, fontSize: '14px', textAlign: 'left' }}>{orderDate}</td>
             </tr>
           </tbody>
         </table>
 
         {/* Primary Insured */}
         <div
-          dir="rtl"
           style={{
             backgroundColor: '#F8F9FA',
             borderRight: `4px solid ${OPAL_GOLD}`,
             padding: '16px',
             marginBottom: '20px',
-            textAlign: 'right',
           }}
         >
           <div
@@ -184,34 +112,19 @@ export function FinalSummaryEmail({
               fontWeight: 600,
               marginBottom: '8px',
               textTransform: 'uppercase',
-              textAlign: 'right',
             }}
           >
             מבוטח ראשי
           </div>
-          <table
-            dir="rtl"
-            align="right"
-            style={{ width: '100%', borderCollapse: 'collapse', direction: 'rtl', textAlign: 'right' }}
-          >
-            <tbody>
-              <tr>
-                <td align="right" style={{ textAlign: 'right', direction: 'rtl' }}>
-                  <span style={{ color: OPAL_BLUE, fontSize: '16px', fontWeight: 600 }}>{primaryInsuredName}</span>
-                </td>
-                <td align="right" style={{ textAlign: 'right', direction: 'rtl', whiteSpace: 'nowrap' }}>
-                  <span dir="ltr" style={{ unicodeBidi: 'embed', color: '#666', fontSize: '14px' }}>
-                    {primaryId}
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ color: OPAL_BLUE, fontSize: '16px', fontWeight: 600 }}>{primaryInsuredName}</span>
+            <span style={{ color: '#666', fontSize: '14px', direction: 'ltr' }}>{primaryId}</span>
+          </div>
         </div>
 
         {/* Beneficiaries */}
         {beneficiaries.length > 0 && (
-          <div dir="rtl" style={{ marginBottom: '24px', textAlign: 'right' }}>
+          <div style={{ marginBottom: '24px' }}>
             <div
               style={{
                 fontSize: '14px',
@@ -220,46 +133,35 @@ export function FinalSummaryEmail({
                 marginBottom: '12px',
                 paddingBottom: '8px',
                 borderBottom: '1px solid #eee',
-                textAlign: 'right',
               }}
             >
               מוטבים נוספים
             </div>
-            <table
-              dir="rtl"
-              align="right"
-              style={{ width: '100%', borderCollapse: 'collapse', direction: 'rtl', textAlign: 'right' }}
-            >
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <tbody>
                 {beneficiaries.map((beneficiary, index) => (
                   <tr key={index}>
                     <td
-                      align="right"
                       style={{
                         padding: '10px 0',
                         color: '#333',
                         fontSize: '14px',
                         borderBottom: index < beneficiaries.length - 1 ? '1px solid #eee' : 'none',
-                        textAlign: 'right',
-                        direction: 'rtl',
                       }}
                     >
                       {beneficiary.name}
                     </td>
                     <td
-                      align="right"
                       style={{
                         padding: '10px 0',
                         color: '#666',
                         fontSize: '14px',
+                        textAlign: 'left',
+                        direction: 'ltr',
                         borderBottom: index < beneficiaries.length - 1 ? '1px solid #eee' : 'none',
-                        textAlign: 'right',
-                        direction: 'rtl',
                       }}
                     >
-                      <span dir="ltr" style={{ unicodeBidi: 'embed' }}>
-                        {beneficiary.id}
-                      </span>
+                      {beneficiary.id}
                     </td>
                   </tr>
                 ))}
@@ -270,18 +172,15 @@ export function FinalSummaryEmail({
 
         {/* Subscription Summary */}
         <div
-          dir="rtl"
           style={{
             backgroundColor: '#F8F9FA',
             padding: '16px',
             marginBottom: '24px',
-            textAlign: 'right',
+            textAlign: 'center',
           }}
         >
-          <div style={{ color: '#666', fontSize: '13px', marginBottom: '4px', textAlign: 'right' }}>סוג מנוי</div>
-          <div
-            style={{ color: OPAL_BLUE, fontSize: '15px', fontWeight: 600, marginBottom: '12px', textAlign: 'right' }}
-          >
+          <div style={{ color: '#666', fontSize: '13px', marginBottom: '4px' }}>סוג מנוי</div>
+          <div style={{ color: OPAL_BLUE, fontSize: '15px', fontWeight: 600, marginBottom: '12px' }}>
             {subscriptionType}
           </div>
           <div
@@ -293,14 +192,9 @@ export function FinalSummaryEmail({
               fontWeight: 700,
               padding: '10px 24px',
               borderRadius: '4px',
-              textAlign: 'center',
-              direction: 'rtl',
             }}
           >
-            <span dir="ltr" style={{ unicodeBidi: 'embed' }}>
-              {monthlyTotal}
-            </span>{' '}
-            לחודש
+            {monthlyTotal} לחודש
           </div>
         </div>
 
@@ -308,8 +202,8 @@ export function FinalSummaryEmail({
         <div style={{ borderTop: '1px solid #eee', marginBottom: '20px' }} />
 
         {/* Medical Services */}
-        <div dir="rtl" style={{ textAlign: 'right', marginBottom: '24px' }}>
-          <div style={{ color: '#666', fontSize: '13px', marginBottom: '8px', textAlign: 'right' }}>
+        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <div style={{ color: '#666', fontSize: '13px', marginBottom: '8px' }}>
             טלפונים להזמנת שירותים רפואיים
           </div>
           <a
@@ -319,15 +213,13 @@ export function FinalSummaryEmail({
               fontSize: '20px',
               fontWeight: 700,
               textDecoration: 'none',
+              direction: 'ltr',
               display: 'inline-block',
-              textAlign: 'right',
             }}
           >
-            <span dir="ltr" style={{ unicodeBidi: 'embed' }}>
-              {medicalServicesPhone}
-            </span>
+            {medicalServicesPhone}
           </a>
-          <div style={{ marginTop: '16px', textAlign: 'right' }}>
+          <div style={{ marginTop: '16px' }}>
             <a
               href={claimsLink}
               style={{
@@ -344,32 +236,22 @@ export function FinalSummaryEmail({
 
         {/* Notice */}
         <div
-          dir="rtl"
           style={{
             borderRight: `3px solid ${OPAL_GOLD}`,
             paddingRight: '12px',
             fontSize: '13px',
             color: '#555',
             lineHeight: 1.6,
-            textAlign: 'right',
           }}
         >
           <strong style={{ color: OPAL_BLUE }}>שים לב:</strong> החיוב החודשי דרך חברת אופאל תקשורת בע״מ.
           <br />
-          לפניות:{' '}
-          <span dir="ltr" style={{ unicodeBidi: 'embed' }}>
-            054-4261369
-          </span>{' '}
-          |{' '}
-          <span dir="ltr" style={{ unicodeBidi: 'embed' }}>
-            opal2000@zahav.net.il
-          </span>
+          לפניות: 054-4261369 | opal2000@zahav.net.il
         </div>
       </div>
 
       {/* Footer */}
       <div
-        dir="rtl"
         style={{
           backgroundColor: '#F5F5F5',
           padding: '16px 32px',
@@ -381,8 +263,6 @@ export function FinalSummaryEmail({
             fontSize: '11px',
             color: '#888',
             margin: 0,
-            textAlign: 'center',
-            direction: 'rtl',
           }}
         >
           המנוי כפוף לכתב השירות ולגילוי נאות המצורפים למייל זה.

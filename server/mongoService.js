@@ -343,6 +343,7 @@ export async function saveContactLead(params) {
     phone: params.phone || '',
     message: params.message || '',
     source: params.source || 'site',
+    isActive: true,
     isHandled: false,
     landingSlug: params.landingSlug || '',
     category: params.category || '',
@@ -476,7 +477,7 @@ export async function listAwaitingPaymentCheckoutLeads(limit = 100) {
   const lim = Math.min(Math.max(Number(limit) || 100, 1), 300);
   const docs = await db
     .collection('pending_checkout_leads')
-    .find({ status: 'awaiting_payment' })
+    .find({ status: 'awaiting_payment', isActive: { $ne: false } })
     .sort({ updatedAt: -1 })
     .limit(lim)
     .toArray();
@@ -504,6 +505,7 @@ export async function saveOrganizationLead(params) {
     email: params.email || '',
     notes: params.notes || '',
     source: params.source || 'site',
+    isActive: true,
     isHandled: false,
     requestType: params.requestType || '',
     company: params.company || null,
@@ -557,21 +559,34 @@ export async function createOrganizationCompany(params) {
     customPricing,
     source: params.source || 'admin',
     status: params.status || 'active',
+    isActive: true,
     createdAt: now,
     updatedAt: now,
   });
   return { id: String(result.insertedId) };
 }
 
-export async function getOrganizationCompanies(limit = 300) {
+export async function getOrganizationCompanies(limit = 300, options = {}) {
   const db = await getDb();
-  const docs = await db.collection('organizations').find({}).sort({ createdAt: -1 }).limit(limit).toArray();
+  const activeOnly = options.activeOnly !== false;
+  const docs = await db
+    .collection('organizations')
+    .find(activeOnly ? { isActive: { $ne: false } } : {})
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .toArray();
   return docs.map((d) => serializeOrgDoc(d));
 }
 
-export async function getOrganizationCompaniesWithMemberCounts(limit = 400) {
+export async function getOrganizationCompaniesWithMemberCounts(limit = 400, options = {}) {
   const db = await getDb();
-  const orgs = await db.collection('organizations').find({}).sort({ createdAt: -1 }).limit(limit).toArray();
+  const activeOnly = options.activeOnly !== false;
+  const orgs = await db
+    .collection('organizations')
+    .find(activeOnly ? { isActive: { $ne: false } } : {})
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .toArray();
   if (!orgs.length) return [];
   const ids = orgs.map((o) => String(o._id));
   const agg = await db
@@ -606,7 +621,7 @@ export async function getOrganizationCompanyById(id) {
 
 export async function getPublicOrganizationForRegistration(orgId) {
   const o = await getOrganizationCompanyById(orgId);
-  if (!o || String(o.status || 'active').toLowerCase() !== 'active') return null;
+  if (!o || o.isActive === false || String(o.status || 'active').toLowerCase() !== 'active') return null;
   return {
     id: o.id,
     name: o.companyName || o.name || '',
@@ -672,8 +687,8 @@ export async function deleteOrganizationCompany(id) {
   } catch {
     throw new Error('מזהה ארגון לא תקין');
   }
-  const r = await db.collection('organizations').deleteOne({ _id: oid });
-  if (!r.deletedCount) throw new Error('ארגון לא נמצא');
+  const r = await db.collection('organizations').updateOne({ _id: oid }, { $set: { isActive: false, updatedAt: new Date() } });
+  if (!r.matchedCount) throw new Error('ארגון לא נמצא');
   return { ok: true };
 }
 
@@ -859,6 +874,7 @@ export async function updateLeadAdmin(kind, id, params) {
   const set = { updatedAt: new Date() };
   if (params.leadStatus != null) set.leadStatus = String(params.leadStatus || '').trim();
   if (params.adminNotes != null) set.adminNotes = String(params.adminNotes || '');
+  if (params.isActive != null) set.isActive = !!params.isActive;
   const r = await db.collection(col).updateOne({ _id: oid }, { $set: set });
   if (!r.matchedCount) throw new Error('ליד לא נמצא');
   return { ok: true };
@@ -921,6 +937,7 @@ function serializeOrgDoc(doc, activeMemberCount = undefined) {
   o.monthlyPricePerMember = Number(doc.monthlyPricePerMember || 0);
   o.subscriptionProductName = String(doc.subscriptionProductName || '').trim();
   o.status = String(doc.status || 'active').trim();
+  o.isActive = doc.isActive !== false;
   o.contactEmail =
     doc.contactEmail != null && String(doc.contactEmail).trim()
       ? String(doc.contactEmail).trim()
@@ -946,6 +963,7 @@ export async function getContactLeads(limit = 200) {
   const docs = await db
     .collection('contactLeads')
     .aggregate([
+      { $match: { isActive: { $ne: false } } },
       { $sort: { createdAt: -1 } },
       { $limit: limit },
       {
@@ -978,7 +996,12 @@ export async function getContactLeads(limit = 200) {
 /** B2B / corporate contact leads */
 export async function getOrganizationLeads(limit = 200) {
   const db = await getDb();
-  const docs = await db.collection('organizationLeads').find({}).sort({ createdAt: -1 }).limit(limit).toArray();
+  const docs = await db
+    .collection('organizationLeads')
+    .find({ isActive: { $ne: false } })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .toArray();
   return docs.map(serializeDocDates);
 }
 
@@ -1692,7 +1715,7 @@ export async function getControlPanelOverviewData(filters = {}) {
 
   const abandonedCartRowsAll = await db
     .collection('pending_checkout_leads')
-    .find({ status: 'awaiting_payment', updatedAt: { $gte: from, $lte: to } })
+    .find({ status: 'awaiting_payment', isActive: { $ne: false }, updatedAt: { $gte: from, $lte: to } })
     .sort({ updatedAt: -1 })
     .limit(500)
     .toArray();
@@ -1700,13 +1723,13 @@ export async function getControlPanelOverviewData(filters = {}) {
 
   const contactLeadsAll = await db
     .collection('contactLeads')
-    .find({ createdAt: { $gte: from, $lte: to } })
+    .find({ isActive: { $ne: false }, createdAt: { $gte: from, $lte: to } })
     .sort({ createdAt: -1 })
     .limit(500)
     .toArray();
   const orgLeadsAll = await db
     .collection('organizationLeads')
-    .find({ createdAt: { $gte: from, $lte: to } })
+    .find({ isActive: { $ne: false }, createdAt: { $gte: from, $lte: to } })
     .sort({ createdAt: -1 })
     .limit(500)
     .toArray();
@@ -1734,7 +1757,7 @@ export async function getControlPanelOverviewData(filters = {}) {
   ];
 
   const orgDebtRows = await db.collection('organizations').aggregate([
-    { $match: { billingType: 'Centralized' } },
+    { $match: { billingType: 'Centralized', isActive: { $ne: false } } },
     {
       $lookup: {
         from: 'deals',

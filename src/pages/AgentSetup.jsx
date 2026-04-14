@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Edit2, Trash2, Users, Percent } from 'lucide-react';
+import { Plus, Edit2, Archive, Users, Percent } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import { ISRAELI_ID_INVALID_MSG, validateIsraeliId } from '../utils/israeliId.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
@@ -22,6 +22,7 @@ import { FieldGroup, Field, FieldLabel } from '../components/ui/field.jsx';
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '../components/ui/empty.jsx';
 import { Badge } from '../components/ui/badge.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -276,7 +277,7 @@ export default function AgentSetup() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) throw new Error(data.error || 'מחיקה נכשלה');
+      if (!res.ok || !data.success) throw new Error(data.error || 'נטרול נכשל');
       setDeleteAgent(null);
       await loadAgents();
     } catch (e2) {
@@ -341,16 +342,17 @@ export default function AgentSetup() {
   }
 
   return (
-    <AdminPageShell>
+    <TooltipProvider delayDuration={250}>
+      <AdminPageShell>
       <ConfirmDialog
         open={!!deleteAgent}
         title="מחיקת סוכן"
         message={
           deleteAgent
-            ? `למחוק את "${deleteAgent.agentName}"?${deleteAgent.totalSales > 0 ? ' (לא ניתן אם יש עסקאות מקושרות)' : ''}`
+            ? `להפוך את "${deleteAgent.agentName}" ללא פעיל?${deleteAgent.totalSales > 0 ? ' (לא ניתן אם יש עסקאות מקושרות)' : ''}`
             : ''
         }
-        confirmLabel="מחק"
+        confirmLabel="הפוך ללא פעיל"
         danger
         onConfirm={confirmDelete}
         onCancel={() => setDeleteAgent(null)}
@@ -772,15 +774,20 @@ export default function AgentSetup() {
                               >
                                 <Edit2 className="size-4" />
                               </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                type="button"
-                                onClick={() => setDeleteAgent(r)}
-                                aria-label="מחק"
-                              >
-                                <Trash2 className="size-4 text-destructive" />
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    type="button"
+                                    onClick={() => setDeleteAgent(r)}
+                                    aria-label="הפוך ללא פעיל"
+                                  >
+                                    <Archive className="size-4 text-destructive" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>הפוך ללא פעיל</TooltipContent>
+                              </Tooltip>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -794,6 +801,7 @@ export default function AgentSetup() {
           </CardContent>
         </Card>
       </div>
-    </AdminPageShell>
+      </AdminPageShell>
+    </TooltipProvider>
   );
 }

@@ -15,6 +15,7 @@ import {
   Gem,
   FileText,
   MessageSquare,
+  Archive,
 } from 'lucide-react'
 
 import {
@@ -57,6 +58,7 @@ const navigationItems = [
     title: 'הגדרות',
     items: [
       { label: 'הגדרות מערכת', href: '/admin/settings', icon: Settings },
+      { label: 'ארכיון', href: '/admin/archive', icon: Archive },
     ],
   },
 ]

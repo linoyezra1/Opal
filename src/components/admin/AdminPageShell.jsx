@@ -13,6 +13,7 @@ import {
   LayoutTemplate,
   Phone,
   FileBarChart2,
+  Archive,
 } from 'lucide-react';
 import { cn } from '../../lib/cn.js';
 import { Button } from '../ui/button.jsx';
@@ -31,6 +32,7 @@ const groups = [
       { label: 'דפי נחיתה', to: '/admin/landing-pages', icon: LayoutTemplate },
       { label: 'צור קשר', to: '/admin/contacts', icon: Phone },
       { label: 'מרכז ניהול ארגונים', to: '/admin/organizations', icon: Building2 },
+      { label: 'ארכיון', to: '/admin/archive', icon: Archive },
     ],
   },
   {

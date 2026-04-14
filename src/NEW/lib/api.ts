@@ -41,6 +41,7 @@ export interface Product {
   name: string;
   sku?: string;
   description?: string;
+  isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -58,6 +59,7 @@ export interface Vendor {
   branchNum?: string;
   accountNum?: string;
   productLinks?: VendorProductLink[];
+  isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -79,6 +81,7 @@ export interface Agent {
   accountNum?: string;
   accountHolder?: string;
   commissions?: AgentCommission[];
+  isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -113,8 +116,23 @@ export interface PriceList {
   lines: PriceListLine[];
   landingUrl?: string;
   landingPageContent?: LandingPageContent;
+  isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
+}
+
+// Contact/Lead type with source differentiation
+export interface Contact {
+  id: string;
+  fullName: string;
+  phone: string;
+  email: string;
+  category: 'individual' | 'organization';
+  organizationName?: string;
+  status: 'new' | 'in_progress' | 'handled';
+  adminNotes: string;
+  isActive: boolean;
+  createdAt: string;
 }
 
 export interface Beneficiary {

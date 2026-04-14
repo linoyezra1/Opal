@@ -13,7 +13,7 @@ import {
   XCircle,
   AlertCircle,
   Send,
-  Trash2,
+  ToggleLeft,
   Edit2,
   MessageSquare,
   ShoppingCart,
@@ -178,7 +178,7 @@ export default function ContactsPage() {
   const [filterCategory, setFilterCategory] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
   const [editForm, setEditForm] = useState<Lead | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -232,9 +232,9 @@ export default function ContactsPage() {
     setEditDialogOpen(true)
   }
 
-  const openDeleteDialog = (lead: Lead) => {
+  const openDeactivateDialog = (lead: Lead) => {
     setSelectedLead(lead)
-    setDeleteDialogOpen(true)
+    setDeactivateDialogOpen(true)
   }
 
   const handleSave = async () => {
@@ -249,10 +249,11 @@ export default function ContactsPage() {
     setEditDialogOpen(false)
   }
 
-  const handleDelete = () => {
+  const handleDeactivate = () => {
     if (!selectedLead) return
+    // In real app, mark as inactive and move to archive
     setLeads(leads.filter((l) => l.id !== selectedLead.id))
-    setDeleteDialogOpen(false)
+    setDeactivateDialogOpen(false)
   }
 
   const updateStatus = (leadId: string, newStatus: Lead['status']) => {
@@ -470,14 +471,15 @@ export default function ContactsPage() {
                                 <Edit2 className="size-4" />
                               </Button>
 
-                              {/* Delete */}
+                              {/* Deactivate */}
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="size-8 text-destructive hover:text-destructive"
-                                onClick={() => openDeleteDialog(lead)}
+                                className="size-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                onClick={() => openDeactivateDialog(lead)}
+                                title="העבר לא פעיל"
                               >
-                                <Trash2 className="size-4" />
+                                <ToggleLeft className="size-4" />
                               </Button>
                             </div>
                           </TableCell>
@@ -615,11 +617,11 @@ export default function ContactsPage() {
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem 
-                              onClick={() => openDeleteDialog(lead)}
-                              className="text-destructive"
+                              onClick={() => openDeactivateDialog(lead)}
+                              className="text-amber-600"
                             >
-                              <Trash2 className="size-4 me-2" />
-                              מחיקה
+                              <ToggleLeft className="size-4 me-2" />
+                              העבר לארכיון
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -731,16 +733,15 @@ export default function ContactsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
+      {/* Deactivate Confirmation */}
       <ConfirmDialog
-        open={deleteDialogOpen}
-        onOpenChange={setDeleteDialogOpen}
-        title="מחיקת פנייה"
-        description={`האם אתה בטוח שברצונך למחוק את הפנייה של ${selectedLead?.fullName}? פעולה זו אינה ניתנת לביטול.`}
-        confirmText="מחיקה"
-        cancelText="ביטול"
-        variant="destructive"
-        onConfirm={handleDelete}
+        open={deactivateDialogOpen}
+        onOpenChange={setDeactivateDialogOpen}
+        title="העברה לארכיון"
+        description={`האם אתה בטוח שברצונך להעביר את הפנייה של ${selectedLead?.fullName} לארכיון? הפנייה תסומן כלא פעילה וניתן יהיה לשחזר אותה מדף הארכיון.`}
+        confirmLabel="העבר לארכיון"
+        variant="default"
+        onConfirm={handleDeactivate}
       />
     </div>
   )

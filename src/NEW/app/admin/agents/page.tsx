@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Edit2, Trash2, Users, Percent, Wallet } from 'lucide-react'
+import { Plus, Edit2, Users, Percent, ToggleLeft, ToggleRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -53,6 +53,7 @@ const mockAgents: Agent[] = [
       { productId: '1', commissionAmount: 50 },
       { productId: '2', commissionAmount: 75 },
     ],
+    isActive: true,
     createdAt: '2024-01-15',
   },
   {
@@ -70,6 +71,7 @@ const mockAgents: Agent[] = [
       { productId: '1', commissionAmount: 45 },
       { productId: '3', commissionAmount: 60 },
     ],
+    isActive: true,
     createdAt: '2024-02-20',
   },
 ]
@@ -90,9 +92,13 @@ interface AgentFormData {
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>(mockAgents)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isDeactivateDialogOpen, setIsDeactivateDialogOpen] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  
+  // Filter only active agents
+  const activeAgents = agents.filter(a => a.isActive)
+  
   const [formData, setFormData] = useState<AgentFormData>({
     name: '',
     phone: '',
@@ -125,7 +131,6 @@ export default function AgentsPage() {
 
   const openEditDialog = (agent: Agent) => {
     setSelectedAgent(agent)
-    // Merge existing commissions with all products
     const existingCommissions = agent.commissions || []
     const commissions = mockProducts.map(p => {
       const existing = existingCommissions.find(c => c.productId === p.id)
@@ -147,9 +152,9 @@ export default function AgentsPage() {
     setIsDialogOpen(true)
   }
 
-  const openDeleteDialog = (agent: Agent) => {
+  const openDeactivateDialog = (agent: Agent) => {
     setSelectedAgent(agent)
-    setIsDeleteDialogOpen(true)
+    setIsDeactivateDialogOpen(true)
   }
 
   const updateCommission = (productId: string, amount: number) => {
@@ -165,7 +170,6 @@ export default function AgentsPage() {
     setIsLoading(true)
     await new Promise(resolve => setTimeout(resolve, 500))
     
-    // Filter out zero commissions
     const activeCommissions = formData.commissions.filter(c => c.commissionAmount > 0)
     
     if (selectedAgent) {
@@ -179,6 +183,7 @@ export default function AgentsPage() {
         id: Date.now().toString(),
         ...formData,
         commissions: activeCommissions,
+        isActive: true,
         createdAt: new Date().toISOString().split('T')[0],
       }
       setAgents(prev => [...prev, newAgent])
@@ -188,15 +193,20 @@ export default function AgentsPage() {
     setIsDialogOpen(false)
   }
 
-  const handleDelete = async () => {
+  const handleDeactivate = async () => {
     if (!selectedAgent) return
     
     setIsLoading(true)
     await new Promise(resolve => setTimeout(resolve, 500))
     
-    setAgents(prev => prev.filter(a => a.id !== selectedAgent.id))
+    setAgents(prev => prev.map(a => 
+      a.id === selectedAgent.id 
+        ? { ...a, isActive: false }
+        : a
+    ))
+    
     setIsLoading(false)
-    setIsDeleteDialogOpen(false)
+    setIsDeactivateDialogOpen(false)
     setSelectedAgent(null)
   }
 
@@ -222,10 +232,10 @@ export default function AgentsPage() {
       <Card>
         <CardHeader>
           <CardTitle>רשימת סוכנים</CardTitle>
-          <CardDescription>{agents.length} סוכנים במערכת</CardDescription>
+          <CardDescription>{activeAgents.length} סוכנים פעילים במערכת</CardDescription>
         </CardHeader>
         <CardContent>
-          {agents.length === 0 ? (
+          {activeAgents.length === 0 ? (
             <Empty>
               <EmptyMedia variant="icon">
                 <Users className="size-8" />
@@ -246,12 +256,13 @@ export default function AgentsPage() {
                     <TableHead>ת.ז.</TableHead>
                     <TableHead>טלפון</TableHead>
                     <TableHead>אימייל</TableHead>
+                    <TableHead>סטטוס</TableHead>
                     <TableHead>עמלות</TableHead>
-                    <TableHead className="w-24">פעולות</TableHead>
+                    <TableHead className="w-28">פעולות</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {agents.map((agent) => (
+                  {activeAgents.map((agent) => (
                     <TableRow key={agent.id}>
                       <TableCell className="font-medium">{agent.name}</TableCell>
                       <TableCell dir="ltr" className="text-start font-mono text-sm">
@@ -260,6 +271,12 @@ export default function AgentsPage() {
                       <TableCell dir="ltr" className="text-start">{agent.phone || '-'}</TableCell>
                       <TableCell dir="ltr" className="text-start text-muted-foreground">
                         {agent.email || '-'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                          <ToggleRight className="size-3 me-1" />
+                          פעיל
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
@@ -282,15 +299,18 @@ export default function AgentsPage() {
                             variant="ghost"
                             size="icon"
                             onClick={() => openEditDialog(agent)}
+                            title="ערוך"
                           >
                             <Edit2 className="size-4" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => openDeleteDialog(agent)}
+                            onClick={() => openDeactivateDialog(agent)}
+                            title="העבר לא פעיל"
+                            className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                           >
-                            <Trash2 className="size-4 text-destructive" />
+                            <ToggleLeft className="size-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -471,16 +491,16 @@ export default function AgentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
+      {/* Deactivate Confirmation */}
       <ConfirmDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-        title="מחיקת סוכן"
-        description={`האם אתה בטוח שברצונך למחוק את הסוכן "${selectedAgent?.name}"? פעולה זו אינה ניתנת לביטול.`}
-        confirmLabel="מחק"
-        variant="destructive"
+        open={isDeactivateDialogOpen}
+        onOpenChange={setIsDeactivateDialogOpen}
+        title="העברה לארכיון"
+        description={`האם אתה בטוח שברצונך להעביר את הסוכן "${selectedAgent?.name}" לארכיון? הסוכן יסומן כלא פעיל וניתן יהיה לשחזר אותו מדף הארכיון.`}
+        confirmLabel="העבר לארכיון"
+        variant="default"
         isLoading={isLoading}
-        onConfirm={handleDelete}
+        onConfirm={handleDeactivate}
       />
     </div>
   )

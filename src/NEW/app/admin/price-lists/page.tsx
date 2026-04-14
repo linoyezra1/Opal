@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Edit2, Trash2, Receipt, Copy, Link2, ExternalLink } from 'lucide-react'
+import { Plus, Edit2, Trash2, Receipt, Copy, Link2, ExternalLink, ToggleLeft, ToggleRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -62,6 +62,7 @@ const mockPriceLists: PriceList[] = [
       { vendorId: '1', productId: '2', retailPrice: 350, defaultAgentCommission: 75, vendorCost: 200 },
     ],
     landingUrl: '/landing/1',
+    isActive: true,
     createdAt: '2024-01-20',
   },
   {
@@ -72,6 +73,7 @@ const mockPriceLists: PriceList[] = [
       { vendorId: '2', productId: '3', retailPrice: 300, defaultAgentCommission: 60, vendorCost: 180 },
     ],
     landingUrl: '/landing/2',
+    isActive: true,
     createdAt: '2024-02-15',
   },
 ]
@@ -85,9 +87,12 @@ interface PriceListFormData {
 export default function PriceListsPage() {
   const [priceLists, setPriceLists] = useState<PriceList[]>(mockPriceLists)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isDeactivateDialogOpen, setIsDeactivateDialogOpen] = useState(false)
   const [selectedPriceList, setSelectedPriceList] = useState<PriceList | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  
+  // Filter only active price lists
+  const activePriceLists = priceLists.filter(p => p.isActive)
   const [formData, setFormData] = useState<PriceListFormData>({
     name: '',
     organizationName: '',
@@ -115,9 +120,9 @@ export default function PriceListsPage() {
     setIsDialogOpen(true)
   }
 
-  const openDeleteDialog = (priceList: PriceList) => {
+  const openDeactivateDialog = (priceList: PriceList) => {
     setSelectedPriceList(priceList)
-    setIsDeleteDialogOpen(true)
+    setIsDeactivateDialogOpen(true)
   }
 
   const addLine = () => {
@@ -194,6 +199,7 @@ export default function PriceListsPage() {
         ...formData,
         lines: linesWithCalc,
         landingUrl: `/landing/${Date.now()}`,
+        isActive: true,
         createdAt: new Date().toISOString().split('T')[0],
       }
       setPriceLists(prev => [...prev, newPriceList])
@@ -203,15 +209,19 @@ export default function PriceListsPage() {
     setIsDialogOpen(false)
   }
 
-  const handleDelete = async () => {
+  const handleDeactivate = async () => {
     if (!selectedPriceList) return
     
     setIsLoading(true)
     await new Promise(resolve => setTimeout(resolve, 500))
     
-    setPriceLists(prev => prev.filter(p => p.id !== selectedPriceList.id))
+    setPriceLists(prev => prev.map(p => 
+      p.id === selectedPriceList.id 
+        ? { ...p, isActive: false }
+        : p
+    ))
     setIsLoading(false)
-    setIsDeleteDialogOpen(false)
+    setIsDeactivateDialogOpen(false)
     setSelectedPriceList(null)
   }
 
@@ -247,10 +257,10 @@ export default function PriceListsPage() {
       <Card>
         <CardHeader>
           <CardTitle>רשימת מחירונים</CardTitle>
-          <CardDescription>{priceLists.length} מחירונים במערכת</CardDescription>
+          <CardDescription>{activePriceLists.length} מחירונים פעילים במערכת</CardDescription>
         </CardHeader>
         <CardContent>
-          {priceLists.length === 0 ? (
+          {activePriceLists.length === 0 ? (
             <Empty>
               <EmptyMedia variant="icon">
                 <Receipt className="size-8" />
@@ -275,7 +285,7 @@ export default function PriceListsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {priceLists.map((priceList) => (
+                  {activePriceLists.map((priceList) => (
                     <TableRow key={priceList.id}>
                       <TableCell className="font-medium">{priceList.name}</TableCell>
                       <TableCell className="text-muted-foreground">
@@ -315,15 +325,18 @@ export default function PriceListsPage() {
                             variant="ghost"
                             size="icon"
                             onClick={() => openEditDialog(priceList)}
+                            title="ערוך"
                           >
                             <Edit2 className="size-4" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => openDeleteDialog(priceList)}
+                            onClick={() => openDeactivateDialog(priceList)}
+                            title="העבר לא פעיל"
+                            className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                           >
-                            <Trash2 className="size-4 text-destructive" />
+                            <ToggleLeft className="size-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -498,16 +511,16 @@ export default function PriceListsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
+      {/* Deactivate Confirmation */}
       <ConfirmDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-        title="מחיקת מחירון"
-        description={`האם אתה בטוח שברצונך למחוק את המחירון "${selectedPriceList?.name}"? פעולה זו אינה ניתנת לביטול.`}
-        confirmLabel="מחק"
-        variant="destructive"
+        open={isDeactivateDialogOpen}
+        onOpenChange={setIsDeactivateDialogOpen}
+        title="העברה לארכיון"
+        description={`האם אתה בטוח שברצונך להעביר את המחירון "${selectedPriceList?.name}" לארכיון? המחירון יסומן כלא פעיל וניתן יהיה לשחזר אותו מדף הארכיון.`}
+        confirmLabel="העבר לארכיון"
+        variant="default"
         isLoading={isLoading}
-        onConfirm={handleDelete}
+        onConfirm={handleDeactivate}
       />
     </div>
   )

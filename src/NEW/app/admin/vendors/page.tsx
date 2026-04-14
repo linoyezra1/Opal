@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Plus, Edit2, Trash2, Building2, CreditCard, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Edit2, Building2, CreditCard, ChevronDown, ChevronUp, ToggleLeft, ToggleRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -27,7 +27,7 @@ import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui
 import { ConfirmDialog } from '@/components/admin/confirm-dialog'
 import { Spinner } from '@/components/ui/spinner'
 import { Badge } from '@/components/ui/badge'
-import type { Vendor, VendorProductLink } from '@/lib/api'
+import type { Vendor } from '@/lib/api'
 
 // Mock data
 const mockVendors: Vendor[] = [
@@ -47,6 +47,7 @@ const mockVendors: Vendor[] = [
       { productId: '1', vendorCost: 150 },
       { productId: '2', vendorCost: 200 },
     ],
+    isActive: true,
     createdAt: '2024-01-10',
   },
   {
@@ -64,6 +65,7 @@ const mockVendors: Vendor[] = [
     productLinks: [
       { productId: '3', vendorCost: 180 },
     ],
+    isActive: true,
     createdAt: '2024-02-05',
   },
 ]
@@ -84,10 +86,14 @@ interface VendorFormData {
 export default function VendorsPage() {
   const [vendors, setVendors] = useState<Vendor[]>(mockVendors)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isDeactivateDialogOpen, setIsDeactivateDialogOpen] = useState(false)
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null)
   const [expandedVendor, setExpandedVendor] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  
+  // Filter only active vendors
+  const activeVendors = vendors.filter(v => v.isActive)
+  
   const [formData, setFormData] = useState<VendorFormData>({
     name: '',
     contactName: '',
@@ -135,9 +141,9 @@ export default function VendorsPage() {
     setIsDialogOpen(true)
   }
 
-  const openDeleteDialog = (vendor: Vendor) => {
+  const openDeactivateDialog = (vendor: Vendor) => {
     setSelectedVendor(vendor)
-    setIsDeleteDialogOpen(true)
+    setIsDeactivateDialogOpen(true)
   }
 
   const toggleExpand = (vendorId: string) => {
@@ -159,6 +165,7 @@ export default function VendorsPage() {
         id: Date.now().toString(),
         ...formData,
         productLinks: [],
+        isActive: true,
         createdAt: new Date().toISOString().split('T')[0],
       }
       setVendors(prev => [...prev, newVendor])
@@ -168,15 +175,20 @@ export default function VendorsPage() {
     setIsDialogOpen(false)
   }
 
-  const handleDelete = async () => {
+  const handleDeactivate = async () => {
     if (!selectedVendor) return
     
     setIsLoading(true)
     await new Promise(resolve => setTimeout(resolve, 500))
     
-    setVendors(prev => prev.filter(v => v.id !== selectedVendor.id))
+    setVendors(prev => prev.map(v => 
+      v.id === selectedVendor.id 
+        ? { ...v, isActive: false }
+        : v
+    ))
+    
     setIsLoading(false)
-    setIsDeleteDialogOpen(false)
+    setIsDeactivateDialogOpen(false)
     setSelectedVendor(null)
   }
 
@@ -198,10 +210,10 @@ export default function VendorsPage() {
       <Card>
         <CardHeader>
           <CardTitle>רשימת ספקים</CardTitle>
-          <CardDescription>{vendors.length} ספקים במערכת</CardDescription>
+          <CardDescription>{activeVendors.length} ספקים פעילים במערכת</CardDescription>
         </CardHeader>
         <CardContent>
-          {vendors.length === 0 ? (
+          {activeVendors.length === 0 ? (
             <Empty>
               <EmptyMedia variant="icon">
                 <Building2 className="size-8" />
@@ -222,12 +234,13 @@ export default function VendorsPage() {
                     <TableHead>שם ספק</TableHead>
                     <TableHead>איש קשר</TableHead>
                     <TableHead>טלפון</TableHead>
+                    <TableHead>סטטוס</TableHead>
                     <TableHead>מוצרים</TableHead>
-                    <TableHead className="w-24">פעולות</TableHead>
+                    <TableHead className="w-28">פעולות</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {vendors.map((vendor) => (
+                  {activeVendors.map((vendor) => (
                     <React.Fragment key={vendor.id}>
                       <TableRow className="group">
                         <TableCell>
@@ -248,6 +261,12 @@ export default function VendorsPage() {
                         <TableCell>{vendor.contactName || '-'}</TableCell>
                         <TableCell dir="ltr" className="text-start">{vendor.phone || '-'}</TableCell>
                         <TableCell>
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                            <ToggleRight className="size-3 me-1" />
+                            פעיל
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
                           <Badge variant="secondary">
                             {vendor.productLinks?.length || 0} מוצרים
                           </Badge>
@@ -258,22 +277,25 @@ export default function VendorsPage() {
                               variant="ghost"
                               size="icon"
                               onClick={() => openEditDialog(vendor)}
+                              title="ערוך"
                             >
                               <Edit2 className="size-4" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => openDeleteDialog(vendor)}
+                              onClick={() => openDeactivateDialog(vendor)}
+                              title="העבר לא פעיל"
+                              className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                             >
-                              <Trash2 className="size-4 text-destructive" />
+                              <ToggleLeft className="size-4" />
                             </Button>
                           </div>
                         </TableCell>
                       </TableRow>
                       {expandedVendor === vendor.id && (
                         <TableRow key={`${vendor.id}-expanded`}>
-                          <TableCell colSpan={6} className="bg-muted/50 p-4">
+                          <TableCell colSpan={7} className="bg-muted/50 p-4">
                             <div className="grid gap-4 md:grid-cols-2">
                               {/* Contact Info */}
                               <div className="space-y-2">
@@ -443,16 +465,16 @@ export default function VendorsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
+      {/* Deactivate Confirmation */}
       <ConfirmDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-        title="מחיקת ספק"
-        description={`האם אתה בטוח שברצונך למחוק את הספק "${selectedVendor?.name}"? פעולה זו אינה ניתנת לביטול.`}
-        confirmLabel="מחק"
-        variant="destructive"
+        open={isDeactivateDialogOpen}
+        onOpenChange={setIsDeactivateDialogOpen}
+        title="העברה לארכיון"
+        description={`האם אתה בטוח שברצונך להעביר את הספק "${selectedVendor?.name}" לארכיון? הספק יסומן כלא פעיל וניתן יהיה לשחזר אותו מדף הארכיון.`}
+        confirmLabel="העבר לארכיון"
+        variant="default"
         isLoading={isLoading}
-        onConfirm={handleDelete}
+        onConfirm={handleDeactivate}
       />
     </div>
   )

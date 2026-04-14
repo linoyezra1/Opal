@@ -92,6 +92,8 @@ import {
   listPublicSalesAgents,
   listSalesAgentsWithSales,
   listVendors,
+  getArchiveSnapshot,
+  restoreArchiveItem,
   resolveAgentIdFromFormState,
   resolveCheckoutEconomics,
   updateLandingPage,
@@ -1213,7 +1215,8 @@ app.post('/api/admin/products', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/products', requireAdmin, async (req, res) => {
   try {
-    const products = await listProducts();
+    const includeInactive = String(req.query.includeInactive || '') === 'true';
+    const products = await listProducts({ activeOnly: !includeInactive });
     res.json({ success: true, products });
   } catch (e) {
     console.error(`[${ts()}] admin/products list error:`, e);
@@ -1256,7 +1259,8 @@ app.post('/api/admin/vendors', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/vendors', requireAdmin, async (req, res) => {
   try {
-    const vendors = await listVendors();
+    const includeInactive = String(req.query.includeInactive || '') === 'true';
+    const vendors = await listVendors({ activeOnly: !includeInactive });
     res.json({ success: true, vendors });
   } catch (e) {
     console.error(`[${ts()}] admin/vendors list error:`, e);
@@ -1601,7 +1605,8 @@ app.get('/api/public/organization/:id', async (req, res) => {
 
 app.get('/api/admin/organizations', requireAdmin, async (req, res) => {
   try {
-    const rows = await getOrganizationCompaniesWithMemberCounts(400);
+    const includeInactive = String(req.query.includeInactive || '') === 'true';
+    const rows = await getOrganizationCompaniesWithMemberCounts(400, { activeOnly: !includeInactive });
     res.json({ success: true, rows });
   } catch (e) {
     console.error(`[${ts()}] admin/organizations list error:`, e);
@@ -1910,11 +1915,32 @@ app.post('/api/admin/agents', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/agents', requireAdmin, async (req, res) => {
   try {
-    const rows = await listSalesAgentsWithSales();
+    const includeInactive = String(req.query.includeInactive || '') === 'true';
+    const rows = await listSalesAgentsWithSales({ activeOnly: !includeInactive });
     res.json({ success: true, rows });
   } catch (e) {
     console.error(`[${ts()}] admin/agents list error:`, e);
     res.status(500).json({ success: false, error: 'Failed to fetch agents' });
+  }
+});
+
+app.get('/api/admin/archive', requireAdmin, async (req, res) => {
+  try {
+    const data = await getArchiveSnapshot(500);
+    res.json({ success: true, ...data });
+  } catch (e) {
+    console.error(`[${ts()}] admin/archive error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to load archive' });
+  }
+});
+
+app.post('/api/admin/archive/:entity/:id/restore', requireAdmin, async (req, res) => {
+  try {
+    await restoreArchiveItem(req.params.entity, req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    console.error(`[${ts()}] admin/archive restore error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to restore item' });
   }
 });
 
