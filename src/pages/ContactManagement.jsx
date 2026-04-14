@@ -106,6 +106,7 @@ export default function ContactManagement() {
         message: l.message || '',
         category,
         categoryLabel,
+        isHandled: !!l.isHandled,
       };
     });
 
@@ -121,6 +122,7 @@ export default function ContactManagement() {
       message: l.notes || '',
       category: 'general',
       categoryLabel: 'כללי',
+      isHandled: !!l.isHandled,
     }));
 
     return [...privateRows, ...corporateRows].sort((a, b) => {
@@ -352,6 +354,7 @@ export default function ContactManagement() {
                         </Badge>
                       </TableCell>
                       <TableCell>
+                        {lead.isHandled ? <Badge className="me-2 bg-emerald-600 text-white">Handled</Badge> : null}
                         <select
                           className={cn('flex h-9 min-w-[120px] rounded-md border px-2 text-sm', getStatusClasses(lead.leadStatus))}
                           value={lead.leadStatus}

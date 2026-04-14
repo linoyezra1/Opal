@@ -343,6 +343,7 @@ export async function saveContactLead(params) {
     phone: params.phone || '',
     message: params.message || '',
     source: params.source || 'site',
+    isHandled: false,
     landingSlug: params.landingSlug || '',
     category: params.category || '',
     leadStatus: params.leadStatus || 'חדש',
@@ -439,6 +440,7 @@ export async function upsertPendingCheckoutLead(params = {}) {
     landingSlug: String(params.landingSlug || '').trim().toLowerCase(),
     priceListId: String(params.priceListId || '').trim(),
     status: 'awaiting_payment',
+    isHandled: false,
     updatedAt: now,
   };
   await db.collection('pending_checkout_leads').updateOne(
@@ -502,6 +504,7 @@ export async function saveOrganizationLead(params) {
     email: params.email || '',
     notes: params.notes || '',
     source: params.source || 'site',
+    isHandled: false,
     requestType: params.requestType || '',
     company: params.company || null,
     contactPerson: params.contactPerson || null,
@@ -638,6 +641,7 @@ export async function updateOrganizationCompany(id, params) {
   if (params.contactEmail != null) set.contactEmail = String(params.contactEmail || '').trim();
   if (params.contactPhone != null) set.contactPhone = String(params.contactPhone || '').trim();
   if (params.notes != null) set.notes = String(params.notes || '').trim();
+  if (params.collectionStatus != null) set.collectionStatus = String(params.collectionStatus || 'open').trim();
   if (params.contactPerson != null) set.contactPerson = params.contactPerson || null;
   if (params.accounting != null) set.accounting = params.accounting || null;
   if (params.additionalContact != null) set.additionalContact = params.additionalContact || null;
@@ -1643,7 +1647,15 @@ export async function getControlPanelOverviewData(filters = {}) {
     {
       $project: {
         transactionId: 1,
+        dashboardHandled: 1,
         createdAt: 1,
+        agentId: {
+          $cond: [
+            { $ifNull: ['$_agentIdObj', false] },
+            { $toString: '$_agentIdObj' },
+            '',
+          ],
+        },
         paymentStatus: 1,
         payerAmount: 1,
         formState: 1,
@@ -1666,10 +1678,25 @@ export async function getControlPanelOverviewData(filters = {}) {
   const totalRevenue = paidRows.reduce((s, d) => s + Number(d.revenue || 0), 0);
   const totalProviderPayments = paidRows.reduce((s, d) => s + Number(d.providerCost || 0), 0);
   const totalAgentPayments = paidRows.reduce((s, d) => s + Number(d.agentCommission || 0), 0);
+  const totalExpenses = totalProviderPayments + totalAgentPayments;
   const totalNetProfit = totalRevenue - totalProviderPayments - totalAgentPayments;
   const activeSubscribers = paidRows.reduce((s, d) => s + Number(d.individualsCount || 1), 0);
   const totalTransactions = paidRows.length;
-  const failedPaymentRows = deals.filter((d) => d.isFailedPayment);
+  const failedPaymentRowsAll = deals.filter((d) => d.isFailedPayment);
+  const failedPaymentRows = failedPaymentRowsAll.filter((d) => d.dashboardHandled?.failedPayment !== true);
+
+  const pendingBeneficiaryRowsAll = deals.filter((d) => d.isPaidSuccess && !d.isCancelled && !d.formState?.subscriptionStartDate);
+  const pendingBeneficiaryRows = pendingBeneficiaryRowsAll.filter(
+    (d) => d.dashboardHandled?.pendingBeneficiary !== true
+  );
+
+  const abandonedCartRowsAll = await db
+    .collection('pending_checkout_leads')
+    .find({ status: 'awaiting_payment', updatedAt: { $gte: from, $lte: to } })
+    .sort({ updatedAt: -1 })
+    .limit(500)
+    .toArray();
+  const abandonedCartRows = abandonedCartRowsAll.filter((d) => d.isHandled !== true);
 
   const orgDebtRows = await db.collection('organizations').aggregate([
     { $match: { billingType: 'Centralized' } },
@@ -1699,9 +1726,11 @@ export async function getControlPanelOverviewData(filters = {}) {
     },
     {
       $project: {
+        organizationId: { $toString: '$_id' },
         organizationName: '$companyName',
         activeEmployees: 1,
         memberPrice: 1,
+        collectionStatus: { $ifNull: ['$collectionStatus', 'open'] },
         debt: { $multiply: ['$activeEmployees', '$memberPrice'] },
       },
     },
@@ -1709,6 +1738,7 @@ export async function getControlPanelOverviewData(filters = {}) {
     { $sort: { debt: -1 } },
   ]).toArray();
   const organizationCollectionsDebt = orgDebtRows.reduce((s, r) => s + Number(r.debt || 0), 0);
+  const totalRevenueWithOrgDebt = totalRevenue + organizationCollectionsDebt;
 
   const dayMap = new Map();
   for (const d of paidRows) {
@@ -1729,24 +1759,30 @@ export async function getControlPanelOverviewData(filters = {}) {
   return {
     range: { fromDate: from.toISOString().slice(0, 10), toDate: to.toISOString().slice(0, 10) },
     overview: {
-      totalRevenue,
+      totalRevenue: totalRevenueWithOrgDebt,
+      successfulRevenue: totalRevenue,
+      totalExpenses,
       totalNetProfit,
       activeSubscribers,
       totalTransactions,
       totalProviderPayments,
       totalAgentPayments,
       failedPayments: failedPaymentRows.length,
+      pendingBeneficiaries: pendingBeneficiaryRows.length,
+      abandonedCarts: abandonedCartRows.length,
       organizationCollectionsDebt,
       chartSeries,
     },
     drilldowns: {
       activeSubscribers: paidRows.map((d) => ({
+        id: String(d._id || ''),
         transactionId: d.transactionId || '',
         fullName: d.formState?.fullName || '—',
         individualsCount: Number(d.individualsCount || 1),
         createdAt: d.createdAt,
       })),
       totalTransactions: paidRows.map((d) => ({
+        id: String(d._id || ''),
         transactionId: d.transactionId || '',
         fullName: d.formState?.fullName || '—',
         amount: Number(d.revenue || 0),
@@ -1759,22 +1795,43 @@ export async function getControlPanelOverviewData(filters = {}) {
         createdAt: d.createdAt,
       })),
       totalAgentPayments: paidRows.map((d) => ({
+        agentId: String(d.formState?.agentId || d.agentId || ''),
+        agentName: String(d.formState?.agentName || ''),
         transactionId: d.transactionId || '',
         fullName: d.formState?.fullName || '—',
         agentCommission: Number(d.agentCommission || 0),
         createdAt: d.createdAt,
       })),
       failedPayments: failedPaymentRows.map((d) => ({
+        id: String(d._id || ''),
         transactionId: d.transactionId || '',
         fullName: d.formState?.fullName || '—',
         paymentStatus: d.paymentStatus || '—',
         amount: Number(d.payerAmount || 0),
         createdAt: d.createdAt,
       })),
+      pendingBeneficiaries: pendingBeneficiaryRows.map((d) => ({
+        id: String(d._id || ''),
+        transactionId: d.transactionId || '',
+        fullName: d.formState?.fullName || '—',
+        phone: d.formState?.phone || '—',
+        amount: Number(d.payerAmount || 0),
+        createdAt: d.createdAt,
+      })),
+      abandonedCarts: abandonedCartRows.map((d) => ({
+        id: String(d._id || ''),
+        name: d.name || '—',
+        phone: d.phone || '—',
+        email: d.email || '—',
+        productName: d.productName || '—',
+        updatedAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : d.updatedAt,
+      })),
       organizationCollectionsDebt: orgDebtRows.map((r) => ({
+        organizationId: r.organizationId || '',
         organizationName: r.organizationName || '—',
         activeEmployees: Number(r.activeEmployees || 0),
         memberPrice: Number(r.memberPrice || 0),
+        collectionStatus: r.collectionStatus || 'open',
         debt: Number(r.debt || 0),
       })),
       totalNetProfit: paidRows.map((d) => ({
@@ -1787,6 +1844,61 @@ export async function getControlPanelOverviewData(filters = {}) {
       })),
     },
   };
+}
+
+export async function markControlPanelItemHandled(type, id, handled = true) {
+  const db = await getDb();
+  const t = String(type || '').trim();
+  const val = handled === true;
+  if (!t || !id) throw new Error('פרטי טיפול חסרים');
+
+  if (t === 'failedPayment' || t === 'pendingBeneficiary') {
+    let oid;
+    try {
+      oid = new ObjectId(String(id));
+    } catch {
+      throw new Error('מזהה עסקה לא תקין');
+    }
+    const path = t === 'failedPayment' ? 'dashboardHandled.failedPayment' : 'dashboardHandled.pendingBeneficiary';
+    const r = await db.collection('deals').updateOne(
+      { _id: oid },
+      { $set: { [path]: val, updatedAt: new Date() } }
+    );
+    if (!r.matchedCount) throw new Error('עסקה לא נמצאה');
+    return { ok: true };
+  }
+
+  if (t === 'abandonedCart') {
+    let oid;
+    try {
+      oid = new ObjectId(String(id));
+    } catch {
+      throw new Error('מזהה ליד לא תקין');
+    }
+    const r = await db.collection('pending_checkout_leads').updateOne(
+      { _id: oid },
+      { $set: { isHandled: val, updatedAt: new Date() } }
+    );
+    if (!r.matchedCount) throw new Error('ליד לא נמצא');
+    return { ok: true };
+  }
+
+  if (t === 'contactLead') {
+    let oid;
+    try {
+      oid = new ObjectId(String(id));
+    } catch {
+      throw new Error('מזהה ליד לא תקין');
+    }
+    const r = await db.collection('contactLeads').updateOne(
+      { _id: oid },
+      { $set: { isHandled: val, updatedAt: new Date() } }
+    );
+    if (!r.matchedCount) throw new Error('ליד לא נמצא');
+    return { ok: true };
+  }
+
+  throw new Error('סוג טיפול לא נתמך');
 }
 
 export async function updateDealAdmin(dealId, body = {}) {

@@ -46,6 +46,7 @@ import {
   getPaymentArrearsDeals,
   getControlPanelOverviewStats,
   getControlPanelOverviewData,
+  markControlPanelItemHandled,
   updateDealAdmin,
   deleteDealAdmin,
   bulkDeleteDealsAdmin,
@@ -1757,6 +1758,17 @@ app.get('/api/admin/control-panel', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(`[${ts()}] admin/control-panel error:`, e);
     res.status(500).json({ success: false, error: 'Failed to load control panel' });
+  }
+});
+
+app.post('/api/admin/control-panel/handle', requireAdmin, async (req, res) => {
+  try {
+    const { type = '', id = '', handled = true } = req.body || {};
+    await markControlPanelItemHandled(type, id, handled !== false);
+    res.json({ success: true });
+  } catch (e) {
+    console.error(`[${ts()}] admin/control-panel/handle error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to mark item' });
   }
 });
 
