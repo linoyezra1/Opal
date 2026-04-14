@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Building2, Upload, Download, ArrowRight, Users } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -49,6 +49,7 @@ function ContactSection({ title, data, onChange }) {
 
 export default function OrganizationDetailPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const token = localStorage.getItem(TOKEN_KEY) || '';
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
@@ -62,13 +63,14 @@ export default function OrganizationDetailPage() {
   const [billingConfirmOpen, setBillingConfirmOpen] = useState(false);
   const [billingChangePending, setBillingChangePending] = useState(null);
   const [products, setProducts] = useState([]);
+  const [payments, setPayments] = useState([]);
 
   const load = useCallback(async () => {
     if (!token || !id) return;
     setLoading(true);
     setErr('');
     try {
-      const [oRes, dRes, prRes] = await Promise.all([
+      const [oRes, dRes, prRes, payRes] = await Promise.all([
         fetch(`${API_BASE}/api/admin/organizations/${encodeURIComponent(id)}`, {
           headers: { Authorization: `Bearer ${token}` },
         }).then((r) => r.json()),
@@ -78,17 +80,26 @@ export default function OrganizationDetailPage() {
         fetch(`${API_BASE}/api/admin/products`, {
           headers: { Authorization: `Bearer ${token}` },
         }).then((r) => r.json()),
+        fetch(`${API_BASE}/api/admin/organizations/${encodeURIComponent(id)}/payments`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then((r) => r.json()),
       ]);
       if (!oRes.success) throw new Error(oRes.error || 'טעינת ארגון נכשלה');
       setOrg(oRes.organization);
       setDeals(Array.isArray(dRes.deals) ? dRes.deals : []);
       setProducts(Array.isArray(prRes?.products) ? prRes.products : []);
+      setPayments(Array.isArray(payRes?.rows) ? payRes.rows : []);
     } catch (e) {
       setErr(e.message || 'שגיאה');
     } finally {
       setLoading(false);
     }
   }, [id, token]);
+
+  useEffect(() => {
+    const tabParam = String(searchParams.get('tab') || '').trim();
+    if (tabParam === 'payments') setTab('payments');
+  }, [searchParams]);
 
   useEffect(() => {
     load();
@@ -277,6 +288,7 @@ export default function OrganizationDetailPage() {
               יבוא עובדים
             </TabsTrigger>
             <TabsTrigger value="settings">הגדרות</TabsTrigger>
+            <TabsTrigger value="payments">תשלומים</TabsTrigger>
           </TabsList>
 
           <TabsContent value="members" className="mt-4" dir="rtl">
@@ -574,6 +586,48 @@ export default function OrganizationDetailPage() {
                     שמור הגדרות
                   </Button>
                 </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="payments" className="mt-4" dir="rtl">
+            <Card className="text-right" dir="rtl">
+              <CardHeader className="text-right">
+                <CardTitle>תשלומים חודשיים</CardTitle>
+                <CardDescription>חיוב חודשי לפי חברים פעילים × מחיר לחבר</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-md border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="[&_th]:text-right">
+                        <TableHead>חודש</TableHead>
+                        <TableHead>סה״כ חברים</TableHead>
+                        <TableHead>סה״כ סכום</TableHead>
+                        <TableHead>סטטוס</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {payments.map((p) => (
+                        <TableRow key={p.month}>
+                          <TableCell>{p.month}</TableCell>
+                          <TableCell>{Number(p.totalMembers || 0)}</TableCell>
+                          <TableCell>₪{Number(p.totalAmount || 0)}</TableCell>
+                          <TableCell>
+                            <Badge variant={String(p.status || '').toLowerCase() === 'paid' ? 'default' : 'outline'}>
+                              {String(p.status || '').toLowerCase() === 'paid' ? 'שולם' : 'לא שולם'}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {!payments.length ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center text-muted-foreground">אין חיובים להצגה</TableCell>
+                        </TableRow>
+                      ) : null}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

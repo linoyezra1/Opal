@@ -148,9 +148,17 @@ export default function ContactManagement() {
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.success) throw new Error(j.error || 'שמירה נכשלה');
       if (kind === 'private' || kind === 'abandoned') {
-        setPrivateLeads((prev) => prev.map((x) => (x.id === leadId ? { ...x, ...patch } : x)));
+        setPrivateLeads((prev) =>
+          patch.isActive === false
+            ? prev.filter((x) => x.id !== leadId)
+            : prev.map((x) => (x.id === leadId ? { ...x, ...patch } : x))
+        );
       } else {
-        setCorporateLeads((prev) => prev.map((x) => (x.id === leadId ? { ...x, ...patch } : x)));
+        setCorporateLeads((prev) =>
+          patch.isActive === false
+            ? prev.filter((x) => x.id !== leadId)
+            : prev.map((x) => (x.id === leadId ? { ...x, ...patch } : x))
+        );
       }
     } catch (e) {
       setError(e.message || 'שגיאה');
@@ -457,7 +465,10 @@ export default function ContactManagement() {
                               size="icon"
                               variant="ghost"
                               type="button"
-                              onClick={() => updateLead(lead.kind, lead.id, { isActive: false })}
+                              onClick={() => {
+                                const ok = window.confirm('פעולה זו תעביר את המידע לארכיון');
+                                if (ok) updateLead(lead.kind, lead.id, { isActive: false });
+                              }}
                               aria-label="הפוך ללא פעיל"
                             >
                               <Archive className="size-4 text-destructive" />

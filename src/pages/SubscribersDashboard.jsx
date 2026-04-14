@@ -285,9 +285,13 @@ export default function SubscribersDashboard() {
     const orgNm = String(fs.organizationName || row.organizationName || row.organizationBadge || '').trim();
     setEditOrganizationName(orgLinked ? orgNm || (oid ? `מקושר לארגון (${oid})` : 'מקושר לארגון') : '');
     setEditDealId(row.id);
+    const primaryFullName = String(primary.fullName || fs.fullName || row.fullName || '').trim();
+    const fullNameParts = primaryFullName ? primaryFullName.split(/\s+/).filter(Boolean) : [];
+    const fallbackFirst = fullNameParts.length > 1 ? fullNameParts.slice(0, -1).join(' ') : fullNameParts[0] || '';
+    const fallbackLast = fullNameParts.length > 1 ? fullNameParts[fullNameParts.length - 1] : '';
     setEditForm({
-      firstName: primary.firstName || '',
-      lastName: primary.lastName || '',
+      firstName: primary.firstName || fallbackFirst,
+      lastName: primary.lastName || fallbackLast,
       phone: primary.phone || fs.phone || '',
       email: primary.email || fs.email || '',
       idNum: primary.id || fs.id || row.idNumber || '',
@@ -618,13 +622,13 @@ export default function SubscribersDashboard() {
       <AdminPageShell>
         <ConfirmDialog
           open={!!deleteTarget}
-          title="מחיקת רשומת עסקה"
+          title="העברה לארכיון"
           message={
             deleteTarget
-              ? `למחוק לצמיתות את העסקה ${deleteTarget.transactionId || deleteTarget.id}? פעולה זו תסיר את הרשומה ממסד הנתונים.`
+              ? `להעביר לארכיון את העסקה ${deleteTarget.transactionId || deleteTarget.id}? פעולה זו תעביר את המידע לארכיון.`
               : ''
           }
-          confirmLabel="מחק"
+          confirmLabel="הפוך ללא פעיל"
           danger
           onConfirm={confirmDelete}
           onCancel={() => setDeleteTarget(null)}
@@ -655,13 +659,13 @@ export default function SubscribersDashboard() {
             <DialogHeader>
               <DialogTitle>מחיקה מרוכזת של מנויים</DialogTitle>
               <DialogDescription>
-                {`פעולה זו תמחק לצמיתות ${selectedCount} מנויים ממסד הנתונים.`}
+                {`פעולה זו תעביר לארכיון ${selectedCount} מנויים.`}
               </DialogDescription>
             </DialogHeader>
             {requireDeletePhrase ? (
               <div className="space-y-2">
                 <p className="text-sm text-destructive">
-                  למחיקה של 50 מנויים ומעלה יש להקליד בדיוק DELETE כדי לאשר.
+                  להעברה לארכיון של 50 מנויים ומעלה יש להקליד בדיוק DELETE כדי לאשר.
                 </p>
                 <Input
                   value={bulkDeleteConfirmText}
@@ -686,7 +690,7 @@ export default function SubscribersDashboard() {
               </Button>
               <Button type="button" variant="destructive" onClick={confirmBulkDelete} disabled={bulkDeleteDisabled}>
                 {bulkDeleteLoading ? <Spinner className="me-2" /> : null}
-                מחיקת נבחרים
+                העבר נבחרים לארכיון
               </Button>
             </DialogFooter>
           </DialogContent>

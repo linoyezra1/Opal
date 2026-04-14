@@ -59,6 +59,16 @@ const HEADER_LABELS = {
   providerCost: 'עלות ספק',
   providerId: 'ספק',
   vendorName: 'ספק',
+  individualsCount: 'כמות מנויים',
+  activeEmployees: 'כמות עובדים',
+  amount: 'סכום',
+  debt: 'חוב',
+  memberPrice: 'מחיר לחבר',
+  collectionStatus: 'סטטוס גבייה',
+  productName: 'שם מוצר',
+  agentCommission: 'עמלת סוכן',
+  kind: 'סוג פנייה',
+  organizationId: 'מזהה ארגון',
   status: 'סטטוס',
   cardcomStatus: 'סטטוס סליקה',
   createdAt: 'תאריך',
@@ -132,7 +142,9 @@ export default function AdminControlPanel() {
       navigate(`/admin/subscribers?search=${encodeURIComponent(search)}&editId=${encodeURIComponent(row.id)}`);
     }
     if (key === 'totalAgentPayments' && row.agentId) navigate('/admin/agents');
-    if (key === 'organizationCollectionsDebt' && row.organizationId) navigate('/admin/organizations');
+    if (key === 'organizationCollectionsDebt' && row.organizationId) {
+      navigate(`/admin/organizations/${encodeURIComponent(row.organizationId)}?tab=payments`);
+    }
   }
 
   if (!token) return <div dir="rtl" className="p-6">יש להתחבר דרך מסך המנהל.</div>;
@@ -152,7 +164,22 @@ export default function AdminControlPanel() {
         <Card>
           <CardContent className="pt-6">
             <div className="grid gap-3 md:grid-cols-4">
-              <Input type="month" value={filters.month} onChange={(e) => setFilters((f) => ({ ...f, month: e.target.value }))} />
+              <Input
+                type="month"
+                value={filters.month}
+                onChange={(e) => {
+                  const m = String(e.target.value || '').trim();
+                  if (!/^\d{4}-\d{2}$/.test(m)) {
+                    setFilters((f) => ({ ...f, month: m }));
+                    return;
+                  }
+                  const [y, mo] = m.split('-').map(Number);
+                  const start = new Date(y, mo - 1, 1);
+                  const end = new Date(y, mo, 0);
+                  const toYmd = (d) => d.toISOString().slice(0, 10);
+                  setFilters((f) => ({ ...f, month: m, fromDate: toYmd(start), toDate: toYmd(end) }));
+                }}
+              />
               <Input type="date" value={filters.fromDate} onChange={(e) => setFilters((f) => ({ ...f, fromDate: e.target.value }))} />
               <Input type="date" value={filters.toDate} onChange={(e) => setFilters((f) => ({ ...f, toDate: e.target.value }))} />
               <div className="text-sm text-muted-foreground flex items-center justify-end">טווח פעיל: {data?.range?.fromDate || filters.fromDate} - {data?.range?.toDate || filters.toDate}</div>

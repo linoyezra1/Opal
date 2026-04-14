@@ -122,6 +122,7 @@ export async function saveDeal(params) {
     organizationId: organizationId || null,
     isOrganizationDeal,
     memberType,
+    isActive: true,
     createdAt: now,
     updatedAt: now,
     ...(params.status != null ? { status: String(params.status) } : {}),
@@ -728,7 +729,7 @@ export async function findDealsByOrganizationId(organizationId, limit = 500) {
   if (!oid) return [];
   const docs = await db
     .collection('deals')
-    .find({ organizationId: oid })
+    .find({ organizationId: oid, isActive: { $ne: false } })
     .sort({ createdAt: -1 })
     .limit(limit)
     .toArray();
@@ -752,6 +753,46 @@ export async function findDealsByOrganizationId(organizationId, limit = 500) {
     createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
     source: d.source,
   }));
+}
+
+export async function getOrganizationMonthlyPayments(orgId, monthsBack = 12) {
+  const db = await getDb();
+  let oid;
+  try {
+    oid = new ObjectId(String(orgId));
+  } catch {
+    throw new Error('מזהה ארגון לא תקין');
+  }
+  const org = await db.collection('organizations').findOne({ _id: oid, isActive: { $ne: false } });
+  if (!org) throw new Error('ארגון לא נמצא');
+  const orgName = String(org.companyName || '').trim();
+  const memberPrice = Number(org.monthlyPricePerMember || 0);
+  const activeMembers = await countActiveMembersByOrganizationId(String(org._id));
+  const lim = Math.max(1, Math.min(Number(monthsBack) || 12, 24));
+  const months = [];
+  const now = new Date();
+  for (let i = lim - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  const invoices = await db
+    .collection('monthly_invoices')
+    .find({ organizationName: orgName, month: { $in: months } })
+    .project({ month: 1, status: 1, totalAmount: 1, dealCount: 1 })
+    .toArray();
+  const byMonth = new Map(invoices.map((x) => [String(x.month), x]));
+  return months.map((month) => {
+    const inv = byMonth.get(month);
+    const totalMembers = Number(inv?.dealCount ?? activeMembers);
+    const totalAmount = Number(inv?.totalAmount ?? totalMembers * memberPrice);
+    const status = String(inv?.status || 'Pending') === 'Paid' ? 'Paid' : 'Pending';
+    return {
+      month,
+      totalMembers,
+      totalAmount,
+      status,
+    };
+  });
 }
 
 /**
@@ -833,6 +874,7 @@ export async function insertOrganizationImportedDeal({
     organizationId: String(organizationId),
     isOrganizationDeal: true,
     memberType: 'Primary',
+    isActive: true,
     status: 'Completed',
     subscriptionStatus: 'Active',
     beneficiaryUpdate: {
@@ -882,7 +924,7 @@ export async function updateLeadAdmin(kind, id, params) {
 
 export async function getDeals() {
   const db = await getDb();
-  const docs = await db.collection('deals').find({}).sort({ createdAt: -1 }).limit(500).toArray();
+  const docs = await db.collection('deals').find({ isActive: { $ne: false } }).sort({ createdAt: -1 }).limit(500).toArray();
   return docs.map((d) => ({
     id: String(d._id),
     ...d,
@@ -1012,6 +1054,7 @@ export async function getDealsPendingBeneficiaryCompletion(limit = 150) {
   const docs = await db
     .collection('deals')
     .find({
+      isActive: { $ne: false },
       paymentStatus: { $regex: /success|paid|test_success/i },
       subscriptionStatus: { $ne: 'Cancelled' },
       $or: [
@@ -1041,6 +1084,7 @@ export async function getPaymentArrearsDeals(limit = 200) {
   const docs = await db
     .collection('deals')
     .find({
+      isActive: { $ne: false },
       $or: [
         { paymentStatus: { $regex: /fail|cancel|declin|error|void|refund|בוטל|נכשל|denied/i } },
         { paymentStatus: 'pending' },
@@ -1191,7 +1235,7 @@ export async function getSalesDashboardData(filters = {}) {
   const db = await getDb();
   const dealsCol = db.collection('deals');
 
-  const match = {};
+  const match = { isActive: { $ne: false } };
   const andClauses = [];
   const dateRange = getDateRange(filters);
   if (dateRange) match.createdAt = dateRange;
@@ -1996,6 +2040,7 @@ export async function updateContactHubItem(kind, id, params = {}) {
   if (params.leadStatus != null) set.leadStatus = String(params.leadStatus || '').trim();
   if (params.adminNotes != null) set.adminNotes = String(params.adminNotes || '');
   if (params.isHandled != null) set.isHandled = !!params.isHandled;
+  if (params.isActive != null) set.isActive = !!params.isActive;
   if (k === 'private') {
     const r = await db.collection('contactLeads').updateOne({ _id: oid }, { $set: set });
     if (!r.matchedCount) throw new Error('ליד לא נמצא');
@@ -2147,8 +2192,8 @@ export async function deleteDealAdmin(dealId) {
   } catch {
     throw new Error('מזהה עסקה לא תקין');
   }
-  const r = await deals.deleteOne({ _id: oid });
-  if (r.deletedCount === 0) throw new Error('עסקה לא נמצאה');
+  const r = await deals.updateOne({ _id: oid }, { $set: { isActive: false, updatedAt: new Date() } });
+  if (r.matchedCount === 0) throw new Error('עסקה לא נמצאה');
   return { success: true };
 }
 
@@ -2165,7 +2210,10 @@ export async function bulkDeleteDealsAdmin(dealIds = []) {
     })
     .filter(Boolean);
   if (!objectIds.length) return { requested: 0, deleted: 0 };
-  const r = await db.collection('deals').deleteMany({ _id: { $in: objectIds } });
+  const r = await db.collection('deals').updateMany(
+    { _id: { $in: objectIds } },
+    { $set: { isActive: false, updatedAt: new Date() } }
+  );
   return {
     requested: objectIds.length,
     deleted: Number(r.deletedCount || 0),

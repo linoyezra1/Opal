@@ -22,6 +22,7 @@ import {
   getOrganizationCompaniesWithMemberCounts,
   getOrganizationCompanyById,
   findDealsByOrganizationId,
+  getOrganizationMonthlyPayments,
   insertOrganizationImportedDeal,
   getPublicOrganizationForRegistration,
   countActiveMembersByOrganizationId,
@@ -1645,6 +1646,16 @@ app.get('/api/admin/organizations/:id/deals', requireAdmin, async (req, res) => 
   } catch (e) {
     console.error(`[${ts()}] admin/organizations/:id/deals error:`, e);
     res.status(500).json({ success: false, error: 'Failed' });
+  }
+});
+
+app.get('/api/admin/organizations/:id/payments', requireAdmin, async (req, res) => {
+  try {
+    const rows = await getOrganizationMonthlyPayments(req.params.id, Number(req.query.months) || 12);
+    res.json({ success: true, rows });
+  } catch (e) {
+    console.error(`[${ts()}] admin/organizations/:id/payments error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed' });
   }
 });
 
