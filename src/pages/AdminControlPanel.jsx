@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, RefreshCw, Wallet, Users, CreditCard, UserCheck, AlertCircle, Building2, Check, Pencil } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { API_BASE } from '../apiBase.js';
@@ -27,7 +28,7 @@ function formatCurrency(v) {
 const SECTIONS = [
   { title: 'הכנסות', keys: ['totalRevenue', 'activeSubscribers', 'totalTransactions', 'organizationCollectionsDebt'] },
   { title: 'הוצאות', keys: ['totalExpenses', 'totalProviderPayments', 'totalAgentPayments'] },
-  { title: 'משימות לטיפול', keys: ['failedPayments', 'abandonedCarts', 'pendingBeneficiaries'] },
+  { title: 'משימות לטיפול', keys: ['failedPayments', 'abandonedCarts', 'pendingBeneficiaries', 'contactTasks'] },
 ];
 
 const CARD_META = {
@@ -41,16 +42,17 @@ const CARD_META = {
   failedPayments: { title: 'תשלומים תקועים', icon: AlertCircle, task: true },
   abandonedCarts: { title: 'עגלות נטושות', icon: CreditCard, task: true },
   pendingBeneficiaries: { title: 'לקוחות להשלמת פרטים', icon: Users, task: true },
+  contactTasks: { title: 'פניות צור קשר', icon: CreditCard, task: true },
 };
 
 export default function AdminControlPanel() {
+  const navigate = useNavigate();
   const [token] = React.useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [filters, setFilters] = React.useState(() => monthDefaults());
   const [data, setData] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const [modalKey, setModalKey] = React.useState('');
-  const [editDialog, setEditDialog] = React.useState({ kind: '', id: '', payload: {} });
   const [saving, setSaving] = React.useState(false);
 
   const load = React.useCallback(async (next = filters) => {
@@ -93,52 +95,22 @@ export default function AdminControlPanel() {
     }
   }
 
-  async function saveQuickEdit() {
-    if (!editDialog.id || !editDialog.kind) return;
-    setSaving(true);
-    try {
-      if (editDialog.kind === 'deal') {
-        await fetch(`${API_BASE}/api/admin/deals/${encodeURIComponent(editDialog.id)}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ formState: editDialog.payload }),
-        });
-      } else if (editDialog.kind === 'agent') {
-        await fetch(`${API_BASE}/api/admin/agents/${encodeURIComponent(editDialog.id)}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify(editDialog.payload),
-        });
-      } else if (editDialog.kind === 'organization') {
-        await fetch(`${API_BASE}/api/admin/organizations/${encodeURIComponent(editDialog.id)}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify(editDialog.payload),
-        });
-      }
-      setEditDialog({ kind: '', id: '', payload: {} });
-      await load(filters);
-    } finally {
-      setSaving(false);
-    }
-  }
-
   function openQuickEdit(key, row) {
-    if (key === 'organizationCollectionsDebt') {
-      setEditDialog({
-        kind: 'organization',
-        id: row.organizationId || '',
-        payload: { collectionStatus: row.collectionStatus || 'open', notes: '' },
-      });
+    if (key === 'abandonedCarts' && row.id) {
+      navigate(`/admin/contacts?editKind=abandoned&editId=${encodeURIComponent(row.id)}`);
       return;
     }
-    if (key === 'totalAgentPayments' && row.agentId) {
-      setEditDialog({ kind: 'agent', id: row.agentId, payload: { phone: '', email: '' } });
+    if (key === 'contactTasks' && row.id) {
+      navigate(`/admin/contacts?editKind=${encodeURIComponent(row.kind || 'private')}&editId=${encodeURIComponent(row.id)}`);
       return;
     }
-    if ((key === 'activeSubscribers' || key === 'totalTransactions') && row.id) {
-      setEditDialog({ kind: 'deal', id: row.id, payload: { phone: '', email: '' } });
+    if (key === 'pendingBeneficiaries' && row.id) {
+      navigate(`/admin/subscribers?editDealId=${encodeURIComponent(row.id)}`);
+      return;
     }
+    if ((key === 'activeSubscribers' || key === 'totalTransactions') && row.id) navigate(`/admin/subscribers?editDealId=${encodeURIComponent(row.id)}`);
+    if (key === 'totalAgentPayments' && row.agentId) navigate('/admin/agents');
+    if (key === 'organizationCollectionsDebt' && row.organizationId) navigate('/admin/organizations');
   }
 
   if (!token) return <div dir="rtl" className="p-6">יש להתחבר דרך מסך המנהל.</div>;
@@ -201,7 +173,16 @@ export default function AdminControlPanel() {
 
       <Dialog open={!!modalKey} onOpenChange={(open) => !open && setModalKey('')}>
         <DialogContent className="max-w-6xl" dir="rtl">
-          <DialogHeader><DialogTitle>{CARD_META[modalKey]?.title || 'פירוט'}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <div className="flex items-center justify-between gap-3">
+              <DialogTitle>{CARD_META[modalKey]?.title || 'פירוט'}</DialogTitle>
+              {modalKey === 'activeSubscribers' ? <Button asChild size="sm" variant="outline"><Link to="/admin/subscribers">ניהול מלא</Link></Button> : null}
+              {modalKey === 'totalProviderPayments' ? <Button asChild size="sm" variant="outline"><Link to="/admin/reports?tab=provider">ניהול מלא</Link></Button> : null}
+              {modalKey === 'totalAgentPayments' ? <Button asChild size="sm" variant="outline"><Link to="/admin/reports?tab=agents">ניהול מלא</Link></Button> : null}
+              {modalKey === 'organizationCollectionsDebt' ? <Button asChild size="sm" variant="outline"><Link to="/admin/reports?tab=orgs">ניהול מלא</Link></Button> : null}
+              {modalKey === 'abandonedCarts' || modalKey === 'contactTasks' ? <Button asChild size="sm" variant="outline"><Link to="/admin/contacts">ניהול מלא</Link></Button> : null}
+            </div>
+          </DialogHeader>
           <div className="max-h-[65vh] overflow-auto rounded-md border">
             <Table>
               <TableHeader><TableRow>{columns.map((c) => <TableHead key={c}>{c}</TableHead>)}<TableHead>פעולה</TableHead></TableRow></TableHeader>
@@ -214,7 +195,7 @@ export default function AdminControlPanel() {
                       return <TableCell key={`${idx}-${c}`}>{isAmount ? formatCurrency(v) : String(v ?? '')}</TableCell>;
                     })}
                     <TableCell>
-                      {isTask ? (
+                      {isTask && modalKey !== 'abandonedCarts' && modalKey !== 'contactTasks' ? (
                         <Button size="sm" variant="outline" disabled={saving} onClick={() => markHandled(modalKey === 'failedPayments' ? 'failedPayment' : modalKey === 'pendingBeneficiaries' ? 'pendingBeneficiary' : 'abandonedCart', row.id)}>
                           <Check className="size-4 me-1" />טופל
                         </Button>
@@ -232,36 +213,6 @@ export default function AdminControlPanel() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!editDialog.kind} onOpenChange={(open) => !open && setEditDialog({ kind: '', id: '', payload: {} })}>
-        <DialogContent className="sm:max-w-xl" dir="rtl">
-          <DialogHeader><DialogTitle>עדכון מהיר</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            {editDialog.kind === 'deal' ? (
-              <>
-                <Input placeholder="טלפון" value={editDialog.payload.phone || ''} onChange={(e) => setEditDialog((p) => ({ ...p, payload: { ...p.payload, phone: e.target.value } }))} />
-                <Input placeholder="אימייל" value={editDialog.payload.email || ''} onChange={(e) => setEditDialog((p) => ({ ...p, payload: { ...p.payload, email: e.target.value } }))} />
-              </>
-            ) : null}
-            {editDialog.kind === 'agent' ? (
-              <>
-                <Input placeholder="טלפון סוכן" value={editDialog.payload.phone || ''} onChange={(e) => setEditDialog((p) => ({ ...p, payload: { ...p.payload, phone: e.target.value } }))} />
-                <Input placeholder="אימייל סוכן" value={editDialog.payload.email || ''} onChange={(e) => setEditDialog((p) => ({ ...p, payload: { ...p.payload, email: e.target.value } }))} />
-              </>
-            ) : null}
-            {editDialog.kind === 'organization' ? (
-              <>
-                <select className="flex h-10 w-full rounded-md border border-input bg-background px-3" value={editDialog.payload.collectionStatus || 'open'} onChange={(e) => setEditDialog((p) => ({ ...p, payload: { ...p.payload, collectionStatus: e.target.value } }))}>
-                  <option value="open">פתוח</option>
-                  <option value="in_progress">בטיפול</option>
-                  <option value="paid">שולם</option>
-                </select>
-                <Input placeholder="הערת גבייה" value={editDialog.payload.notes || ''} onChange={(e) => setEditDialog((p) => ({ ...p, payload: { ...p.payload, notes: e.target.value } }))} />
-              </>
-            ) : null}
-          </div>
-          <div className="pt-2"><Button onClick={saveQuickEdit} disabled={saving}>{saving ? 'שומר...' : 'שמירה'}</Button></div>
-        </DialogContent>
-      </Dialog>
     </AdminPageShell>
   );
 }

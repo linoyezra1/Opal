@@ -1698,6 +1698,41 @@ export async function getControlPanelOverviewData(filters = {}) {
     .toArray();
   const abandonedCartRows = abandonedCartRowsAll.filter((d) => d.isHandled !== true);
 
+  const contactLeadsAll = await db
+    .collection('contactLeads')
+    .find({ createdAt: { $gte: from, $lte: to } })
+    .sort({ createdAt: -1 })
+    .limit(500)
+    .toArray();
+  const orgLeadsAll = await db
+    .collection('organizationLeads')
+    .find({ createdAt: { $gte: from, $lte: to } })
+    .sort({ createdAt: -1 })
+    .limit(500)
+    .toArray();
+  const contactTaskRows = [
+    ...contactLeadsAll
+      .filter((d) => d.isHandled !== true)
+      .map((d) => ({
+        id: String(d._id || ''),
+        kind: 'private',
+        fullName: d.name || '—',
+        phone: d.phone || '—',
+        email: d.email || '—',
+        createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+      })),
+    ...orgLeadsAll
+      .filter((d) => d.isHandled !== true)
+      .map((d) => ({
+        id: String(d._id || ''),
+        kind: 'corporate',
+        fullName: d.contactName || d.organizationName || '—',
+        phone: d.phone || '—',
+        email: d.email || '—',
+        createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+      })),
+  ];
+
   const orgDebtRows = await db.collection('organizations').aggregate([
     { $match: { billingType: 'Centralized' } },
     {
@@ -1770,6 +1805,7 @@ export async function getControlPanelOverviewData(filters = {}) {
       failedPayments: failedPaymentRows.length,
       pendingBeneficiaries: pendingBeneficiaryRows.length,
       abandonedCarts: abandonedCartRows.length,
+      contactTasks: contactTaskRows.length,
       organizationCollectionsDebt,
       chartSeries,
     },
@@ -1826,6 +1862,7 @@ export async function getControlPanelOverviewData(filters = {}) {
         productName: d.productName || '—',
         updatedAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : d.updatedAt,
       })),
+      contactTasks: contactTaskRows,
       organizationCollectionsDebt: orgDebtRows.map((r) => ({
         organizationId: r.organizationId || '',
         organizationName: r.organizationName || '—',
@@ -1899,6 +1936,37 @@ export async function markControlPanelItemHandled(type, id, handled = true) {
   }
 
   throw new Error('סוג טיפול לא נתמך');
+}
+
+export async function updateContactHubItem(kind, id, params = {}) {
+  const db = await getDb();
+  let oid;
+  try {
+    oid = new ObjectId(String(id));
+  } catch {
+    throw new Error('מזהה לא תקין');
+  }
+  const k = String(kind || '').trim();
+  const set = { updatedAt: new Date() };
+  if (params.leadStatus != null) set.leadStatus = String(params.leadStatus || '').trim();
+  if (params.adminNotes != null) set.adminNotes = String(params.adminNotes || '');
+  if (params.isHandled != null) set.isHandled = !!params.isHandled;
+  if (k === 'private') {
+    const r = await db.collection('contactLeads').updateOne({ _id: oid }, { $set: set });
+    if (!r.matchedCount) throw new Error('ליד לא נמצא');
+    return { ok: true };
+  }
+  if (k === 'corporate') {
+    const r = await db.collection('organizationLeads').updateOne({ _id: oid }, { $set: set });
+    if (!r.matchedCount) throw new Error('ליד לא נמצא');
+    return { ok: true };
+  }
+  if (k === 'abandoned') {
+    const r = await db.collection('pending_checkout_leads').updateOne({ _id: oid }, { $set: set });
+    if (!r.matchedCount) throw new Error('עגלה לא נמצאה');
+    return { ok: true };
+  }
+  throw new Error('סוג רשומה לא נתמך');
 }
 
 export async function updateDealAdmin(dealId, body = {}) {

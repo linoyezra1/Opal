@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   UserCheck,
   Search,
@@ -105,6 +106,7 @@ const emptyEditForm = () => ({
 });
 
 export default function SubscribersDashboard() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const token = localStorage.getItem(TOKEN_KEY) || '';
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -239,6 +241,17 @@ export default function SubscribersDashboard() {
     loadDashboard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const editId = String(searchParams.get('editDealId') || '').trim();
+    if (!editId) return;
+    const row = (data.rows || []).find((r) => String(r.id || '') === editId);
+    if (!row) return;
+    openEdit(row);
+    const next = new URLSearchParams(searchParams);
+    next.delete('editDealId');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, data.rows]);
 
   function toggleSummaryCategory(key) {
     setFilters((prev) => {

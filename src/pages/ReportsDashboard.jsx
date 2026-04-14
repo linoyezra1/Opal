@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { FileSpreadsheet, Building2, Users, RefreshCw } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -65,6 +66,7 @@ async function downloadCsv(url, token, fallbackName) {
 }
 
 export default function ReportsDashboard() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const token = localStorage.getItem(TOKEN_KEY) || '';
   const defaults = useMemo(() => monthStartEndIso(), []);
 
@@ -95,6 +97,12 @@ export default function ReportsDashboard() {
     status: 'Pending',
   });
   const [saveInvBusy, setSaveInvBusy] = useState(false);
+  const [tab, setTab] = useState(() => String(searchParams.get('tab') || 'provider'));
+  useEffect(() => {
+    const t = String(searchParams.get('tab') || 'provider');
+    if (t && t !== tab) setTab(t);
+  }, [searchParams, tab]);
+
 
   const loadAgents = useCallback(async () => {
     if (!token) return;
@@ -263,7 +271,17 @@ export default function ReportsDashboard() {
           </p>
         </div>
 
-        <Tabs defaultValue="provider" className="w-full">
+        <Tabs
+          value={tab}
+          onValueChange={(v) => {
+            setTab(v);
+            const next = new URLSearchParams(searchParams);
+            next.set('tab', v);
+            setSearchParams(next, { replace: true });
+            if (v === 'orgs') loadInvoices();
+          }}
+          className="w-full"
+        >
           <TabsList className="flex flex-wrap h-auto gap-1">
             <TabsTrigger value="provider" className="gap-1">
               <FileSpreadsheet className="size-4" />
@@ -273,7 +291,7 @@ export default function ReportsDashboard() {
               <Users className="size-4" />
               עמלות סוכנים
             </TabsTrigger>
-            <TabsTrigger value="orgs" className="gap-1" onClick={() => loadInvoices()}>
+            <TabsTrigger value="orgs" className="gap-1">
               <Building2 className="size-4" />
               גבייה מארגונים
             </TabsTrigger>

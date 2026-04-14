@@ -47,6 +47,7 @@ import {
   getControlPanelOverviewStats,
   getControlPanelOverviewData,
   markControlPanelItemHandled,
+  updateContactHubItem,
   updateDealAdmin,
   deleteDealAdmin,
   bulkDeleteDealsAdmin,
@@ -1769,6 +1770,16 @@ app.post('/api/admin/control-panel/handle', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(`[${ts()}] admin/control-panel/handle error:`, e);
     res.status(400).json({ success: false, error: e.message || 'Failed to mark item' });
+  }
+});
+
+app.put('/api/admin/contact-hub/:kind/:id', requireAdmin, async (req, res) => {
+  try {
+    await updateContactHubItem(req.params.kind, req.params.id, req.body || {});
+    res.json({ success: true });
+  } catch (e) {
+    console.error(`[${ts()}] admin/contact-hub update error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to update contact item' });
   }
 });
 

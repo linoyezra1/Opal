@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Phone, RefreshCw, Search, MessageSquare, ShoppingCart, Pencil } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -21,6 +22,7 @@ import { cn } from '../lib/cn.js';
 const TOKEN_KEY = 'opal_admin_token';
 
 export default function ContactManagement() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [token] = React.useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -45,8 +47,47 @@ export default function ContactManagement() {
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.success) throw new Error(j.error || 'טעינה נכשלה');
-      setPrivateLeads(Array.isArray(j.privateLeads) ? j.privateLeads : []);
-      setCorporateLeads(Array.isArray(j.corporateLeads) ? j.corporateLeads : []);
+      const contactRows = Array.isArray(j?.drilldowns?.contactTasks) ? j.drilldowns.contactTasks : [];
+      const abandonedRows = Array.isArray(j?.drilldowns?.abandonedCarts) ? j.drilldowns.abandonedCarts : [];
+      setPrivateLeads([
+        ...contactRows
+          .filter((x) => x.kind === 'private')
+          .map((x) => ({
+            id: x.id,
+            name: x.fullName,
+            phone: x.phone,
+            email: x.email,
+            createdAt: x.createdAt,
+            leadStatus: 'חדש',
+            adminNotes: '',
+            isHandled: false,
+          })),
+        ...abandonedRows.map((x) => ({
+          id: x.id,
+          name: x.name,
+          phone: x.phone,
+          email: x.email,
+          createdAt: x.updatedAt,
+          source: 'abandoned_checkout',
+          leadStatus: 'חדש',
+          adminNotes: '',
+          isHandled: false,
+        })),
+      ]);
+      setCorporateLeads(
+        contactRows
+          .filter((x) => x.kind === 'corporate')
+          .map((x) => ({
+            id: x.id,
+            contactName: x.fullName,
+            phone: x.phone,
+            email: x.email,
+            createdAt: x.createdAt,
+            leadStatus: 'חדש',
+            adminNotes: '',
+            isHandled: false,
+          }))
+      );
     } catch (e) {
       setError(e.message || 'שגיאה');
     } finally {
@@ -58,19 +99,49 @@ export default function ContactManagement() {
     load();
   }, [token]);
 
+  React.useEffect(() => {
+    const editId = String(searchParams.get('editId') || '').trim();
+    const editKind = String(searchParams.get('editKind') || '').trim();
+    if (!editId || !editKind) return;
+    const merged = [
+      ...privateLeads.map((x) => ({
+        id: x.id,
+        kind: x.source === 'abandoned_checkout' ? 'abandoned' : 'private',
+        fullName: x.name || '—',
+        leadStatus: x.leadStatus || 'חדש',
+        adminNotes: x.adminNotes || '',
+      })),
+      ...corporateLeads.map((x) => ({
+        id: x.id,
+        kind: 'corporate',
+        fullName: x.contactName || '—',
+        leadStatus: x.leadStatus || 'חדש',
+        adminNotes: x.adminNotes || '',
+      })),
+    ];
+    const row = merged.find((x) => x.id === editId && x.kind === editKind);
+    if (!row) return;
+    openEdit(row);
+    const next = new URLSearchParams(searchParams);
+    next.delete('editId');
+    next.delete('editKind');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, privateLeads, corporateLeads]);
+
   async function updateLead(kind, leadId, patch) {
     if (!leadId) return;
     setSavingKey(`${kind}:${leadId}`);
     setError('');
     try {
-      const res = await fetch(`${API_BASE}/api/admin/leads/${kind}/${encodeURIComponent(leadId)}`, {
+      const endpointKind = kind === 'corporate' ? 'corporate' : kind === 'private' ? 'private' : 'abandoned';
+      const res = await fetch(`${API_BASE}/api/admin/contact-hub/${endpointKind}/${encodeURIComponent(leadId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(patch),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.success) throw new Error(j.error || 'שמירה נכשלה');
-      if (kind === 'private') {
+      if (kind === 'private' || kind === 'abandoned') {
         setPrivateLeads((prev) => prev.map((x) => (x.id === leadId ? { ...x, ...patch } : x)));
       } else {
         setCorporateLeads((prev) => prev.map((x) => (x.id === leadId ? { ...x, ...patch } : x)));
@@ -96,7 +167,7 @@ export default function ContactManagement() {
       }
       return {
         id: l.id,
-        kind: 'private',
+        kind: l.source === 'abandoned_checkout' ? 'abandoned' : 'private',
         fullName: l.name || '—',
         phone: l.phone || '',
         email: l.email || '',
