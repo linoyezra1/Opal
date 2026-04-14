@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, RefreshCw, Wallet, Users, CreditCard, UserCheck, AlertCircle, Building2, Check, Pencil } from 'lucide-react';
+import { LayoutDashboard, RefreshCw, Wallet, Users, CreditCard, UserCheck, AlertCircle, Building2, Pencil, MessageSquareText } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
 import { Input } from '../components/ui/input.jsx';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -53,7 +54,9 @@ export default function AdminControlPanel() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const [modalKey, setModalKey] = React.useState('');
-  const [saving, setSaving] = React.useState(false);
+  const [commentOpen, setCommentOpen] = React.useState(false);
+  const [commentTarget, setCommentTarget] = React.useState(null);
+  const [commentText, setCommentText] = React.useState('');
 
   const load = React.useCallback(async (next = filters) => {
     if (!token) return;
@@ -79,25 +82,9 @@ export default function AdminControlPanel() {
   const columns = rows.length ? Object.keys(rows[0]).filter((k) => k !== 'id') : [];
   const isTask = !!CARD_META[modalKey]?.task;
 
-  async function markHandled(type, id) {
-    if (!id) return;
-    setSaving(true);
-    try {
-      await fetch(`${API_BASE}/api/admin/control-panel/handle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ type, id, handled: true }),
-      });
-      await load(filters);
-      setModalKey((k) => k);
-    } finally {
-      setSaving(false);
-    }
-  }
-
   function openQuickEdit(key, row) {
     if (key === 'abandonedCarts' && row.id) {
-      navigate(`/admin/contacts?editKind=abandoned&editId=${encodeURIComponent(row.id)}`);
+      navigate(`/admin/contacts?search=${encodeURIComponent(row.id)}&editKind=abandoned&editId=${encodeURIComponent(row.id)}`);
       return;
     }
     if (key === 'contactTasks' && row.id) {
@@ -119,8 +106,12 @@ export default function AdminControlPanel() {
 
   if (!token) return <div dir="rtl" className="p-6">יש להתחבר דרך מסך המנהל.</div>;
 
+  const cardClickable = (key) => !['totalRevenue', 'totalExpenses'].includes(key);
+  const readOnlyDrilldown = ['totalProviderPayments', 'totalAgentPayments'].includes(modalKey);
+
   return (
-    <AdminPageShell>
+    <TooltipProvider delayDuration={250}>
+      <AdminPageShell>
       <div className="space-y-6 text-right" dir="rtl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2"><LayoutDashboard className="size-7 text-primary" />לוח בקרה — סקירה פיננסית</h1>
@@ -147,9 +138,15 @@ export default function AdminControlPanel() {
               {section.keys.map((key) => {
                 const meta = CARD_META[key];
                 return (
-                  <button key={key} type="button" className="text-right" onClick={() => setModalKey(key)}>
-                    <StatsCard title={meta.title} value={meta.money ? formatCurrency(overview[key]) : String(Math.round(Number(overview[key] || 0)))} icon={meta.icon} className={meta.className} loading={loading && !data} />
-                  </button>
+                  cardClickable(key) ? (
+                    <button key={key} type="button" className="text-right" onClick={() => setModalKey(key)}>
+                      <StatsCard title={meta.title} value={meta.money ? formatCurrency(overview[key]) : String(Math.round(Number(overview[key] || 0)))} icon={meta.icon} className={meta.className} loading={loading && !data} />
+                    </button>
+                  ) : (
+                    <div key={key}>
+                      <StatsCard title={meta.title} value={meta.money ? formatCurrency(overview[key]) : String(Math.round(Number(overview[key] || 0)))} icon={meta.icon} className={meta.className} loading={loading && !data} />
+                    </div>
+                  )
                 );
               })}
             </div>
@@ -189,7 +186,7 @@ export default function AdminControlPanel() {
           </DialogHeader>
           <div className="max-h-[65vh] overflow-auto rounded-md border">
             <Table>
-              <TableHeader><TableRow>{columns.map((c) => <TableHead key={c}>{c}</TableHead>)}<TableHead>פעולה</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow>{columns.map((c) => <TableHead key={c}>{c}</TableHead>)}{modalKey !== 'totalProviderPayments' && modalKey !== 'totalAgentPayments' ? <TableHead>פעולה</TableHead> : null}</TableRow></TableHeader>
               <TableBody>
                 {rows.map((row, idx) => (
                   <TableRow key={`${modalKey}-${idx}`}>
@@ -198,17 +195,38 @@ export default function AdminControlPanel() {
                       const isAmount = /amount|cost|commission|profit|debt|revenue|price/i.test(c);
                       return <TableCell key={`${idx}-${c}`}>{isAmount ? formatCurrency(v) : String(v ?? '')}</TableCell>;
                     })}
-                    <TableCell>
-                      {isTask && modalKey !== 'abandonedCarts' && modalKey !== 'contactTasks' ? (
-                        <Button size="sm" variant="outline" disabled={saving} onClick={() => markHandled(modalKey === 'failedPayments' ? 'failedPayment' : modalKey === 'pendingBeneficiaries' ? 'pendingBeneficiary' : 'abandonedCart', row.id)}>
-                          <Check className="size-4 me-1" />טופל
-                        </Button>
-                      ) : (
-                        <Button size="icon" variant="outline" onClick={() => openQuickEdit(modalKey, row)} aria-label="עריכה">
-                          <Pencil className="size-4" />
-                        </Button>
-                      )}
-                    </TableCell>
+                    {readOnlyDrilldown ? null : (
+                      <TableCell>
+                        {modalKey === 'failedPayments' ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                onClick={() => {
+                                  setCommentTarget(row);
+                                  setCommentText(String(row.comments || ''));
+                                  setCommentOpen(true);
+                                }}
+                                aria-label="הערות"
+                              >
+                                <MessageSquareText className="size-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>הערות</TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="icon" variant="outline" onClick={() => openQuickEdit(modalKey, row)} aria-label="עריכה">
+                                <Pencil className="size-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>עריכה</TooltipContent>
+                          </Tooltip>
+                        )}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -216,7 +234,29 @@ export default function AdminControlPanel() {
           </div>
         </DialogContent>
       </Dialog>
-
-    </AdminPageShell>
+      <Dialog open={commentOpen} onOpenChange={setCommentOpen}>
+        <DialogContent dir="rtl" className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>הערות לתשלום תקוע</DialogTitle>
+          </DialogHeader>
+          <Input value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="הערה פנימית" />
+          <Button
+            onClick={async () => {
+              if (!commentTarget?.id) return;
+              await fetch(`${API_BASE}/api/admin/deals/${encodeURIComponent(commentTarget.id)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ formState: { failedPaymentComment: commentText } }),
+              });
+              setCommentOpen(false);
+              await load(filters);
+            }}
+          >
+            שמירה
+          </Button>
+        </DialogContent>
+      </Dialog>
+      </AdminPageShell>
+    </TooltipProvider>
   );
 }

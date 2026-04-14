@@ -101,6 +101,11 @@ export default function ContactManagement() {
   }, [token]);
 
   React.useEffect(() => {
+    const search = String(searchParams.get('search') || '').trim();
+    if (search && search !== searchQuery) setSearchQuery(search);
+  }, [searchParams, searchQuery]);
+
+  React.useEffect(() => {
     const editId = String(searchParams.get('editId') || '').trim();
     const editKind = String(searchParams.get('editKind') || '').trim();
     if (!editId || !editKind) return;

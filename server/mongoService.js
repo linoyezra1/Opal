@@ -1665,6 +1665,13 @@ export async function getControlPanelOverviewData(filters = {}) {
           ],
         },
         _providerName: { $ifNull: ['$_product.provider.vendorName', ''] },
+        _isCardcomDeal: {
+          $or: [
+            { $gt: [{ $strLenCP: { $ifNull: ['$lowProfileCode', ''] } }, 0] },
+            { $gt: [{ $strLenCP: { $ifNull: ['$cardcomAccountId', ''] } }, 0] },
+            { $gt: [{ $strLenCP: { $ifNull: ['$indicator.internalDealNumber', ''] } }, 0] },
+          ],
+        },
       },
     },
     {
@@ -1682,6 +1689,7 @@ export async function getControlPanelOverviewData(filters = {}) {
         paymentStatus: 1,
         payerAmount: 1,
         formState: 1,
+        beneficiaryUpdate: 1,
         organizationId: 1,
         organizationName: '$_orgName',
         productName: { $ifNull: ['$_product.productName', { $ifNull: ['$_product.name', '$formState.productName'] }] },
@@ -1693,6 +1701,10 @@ export async function getControlPanelOverviewData(filters = {}) {
         isPaidSuccess: '$_paidSuccess',
         isCancelled: '$_isCancelled',
         isFailedPayment: '$_isFailedPayment',
+        isCardcomDeal: '$_isCardcomDeal',
+        lowProfileCode: 1,
+        cardcomAccountId: 1,
+        cardcomInternalDealNumber: '$indicator.internalDealNumber',
       },
     },
   ]).toArray();
@@ -1705,13 +1717,22 @@ export async function getControlPanelOverviewData(filters = {}) {
   const totalNetProfit = totalRevenue - totalProviderPayments - totalAgentPayments;
   const activeSubscribers = paidRows.reduce((s, d) => s + Number(d.individualsCount || 1), 0);
   const totalTransactions = paidRows.length;
-  const failedPaymentRowsAll = deals.filter((d) => d.isFailedPayment);
-  const failedPaymentRows = failedPaymentRowsAll.filter((d) => d.dashboardHandled?.failedPayment !== true);
+  const failedPaymentRows = deals.filter((d) => {
+    const ps = String(d.paymentStatus || '').toLowerCase();
+    const isCancelled = ps.includes('cancel') || ps.includes('בוטל') || ps === 'cancelled';
+    const isError = /fail|declin|error|denied|נכשל/i.test(String(d.paymentStatus || ''));
+    return d.isCardcomDeal && isError && !isCancelled;
+  });
 
-  const pendingBeneficiaryRowsAll = deals.filter((d) => d.isPaidSuccess && !d.isCancelled && !d.formState?.subscriptionStartDate);
-  const pendingBeneficiaryRows = pendingBeneficiaryRowsAll.filter(
-    (d) => d.dashboardHandled?.pendingBeneficiary !== true
-  );
+  const pendingBeneficiaryRows = deals.filter((d) => {
+    if (!d.isPaidSuccess || d.isCancelled) return false;
+    const pm = d.formState?.primaryMember || d.beneficiaryUpdate?.primaryMember || {};
+    const idNum = String(pm.id || d.formState?.id || '').trim();
+    const dob = String(pm.dateOfBirth || d.formState?.dateOfBirth || '').trim();
+    const submittedAt = d.beneficiaryUpdate?.submittedAt;
+    const submitted = !!(submittedAt && !Number.isNaN(new Date(submittedAt).getTime()));
+    return !submitted || !idNum || !dob;
+  });
 
   const abandonedCartRowsAll = await db
     .collection('pending_checkout_leads')
@@ -1863,11 +1884,12 @@ export async function getControlPanelOverviewData(filters = {}) {
       })),
       failedPayments: failedPaymentRows.map((d) => ({
         id: String(d._id || ''),
-        transactionId: d.transactionId || '',
-        fullName: d.formState?.fullName || '—',
-        paymentStatus: d.paymentStatus || '—',
-        amount: Number(d.payerAmount || 0),
-        createdAt: d.createdAt,
+        orderId: d.transactionId || '',
+        price: Number(d.payerAmount || 0),
+        cardcomStatus: d.paymentStatus || '—',
+        customerName: d.formState?.fullName || '—',
+        phoneNumber: d.formState?.phone || '—',
+        comments: String(d.formState?.failedPaymentComment || ''),
       })),
       pendingBeneficiaries: pendingBeneficiaryRows.map((d) => ({
         id: String(d._id || ''),
