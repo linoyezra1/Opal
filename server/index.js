@@ -30,8 +30,10 @@ import {
   saveBeneficiaryUpdate,
   saveContactLead,
   saveDeal,
+  findDealForRecurringEvent,
+  setDealPaymentArrears,
+  getSubscriberBillingHistoryByDealId,
   mergeDealCardcomRecurringIds,
-  mergeDealCardcomRecurringIdsByLowProfileCode,
   saveOrUpdateAbandonedCheckoutLead,
   upsertPendingCheckoutLead,
   markPendingCheckoutLeadConverted,
@@ -882,6 +884,9 @@ async function handleMasterRecurringWebhook(body = {}, query = {}) {
   if (!normalizedBody || typeof normalizedBody !== 'object') {
     normalizedBody = {};
   }
+  if (query && typeof query === 'object') {
+    normalizedBody = { ...query, ...normalizedBody };
+  }
 
   const secretExpected = String(process.env.CARDCOM_MASTER_RECURRING_SECRET || '').trim();
   // Cardcom table field is case-sensitive: Secret
@@ -900,42 +905,98 @@ async function handleMasterRecurringWebhook(body = {}, query = {}) {
       ? String(normalizedBody.RecurringId).trim()
       : '';
   const cardcomToken = pickFirstValue(normalizedBody, ['Token', 'CardToken', 'TokenToSave']);
+  const responseCodeRaw = pickFirstValue(normalizedBody, ['responsecode', 'ResponseCode']);
+  const responseDescription = pickFirstValue(normalizedBody, [
+    'responsdescription',
+    'ResponsDescription',
+    'ResponseDescription',
+    'description',
+    'Description',
+  ]);
+  const internalDealNumber = pickFirstValue(normalizedBody, ['internaldealnumber', 'InternalDealNumber']);
+  const last4 = pickFirstValue(normalizedBody, ['Lest4Numbers', 'Last4Numbers']);
+  const cardBrand = pickFirstValue(normalizedBody, ['MutagName', 'CardBrand', 'CardName']);
+  const rawAmount = pickFirstValue(normalizedBody, ['amount', 'Amount', 'sumToBill', 'SumToBill']);
+  const payerAmount = Number(rawAmount || 0);
 
   // Link key per requirement: InternalDealNumber or lowProfileCode
-  const transactionId =
-    normalizedBody.InternalDealNumber != null && String(normalizedBody.InternalDealNumber).trim() !== ''
-      ? String(normalizedBody.InternalDealNumber).trim()
-      : '';
+  const transactionId = internalDealNumber;
   const lowProfileCode = pickFirstValue(normalizedBody, ['lowProfileCode', 'LowProfileCode']);
+  const paymentSuccess = String(responseCodeRaw || '1').trim() === '0';
+  const paymentStatus = paymentSuccess ? 'paid' : 'failed';
+  const now = new Date();
+  const billingMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
   if (!cardcomRecurringId && !cardcomAccountId && !cardcomToken) {
     console.warn(`[${ts()}] MasterRecurring webhook without identifiers`, normalizedBody);
     return;
   }
 
-  if (transactionId) {
-    await mergeDealCardcomRecurringIds(transactionId, {
-      cardcomAccountId,
-      cardcomRecurringId,
-      cardcomToken,
-    });
-    return;
-  }
-
-  if (lowProfileCode) {
-    await mergeDealCardcomRecurringIdsByLowProfileCode(lowProfileCode, {
-      cardcomAccountId,
-      cardcomRecurringId,
-      cardcomToken,
-    });
-    return;
-  }
-
-  console.warn(`[${ts()}] MasterRecurring webhook could not map deal (missing transactionId + lowProfileCode)`, {
-    cardcomAccountId: cardcomAccountId || null,
-    cardcomRecurringId: cardcomRecurringId || null,
-    hasToken: !!cardcomToken,
+  const parent = await findDealForRecurringEvent({
+    transactionId,
+    lowProfileCode,
+    cardcomRecurringId,
+    cardcomAccountId,
+    cardcomToken,
   });
+  if (!parent) {
+    console.warn(`[${ts()}] MasterRecurring webhook could not map parent deal`, {
+      transactionId: transactionId || null,
+      lowProfileCode: lowProfileCode || null,
+      cardcomAccountId: cardcomAccountId || null,
+      cardcomRecurringId: cardcomRecurringId || null,
+      hasToken: !!cardcomToken,
+    });
+    return;
+  }
+  const fallbackTransactionId = [
+    'RC',
+    cardcomRecurringId || parent.cardcomRecurringId || 'unknown',
+    billingMonth.replace('-', ''),
+    Date.now(),
+  ].join('-');
+  const recurringTransactionId = transactionId || fallbackTransactionId;
+  const mergedFormState = {
+    ...(parent.formState || {}),
+    cardcomResponseDescription: responseDescription,
+    lastFourDigits: last4,
+    cardBrand,
+    cardcomRecurringId: cardcomRecurringId || parent.cardcomRecurringId || '',
+  };
+  await saveDeal({
+    transactionId: recurringTransactionId,
+    lowProfileCode,
+    cardcomAccountId: cardcomAccountId || parent.cardcomAccountId || '',
+    cardcomRecurringId: cardcomRecurringId || parent.cardcomRecurringId || '',
+    cardcomToken: cardcomToken || '',
+    payerAmount: Number.isFinite(payerAmount) && payerAmount > 0 ? payerAmount : Number(parent.payerAmount || 0),
+    formState: mergedFormState,
+    agentId: parent.agentId || null,
+    paymentStatus,
+    terminalNumber: Number(parent.terminalNumber || process.env.CARDCOM_TERMINAL || 0),
+    source: 'cardcom-master-recurring-webhook',
+    status: !paymentSuccess ? 'payment_arrears' : undefined,
+    isRecurringCycle: true,
+    parentDealId: parent.id,
+    billingMonth,
+    indicator: {
+      responseCode: responseCodeRaw || null,
+      responsdescription: responseDescription || null,
+      internalDealNumber: internalDealNumber || null,
+      Lest4Numbers: last4 || null,
+      MutagName: cardBrand || null,
+      cardcomAccountId: cardcomAccountId || null,
+      cardcomRecurringId: cardcomRecurringId || null,
+    },
+  });
+  await mergeDealCardcomRecurringIds(parent.transactionId, {
+    cardcomAccountId,
+    cardcomRecurringId,
+    cardcomToken,
+  });
+  if (!paymentSuccess) {
+    await setDealPaymentArrears(parent.id, cardcomRecurringId || parent.cardcomRecurringId || '');
+  }
 }
 
 const OPAL_EMAIL = process.env.OPAL_EMAIL || 'opal2000@zahav.net.il';
@@ -1898,6 +1959,16 @@ app.put('/api/admin/deals/:id', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(`[${ts()}] admin/deals update error:`, e);
     res.status(400).json({ success: false, error: e.message || 'Failed to update deal' });
+  }
+});
+
+app.get('/api/admin/deals/:id/billing-history', requireAdmin, async (req, res) => {
+  try {
+    const payload = await getSubscriberBillingHistoryByDealId(req.params.id, Number(req.query.limit || 120));
+    res.json({ success: true, ...payload });
+  } catch (e) {
+    console.error(`[${ts()}] admin/deals/:id/billing-history error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to load billing history' });
   }
 });
 

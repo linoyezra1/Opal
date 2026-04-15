@@ -12,6 +12,7 @@ import {
   Archive,
   Download,
   Eye,
+  History,
   Ban,
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
@@ -82,6 +83,13 @@ function dealDisplaySubscriptionStatus(deal) {
     : String(deal?.subscriptionStatus || '—');
 }
 
+function billingMonthLabel(value) {
+  const v = String(value || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(v)) return v || '—';
+  const [y, m] = v.split('-');
+  return `${m}/${y}`;
+}
+
 const checkboxClass = 'h-4 w-4 rounded border border-input bg-background text-primary ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 const emptyEditForm = () => ({
@@ -111,6 +119,10 @@ export default function SubscribersDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState(null);
+  const [selectedDetailsTab, setSelectedDetailsTab] = useState('transaction');
+  const [billingHistory, setBillingHistory] = useState([]);
+  const [billingHistoryRecurringId, setBillingHistoryRecurringId] = useState('');
+  const [billingHistoryLoading, setBillingHistoryLoading] = useState(false);
   const [filterDialogOpen, setFilterDialogOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editDealId, setEditDealId] = useState(null);
@@ -126,6 +138,39 @@ export default function SubscribersDashboard() {
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
   const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadBillingHistory() {
+      if (!selected?.id || !token) {
+        setBillingHistory([]);
+        setBillingHistoryRecurringId('');
+        return;
+      }
+      setBillingHistoryLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/deals/${encodeURIComponent(selected.id)}/billing-history`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || !j.success) throw new Error(j.error || 'טעינת היסטוריית חיובים נכשלה');
+        if (cancelled) return;
+        setBillingHistory(Array.isArray(j.rows) ? j.rows : []);
+        setBillingHistoryRecurringId(String(j.cardcomRecurringId || selected?.cardcomRecurringId || ''));
+      } catch {
+        if (!cancelled) {
+          setBillingHistory([]);
+          setBillingHistoryRecurringId(String(selected?.cardcomRecurringId || ''));
+        }
+      } finally {
+        if (!cancelled) setBillingHistoryLoading(false);
+      }
+    }
+    loadBillingHistory();
+    return () => {
+      cancelled = true;
+    };
+  }, [selected, token]);
 
   const [data, setData] = useState({
     summary: {},
@@ -1522,11 +1567,37 @@ export default function SubscribersDashboard() {
                             <div className="flex items-center justify-end gap-1 flex-wrap">
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" type="button" onClick={() => setSelected(r.raw ?? r)} aria-label="הצג פרטים">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    type="button"
+                                    onClick={() => {
+                                      setSelected(r.raw ?? r);
+                                      setSelectedDetailsTab('transaction');
+                                    }}
+                                    aria-label="הצג פרטים"
+                                  >
                                     <Eye className="size-4" />
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>הצג פרטים</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    type="button"
+                                    onClick={() => {
+                                      setSelected(r.raw ?? r);
+                                      setSelectedDetailsTab('billingHistory');
+                                    }}
+                                    aria-label="היסטוריית חיובים"
+                                  >
+                                    <History className="size-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>היסטוריית חיובים</TooltipContent>
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -1616,107 +1687,155 @@ export default function SubscribersDashboard() {
                 הזמנה: <span className="font-mono">{selected?.transactionId || '—'}</span>
               </DialogDescription>
             </DialogHeader>
-            <div className="overflow-auto max-h-[70vh] space-y-4">
-              {(() => {
-                const oid = String(selected?.organizationId || selected?.formState?.organizationId || '').trim();
-                const oname = String(selected?.organizationName || selected?.formState?.organizationName || '').trim();
-                const linked = !!(oid || selected?.isOrganizationDeal || String(selected?.source || '') === 'org-bulk-import');
-                if (!linked) return null;
-                return (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base">ארגון (קריאה בלבד)</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm font-medium">{oname || `מקושר לארגון (${oid || '—'})`}</p>
-                    </CardContent>
-                  </Card>
-                );
-              })()}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">סטטוס מנוי ותשלום</CardTitle>
-                </CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                  <div className="rounded-lg border p-3">
-                    <p className="text-xs text-muted-foreground mb-1">סטטוס תשלום</p>
-                    <p className="font-semibold">{dealDisplayPaymentStatus(selected)}</p>
-                  </div>
-                  <div className="rounded-lg border p-3">
-                    <p className="text-xs text-muted-foreground mb-1">סטטוס מנוי</p>
-                    <p className="font-semibold">{dealDisplaySubscriptionStatus(selected)}</p>
-                  </div>
-                  <div className="rounded-lg border p-3">
-                    <p className="text-xs text-muted-foreground mb-1">סכום עסקה</p>
-                    <p className="font-semibold">{formatCurrency(selected?.payerAmount ?? selected?.amount ?? 0)}</p>
-                  </div>
-                  <div className="rounded-lg border p-3">
-                    <p className="text-xs text-muted-foreground mb-1">סטטוס השלמה</p>
-                    <p className="font-semibold">{selected?.completionStatus || '—'}</p>
-                  </div>
-                  <div className="rounded-lg border p-3">
-                    <p className="text-xs text-muted-foreground mb-1">עלות ספק</p>
-                    <p className="font-semibold">{formatCurrency(selected?.formState?.resolvedVendorCost ?? 0)}</p>
-                  </div>
-                  <div className="rounded-lg border p-3">
-                    <p className="text-xs text-muted-foreground mb-1">עמלת סוכן</p>
-                    <p className="font-semibold">{formatCurrency(selected?.formState?.resolvedAgentCommission ?? 0)}</p>
-                  </div>
-                  <div className="rounded-lg border p-3">
-                    <p className="text-xs text-muted-foreground mb-1">רווח נקי</p>
-                    <p className="font-semibold text-primary">
-                      {formatCurrency(selected?.formState?.resolvedNetProfit ?? 0)}
+            <Tabs value={selectedDetailsTab} onValueChange={setSelectedDetailsTab} className="overflow-hidden">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="transaction">פרטי עסקה</TabsTrigger>
+                <TabsTrigger value="beneficiary">פרטי מוטב</TabsTrigger>
+                <TabsTrigger value="billingHistory">היסטוריית חיובים</TabsTrigger>
+              </TabsList>
+              <TabsContent value="transaction" className="overflow-auto max-h-[68vh] space-y-4 mt-3">
+                {(() => {
+                  const oid = String(selected?.organizationId || selected?.formState?.organizationId || '').trim();
+                  const oname = String(selected?.organizationName || selected?.formState?.organizationName || '').trim();
+                  const linked = !!(oid || selected?.isOrganizationDeal || String(selected?.source || '') === 'org-bulk-import');
+                  if (!linked) return null;
+                  return (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">ארגון (קריאה בלבד)</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm font-medium">{oname || `מקושר לארגון (${oid || '—'})`}</p>
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">סטטוס מנוי ותשלום</CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                    <div className="rounded-lg border p-3">
+                      <p className="text-xs text-muted-foreground mb-1">סטטוס תשלום</p>
+                      <p className="font-semibold">{dealDisplayPaymentStatus(selected)}</p>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <p className="text-xs text-muted-foreground mb-1">סטטוס מנוי</p>
+                      <p className="font-semibold">{dealDisplaySubscriptionStatus(selected)}</p>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <p className="text-xs text-muted-foreground mb-1">סכום עסקה</p>
+                      <p className="font-semibold">{formatCurrency(selected?.payerAmount ?? selected?.amount ?? 0)}</p>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <p className="text-xs text-muted-foreground mb-1">סטטוס השלמה</p>
+                      <p className="font-semibold">{selected?.completionStatus || '—'}</p>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <p className="text-xs text-muted-foreground mb-1">עלות ספק</p>
+                      <p className="font-semibold">{formatCurrency(selected?.formState?.resolvedVendorCost ?? 0)}</p>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <p className="text-xs text-muted-foreground mb-1">עמלת סוכן</p>
+                      <p className="font-semibold">{formatCurrency(selected?.formState?.resolvedAgentCommission ?? 0)}</p>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <p className="text-xs text-muted-foreground mb-1">רווח נקי</p>
+                      <p className="font-semibold text-primary">
+                        {formatCurrency(selected?.formState?.resolvedNetProfit ?? 0)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <p className="text-xs text-muted-foreground mb-1">תאריך תחילת מנוי</p>
+                      <p className="font-semibold">{selected?.formState?.subscriptionStartDate || selected?.subscriptionStartDate || '—'}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              <TabsContent value="beneficiary" className="overflow-auto max-h-[68vh] space-y-4 mt-3">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">מבוטח ראשי</CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                    <div>שם מלא: <strong>{[selectedPrimary.firstName, selectedPrimary.lastName].filter(Boolean).join(' ') || '—'}</strong></div>
+                    <div>ת.ז: <strong dir="ltr">{selectedPrimary.id || '—'}</strong></div>
+                    <div>תאריך לידה: <strong>{selectedPrimary.dateOfBirth || '—'}</strong></div>
+                    <div>מין: <strong>{selectedPrimary.gender || '—'}</strong></div>
+                    <div>טלפון: <strong dir="ltr">{selectedPrimary.phone || '—'}</strong></div>
+                    <div>אימייל: <strong dir="ltr">{selectedPrimary.email || '—'}</strong></div>
+                    <div>כתובת: <strong>{selectedPrimary.address || '—'}</strong></div>
+                    <div>מצב משפחתי: <strong>{selectedPrimary.maritalStatus || '—'}</strong></div>
+                    <div>קופת חולים: <strong>{selectedPrimary.healthFund || '—'}</strong></div>
+                    <div>ביטוח משלים: <strong>{selectedPrimary.supplementalInsurance || '—'}</strong></div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">מוטבים נוספים</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {selectedAdditional.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">לא נמצאו מוטבים נוספים בעסקה זו.</p>
+                    ) : (
+                      selectedAdditional.map((m, idx) => (
+                        <div key={`${m.id || 'ben'}-${idx}`} className="rounded-lg border p-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                          <div>שם: <strong>{[m.firstName, m.lastName].filter(Boolean).join(' ') || '—'}</strong></div>
+                          <div>ת.ז: <strong dir="ltr">{m.id || '—'}</strong></div>
+                          <div>תאריך לידה: <strong>{m.dateOfBirth || '—'}</strong></div>
+                          <div>מין: <strong>{m.gender || '—'}</strong></div>
+                          <div>טלפון: <strong dir="ltr">{m.phone || '—'}</strong></div>
+                          <div>אימייל: <strong dir="ltr">{m.email || '—'}</strong></div>
+                          <div>קרבה: <strong>{m.relation || m.relationship || '—'}</strong></div>
+                          <div>מצב משפחתי: <strong>{m.maritalStatus || '—'}</strong></div>
+                          <div>קופת חולים: <strong>{m.healthFund || '—'}</strong></div>
+                          <div>ביטוח משלים: <strong>{m.supplementalInsurance || '—'}</strong></div>
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              <TabsContent value="billingHistory" className="overflow-auto max-h-[68vh] space-y-3 mt-3">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">היסטוריית חיובים</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="rounded-md border overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>חודש חיוב</TableHead>
+                            <TableHead>סטטוס (הצלחה/כישלון)</TableHead>
+                            <TableHead>סיבת השגיאה (מתוך responsdescription)</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {billingHistory.map((row) => (
+                            <TableRow key={row.id}>
+                              <TableCell>{billingMonthLabel(row.billingMonth)}</TableCell>
+                              <TableCell className={row.status === 'כישלון' ? 'text-destructive font-medium' : ''}>{row.status}</TableCell>
+                              <TableCell>{row.errorReason || '—'}</TableCell>
+                            </TableRow>
+                          ))}
+                          {!billingHistory.length ? (
+                            <TableRow>
+                              <TableCell colSpan={3} className="text-center text-muted-foreground">
+                                {billingHistoryLoading ? 'טוען…' : 'אין רשומות להצגה'}
+                              </TableCell>
+                            </TableRow>
+                          ) : null}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {`לבדיקה מעמיקה וניהול אמצעי תשלום, יש להיכנס לממשק קארדקום עם מספר הוראת קבע: ${billingHistoryRecurringId || selected?.cardcomRecurringId || '—'}`}
                     </p>
-                  </div>
-                  <div className="rounded-lg border p-3">
-                    <p className="text-xs text-muted-foreground mb-1">תאריך תחילת מנוי</p>
-                    <p className="font-semibold">{selected?.formState?.subscriptionStartDate || selected?.subscriptionStartDate || '—'}</p>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">מבוטח ראשי</CardTitle>
-                </CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                  <div>שם מלא: <strong>{[selectedPrimary.firstName, selectedPrimary.lastName].filter(Boolean).join(' ') || '—'}</strong></div>
-                  <div>ת.ז: <strong dir="ltr">{selectedPrimary.id || '—'}</strong></div>
-                  <div>תאריך לידה: <strong>{selectedPrimary.dateOfBirth || '—'}</strong></div>
-                  <div>מין: <strong>{selectedPrimary.gender || '—'}</strong></div>
-                  <div>טלפון: <strong dir="ltr">{selectedPrimary.phone || '—'}</strong></div>
-                  <div>אימייל: <strong dir="ltr">{selectedPrimary.email || '—'}</strong></div>
-                  <div>כתובת: <strong>{selectedPrimary.address || '—'}</strong></div>
-                  <div>מצב משפחתי: <strong>{selectedPrimary.maritalStatus || '—'}</strong></div>
-                  <div>קופת חולים: <strong>{selectedPrimary.healthFund || '—'}</strong></div>
-                  <div>ביטוח משלים: <strong>{selectedPrimary.supplementalInsurance || '—'}</strong></div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">מוטבים נוספים</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {selectedAdditional.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">לא נמצאו מוטבים נוספים בעסקה זו.</p>
-                  ) : (
-                    selectedAdditional.map((m, idx) => (
-                      <div key={`${m.id || 'ben'}-${idx}`} className="rounded-lg border p-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                        <div>שם: <strong>{[m.firstName, m.lastName].filter(Boolean).join(' ') || '—'}</strong></div>
-                        <div>ת.ז: <strong dir="ltr">{m.id || '—'}</strong></div>
-                        <div>תאריך לידה: <strong>{m.dateOfBirth || '—'}</strong></div>
-                        <div>מין: <strong>{m.gender || '—'}</strong></div>
-                        <div>טלפון: <strong dir="ltr">{m.phone || '—'}</strong></div>
-                        <div>אימייל: <strong dir="ltr">{m.email || '—'}</strong></div>
-                        <div>קרבה: <strong>{m.relation || m.relationship || '—'}</strong></div>
-                        <div>מצב משפחתי: <strong>{m.maritalStatus || '—'}</strong></div>
-                        <div>קופת חולים: <strong>{m.healthFund || '—'}</strong></div>
-                        <div>ביטוח משלים: <strong>{m.supplementalInsurance || '—'}</strong></div>
-                      </div>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
             <DialogFooter className="flex-row-reverse sm:flex-row-reverse">
               <Button type="button" variant="outline" onClick={() => setSelected(null)}>
                 סגור

@@ -137,7 +137,12 @@ export async function saveDeal(params) {
     /** עמלת סוכן לעסקה (מחושב מפרופיל סוכן / מחירון) */
     commissionAmount,
     /** חודש שיוך לדוחות (תשלום מרוכז וכו׳) */
-    billingMonth,
+    billingMonth: String(params.billingMonth || billingMonth),
+    isRecurringCycle: params.isRecurringCycle === true,
+    parentDealId:
+      params.parentDealId != null && String(params.parentDealId).trim() !== ''
+        ? String(params.parentDealId).trim()
+        : null,
     organizationId: organizationId || null,
     isOrganizationDeal,
     memberType,
@@ -149,6 +154,103 @@ export async function saveDeal(params) {
 
   const result = await deals.insertOne(doc);
   return { duplicate: false, id: String(result.insertedId) };
+}
+
+export async function findDealForRecurringEvent(params = {}) {
+  const db = await getDb();
+  const deals = db.collection('deals');
+  const tid = String(params.transactionId || '').trim();
+  const lowProfileCode = String(params.lowProfileCode || '').trim();
+  const recurringId = String(params.cardcomRecurringId || '').trim();
+  const accountId = String(params.cardcomAccountId || '').trim();
+  const token = String(params.cardcomToken || '').trim();
+  const or = [];
+  if (tid) or.push({ transactionId: tid });
+  if (lowProfileCode) or.push({ lowProfileCode });
+  if (recurringId) or.push({ cardcomRecurringId: recurringId });
+  if (accountId) or.push({ cardcomAccountId: accountId });
+  if (token) or.push({ cardcomToken: token });
+  if (!or.length) return null;
+  const rows = await deals
+    .find({ $or: or, isActive: { $ne: false } })
+    .sort({ createdAt: 1 })
+    .limit(20)
+    .toArray();
+  if (!rows.length) return null;
+  const primary = rows.find((d) => d.isRecurringCycle !== true) || rows[0];
+  return {
+    id: String(primary._id),
+    transactionId: String(primary.transactionId || ''),
+    formState: primary.formState && typeof primary.formState === 'object' ? primary.formState : {},
+    payerAmount: Number(primary.payerAmount || 0),
+    terminalNumber: Number(primary.terminalNumber || 0),
+    agentId: primary.agentId ? String(primary.agentId) : null,
+    source: String(primary.source || ''),
+    cardcomRecurringId: String(primary.cardcomRecurringId || ''),
+  };
+}
+
+export async function setDealPaymentArrears(parentDealId, recurringId = '') {
+  const db = await getDb();
+  const deals = db.collection('deals');
+  const now = new Date();
+  const rid = String(recurringId || '').trim();
+  const parentId = String(parentDealId || '').trim();
+  if (parentId && ObjectId.isValid(parentId)) {
+    await deals.updateOne(
+      { _id: new ObjectId(parentId) },
+      { $set: { subscriptionStatus: 'שגיאת סליקה - פיגור בתשלום', updatedAt: now } }
+    );
+    return;
+  }
+  if (rid) {
+    await deals.updateMany(
+      { cardcomRecurringId: rid, isRecurringCycle: { $ne: true }, isActive: { $ne: false } },
+      { $set: { subscriptionStatus: 'שגיאת סליקה - פיגור בתשלום', updatedAt: now } }
+    );
+  }
+}
+
+export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
+  const db = await getDb();
+  if (!ObjectId.isValid(String(dealId || ''))) return { cardcomRecurringId: '', rows: [] };
+  const deals = db.collection('deals');
+  const seed = await deals.findOne({ _id: new ObjectId(String(dealId)) });
+  if (!seed) return { cardcomRecurringId: '', rows: [] };
+  const recurringId = String(seed.cardcomRecurringId || '').trim();
+  const parentDealId = String(seed.parentDealId || '').trim() || String(seed._id);
+  const or = [];
+  if (recurringId) or.push({ cardcomRecurringId: recurringId });
+  if (parentDealId && ObjectId.isValid(parentDealId)) {
+    const oid = new ObjectId(parentDealId);
+    or.push({ _id: oid });
+    or.push({ parentDealId });
+  }
+  if (!or.length) {
+    or.push({ _id: seed._id });
+  }
+  const docs = await deals
+    .find({ $or: or, isActive: { $ne: false } })
+    .sort({ createdAt: -1 })
+    .limit(Math.max(1, Math.min(Number(limit) || 120, 240)))
+    .toArray();
+  const rows = docs.map((d) => {
+    const month =
+      String(d.billingMonth || '').trim() ||
+      formatBillingMonthFromDate(d.createdAt instanceof Date ? d.createdAt : new Date(d.createdAt));
+    const success = /success|paid|test_success|completed/i.test(String(d.paymentStatus || ''));
+    const errorReason = String(d?.indicator?.responsdescription || d?.formState?.cardcomResponseDescription || '').trim();
+    return {
+      id: String(d._id),
+      billingMonth: month,
+      status: success ? 'הצלחה' : 'כישלון',
+      paymentStatus: String(d.paymentStatus || ''),
+      errorReason: errorReason || (success ? '—' : String(d.paymentStatus || '—')),
+      createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+      isRecurringCycle: d.isRecurringCycle === true,
+    };
+  });
+  return { cardcomRecurringId: recurringId, rows };
 }
 
 /** מיזוג מזהי recurring מ־Cardcom לעסקה קיימת (למשל duplicate webhook או עדכון מאוחר) */
