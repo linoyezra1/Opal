@@ -10,6 +10,8 @@ import {
   LogOut,
   PanelRightClose,
   PanelRightOpen,
+  Menu,
+  X,
   LayoutTemplate,
   Phone,
   FileBarChart2,
@@ -47,6 +49,7 @@ const groups = [
 export default function AdminPageShell({ children }) {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = React.useState(false);
+  const [mobileOpen, setMobileOpen] = React.useState(false);
 
   function logout() {
     localStorage.removeItem(TOKEN_KEY);
@@ -57,7 +60,9 @@ export default function AdminPageShell({ children }) {
     <div dir="rtl" className="min-h-screen bg-background flex">
       <aside
         className={cn(
-          'border-s border-border bg-card flex flex-col shrink-0 transition-[width] duration-200',
+          'border-s border-border bg-card flex flex-col shrink-0 transition-all duration-200 z-30',
+          'fixed inset-y-0 start-0 md:static',
+          mobileOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0',
           collapsed ? 'w-[72px]' : 'w-60'
         )}
       >
@@ -78,6 +83,16 @@ export default function AdminPageShell({ children }) {
             aria-label={collapsed ? 'הרחב תפריט' : 'כווץ תפריט'}
           >
             {collapsed ? <PanelRightOpen className="size-4" /> : <PanelRightClose className="size-4" />}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="md:hidden shrink-0"
+            onClick={() => setMobileOpen(false)}
+            aria-label="סגירת תפריט"
+          >
+            <X className="size-4" />
           </Button>
         </div>
 
@@ -130,6 +145,21 @@ export default function AdminPageShell({ children }) {
           )}
         </div>
       </aside>
+
+      {!mobileOpen ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="fixed top-3 end-3 z-40 md:hidden"
+          onClick={() => setMobileOpen(true)}
+          aria-label="פתיחת תפריט"
+        >
+          <Menu className="size-4" />
+        </Button>
+      ) : null}
+
+      {mobileOpen ? <button type="button" className="fixed inset-0 z-20 bg-black/20 md:hidden" onClick={() => setMobileOpen(false)} aria-label="סגירת תפריט" /> : null}
 
       <main className="flex-1 flex flex-col min-w-0">
         <div className="flex-1 overflow-auto" dir="rtl">

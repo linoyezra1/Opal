@@ -340,7 +340,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
       if (!String(fs0.fullName || '').trim() || !String(fs0.email || '').trim()) {
         return res.status(400).json({
           success: false,
-          error: 'בהרשמה ארגונית נדרשים שם מלא, תעודת זהות ואימייל.',
+          error: 'בהרשמה ארגונית נדרשים שם מלא ואימייל.',
         });
       }
     }
@@ -352,15 +352,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
     }
     if (orgPrivateOk || landingFlow) {
       const idDigits = String(fs0.id || '').replace(/\D/g, '');
-      if (!idDigits) {
-        return res.status(400).json({
-          success: false,
-          error: orgPrivateOk
-            ? 'בהרשמה ארגונית נדרשים שם מלא, תעודת זהות ואימייל.'
-            : 'נא למלא תעודת זהות.',
-        });
-      }
-      if (!validateIsraeliId(idDigits)) {
+      if (idDigits && !validateIsraeliId(idDigits)) {
         return res.status(400).json({ success: false, error: ISRAELI_ID_INVALID_MSG });
       }
     }
@@ -394,8 +386,10 @@ app.post('/api/create-checkout-session', async (req, res) => {
       priceListId: econ.priceListId || formState.priceListId,
     };
     if (orgPrivateOk || landingFlow) {
-      const stored = formatIsraeliIdStored(enrichedForm.id);
-      if (stored) enrichedForm.id = stored;
+      if (String(enrichedForm.id || '').trim()) {
+        const stored = formatIsraeliIdStored(enrichedForm.id);
+        if (stored) enrichedForm.id = stored;
+      }
     }
 
     const result = await createLowProfilePage({

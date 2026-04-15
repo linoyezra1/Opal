@@ -78,6 +78,7 @@ const HEADER_LABELS = {
   agentName: 'סוכן',
   orgName: 'ארגון',
   organizationName: 'ארגון',
+  cardcomRecurringId: 'אסמכתא קארדקום',
   price: 'מחיר',
   comments: 'הערות',
 };
@@ -129,7 +130,14 @@ export default function AdminControlPanel() {
       return;
     }
     if (key === 'contactTasks' && row.id) {
-      navigate(`/admin/contacts?editKind=${encodeURIComponent(row.kind || 'private')}&editId=${encodeURIComponent(row.id)}`);
+      const isOrgLead = String(row.kind || '').toLowerCase() === 'corporate';
+      if (isOrgLead) {
+        const orgName = String(row.organizationName || row.fullName || '').trim();
+        navigate(`/admin/organizations?search=${encodeURIComponent(orgName)}&editId=${encodeURIComponent(row.organizationId || '')}`);
+        return;
+      }
+      const search = String(row.fullName || row.customerName || row.name || row.id || '').trim();
+      navigate(`/admin/contacts?search=${encodeURIComponent(search)}&editKind=${encodeURIComponent(row.kind || 'private')}&editId=${encodeURIComponent(row.id)}`);
       return;
     }
     if (key === 'pendingBeneficiaries' && row.id) {
@@ -225,7 +233,7 @@ export default function AdminControlPanel() {
                   <Bar dataKey="netProfit" fill="#c89b3c" name="רווח נקי" />
                 </BarChart>
               </ResponsiveContainer>
-            ) : <div className="flex h-full items-center justify-center text-muted-foreground">אין נתונים</div>}
+            ) : <div className="flex h-full items-center justify-center text-muted-foreground">אין רשומות להצגה</div>}
           </CardContent>
         </Card>
       </div>
@@ -287,6 +295,13 @@ export default function AdminControlPanel() {
                     )}
                   </TableRow>
                 ))}
+                {!rows.length ? (
+                  <TableRow>
+                    <TableCell colSpan={Math.max(columns.length + (readOnlyDrilldown ? 0 : 1), 1)} className="text-center text-muted-foreground">
+                      אין רשומות להצגה
+                    </TableCell>
+                  </TableRow>
+                ) : null}
               </TableBody>
             </Table>
           </div>

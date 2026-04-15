@@ -9,7 +9,7 @@ import {
   Users,
   Calendar,
   Edit2,
-  Trash2,
+  Archive,
   Download,
   Eye,
   Ban,
@@ -625,7 +625,7 @@ export default function SubscribersDashboard() {
           title="העברה לארכיון"
           message={
             deleteTarget
-              ? `להעביר לארכיון את העסקה ${deleteTarget.transactionId || deleteTarget.id}? פעולה זו תעביר את המידע לארכיון.`
+              ? `להעביר לארכיון את העסקה ${deleteTarget.transactionId || deleteTarget.id}? פעולה זו תעביר את המידע לארכיון. חשוב לזכור: פעולה זו אינה מבטלת חיובים עתידיים בקארדקום. נא לבטל חיוב עתידי קודם לכן.`
               : ''
           }
           confirmLabel="הפוך ללא פעיל"
@@ -1381,7 +1381,7 @@ export default function SubscribersDashboard() {
                         נקה בחירה
                       </Button>
                       <Button type="button" variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)} disabled={bulkDeleteLoading}>
-                        {bulkDeleteLoading ? <Spinner className="me-2" /> : <Trash2 className="size-4 me-1" />}
+                        {bulkDeleteLoading ? <Spinner className="me-2" /> : <Archive className="size-4 me-1" />}
                         מחיקת נבחרים
                       </Button>
                     </div>
@@ -1545,7 +1545,7 @@ export default function SubscribersDashboard() {
                                     onClick={() => setDeleteTarget({ id: r.id, transactionId: r.transactionId })}
                                     aria-label="מחק"
                                   >
-                                    <Trash2 className="size-4 text-destructive" />
+                                    <Archive className="size-4 text-destructive" />
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>מחיקה</TooltipContent>

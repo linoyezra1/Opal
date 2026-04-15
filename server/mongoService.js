@@ -1850,8 +1850,11 @@ export async function getControlPanelOverviewData(filters = {}) {
         id: String(d._id || ''),
         kind: 'corporate',
         fullName: d.contactName || d.organizationName || '—',
+        organizationName: d.organizationName || '',
+        organizationId: String(d.organizationId || ''),
         phone: d.phone || '—',
         email: d.email || '—',
+        comments: String(d.notes || d.adminNotes || ''),
         createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
       })),
   ];

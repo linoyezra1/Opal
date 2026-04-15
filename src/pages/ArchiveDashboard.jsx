@@ -50,6 +50,26 @@ const HEADER_LABELS = {
   agentName: 'סוכן',
   orgName: 'ארגון',
   organizationName: 'ארגון',
+  companyName: 'שם חברה',
+  companyId: 'ח.פ / מזהה חברה',
+  officialAddress: 'כתובת רשמית',
+  companyEmail: 'אימייל חברה',
+  fieldOfActivity: 'תחום פעילות',
+  employeesCount: 'מספר עובדים',
+  billingType: 'סוג חיוב',
+  billingMethod: 'שיטת חיוב',
+  monthlyPricePerMember: 'מחיר חודשי לחבר',
+  contactEmail: 'אימייל ליצירת קשר',
+  contactPhone: 'טלפון ליצירת קשר',
+  notes: 'הערות',
+  name: 'שם',
+  message: 'הודעה',
+  source: 'מקור',
+  leadStatus: 'סטטוס ליד',
+  requestType: 'סוג בקשה',
+  sku: 'קוד מוצר',
+  providerCost: 'עלות ספק',
+  isActive: 'פעיל',
 };
 
 function labelForColumn(key) {
@@ -111,6 +131,15 @@ export default function ArchiveDashboard() {
           {TAB_CONFIG.map((tab) => {
             const rows = Array.isArray(data?.[tab.key]) ? data[tab.key] : [];
             const columns = rows.length ? Object.keys(rows[0]).filter((k) => !['_id', 'id', 'productLinks', 'products', 'bankDetails', 'contactPerson', 'accounting', 'additionalContact'].includes(k)) : [];
+            const preferredOrder = ['companyName', 'fullName', 'organizationName', 'email', 'phone', 'notes'];
+            const displayColumns = [...columns].sort((a, b) => {
+              const ia = preferredOrder.indexOf(a);
+              const ib = preferredOrder.indexOf(b);
+              if (ia === -1 && ib === -1) return 0;
+              if (ia === -1) return 1;
+              if (ib === -1) return -1;
+              return ia - ib;
+            });
             return (
               <TabsContent key={tab.key} value={tab.key}>
                 <Card>
@@ -121,14 +150,14 @@ export default function ArchiveDashboard() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          {columns.slice(0, 5).map((c) => <TableHead key={c}>{labelForColumn(c)}</TableHead>)}
+                          {displayColumns.slice(0, 5).map((c) => <TableHead key={c}>{labelForColumn(c)}</TableHead>)}
                           <TableHead>פעולה</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {rows.map((row) => (
                           <TableRow key={row.id}>
-                            {columns.slice(0, 5).map((c) => <TableCell key={`${row.id}-${c}`}>{String(row[c] ?? '')}</TableCell>)}
+                            {displayColumns.slice(0, 5).map((c) => <TableCell key={`${row.id}-${c}`}>{String(row[c] ?? '')}</TableCell>)}
                             <TableCell>
                               <Button size="sm" variant="outline" onClick={() => restore(tab.key, row.id)} disabled={loading}>
                                 <ArchiveRestore className="size-4 me-1" />
@@ -139,7 +168,7 @@ export default function ArchiveDashboard() {
                         ))}
                         {!rows.length ? (
                           <TableRow>
-                            <TableCell colSpan={6} className="text-center text-muted-foreground">אין רשומות בארכיון</TableCell>
+                            <TableCell colSpan={6} className="text-center text-muted-foreground">אין רשומות להצגה</TableCell>
                           </TableRow>
                         ) : null}
                       </TableBody>

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { Building2, Upload, Download, ArrowRight, Users } from 'lucide-react';
+import { Building2, Upload, Download, ArrowRight, Users, Link as LinkIcon, Copy } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -65,6 +65,7 @@ export default function OrganizationDetailPage() {
   const [billingChangePending, setBillingChangePending] = useState(null);
   const [products, setProducts] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
     if (!token || !id) return;
@@ -214,6 +215,7 @@ export default function OrganizationDetailPage() {
   const billingTypeNorm = String(org.billingType || '').trim().toLowerCase();
   const isCentralizedBilling = billingTypeNorm === 'centralized';
   const privateBillingDeals = deals || [];
+  const privateRegistrationUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/register?orgId=${org.id || ''}`;
 
   return (
     <AdminPageShell>
@@ -268,13 +270,26 @@ export default function OrganizationDetailPage() {
               <span>{org.activeMemberCount != null ? `${org.activeMemberCount} חברים פעילים` : ''}</span>
             </p>
             {org.billingType === 'Private' ? (
-              <p className="text-xs text-muted-foreground mt-2 break-all">
-                קישור הרשמה (תשלום פרטי):{' '}
-                <code className="rounded bg-muted px-1 py-0.5">
-                  {typeof window !== 'undefined' ? window.location.origin : ''}/register?orgId=
-                  {org.id}
-                </code>
-              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(privateRegistrationUrl);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 1200);
+                    } catch {
+                      setCopied(false);
+                    }
+                  }}
+                  aria-label="העתקת קישור הרשמה"
+                >
+                  {copied ? <Copy className="size-4 text-emerald-600" /> : <LinkIcon className="size-4" />}
+                </Button>
+                <span className="text-xs text-muted-foreground break-all">{privateRegistrationUrl}</span>
+              </div>
             ) : null}
           </div>
         </div>
@@ -661,7 +676,7 @@ export default function OrganizationDetailPage() {
                             {privateBillingDeals.map((d) => {
                               const statusText = String(d.cardcomResponseDescription || d.paymentStatus || '—').trim();
                               const isFailed = /fail|declin|error|denied|נכשל|סירוב/i.test(String(d.paymentStatus || ''));
-                              const ref = d.cardcomInternalDealNumber || d.cardcomAccountId || d.lowProfileCode || '—';
+                              const ref = d.cardcomRecurringId || '—';
                               return (
                                 <TableRow key={d.id}>
                                   <TableCell className="text-xs whitespace-nowrap">

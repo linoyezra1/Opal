@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Building2, Plus, Edit2, Archive } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
@@ -49,6 +49,7 @@ const emptyForm = () => ({
 });
 
 export default function OrganizationsDashboard() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [token] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -96,6 +97,11 @@ export default function OrganizationsDashboard() {
   useEffect(() => {
     loadRows();
   }, [loadRows]);
+
+  useEffect(() => {
+    const deepSearch = String(searchParams.get('search') || '').trim();
+    if (deepSearch) setSearch(deepSearch);
+  }, [searchParams]);
 
   function openAdd() {
     setAddForm(emptyForm());
@@ -259,6 +265,29 @@ export default function OrganizationsDashboard() {
       return hay.includes(q);
     });
   }, [rows, search, billingFilter]);
+
+  useEffect(() => {
+    const editId = String(searchParams.get('editId') || '').trim();
+    const deepSearch = String(searchParams.get('search') || '').trim().toLowerCase();
+    if (!rows.length) return;
+    if (!editId && !deepSearch) return;
+    const target =
+      rows.find((r) => String(r.id || '') === editId) ||
+      rows.find((r) => String(r.companyName || '').toLowerCase().includes(deepSearch));
+    if (!target) return;
+    setEditTab('org');
+    setEditOrg({
+      ...emptyForm(),
+      ...target,
+      pricingMethod: Array.isArray(target.customPricing) && target.customPricing.length ? 'custom' : 'priceList',
+      billingType: target.billingType || (target.billingMethod?.includes('מרוכז') ? 'Centralized' : 'Private'),
+    });
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('editId');
+      return next;
+    }, { replace: true });
+  }, [rows, searchParams, setSearchParams]);
 
   return (
     <TooltipProvider delayDuration={250}>

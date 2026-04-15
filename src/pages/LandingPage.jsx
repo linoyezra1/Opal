@@ -20,11 +20,7 @@ import {
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import {
-  ISRAELI_ID_INVALID_MSG,
   normalizeIsraeliIdDigitsInput,
-  validateIsraeliId,
-  shouldShowIsraeliIdChecksumError,
-  formatIsraeliIdStored,
 } from '../utils/israeliId.js';
 
 const ORG_JOIN_REQUEST_URL = 'https://opal-production-5fee.up.railway.app/organization-join-request';
@@ -316,7 +312,6 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
   });
   const [productId, setProductId] = useState('');
   const [fullName, setFullName] = useState('');
-  const [idNum, setIdNum] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [beneficiaryCount, setBeneficiaryCount] = useState(0);
@@ -472,20 +467,6 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
         setSubmitError('נא למלא שם מלא');
         return;
       }
-      const idDigits = normalizeIsraeliIdDigitsInput(idNum);
-      if (!idDigits) {
-        setSubmitError('נא למלא תעודת זהות');
-        return;
-      }
-      if (!validateIsraeliId(idDigits)) {
-        setSubmitError(ISRAELI_ID_INVALID_MSG);
-        return;
-      }
-      const idStored = formatIsraeliIdStored(idDigits);
-      if (!idStored) {
-        setSubmitError(ISRAELI_ID_INVALID_MSG);
-        return;
-      }
       if (!validatePhone(phone)) {
         setSubmitError('נא למלא טלפון תקין');
         return;
@@ -504,7 +485,6 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
         productId,
         fullName: fullName.trim(),
         phone: phone.trim(),
-        id: idStored,
         email: email.trim(),
         organizationName: ctx?.organizationName || 'לקוח פרטי',
         agentId: String(selectedProduct?.agentId || ''),
@@ -548,7 +528,6 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
     [
       productId,
       fullName,
-      idNum,
       phone,
       email,
       acceptedTerms,
@@ -863,22 +842,6 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                       required
                     />
                   </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-medium text-foreground">תעודת זהות *</label>
-                    <input
-                      dir="ltr"
-                      inputMode="numeric"
-                      maxLength={9}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      value={idNum}
-                      onChange={(e) => setIdNum(normalizeIsraeliIdDigitsInput(e.target.value))}
-                      placeholder="7–9 ספרות"
-                      required
-                    />
-                    {shouldShowIsraeliIdChecksumError(idNum) ? (
-                      <p className="text-destructive text-sm">{ISRAELI_ID_INVALID_MSG}</p>
-                    ) : null}
-                  </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">טלפון *</label>
                     <input
@@ -990,9 +953,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                   disabled={
                     submitting ||
                     !selectedProduct ||
-                    !acceptedTerms ||
-                    !normalizeIsraeliIdDigitsInput(idNum) ||
-                    !validateIsraeliId(idNum)
+                    !acceptedTerms
                   }
                 >
                   {submitting ? 'מעביר לתשלום…' : 'המשך לתשלום מאובטח'}
