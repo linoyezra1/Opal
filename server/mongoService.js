@@ -743,6 +743,7 @@ export async function findDealsByOrganizationId(organizationId, limit = 500) {
     memberType: d.memberType || 'Primary',
     isOrganizationDeal: !!d.isOrganizationDeal,
     fullName: d.formState?.fullName,
+    productName: d.formState?.productName || d.formState?.subscriptionProductName || '',
     idNumber: d.formState?.id,
     email: d.formState?.email,
     phone: d.formState?.phone,
@@ -751,6 +752,9 @@ export async function findDealsByOrganizationId(organizationId, limit = 500) {
     healthFund: d.formState?.healthFund,
     address: d.formState?.address,
     createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+    lowProfileCode: String(d.lowProfileCode || '').trim(),
+    cardcomAccountId: String(d.cardcomAccountId || '').trim(),
+    cardcomInternalDealNumber: String(d?.indicator?.internalDealNumber || '').trim(),
     source: d.source,
   }));
 }

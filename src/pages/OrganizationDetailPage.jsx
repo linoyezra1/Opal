@@ -210,6 +210,9 @@ export default function OrganizationDetailPage() {
   }
 
   const billingLabel = org.billingType === 'Centralized' ? 'תשלום מרוכז' : 'תשלום פרטי';
+  const billingTypeNorm = String(org.billingType || '').trim().toLowerCase();
+  const isCentralizedBilling = billingTypeNorm === 'centralized';
+  const successfulPrivateDeals = (deals || []).filter((d) => /success|paid|test_success/i.test(String(d.paymentStatus || '')));
 
   return (
     <AdminPageShell>
@@ -594,40 +597,89 @@ export default function OrganizationDetailPage() {
             <Card className="text-right" dir="rtl">
               <CardHeader className="text-right">
                 <CardTitle>תשלומים חודשיים</CardTitle>
-                <CardDescription>חיוב חודשי לפי חברים פעילים × מחיר לחבר</CardDescription>
+                <CardDescription>
+                  {isCentralizedBilling
+                    ? 'חיוב חודשי לפי חברים פעילים × מחיר לחבר'
+                    : 'ארגון זה מוגדר לתשלום פרטי מול עובדי הארגון'}
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="[&_th]:text-right">
-                        <TableHead>חודש</TableHead>
-                        <TableHead>סה״כ חברים</TableHead>
-                        <TableHead>סה״כ סכום</TableHead>
-                        <TableHead>סטטוס</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {payments.map((p) => (
-                        <TableRow key={p.month}>
-                          <TableCell>{p.month}</TableCell>
-                          <TableCell>{Number(p.totalMembers || 0)}</TableCell>
-                          <TableCell>₪{Number(p.totalAmount || 0)}</TableCell>
-                          <TableCell>
-                            <Badge variant={String(p.status || '').toLowerCase() === 'paid' ? 'default' : 'outline'}>
-                              {String(p.status || '').toLowerCase() === 'paid' ? 'שולם' : 'לא שולם'}
-                            </Badge>
-                          </TableCell>
+                {isCentralizedBilling ? (
+                  <div className="rounded-md border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="[&_th]:text-right">
+                          <TableHead>חודש</TableHead>
+                          <TableHead>סה״כ חברים</TableHead>
+                          <TableHead>סה״כ סכום</TableHead>
+                          <TableHead>סטטוס</TableHead>
                         </TableRow>
-                      ))}
-                      {!payments.length ? (
-                        <TableRow>
-                          <TableCell colSpan={4} className="text-center text-muted-foreground">אין חיובים להצגה</TableCell>
-                        </TableRow>
-                      ) : null}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {payments.map((p) => (
+                          <TableRow key={p.month}>
+                            <TableCell>{p.month}</TableCell>
+                            <TableCell>{Number(p.totalMembers || 0)}</TableCell>
+                            <TableCell>₪{Number(p.totalAmount || 0)}</TableCell>
+                            <TableCell>
+                              <Badge variant={String(p.status || '').toLowerCase() === 'paid' ? 'default' : 'outline'}>
+                                {String(p.status || '').toLowerCase() === 'paid' ? 'שולם' : 'לא שולם'}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {!payments.length ? (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center text-muted-foreground">אין חיובים להצגה</TableCell>
+                          </TableRow>
+                        ) : null}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
+                      ארגון זה מוגדר כתשלום באופן פרטי, ולכן התשלום הינו מול עובדי הארגון באופן פרטני.
+                    </div>
+                    <div>
+                      <h3 className="font-semibold mb-2">היסטוריית חיובים מול קארדקום</h3>
+                      <div className="rounded-md border overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="[&_th]:text-right">
+                              <TableHead>תאריך</TableHead>
+                              <TableHead>שם עובד</TableHead>
+                              <TableHead>מוצר</TableHead>
+                              <TableHead>סכום</TableHead>
+                              <TableHead>אסמכתא קארדקום</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {successfulPrivateDeals.map((d) => {
+                              const ref = d.cardcomInternalDealNumber || d.cardcomAccountId || d.lowProfileCode || '—';
+                              return (
+                                <TableRow key={d.id}>
+                                  <TableCell className="text-xs whitespace-nowrap">
+                                    {d.createdAt ? new Date(d.createdAt).toLocaleDateString('he-IL') : '—'}
+                                  </TableCell>
+                                  <TableCell>{d.fullName || '—'}</TableCell>
+                                  <TableCell>{d.productName || '—'}</TableCell>
+                                  <TableCell>₪{Number(d.payerAmount || 0)}</TableCell>
+                                  <TableCell className="font-mono text-xs">{ref}</TableCell>
+                                </TableRow>
+                              );
+                            })}
+                            {!successfulPrivateDeals.length ? (
+                              <TableRow>
+                                <TableCell colSpan={5} className="text-center text-muted-foreground">אין חיובים מוצלחים להצגה</TableCell>
+                              </TableRow>
+                            ) : null}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
