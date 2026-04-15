@@ -120,7 +120,9 @@ export default function AdminControlPanel() {
 
   const overview = data?.overview || {};
   const rows = Array.isArray(data?.drilldowns?.[modalKey]) ? data.drilldowns[modalKey] : [];
-  const columns = rows.length ? Object.keys(rows[0]).filter((k) => k !== 'id') : [];
+  const columns = rows.length
+    ? Object.keys(rows[0]).filter((k) => k !== 'id' && k !== 'subscriberDealId')
+    : [];
   const isTask = !!CARD_META[modalKey]?.task;
 
   function openQuickEdit(key, row) {
@@ -143,6 +145,13 @@ export default function AdminControlPanel() {
     if (key === 'pendingBeneficiaries' && row.id) {
       const search = String(row.transactionId || row.id || '').trim();
       navigate(`/admin/subscribers?search=${encodeURIComponent(search)}&editId=${encodeURIComponent(row.id)}`);
+      return;
+    }
+    if (key === 'failedPayments' && row.subscriberDealId) {
+      const search = String(row.orderId || row.transactionId || '').trim();
+      navigate(
+        `/admin/subscribers?search=${encodeURIComponent(search)}&editId=${encodeURIComponent(row.subscriberDealId)}`
+      );
       return;
     }
     if ((key === 'activeSubscribers' || key === 'totalTransactions') && row.id) {
@@ -264,23 +273,38 @@ export default function AdminControlPanel() {
                     {readOnlyDrilldown ? null : (
                       <TableCell>
                         {modalKey === 'failedPayments' ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                size="icon"
-                                variant="outline"
-                                onClick={() => {
-                                  setCommentTarget(row);
-                                  setCommentText(String(row.comments || ''));
-                                  setCommentOpen(true);
-                                }}
-                                aria-label="הערות"
-                              >
-                                <MessageSquareText className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>הערות</TooltipContent>
-                          </Tooltip>
+                          <div className="flex items-center gap-1 justify-end">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setCommentTarget(row);
+                                    setCommentText(String(row.comments || ''));
+                                    setCommentOpen(true);
+                                  }}
+                                  aria-label="הערות"
+                                >
+                                  <MessageSquareText className="size-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>הערות</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  onClick={() => openQuickEdit('failedPayments', row)}
+                                  aria-label="מעבר ללקוח"
+                                >
+                                  <Pencil className="size-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>מעבר לרשומת הלקוח</TooltipContent>
+                            </Tooltip>
+                          </div>
                         ) : (
                           <Tooltip>
                             <TooltipTrigger asChild>

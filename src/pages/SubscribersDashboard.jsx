@@ -12,7 +12,6 @@ import {
   Archive,
   Download,
   Eye,
-  History,
   Ban,
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
@@ -1584,23 +1583,6 @@ export default function SubscribersDashboard() {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    type="button"
-                                    onClick={() => {
-                                      setSelected(r.raw ?? r);
-                                      setSelectedDetailsTab('billingHistory');
-                                    }}
-                                    aria-label="היסטוריית חיובים"
-                                  >
-                                    <History className="size-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>היסטוריית חיובים</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
                                   <Button variant="ghost" size="icon" type="button" onClick={() => openEdit(r)} aria-label="ערוך">
                                     <Edit2 className="size-4" />
                                   </Button>
@@ -1680,14 +1662,19 @@ export default function SubscribersDashboard() {
         </div>
 
         <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
-          <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col" dir="rtl">
+          <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col text-right" dir="rtl">
             <DialogHeader>
               <DialogTitle>פרטי מוטבים</DialogTitle>
               <DialogDescription>
                 הזמנה: <span className="font-mono">{selected?.transactionId || '—'}</span>
               </DialogDescription>
             </DialogHeader>
-            <Tabs value={selectedDetailsTab} onValueChange={setSelectedDetailsTab} className="overflow-hidden">
+            <Tabs
+              value={selectedDetailsTab}
+              onValueChange={setSelectedDetailsTab}
+              dir="rtl"
+              className="overflow-hidden text-right"
+            >
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="transaction">פרטי עסקה</TabsTrigger>
                 <TabsTrigger value="beneficiary">פרטי מוטב</TabsTrigger>
@@ -1803,20 +1790,22 @@ export default function SubscribersDashboard() {
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="rounded-md border overflow-auto">
-                      <Table>
+                      <Table dir="rtl" className="text-right">
                         <TableHeader>
                           <TableRow>
-                            <TableHead>חודש חיוב</TableHead>
-                            <TableHead>סטטוס (הצלחה/כישלון)</TableHead>
-                            <TableHead>סיבת השגיאה (מתוך responsdescription)</TableHead>
+                            <TableHead className="text-right">חודש חיוב</TableHead>
+                            <TableHead className="text-right">סטטוס (הצלחה/כישלון)</TableHead>
+                            <TableHead className="text-right">סיבת השגיאה (מתוך responsdescription)</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {billingHistory.map((row) => (
                             <TableRow key={row.id}>
-                              <TableCell>{billingMonthLabel(row.billingMonth)}</TableCell>
-                              <TableCell className={row.status === 'כישלון' ? 'text-destructive font-medium' : ''}>{row.status}</TableCell>
-                              <TableCell>{row.errorReason || '—'}</TableCell>
+                              <TableCell className="text-right">{billingMonthLabel(row.billingMonth)}</TableCell>
+                              <TableCell className={`text-right ${row.status === 'כישלון' ? 'text-destructive font-medium' : ''}`}>
+                                {row.status}
+                              </TableCell>
+                              <TableCell className="text-right">{row.errorReason || '—'}</TableCell>
                             </TableRow>
                           ))}
                           {!billingHistory.length ? (
@@ -1829,9 +1818,12 @@ export default function SubscribersDashboard() {
                         </TableBody>
                       </Table>
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <div
+                      role="note"
+                      className="rounded-lg border border-amber-300/80 bg-amber-50 px-4 py-3 text-right text-base font-bold leading-snug text-foreground shadow-sm dark:border-amber-700/60 dark:bg-amber-950/40"
+                    >
                       {`לבדיקה מעמיקה וניהול אמצעי תשלום, יש להיכנס לממשק קארדקום עם מספר הוראת קבע: ${billingHistoryRecurringId || selected?.cardcomRecurringId || '—'}`}
-                    </p>
+                    </div>
                   </CardContent>
                 </Card>
               </TabsContent>

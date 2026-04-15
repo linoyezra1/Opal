@@ -229,8 +229,22 @@ export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
   const deals = db.collection('deals');
   const seed = await deals.findOne({ _id: new ObjectId(String(dealId)) });
   if (!seed) return { cardcomRecurringId: '', rows: [] };
-  const recurringId = String(seed.cardcomRecurringId ?? '').trim();
-  const parentDealId = String(seed.parentDealId || '').trim() || String(seed._id);
+
+  const masterIdStr =
+    seed.isRecurringCycle === true && seed.parentDealId != null && String(seed.parentDealId).trim() !== ''
+      ? String(seed.parentDealId).trim()
+      : String(seed._id);
+
+  let master = seed;
+  if (String(seed._id) !== masterIdStr && ObjectId.isValid(masterIdStr)) {
+    const m = await deals.findOne({ _id: new ObjectId(masterIdStr) });
+    if (m) master = m;
+  }
+
+  const recurringId = String(
+    seed.cardcomRecurringId || master.cardcomRecurringId || seed.formState?.cardcomRecurringId || ''
+  ).trim();
+
   const or = [];
   if (recurringId) {
     const asNum = Number(recurringId);
@@ -240,18 +254,20 @@ export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
         : { cardcomRecurringId: recurringId };
     or.push(idMatch);
   }
-  if (parentDealId && ObjectId.isValid(parentDealId)) {
-    const oid = new ObjectId(parentDealId);
+  if (masterIdStr && ObjectId.isValid(masterIdStr)) {
+    const oid = new ObjectId(masterIdStr);
     or.push({ _id: oid });
-    or.push({ parentDealId });
+    or.push({ parentDealId: masterIdStr });
+    or.push({ parentDealId: oid });
   }
   if (!or.length) {
     or.push({ _id: seed._id });
   }
+  const lim = Math.max(1, Math.min(Number(limit) || 120, 500));
   const docs = await deals
     .find({ $or: or, isActive: { $ne: false } })
     .sort({ createdAt: -1 })
-    .limit(Math.max(1, Math.min(Number(limit) || 120, 240)))
+    .limit(lim)
     .toArray();
   const rows = docs.map((d) => {
     const month =
@@ -269,7 +285,10 @@ export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
       isRecurringCycle: d.isRecurringCycle === true,
     };
   });
-  return { cardcomRecurringId: recurringId, rows };
+  return {
+    cardcomRecurringId: recurringId || String(master.cardcomRecurringId || '').trim(),
+    rows,
+  };
 }
 
 /** מיזוג מזהי recurring מ־Cardcom לעסקה קיימת (למשל duplicate webhook או עדכון מאוחר) */
@@ -1072,7 +1091,12 @@ export async function updateLeadAdmin(kind, id, params) {
 
 export async function getDeals() {
   const db = await getDb();
-  const docs = await db.collection('deals').find({ isActive: { $ne: false } }).sort({ createdAt: -1 }).limit(500).toArray();
+  const docs = await db
+    .collection('deals')
+    .find({ isActive: { $ne: false }, isRecurringCycle: { $ne: true } })
+    .sort({ createdAt: -1 })
+    .limit(500)
+    .toArray();
   return docs.map((d) => ({
     id: String(d._id),
     ...d,
@@ -1096,6 +1120,7 @@ export async function countDealsByAgentId(agentId) {
   const id = String(agentId).trim();
   return db.collection('deals').countDocuments({
     agentId: id,
+    isRecurringCycle: { $ne: true },
     paymentStatus: { $regex: /success|paid|test_success/i },
     subscriptionStatus: { $ne: 'Cancelled' },
   });
@@ -1203,6 +1228,7 @@ export async function getDealsPendingBeneficiaryCompletion(limit = 150) {
     .collection('deals')
     .find({
       isActive: { $ne: false },
+      isRecurringCycle: { $ne: true },
       paymentStatus: { $regex: /success|paid|test_success/i },
       subscriptionStatus: { $ne: 'Cancelled' },
       $or: [
@@ -1384,7 +1410,7 @@ export async function getSalesDashboardData(filters = {}) {
   const dealsCol = db.collection('deals');
 
   const match = { isActive: { $ne: false } };
-  const andClauses = [];
+  const andClauses = [{ isRecurringCycle: { $ne: true } }];
   const dateRange = getDateRange(filters);
   if (dateRange) match.createdAt = dateRange;
 
@@ -1870,6 +1896,9 @@ export async function getControlPanelOverviewData(filters = {}) {
             { $gt: [{ $strLenCP: { $ifNull: ['$lowProfileCode', ''] } }, 0] },
             { $gt: [{ $strLenCP: { $ifNull: ['$cardcomAccountId', ''] } }, 0] },
             { $gt: [{ $strLenCP: { $ifNull: ['$indicator.internalDealNumber', ''] } }, 0] },
+            {
+              $and: [{ $ne: ['$cardcomRecurringId', null] }, { $ne: ['$cardcomRecurringId', ''] }],
+            },
           ],
         },
       },
@@ -1904,6 +1933,10 @@ export async function getControlPanelOverviewData(filters = {}) {
         isCardcomDeal: '$_isCardcomDeal',
         lowProfileCode: 1,
         cardcomAccountId: 1,
+        cardcomRecurringId: 1,
+        parentDealId: 1,
+        isRecurringCycle: 1,
+        indicator: 1,
         cardcomInternalDealNumber: '$indicator.internalDealNumber',
       },
     },
@@ -1921,7 +1954,10 @@ export async function getControlPanelOverviewData(filters = {}) {
     const ps = String(d.paymentStatus || '').toLowerCase();
     const isCancelled = ps.includes('cancel') || ps.includes('בוטל') || ps === 'cancelled';
     const isError = /fail|declin|error|denied|נכשל/i.test(String(d.paymentStatus || ''));
-    return d.isCardcomDeal && isError && !isCancelled;
+    const hasCardcom =
+      d.isCardcomDeal ||
+      (d.cardcomRecurringId != null && String(d.cardcomRecurringId).trim() !== '');
+    return hasCardcom && isError && !isCancelled;
   });
 
   const pendingBeneficiaryRows = deals.filter((d) => {
@@ -2085,16 +2121,25 @@ export async function getControlPanelOverviewData(filters = {}) {
         agentCommission: Number(d.agentCommission || 0),
         createdAt: d.createdAt,
       })),
-      failedPayments: failedPaymentRows.map((d) => ({
-        id: String(d._id || ''),
-        orderId: d.transactionId || '',
-        price: Number(d.payerAmount || 0),
-        cardcomStatus: String(d?.indicator?.responsdescription || d?.formState?.cardcomResponseDescription || d.paymentStatus || '—'),
-        customerName: d.formState?.fullName || '—',
-        phoneNumber: d.formState?.phone || '—',
-        cardcomRecurringId: String(d.cardcomRecurringId || ''),
-        comments: String(d.formState?.failedPaymentComment || ''),
-      })),
+      failedPayments: failedPaymentRows.map((d) => {
+        const pid = String(d.parentDealId || '').trim();
+        const isCycle = d.isRecurringCycle === true;
+        const subscriberDealId =
+          isCycle && pid && ObjectId.isValid(pid) ? pid : String(d._id || '');
+        return {
+          id: String(d._id || ''),
+          subscriberDealId,
+          orderId: d.transactionId || '',
+          price: Number(d.payerAmount || 0),
+          cardcomStatus: String(
+            d?.indicator?.responsdescription || d?.formState?.cardcomResponseDescription || d.paymentStatus || '—'
+          ),
+          customerName: d.formState?.fullName || '—',
+          phoneNumber: d.formState?.phone || '—',
+          cardcomRecurringId: String(d.cardcomRecurringId || ''),
+          comments: String(d.formState?.failedPaymentComment || ''),
+        };
+      }),
       pendingBeneficiaries: pendingBeneficiaryRows.map((d) => ({
         id: String(d._id || ''),
         transactionId: d.transactionId || '',
