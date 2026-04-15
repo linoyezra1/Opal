@@ -167,7 +167,14 @@ export async function findDealForRecurringEvent(params = {}) {
   const or = [];
   if (tid) or.push({ transactionId: tid });
   if (lowProfileCode) or.push({ lowProfileCode });
-  if (recurringId) or.push({ cardcomRecurringId: recurringId });
+  if (recurringId) {
+    const asNum = Number(recurringId);
+    const idMatch =
+      Number.isFinite(asNum) && !Number.isNaN(asNum) && String(asNum) === recurringId
+        ? { cardcomRecurringId: { $in: [recurringId, asNum] } }
+        : { cardcomRecurringId: recurringId };
+    or.push(idMatch);
+  }
   if (accountId) or.push({ cardcomAccountId: accountId });
   if (token) or.push({ cardcomToken: token });
   if (!or.length) return null;
@@ -204,8 +211,13 @@ export async function setDealPaymentArrears(parentDealId, recurringId = '') {
     return;
   }
   if (rid) {
+    const asNum = Number(rid);
+    const idFilter =
+      Number.isFinite(asNum) && !Number.isNaN(asNum) && String(asNum) === rid
+        ? { cardcomRecurringId: { $in: [rid, asNum] } }
+        : { cardcomRecurringId: rid };
     await deals.updateMany(
-      { cardcomRecurringId: rid, isRecurringCycle: { $ne: true }, isActive: { $ne: false } },
+      { ...idFilter, isRecurringCycle: { $ne: true }, isActive: { $ne: false } },
       { $set: { subscriptionStatus: 'שגיאת סליקה - פיגור בתשלום', updatedAt: now } }
     );
   }
@@ -217,10 +229,17 @@ export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
   const deals = db.collection('deals');
   const seed = await deals.findOne({ _id: new ObjectId(String(dealId)) });
   if (!seed) return { cardcomRecurringId: '', rows: [] };
-  const recurringId = String(seed.cardcomRecurringId || '').trim();
+  const recurringId = String(seed.cardcomRecurringId ?? '').trim();
   const parentDealId = String(seed.parentDealId || '').trim() || String(seed._id);
   const or = [];
-  if (recurringId) or.push({ cardcomRecurringId: recurringId });
+  if (recurringId) {
+    const asNum = Number(recurringId);
+    const idMatch =
+      Number.isFinite(asNum) && !Number.isNaN(asNum) && String(asNum) === recurringId
+        ? { cardcomRecurringId: { $in: [recurringId, asNum] } }
+        : { cardcomRecurringId: recurringId };
+    or.push(idMatch);
+  }
   if (parentDealId && ObjectId.isValid(parentDealId)) {
     const oid = new ObjectId(parentDealId);
     or.push({ _id: oid });
