@@ -534,17 +534,47 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
 
     const terminalNum = Number(terminal);
     const isTestTerminal = terminalNum === 1000;
+    const responseCode = Number(indicator?.responseCode ?? NaN);
     const processEndOk = indicator?.processEndOk === true || indicator?.processEndOk === 1 || indicator?.processEndOk === '1';
     const dealResponse = indicator?.dealResponse;
+    const responseDescription = String(indicator?.responseDescription || indicator?.description || '').trim();
+    const webhookInternalDeal = firstDefined(
+      webhookBody?.internaldealnumber,
+      webhookBody?.InternalDealNumber,
+      webhookQuery?.internaldealnumber,
+      webhookQuery?.InternalDealNumber
+    );
+    const webhookResponseDescription = firstDefined(
+      webhookBody?.responsdescription,
+      webhookBody?.ResponsDescription,
+      webhookBody?.ResponseDescription,
+      webhookQuery?.responsdescription,
+      webhookQuery?.ResponsDescription,
+      webhookQuery?.ResponseDescription
+    );
+    const webhookLast4 = firstDefined(
+      webhookBody?.Lest4Numbers,
+      webhookBody?.Last4Numbers,
+      webhookQuery?.Lest4Numbers,
+      webhookQuery?.Last4Numbers
+    );
+    const webhookBrand = firstDefined(
+      webhookBody?.MutagName,
+      webhookBody?.CardBrand,
+      webhookQuery?.MutagName,
+      webhookQuery?.CardBrand
+    );
 
     console.log(`[${ts()}] Checking terminal: ${terminalNum} with DealResponse: ${dealResponse} (ProcessEndOK: ${indicator?.processEndOk})`);
 
     let paymentValid = false;
-    if (isTestTerminal) {
+    if (responseCode !== 0) {
+      paymentValid = false;
+    } else if (isTestTerminal) {
       paymentValid = true;
       console.log(`[${ts()}] Validation passed for TEST terminal (bypass: terminal 1000 always proceeds)`);
     } else {
-      paymentValid = (dealResponse === 1 || dealResponse === '1') && processEndOk;
+      paymentValid = responseCode === 0 && (dealResponse === 1 || dealResponse === '1') && processEndOk;
       if (paymentValid) {
         console.log(`[${ts()}] Validation passed for LIVE terminal`);
       }
@@ -555,9 +585,57 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
       console.log(`[${ts()}] Payment status: ${paymentStatus} - Result: FAILURE`);
       console.warn(`[${ts()}] Webhook: deal not accepted`, {
         terminal: terminalNum,
+        responseCode: indicator?.responseCode,
+        responseDescription,
         processEndOk: indicator?.processEndOk,
         dealResponse: indicator?.dealResponse,
       });
+      const pending = pendingDeals.get(lowProfileCode);
+      if (pending) {
+        try {
+          const transactionIdFail =
+            webhookInternalDeal ||
+            (indicator?.internalDealNumber != null && String(indicator.internalDealNumber).trim() !== ''
+              ? String(indicator.internalDealNumber).trim()
+              : lowProfileCode);
+          const mergedFailedForm = {
+            ...(pending.formState || {}),
+            cardcomRecurringId: String(indicator?.cardcomRecurringId || '').trim(),
+            cardcomResponseDescription: webhookResponseDescription || responseDescription,
+            lastFourDigits: webhookLast4 || String(indicator?.Lest4Numbers || '').trim(),
+            cardBrand: webhookBrand || String(indicator?.MutagName || '').trim(),
+          };
+          await saveDeal({
+            transactionId: transactionIdFail,
+            lowProfileCode,
+            cardcomAccountId: String(indicator?.cardcomAccountId || '').trim(),
+            cardcomRecurringId: String(indicator?.cardcomRecurringId || '').trim(),
+            cardcomToken: String(indicator?.cardcomToken || '').trim(),
+            payerAmount: Number(pending?.payerAmount || 0),
+            formState: mergedFailedForm,
+            agentId: pending?.agentId || null,
+            paymentStatus: 'failed',
+            terminalNumber: terminalNum,
+            source: 'cardcom-webhook',
+            indicator: {
+              responseCode: indicator?.responseCode ?? null,
+              responsdescription: webhookResponseDescription || responseDescription || null,
+              processEndOk: indicator?.processEndOk ?? null,
+              dealResponse: indicator?.dealResponse ?? null,
+              internalDealNumber: webhookInternalDeal || indicator?.internalDealNumber || null,
+              Lest4Numbers: webhookLast4 || indicator?.Lest4Numbers || null,
+              MutagName: webhookBrand || indicator?.MutagName || null,
+              cardcomAccountId: indicator?.cardcomAccountId ?? null,
+              cardcomRecurringId: indicator?.cardcomRecurringId ?? null,
+              cardcomToken: indicator?.cardcomToken ?? null,
+            },
+            normalizedPayload: buildDealPayloadFromFormState(mergedFailedForm),
+          });
+          pendingDeals.delete(lowProfileCode);
+        } catch (failPersistErr) {
+          console.warn(`[${ts()}] failed deal persistence (non-blocking):`, failPersistErr?.message || failPersistErr);
+        }
+      }
       return;
     }
 
@@ -609,6 +687,10 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
       productName: econ.productName || mergedForm.productName,
       productId: econ.productId || mergedForm.productId,
       priceListId: econ.priceListId || mergedForm.priceListId,
+      cardcomRecurringId: String(indicator?.cardcomRecurringId || '').trim(),
+      cardcomResponseDescription: responseDescription,
+      lastFourDigits: String(indicator?.Lest4Numbers || '').trim(),
+      cardBrand: String(indicator?.MutagName || '').trim(),
     };
 
     const dealPayload = buildDealPayloadFromFormState(finalForm);
@@ -649,6 +731,12 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
         message: step2Err?.message || step2Err,
       });
     }
+    finalForm.cardcomRecurringId = String(
+      step2Recurring?.cardcomRecurringId || finalForm.cardcomRecurringId || indicator?.cardcomRecurringId || ''
+    ).trim();
+    if (webhookResponseDescription) finalForm.cardcomResponseDescription = webhookResponseDescription;
+    if (webhookLast4) finalForm.lastFourDigits = webhookLast4;
+    if (webhookBrand) finalForm.cardBrand = webhookBrand;
 
     console.log(`[${ts()}] Attempting to write deal to MongoDB...`);
     let result;
@@ -666,9 +754,13 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
         terminalNumber: terminalNum,
         source: 'cardcom-webhook',
         indicator: {
+          responseCode: indicator?.responseCode ?? null,
+          responsdescription: webhookResponseDescription || responseDescription || null,
           processEndOk: indicator?.processEndOk ?? null,
           dealResponse: indicator?.dealResponse ?? null,
-          internalDealNumber: indicator?.internalDealNumber ?? null,
+          internalDealNumber: webhookInternalDeal || indicator?.internalDealNumber || null,
+          Lest4Numbers: webhookLast4 || indicator?.Lest4Numbers || null,
+          MutagName: webhookBrand || indicator?.MutagName || null,
           cardcomAccountId: indicator?.cardcomAccountId ?? null,
           cardcomRecurringId: indicator?.cardcomRecurringId ?? null,
           step2CardcomAccountId: step2Recurring?.cardcomAccountId ?? null,

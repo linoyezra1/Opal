@@ -1477,7 +1477,18 @@ export default function SubscribersDashboard() {
                             )}
                           </TableCell>
                           <TableCell dir="rtl" className="text-right text-sm whitespace-pre-wrap max-w-[12rem]">
-                            {r.displayPaymentStatus || r.paymentStatus || '—'}
+                            {String(r.cardcomRecurringId || '').trim() ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="cursor-help">{r.displayPaymentStatus || r.paymentStatus || '—'}</span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {`למידע נוסף, ניתן לבדוק בממשק קארדקום תחת מזהה הוראת קבע: ${r.cardcomRecurringId}`}
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : (
+                              r.displayPaymentStatus || r.paymentStatus || '—'
+                            )}
                           </TableCell>
                           <TableCell dir="rtl" className="text-right whitespace-nowrap">
                             {isCancelled ? (

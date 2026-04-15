@@ -280,6 +280,14 @@ export function parseLowProfileIndicatorXml(xml) {
     firstTagValue(block, 'TokenToSave');
   const processEndOkRaw = firstTagValue(block, 'ProssesEndOK');
   const dealResponseRaw = firstTagValue(block, 'DealRespone');
+  const responseDescription =
+    firstTagValue(block, 'ResponsDescription') ||
+    firstTagValue(block, 'ResponseDescription') ||
+    firstTagValue(block, 'Description');
+  const last4 =
+    firstTagValue(block, 'Lest4Numbers') ||
+    firstTagValue(block, 'Last4Numbers');
+  const cardBrand = firstTagValue(block, 'MutagName') || firstTagValue(block, 'CardName');
 
   return {
     internalDealNumber: internalDealNumber != null ? String(internalDealNumber) : null,
@@ -288,6 +296,9 @@ export function parseLowProfileIndicatorXml(xml) {
     cardcomToken: token != null && String(token).trim() !== '' ? String(token).trim() : null,
     processEndOk: parseInt(processEndOkRaw, 10) === 1,
     dealResponse: dealResponseRaw != null ? parseInt(dealResponseRaw, 10) : null,
+    responseDescription: responseDescription != null ? String(responseDescription).trim() : '',
+    Lest4Numbers: last4 != null ? String(last4).trim() : '',
+    MutagName: cardBrand != null ? String(cardBrand).trim() : '',
   };
 }
 
@@ -341,6 +352,9 @@ export async function getLowProfileIndicator(terminalNumber, username, lowProfil
   const rootAccountId = getVal('AccountId');
   const rootRecurringId = getVal('RecurringId') || getVal('RowID');
   const rootToken = getVal('Token') || getVal('CardToken') || getVal('TokenToSave');
+  const rootResponseDescription = getVal('ResponsDescription') || getVal('ResponseDescription') || getVal('Description');
+  const rootLast4 = getVal('Lest4Numbers') || getVal('Last4Numbers');
+  const rootCardBrand = getVal('MutagName') || getVal('CardName');
 
   return {
     responseCode,
@@ -351,6 +365,9 @@ export async function getLowProfileIndicator(terminalNumber, username, lowProfil
     cardcomAccountId: parsed.cardcomAccountId || (rootAccountId != null ? String(rootAccountId).trim() : null),
     cardcomRecurringId: parsed.cardcomRecurringId || (rootRecurringId != null ? String(rootRecurringId).trim() : null),
     cardcomToken: parsed.cardcomToken || (rootToken != null ? String(rootToken).trim() : null),
+    responseDescription: parsed.responseDescription || (rootResponseDescription != null ? String(rootResponseDescription).trim() : ''),
+    Lest4Numbers: parsed.Lest4Numbers || (rootLast4 != null ? String(rootLast4).trim() : ''),
+    MutagName: parsed.MutagName || (rootCardBrand != null ? String(rootCardBrand).trim() : ''),
     responseXml: xml,
   };
 }

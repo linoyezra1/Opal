@@ -39,10 +39,29 @@ export async function saveDeal(params) {
   const db = await getDb();
   const transactionId = String(params.transactionId || '').trim();
   if (!transactionId) throw new Error('Missing transactionId');
+  const internalDealNumber = String(params?.indicator?.internalDealNumber || '').trim();
 
   const deals = db.collection('deals');
-  const exists = await deals.findOne({ transactionId }, { projection: { _id: 1 } });
-  if (exists) return { duplicate: true, id: String(exists._id) };
+  const duplicateQuery = [];
+  duplicateQuery.push({ transactionId });
+  if (internalDealNumber) duplicateQuery.push({ 'indicator.internalDealNumber': internalDealNumber });
+  const exists = await deals.findOne({ $or: duplicateQuery }, { projection: { _id: 1 } });
+  if (exists) {
+    const set = {
+      updatedAt: new Date(),
+      paymentStatus: String(params.paymentStatus || '').trim() || 'paid',
+    };
+    if (params.lowProfileCode != null) set.lowProfileCode = String(params.lowProfileCode || '').trim();
+    if (params.cardcomAccountId != null) set.cardcomAccountId = String(params.cardcomAccountId || '').trim();
+    if (params.cardcomRecurringId != null) set.cardcomRecurringId = String(params.cardcomRecurringId || '').trim();
+    if (params.cardcomToken != null) set.cardcomToken = String(params.cardcomToken || '').trim();
+    if (params.payerAmount != null) set.payerAmount = Number(params.payerAmount || 0);
+    if (params.formState && typeof params.formState === 'object') set.formState = params.formState;
+    if (params.indicator && typeof params.indicator === 'object') set.indicator = params.indicator;
+    if (params.normalizedPayload && typeof params.normalizedPayload === 'object') set.normalizedPayload = params.normalizedPayload;
+    await deals.updateOne({ _id: exists._id }, { $set: set });
+    return { duplicate: true, id: String(exists._id), updated: true };
+  }
 
   const now = new Date();
   const fs = params.formState && typeof params.formState === 'object' ? params.formState : {};
@@ -754,7 +773,11 @@ export async function findDealsByOrganizationId(organizationId, limit = 500) {
     createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
     lowProfileCode: String(d.lowProfileCode || '').trim(),
     cardcomAccountId: String(d.cardcomAccountId || '').trim(),
+    cardcomRecurringId: String(d.cardcomRecurringId || '').trim(),
     cardcomInternalDealNumber: String(d?.indicator?.internalDealNumber || '').trim(),
+    cardcomResponseDescription: String(d?.indicator?.responsdescription || d?.formState?.cardcomResponseDescription || '').trim(),
+    Lest4Numbers: String(d?.indicator?.Lest4Numbers || d?.formState?.lastFourDigits || '').trim(),
+    MutagName: String(d?.indicator?.MutagName || d?.formState?.cardBrand || '').trim(),
     source: d.source,
   }));
 }
@@ -1445,9 +1468,16 @@ export async function getSalesDashboardData(filters = {}) {
       const orgBadge = orgLinked
         ? String(d.organizationName || d.formState?.organizationName || '').trim() || 'ארגון'
         : '';
+      const cardcomResponseDescription = firstNonEmpty(
+        String(d?.indicator?.responsdescription || '').trim(),
+        String(d?.formState?.cardcomResponseDescription || '').trim(),
+        ''
+      );
+      const paymentStatusRaw = String(d.paymentStatus || '');
+      const isFailedPayment = /fail|declin|error|denied|נכשל/i.test(paymentStatusRaw);
       const displayPaymentStatus = centralized
         ? 'משולם ע״י ארגון'
-        : String(d.paymentStatus || '');
+        : (isFailedPayment && cardcomResponseDescription ? cardcomResponseDescription : paymentStatusRaw);
       const displaySubscriptionStatus = centralized
         ? `חיוב מרוכז · ${String(d.subscriptionStatus || '—')}`
         : String(d.subscriptionStatus || '');
@@ -1456,6 +1486,7 @@ export async function getSalesDashboardData(filters = {}) {
         transactionId: d.transactionId || '',
         status: d.isCanceled ? 'canceled' : 'paid',
         paymentStatus: d.paymentStatus || '',
+        cardcomResponseDescription,
         subscriptionStatus: String(d.subscriptionStatus || ''),
         isOrganizationMember: orgLinked,
         organizationBadge: orgBadge,
@@ -1934,9 +1965,10 @@ export async function getControlPanelOverviewData(filters = {}) {
         id: String(d._id || ''),
         orderId: d.transactionId || '',
         price: Number(d.payerAmount || 0),
-        cardcomStatus: d.paymentStatus || '—',
+        cardcomStatus: String(d?.indicator?.responsdescription || d?.formState?.cardcomResponseDescription || d.paymentStatus || '—'),
         customerName: d.formState?.fullName || '—',
         phoneNumber: d.formState?.phone || '—',
+        cardcomRecurringId: String(d.cardcomRecurringId || ''),
         comments: String(d.formState?.failedPaymentComment || ''),
       })),
       pendingBeneficiaries: pendingBeneficiaryRows.map((d) => ({

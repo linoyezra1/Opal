@@ -13,6 +13,7 @@ import { Textarea } from '../components/ui/textarea.jsx';
 import { Badge } from '../components/ui/badge.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '../components/ui/empty.jsx';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
@@ -212,7 +213,7 @@ export default function OrganizationDetailPage() {
   const billingLabel = org.billingType === 'Centralized' ? 'תשלום מרוכז' : 'תשלום פרטי';
   const billingTypeNorm = String(org.billingType || '').trim().toLowerCase();
   const isCentralizedBilling = billingTypeNorm === 'centralized';
-  const successfulPrivateDeals = (deals || []).filter((d) => /success|paid|test_success/i.test(String(d.paymentStatus || '')));
+  const privateBillingDeals = deals || [];
 
   return (
     <AdminPageShell>
@@ -643,6 +644,7 @@ export default function OrganizationDetailPage() {
                     </div>
                     <div>
                       <h3 className="font-semibold mb-2">היסטוריית חיובים מול קארדקום</h3>
+                      <TooltipProvider delayDuration={300}>
                       <div className="rounded-md border overflow-x-auto">
                         <Table>
                           <TableHeader>
@@ -651,11 +653,14 @@ export default function OrganizationDetailPage() {
                               <TableHead>שם עובד</TableHead>
                               <TableHead>מוצר</TableHead>
                               <TableHead>סכום</TableHead>
+                              <TableHead>סטטוס סליקה</TableHead>
                               <TableHead>אסמכתא קארדקום</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {successfulPrivateDeals.map((d) => {
+                            {privateBillingDeals.map((d) => {
+                              const statusText = String(d.cardcomResponseDescription || d.paymentStatus || '—').trim();
+                              const isFailed = /fail|declin|error|denied|נכשל|סירוב/i.test(String(d.paymentStatus || ''));
                               const ref = d.cardcomInternalDealNumber || d.cardcomAccountId || d.lowProfileCode || '—';
                               return (
                                 <TableRow key={d.id}>
@@ -665,18 +670,33 @@ export default function OrganizationDetailPage() {
                                   <TableCell>{d.fullName || '—'}</TableCell>
                                   <TableCell>{d.productName || '—'}</TableCell>
                                   <TableCell>₪{Number(d.payerAmount || 0)}</TableCell>
+                                  <TableCell className={isFailed ? 'text-destructive font-medium' : ''}>
+                                    {String(d.cardcomRecurringId || '').trim() ? (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className="cursor-help">{statusText || '—'}</span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          {`למידע נוסף, ניתן לבדוק בממשק קארדקום תחת מזהה הוראת קבע: ${d.cardcomRecurringId}`}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    ) : (
+                                      statusText || '—'
+                                    )}
+                                  </TableCell>
                                   <TableCell className="font-mono text-xs">{ref}</TableCell>
                                 </TableRow>
                               );
                             })}
-                            {!successfulPrivateDeals.length ? (
+                            {!privateBillingDeals.length ? (
                               <TableRow>
-                                <TableCell colSpan={5} className="text-center text-muted-foreground">אין חיובים מוצלחים להצגה</TableCell>
+                                <TableCell colSpan={6} className="text-center text-muted-foreground">אין חיובים להצגה</TableCell>
                               </TableRow>
                             ) : null}
                           </TableBody>
                         </Table>
                       </div>
+                      </TooltipProvider>
                     </div>
                   </div>
                 )}
