@@ -1352,9 +1352,9 @@ export default function SubscribersDashboard() {
           </div>
 
           {/* שורת חיפוש + סינון */}
-          <Card dir="rtl" className="text-right">
+          <Card dir="rtl" className="text-right border-border/60 shadow-sm">
             <CardContent className="pt-6">
-              <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center flex-wrap">
+              <div className="flex flex-wrap items-end gap-2 rounded-xl border border-border/60 bg-muted/20 p-3">
                 <div className="relative flex-1 min-w-[200px]">
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
                   <Input
@@ -1364,7 +1364,7 @@ export default function SubscribersDashboard() {
                     onChange={(e) => setLiveSearch(e.target.value)}
                   />
                 </div>
-                <Field className="w-full sm:w-52 shrink-0 space-y-1.5">
+                <Field className="w-full sm:w-44 shrink-0 space-y-1.5">
                   <FieldLabel className="text-xs text-muted-foreground">סוג לקוח</FieldLabel>
                   <select
                     value={filters.customerSegment}
@@ -1372,7 +1372,7 @@ export default function SubscribersDashboard() {
                       const v = e.target.value;
                       setFilters((p) => ({ ...p, customerSegment: v }));
                     }}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm"
+                    className="flex h-10 w-full rounded-md border border-input/70 bg-background px-3 py-2 text-sm"
                   >
                     <option value="all">הכל</option>
                     <option value="private">לקוחות פרטיים</option>
@@ -1381,30 +1381,29 @@ export default function SubscribersDashboard() {
                 </Field>
                 <Input
                   type="month"
-                  className="w-full sm:w-44"
+                  className="w-full sm:w-40 border-input/70"
                   value={filters.month}
                   onChange={(e) => setFilters((p) => ({ ...p, month: e.target.value }))}
                 />
                 <Input
                   type="date"
-                  className="w-full sm:w-40"
+                  className="w-full sm:w-36 border-input/70"
                   value={filters.fromDate}
                   onChange={(e) => setFilters((p) => ({ ...p, fromDate: e.target.value }))}
                 />
                 <Input
                   type="date"
-                  className="w-full sm:w-40"
+                  className="w-full sm:w-36 border-input/70"
                   value={filters.toDate}
                   onChange={(e) => setFilters((p) => ({ ...p, toDate: e.target.value }))}
                 />
                 <select
-                  className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm w-full sm:w-44"
+                  className="flex h-10 rounded-md border border-input/70 bg-background px-3 py-2 text-sm w-full sm:w-40"
                   value={filters.status || 'all'}
                   onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))}
                 >
                   <option value="all">סטטוס: הכל</option>
-                  <option value="active">סטטוס: פעיל</option>
-                  <option value="not_active">סטטוס: לא פעיל</option>
+                  <option value="active">סטטוס: פעילים</option>
                   <option value="cancelled">סטטוס: מבוטלים</option>
                 </select>
                 <Button type="button" onClick={loadDashboard} disabled={loading}>

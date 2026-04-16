@@ -1449,7 +1449,7 @@ export async function getSalesDashboardData(filters = {}) {
   if (statusFilter === 'cancelled') {
     andClauses.push({
       $or: [
-        { subscriptionStatus: { $regex: /^cancelled$/i } },
+        { subscriptionStatus: { $regex: /cancel|בוטל/i } },
         {
           $and: [
             { isActive: false },
@@ -1839,7 +1839,6 @@ function parseControlPanelDateRange({ fromDate, toDate, month } = {}) {
 function parseActivityStatus(statusRaw) {
   const s = String(statusRaw || '').trim().toLowerCase();
   if (s === 'active') return 'active';
-  if (s === 'not_active' || s === 'inactive' || s === 'not-active') return 'not_active';
   if (s === 'cancelled' || s === 'canceled' || s === 'מבוטלים') return 'cancelled';
   return 'all';
 }
@@ -1854,7 +1853,7 @@ export async function getControlPanelOverviewData(filters = {}) {
       : activityStatus === 'cancelled'
         ? {
             $or: [
-              { subscriptionStatus: { $regex: /^cancelled$/i } },
+              { subscriptionStatus: { $regex: /cancel|בוטל/i } },
               {
                 $and: [
                   { cardcomRecurringId: { $exists: true, $ne: '' } },
@@ -1863,15 +1862,7 @@ export async function getControlPanelOverviewData(filters = {}) {
               },
             ],
           }
-      : activityStatus === 'not_active'
-        ? {
-            $or: [
-              { isActive: false },
-              { subscriptionStatus: { $regex: /cancel|בוטל/i } },
-              { paymentStatus: { $regex: /cancel|בוטל|fail|declin|error|denied|נכשל/i } },
-            ],
-          }
-        : {};
+      : {};
   const deals = await db.collection('deals').aggregate([
     { $match: { createdAt: { $gte: from, $lte: to }, ...statusMatch } },
     {
@@ -2046,7 +2037,8 @@ export async function getControlPanelOverviewData(filters = {}) {
     const sub = String(d.subscriptionStatus || '').trim().toLowerCase();
     const recurringId = String(d.cardcomRecurringId || '').trim();
     const recurringStopped = d.isActive === false && recurringId !== '';
-    return sub === 'cancelled' || recurringStopped;
+    const manuallyCancelled = /cancel|בוטל/i.test(sub);
+    return manuallyCancelled || recurringStopped;
   });
 
   const pendingBeneficiaryRows = deals.filter((d) => {
@@ -2166,9 +2158,7 @@ export async function getControlPanelOverviewData(filters = {}) {
   const cancellationRevenueByDay = {};
   let totalCancellationRevenue = 0;
   let totalCancellations = 0;
-  for (const d of deals) {
-    if (d.isRecurringCycle !== true) continue;
-    if (!(d.isFailedPayment || d.isCancelled)) continue;
+  for (const d of cancelledCustomerRows) {
     const eventDateRaw = d.cancellationDate || d.updatedAt || d.createdAt;
     const dt = new Date(eventDateRaw);
     if (Number.isNaN(dt.getTime())) continue;
@@ -2179,11 +2169,19 @@ export async function getControlPanelOverviewData(filters = {}) {
     totalCancellationRevenue += amount;
     totalCancellations += 1;
   }
-  for (const row of chartSeries) {
-    row.cancellations = Number(cancellationCountByDay[row.date] || 0);
-    row.cancellationRevenue = Number(cancellationRevenueByDay[row.date] || 0);
-  }
-  const churnRate = totalRevenue > 0 ? (totalCancellationRevenue / totalRevenue) * 100 : 0;
+  const chartDays = new Set(chartSeries.map((r) => r.date));
+  Object.keys(cancellationCountByDay).forEach((d) => chartDays.add(d));
+  const chartSeriesWithCancellations = Array.from(chartDays)
+    .sort((a, b) => a.localeCompare(b))
+    .map((date) => {
+      const base = chartSeries.find((r) => r.date === date) || { date, revenue: 0, netProfit: 0, count: 0 };
+      return {
+        ...base,
+        cancellations: Number(cancellationCountByDay[date] || 0),
+        cancellationRevenue: Number(cancellationRevenueByDay[date] || 0),
+        label: new Date(date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }),
+      };
+    });
 
   return {
     range: { fromDate: from.toISOString().slice(0, 10), toDate: to.toISOString().slice(0, 10) },
@@ -2202,8 +2200,7 @@ export async function getControlPanelOverviewData(filters = {}) {
       contactTasks: contactTaskRows.length,
       organizationCollectionsDebt,
       cancellationsCount: cancelledCustomerRows.length,
-      chartSeries,
-      churnRate,
+      chartSeries: chartSeriesWithCancellations,
       totalCancellationRevenue,
       totalCancellations,
     },

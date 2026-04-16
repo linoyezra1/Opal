@@ -209,8 +209,7 @@ export default function AdminControlPanel() {
                 onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
               >
                 <option value="all">סטטוס: הכל</option>
-                <option value="active">סטטוס: פעיל</option>
-                <option value="not_active">סטטוס: לא פעיל</option>
+                <option value="active">סטטוס: פעילים</option>
                 <option value="cancelled">סטטוס: מבוטלים</option>
               </select>
               <div className="text-sm text-muted-foreground flex items-center justify-end">טווח פעיל: {data?.range?.fromDate || filters.fromDate} - {data?.range?.toDate || filters.toDate}</div>
@@ -324,10 +323,6 @@ export default function AdminControlPanel() {
                   <div className="flex items-center justify-end gap-2">
                     <Button size="sm" variant="outline" onClick={() => setModalKey('cancelledCustomers')}>לרשומות</Button>
                     <Button size="sm" onClick={() => navigate('/admin/subscribers?status=cancelled')}>ניהול מלא</Button>
-                  </div>
-                  <div className="text-right text-sm">
-                    <span className="text-muted-foreground">Revenue Churn Rate: </span>
-                    <span className="font-semibold text-red-700">{Number(overview.churnRate || 0).toFixed(1)}%</span>
                   </div>
                   <div className="text-right text-sm">
                     <span className="text-muted-foreground">סה"כ מבוטלים: </span>
