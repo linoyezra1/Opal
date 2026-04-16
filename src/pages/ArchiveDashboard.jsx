@@ -1,11 +1,13 @@
 import React from 'react';
-import { ArchiveRestore } from 'lucide-react';
+import { Archive, ArchiveRestore, Search, ChevronDown, ChevronUp } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.jsx';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
 import { Button } from '../components/ui/button.jsx';
+import { Input } from '../components/ui/input.jsx';
+import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '../components/ui/empty.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -18,6 +20,9 @@ const TAB_CONFIG = [
   { key: 'contactRequests', label: 'פניות צור קשר' },
   { key: 'personalContacts', label: 'פניות - פרטי' },
   { key: 'orgContacts', label: 'פניות - ארגון' },
+  { key: 'priceLists', label: 'מחירונים' },
+  { key: 'landingPages', label: 'דפי נחיתה' },
+  { key: 'pricingEntries', label: 'רשומות תמחור' },
 ];
 
 const HEADER_LABELS = {
@@ -83,6 +88,8 @@ export default function ArchiveDashboard() {
   const [data, setData] = React.useState({});
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [openSections, setOpenSections] = React.useState({});
 
   const load = React.useCallback(async () => {
     if (!token) return;
@@ -101,6 +108,13 @@ export default function ArchiveDashboard() {
   }, [token]);
 
   React.useEffect(() => { load(); }, [load]);
+  React.useEffect(() => {
+    const next = {};
+    for (const tab of TAB_CONFIG) {
+      next[tab.key] = true;
+    }
+    setOpenSections(next);
+  }, []);
 
   async function restore(entity, id) {
     if (!id) return;
@@ -121,17 +135,54 @@ export default function ArchiveDashboard() {
     }
   }
 
+  function toggleSection(key) {
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  const totalArchived = React.useMemo(
+    () => TAB_CONFIG.reduce((sum, tab) => sum + (Array.isArray(data?.[tab.key]) ? data[tab.key].length : 0), 0),
+    [data]
+  );
+
   return (
     <AdminPageShell>
-      <div className="space-y-4" dir="rtl">
+      <div className="space-y-5 text-right" dir="rtl">
         <h1 className="text-2xl font-bold">ארכיון</h1>
+        <Card className="bg-muted/30">
+          <CardContent className="p-5">
+            <div className="flex items-center gap-4">
+              <div className="size-12 rounded-xl bg-muted flex items-center justify-center">
+                <Archive className="size-6 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-3xl font-bold">{totalArchived}</p>
+                <p className="text-sm text-muted-foreground">סה"כ רשומות בארכיון</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="max-w-md relative">
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            className="ps-10"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="חיפוש בארכיון..."
+          />
+        </div>
+
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
-        <Tabs defaultValue="products">
+        <Tabs defaultValue="subscribers" dir="rtl">
           <TabsList className="flex flex-wrap h-auto gap-1">
             {TAB_CONFIG.map((tab) => <TabsTrigger key={tab.key} value={tab.key}>{tab.label}</TabsTrigger>)}
           </TabsList>
           {TAB_CONFIG.map((tab) => {
-            const rows = Array.isArray(data?.[tab.key]) ? data[tab.key] : [];
+            const rowsAll = Array.isArray(data?.[tab.key]) ? data[tab.key] : [];
+            const query = String(searchQuery || '').trim().toLowerCase();
+            const rows = !query
+              ? rowsAll
+              : rowsAll.filter((row) => Object.values(row || {}).some((v) => String(v ?? '').toLowerCase().includes(query)));
             const canRestore = tab.key !== 'contactRequests';
             const columns = rows.length ? Object.keys(rows[0]).filter((k) => !['_id', 'id', 'productLinks', 'products', 'bankDetails', 'contactPerson', 'accounting', 'additionalContact'].includes(k)) : [];
             const preferredOrder = ['companyName', 'fullName', 'organizationName', 'email', 'phone', 'notes'];
@@ -146,37 +197,64 @@ export default function ArchiveDashboard() {
             return (
               <TabsContent key={tab.key} value={tab.key}>
                 <Card>
-                  <CardHeader>
-                    <CardTitle>{tab.label}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="rounded-md border overflow-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          {displayColumns.slice(0, 5).map((c) => <TableHead key={c}>{labelForColumn(c)}</TableHead>)}
-                          <TableHead>פעולה</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {rows.map((row) => (
-                          <TableRow key={row.id}>
-                            {displayColumns.slice(0, 5).map((c) => <TableCell key={`${row.id}-${c}`}>{String(row[c] ?? '')}</TableCell>)}
-                            <TableCell>
-                              <Button size="sm" variant="outline" onClick={() => restore(tab.key, row.id)} disabled={loading || !canRestore}>
-                                <ArchiveRestore className="size-4 me-1" />
-                                {canRestore ? 'שחזר' : '—'}
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                        {!rows.length ? (
-                          <TableRow>
-                            <TableCell colSpan={6} className="text-center text-muted-foreground">אין רשומות להצגה</TableCell>
-                          </TableRow>
-                        ) : null}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
+                  <button
+                    type="button"
+                    className="w-full text-right"
+                    onClick={() => toggleSection(tab.key)}
+                    aria-expanded={!!openSections[tab.key]}
+                  >
+                    <CardHeader className="hover:bg-muted/40 transition-colors">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <CardTitle className="text-lg">{tab.label}</CardTitle>
+                          <CardDescription>{rows.length} רשומות</CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-full bg-secondary px-2 py-0.5 text-xs">{rows.length}</span>
+                          {openSections[tab.key] ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                        </div>
+                      </div>
+                    </CardHeader>
+                  </button>
+                  {openSections[tab.key] ? (
+                    <CardContent className="pt-0">
+                      {!rows.length ? (
+                        <div className="rounded-md border py-10">
+                          <Empty>
+                            <EmptyMedia variant="icon">
+                              <Archive className="size-6" />
+                            </EmptyMedia>
+                            <EmptyTitle>אין רשומות להצגה</EmptyTitle>
+                            <EmptyDescription>נסה/י לשנות חיפוש או לעבור ללשונית אחרת.</EmptyDescription>
+                          </Empty>
+                        </div>
+                      ) : (
+                        <div className="rounded-md border overflow-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                {displayColumns.slice(0, 5).map((c) => <TableHead key={c}>{labelForColumn(c)}</TableHead>)}
+                                <TableHead>פעולה</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {rows.map((row) => (
+                                <TableRow key={row.id}>
+                                  {displayColumns.slice(0, 5).map((c) => <TableCell key={`${row.id}-${c}`}>{String(row[c] ?? '')}</TableCell>)}
+                                  <TableCell>
+                                    <Button size="sm" variant="outline" onClick={() => restore(tab.key, row.id)} disabled={loading || !canRestore}>
+                                      <ArchiveRestore className="size-4 me-1" />
+                                      {canRestore ? 'שחזר' : '—'}
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </CardContent>
+                  ) : null}
                 </Card>
               </TabsContent>
             );
