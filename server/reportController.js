@@ -2,6 +2,7 @@
  * דוחות וייצוא CSV — מרכז הדוחות והבילינג של אופאל
  */
 import { Parser } from 'json2csv';
+import XLSX from 'xlsx';
 
 /**
  * סינון חודשי לדוחות בילינג ארגוני: רק עסקאות שחודש הבילינג שלהן (שדה billingMonth) תואם בדיוק ל־YYYY-MM.
@@ -257,6 +258,85 @@ export function rowsToCsv(rows, fields) {
 export function buildSubscribersCsv(deals) {
   const rows = generateFlattenedSubscriberRows(deals);
   return rowsToCsv(rows, SUBSCRIBER_FIELDS);
+}
+
+function normalizeProviderName(deal) {
+  const fs = deal?.formState && typeof deal.formState === 'object' ? deal.formState : {};
+  const raw = firstNonEmpty(
+    deal?.provider,
+    fs.provider,
+    fs.providerName,
+    fs.vendorName,
+    fs.resolvedVendorName
+  );
+  return raw || 'לא משויך';
+}
+
+export function filterDealsByProvider(deals, providerName = '') {
+  const target = String(providerName || '').trim().toLowerCase();
+  if (!target) return Array.isArray(deals) ? deals : [];
+  return (Array.isArray(deals) ? deals : []).filter(
+    (d) => normalizeProviderName(d).toLowerCase() === target
+  );
+}
+
+export function listProviderNamesFromDeals(deals) {
+  const set = new Set();
+  for (const d of Array.isArray(deals) ? deals : []) {
+    const p = normalizeProviderName(d);
+    if (p) set.add(p);
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b, 'he'));
+}
+
+export function buildSubscribersXlsxBuffer(deals) {
+  const rows = generateFlattenedSubscriberRows(deals);
+  const sheetRows = rows.map((r) => ({
+    'מזהה עסקה DB': r.dealId,
+    'מספר הזמנה': r.transactionId,
+    'סוג שורה': r.rowRole === 'primary' ? 'מבוטח ראשי' : 'מוטב משני',
+    'ארגון': r.organizationName,
+    'סוכן': r.agentName,
+    'מזהה סוכן': r.agentId,
+    'שם פרטי': r.firstName,
+    'שם משפחה': r.lastName,
+    'תעודת זהות': r.idNumber,
+    'טלפון': r.phone,
+    'אימייל': r.email,
+    'כתובת': r.address,
+    'תאריך לידה': r.dateOfBirth,
+    'מין': r.gender,
+    'קופת חולים': r.healthFund,
+    'ביטוח משלים': r.supplementalInsurance,
+    'סכום תשלום': Number(r.payerAmount || 0),
+    'חודש בילינג': r.billingMonth,
+    'עמלה': Number(r.commissionAmount || 0),
+    'סטטוס תשלום': r.paymentStatus,
+    'סטטוס מנוי': r.subscriptionStatus,
+    'מוצר': r.productName,
+    'נוצר בתאריך': r.createdAt,
+  }));
+  const ws = XLSX.utils.json_to_sheet(sheetRows);
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
+  for (let row = 1; row <= range.e.r; row += 1) {
+    const source = rows[row - 1];
+    if (!source || source.rowRole !== 'primary') continue;
+    for (let col = range.s.c; col <= range.e.c; col += 1) {
+      const ref = XLSX.utils.encode_cell({ r: row, c: col });
+      if (!ws[ref]) ws[ref] = { t: 's', v: '' };
+      ws[ref].s = {
+        ...(ws[ref].s || {}),
+        fill: {
+          patternType: 'solid',
+          fgColor: { rgb: 'FFFDEB3B' },
+          bgColor: { rgb: 'FFFDEB3B' },
+        },
+      };
+    }
+  }
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Subscribers');
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', cellStyles: true });
 }
 
 export function buildCancellationsCsv(deals) {

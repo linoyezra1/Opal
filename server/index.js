@@ -108,7 +108,15 @@ import {
   updateVendor,
   upsertCheckoutDraft,
 } from './adminMongooseService.js';
-import { buildSubscribersCsv, buildCancellationsCsv, buildAgentCommissionPayload } from './reportController.js';
+import {
+  buildSubscribersCsv,
+  buildCancellationsCsv,
+  buildAgentCommissionPayload,
+  generateFlattenedSubscriberRows,
+  filterDealsByProvider,
+  listProviderNamesFromDeals,
+  buildSubscribersXlsxBuffer,
+} from './reportController.js';
 import multer from 'multer';
 import { parseOrgMemberImportBuffer, buildOrgImportTemplateBuffer } from './orgImportService.js';
 import fs from 'fs/promises';
@@ -2199,7 +2207,9 @@ app.get('/api/admin/reports/subscribers-export', requireAdmin, async (req, res) 
   try {
     const fromDate = req.query.fromDate || req.query.from || '';
     const toDate = req.query.toDate || req.query.to || '';
-    const deals = await findDealsCreatedInRange(fromDate || null, toDate || null);
+    const provider = String(req.query.provider || '').trim();
+    const allDeals = await findDealsCreatedInRange(fromDate || null, toDate || null);
+    const deals = provider ? filterDealsByProvider(allDeals, provider) : allDeals;
     const csv = buildSubscribersCsv(deals);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="opal-subscribers-by-person.csv"');
@@ -2207,6 +2217,57 @@ app.get('/api/admin/reports/subscribers-export', requireAdmin, async (req, res) 
   } catch (e) {
     console.error(`[${ts()}] reports/subscribers-export error:`, e);
     res.status(500).json({ success: false, error: 'Failed to build export' });
+  }
+});
+
+app.get('/api/admin/reports/subscribers-export-xlsx', requireAdmin, async (req, res) => {
+  try {
+    const fromDate = req.query.fromDate || req.query.from || '';
+    const toDate = req.query.toDate || req.query.to || '';
+    const provider = String(req.query.provider || '').trim();
+    const allDeals = await findDealsCreatedInRange(fromDate || null, toDate || null);
+    const deals = provider ? filterDealsByProvider(allDeals, provider) : allDeals;
+    const file = buildSubscribersXlsxBuffer(deals);
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="opal-subscribers-by-person.xlsx"'
+    );
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.send(file);
+  } catch (e) {
+    console.error(`[${ts()}] reports/subscribers-export-xlsx error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to build XLSX export' });
+  }
+});
+
+app.get('/api/admin/reports/providers', requireAdmin, async (req, res) => {
+  try {
+    const fromDate = req.query.fromDate || req.query.from || '';
+    const toDate = req.query.toDate || req.query.to || '';
+    const deals = await findDealsCreatedInRange(fromDate || null, toDate || null);
+    const providers = listProviderNamesFromDeals(deals);
+    res.json({ success: true, providers });
+  } catch (e) {
+    console.error(`[${ts()}] reports/providers error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to load providers' });
+  }
+});
+
+app.get('/api/admin/reports/subscribers-preview', requireAdmin, async (req, res) => {
+  try {
+    const fromDate = req.query.fromDate || req.query.from || '';
+    const toDate = req.query.toDate || req.query.to || '';
+    const provider = String(req.query.provider || '').trim();
+    const allDeals = await findDealsCreatedInRange(fromDate || null, toDate || null);
+    const deals = provider ? filterDealsByProvider(allDeals, provider) : allDeals;
+    const allRows = generateFlattenedSubscriberRows(deals);
+    res.json({ success: true, rows: allRows.slice(0, 200), totalRows: allRows.length });
+  } catch (e) {
+    console.error(`[${ts()}] reports/subscribers-preview error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to build preview' });
   }
 });
 

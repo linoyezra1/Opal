@@ -565,7 +565,7 @@ export default function OrganizationDetailPage() {
                           />
                         </Field>
                         <Field>
-                          <FieldLabel>שם מוצר לחברים (דוחות / ייצוא למפעיל)</FieldLabel>
+                          <FieldLabel>שם מוצר לחברים (דוחות / ייצוא לספק)</FieldLabel>
                           <select
                             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                             value={org.subscriptionProductName || ''}

@@ -74,6 +74,11 @@ export default function ReportsDashboard() {
   const [toDate, setToDate] = useState(defaults.to);
   const [exportBusy, setExportBusy] = useState(false);
   const [exportErr, setExportErr] = useState('');
+  const [providers, setProviders] = useState([]);
+  const [providerFilter, setProviderFilter] = useState('');
+  const [previewRows, setPreviewRows] = useState([]);
+  const [previewTotal, setPreviewTotal] = useState(0);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const [agents, setAgents] = useState([]);
   const [agentId, setAgentId] = useState('');
@@ -114,6 +119,47 @@ export default function ReportsDashboard() {
     setAgents(Array.isArray(j.rows) ? j.rows : []);
   }, [token]);
 
+  const loadProviders = useCallback(async () => {
+    if (!token) return;
+    try {
+      const q = new URLSearchParams();
+      if (fromDate) q.set('fromDate', fromDate);
+      if (toDate) q.set('toDate', toDate);
+      const res = await fetch(`${API_BASE}/api/admin/reports/providers?${q.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.success) setProviders(Array.isArray(j.providers) ? j.providers : []);
+    } catch {
+      setProviders([]);
+    }
+  }, [token, fromDate, toDate]);
+
+  const loadPreview = useCallback(async () => {
+    if (!token) return;
+    setPreviewLoading(true);
+    setExportErr('');
+    try {
+      const q = new URLSearchParams();
+      if (fromDate) q.set('fromDate', fromDate);
+      if (toDate) q.set('toDate', toDate);
+      if (providerFilter) q.set('provider', providerFilter);
+      const res = await fetch(`${API_BASE}/api/admin/reports/subscribers-preview?${q.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.success) throw new Error(j.error || 'טעינת תצוגה מקדימה נכשלה');
+      setPreviewRows(Array.isArray(j.rows) ? j.rows : []);
+      setPreviewTotal(Number(j.totalRows || 0));
+    } catch (e) {
+      setExportErr(e?.message || 'שגיאה');
+      setPreviewRows([]);
+      setPreviewTotal(0);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [token, fromDate, toDate, providerFilter]);
+
   const loadInvoices = useCallback(
     async (monthOverride) => {
       if (!token) return;
@@ -141,6 +187,9 @@ export default function ReportsDashboard() {
   useEffect(() => {
     loadAgents();
   }, [loadAgents]);
+  useEffect(() => {
+    loadProviders();
+  }, [loadProviders]);
 
   const runSubscribersExport = async () => {
     setExportErr('');
@@ -149,10 +198,11 @@ export default function ReportsDashboard() {
       const q = new URLSearchParams();
       if (fromDate) q.set('fromDate', fromDate);
       if (toDate) q.set('toDate', toDate);
+      if (providerFilter) q.set('provider', providerFilter);
       await downloadCsv(
-        `${API_BASE}/api/admin/reports/subscribers-export?${q.toString()}`,
+        `${API_BASE}/api/admin/reports/subscribers-export-xlsx?${q.toString()}`,
         token,
-        'opal-subscribers-by-person.csv'
+        'opal-subscribers-by-person.xlsx'
       );
     } catch (e) {
       setExportErr(e?.message || 'שגיאה');
@@ -267,7 +317,7 @@ export default function ReportsDashboard() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">דוחות ובילינג אופאל</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            מרכז הדוחות והבילינג של אופאל — ייצוא למפעיל, עמלות סוכנים וגבייה מארגונים
+            מרכז הדוחות והבילינג של אופאל — ייצוא לספק, עמלות סוכנים וגבייה מארגונים
           </p>
         </div>
 
@@ -285,7 +335,7 @@ export default function ReportsDashboard() {
           <TabsList className="flex flex-wrap h-auto gap-1">
             <TabsTrigger value="provider" className="gap-1">
               <FileSpreadsheet className="size-4" />
-              ייצוא למפעיל
+              ייצוא לספק
             </TabsTrigger>
             <TabsTrigger value="agents" className="gap-1">
               <Users className="size-4" />
@@ -300,7 +350,7 @@ export default function ReportsDashboard() {
           <TabsContent value="provider" className="mt-4" dir="rtl">
             <Card className="text-right" dir="rtl">
               <CardHeader className="text-right">
-                <CardTitle>ייצוא למפעיל</CardTitle>
+                <CardTitle>ייצוא לספק</CardTitle>
                 <CardDescription>בחרו טווח תאריכים לפי תאריך יצירת העסקה במערכת</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -313,17 +363,68 @@ export default function ReportsDashboard() {
                     <FieldLabel>עד תאריך</FieldLabel>
                     <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
                   </Field>
+                  <Field>
+                    <FieldLabel>ספק</FieldLabel>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={providerFilter}
+                      onChange={(e) => setProviderFilter(e.target.value)}
+                    >
+                      <option value="">כל הספקים</option>
+                      {providers.map((p) => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                  </Field>
                 </FieldGroup>
                 {exportErr ? <p className="text-sm text-destructive">{exportErr}</p> : null}
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" disabled={exportBusy} onClick={runSubscribersExport}>
                     {exportBusy ? <Spinner className="size-4" /> : null}
-                    הורד אקסל מנויים (שורה לכל נפש)
+                    הורד אקסל מנויים לספק
+                  </Button>
+                  <Button type="button" variant="outline" disabled={previewLoading} onClick={loadPreview}>
+                    {previewLoading ? <Spinner className="size-4" /> : null}
+                    תצוגה מקדימה
                   </Button>
                   <Button type="button" variant="secondary" disabled={exportBusy} onClick={runCancellationsExport}>
                     הורד אקסל ביטולים
                   </Button>
                 </div>
+                <div className="rounded-md border overflow-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-right">סוג שורה</TableHead>
+                        <TableHead className="text-right">שם פרטי</TableHead>
+                        <TableHead className="text-right">שם משפחה</TableHead>
+                        <TableHead className="text-right">ת.ז</TableHead>
+                        <TableHead className="text-right">מוצר</TableHead>
+                        <TableHead className="text-right">סכום</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {previewRows.map((r, idx) => (
+                        <TableRow key={`preview-${idx}`}>
+                          <TableCell>{String(r.rowRole || '') === 'primary' ? 'מבוטח ראשי' : 'מוטב משני'}</TableCell>
+                          <TableCell>{String(r.firstName || '—')}</TableCell>
+                          <TableCell>{String(r.lastName || '—')}</TableCell>
+                          <TableCell>{String(r.idNumber || '—')}</TableCell>
+                          <TableCell>{String(r.productName || '—')}</TableCell>
+                          <TableCell>{formatCurrency(r.payerAmount || 0)}</TableCell>
+                        </TableRow>
+                      ))}
+                      {!previewRows.length ? (
+                        <TableRow>
+                          <TableCell className="text-center text-muted-foreground" colSpan={6}>
+                            אין נתונים לתצוגה מקדימה
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                    </TableBody>
+                  </Table>
+                </div>
+                <p className="text-xs text-muted-foreground">סה״כ רשומות בטווח: {previewTotal}</p>
               </CardContent>
             </Card>
           </TabsContent>

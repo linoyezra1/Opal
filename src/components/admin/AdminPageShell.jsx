@@ -13,7 +13,6 @@ import {
   Menu,
   X,
   LayoutTemplate,
-  Phone,
   FileBarChart2,
   Archive,
   Bell,
@@ -35,6 +34,7 @@ const groups = [
       { label: 'מחירון', to: '/admin/price-list', icon: Receipt },
       { label: 'דף נחיתה', to: '/admin/landing-pages', icon: LayoutTemplate },
       { label: 'סוכן', to: '/admin/agents', icon: Users },
+      { label: 'דוחות ובילינג', to: '/admin/reports', icon: FileBarChart2 },
     ],
   },
   {
@@ -48,13 +48,7 @@ const groups = [
   {
     title: 'התראות',
     items: [
-      { label: 'צור קשר', to: '/admin/alerts?tab=contactTasks', icon: Phone, badgeKey: 'contactTasks' },
-      { label: 'ארגון ממתין לאישור', to: '/admin/alerts?tab=orgPendingApproval', icon: Building2, badgeKey: 'orgPendingApproval' },
-      { label: 'השלמת טפסים', to: '/admin/alerts?tab=pendingBeneficiaries', icon: UserCheck, badgeKey: 'pendingBeneficiaries' },
-      { label: 'פיגור תשלום', to: '/admin/alerts?tab=paymentArrears', icon: Bell, badgeKey: 'paymentArrears' },
-      { label: 'ארגונים לחיוב', to: '/admin/alerts?tab=organizationsToBill', icon: Receipt, badgeKey: 'organizationsToBill' },
       { label: 'מרכז התראות', to: '/admin/alerts', icon: Bell },
-      { label: 'דוחות ובילינג', to: '/admin/reports', icon: FileBarChart2 },
     ],
   },
 ];

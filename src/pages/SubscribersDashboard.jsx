@@ -5,7 +5,6 @@ import {
   Search,
   Filter,
   TrendingUp,
-  Receipt,
   Users,
   Calendar,
   Edit2,
@@ -1339,9 +1338,8 @@ export default function SubscribersDashboard() {
           </div>
 
           {/* כרטיסי סטטיסטיקה — נתונים אמיתיים מהדוח */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <StatsCard title="סה״כ הכנסות" value={formatCurrency(s.totalRevenue || 0)} icon={TrendingUp} loading={loading} />
-            <StatsCard title="רווח נקי" value={formatCurrency(s.totalNetProfit || 0)} icon={Receipt} loading={loading} />
             <StatsCard title="עסקאות בתוצאות" value={visibleRows.length} icon={Users} loading={loading} />
             <Tooltip>
               <TooltipTrigger asChild>
