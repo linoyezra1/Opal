@@ -142,8 +142,10 @@ function printVerification(beforeCyclesLen, afterDeals, scenarioName, expectedFa
   if (expectedFailure) {
     console.log(`Subscriber status updated to arrears: ${statusUpdated ? 'YES' : 'NO'}`);
     console.log(`Parent subscriptionStatus: ${String(parent?.subscriptionStatus || '—')}`);
+    console.log(`Parent futureBillingStatus: ${String(parent?.futureBillingStatus || '—')}`);
   } else {
     console.log(`Parent subscriptionStatus (unchanged check): ${String(parent?.subscriptionStatus || '—')}`);
+    console.log(`Parent futureBillingStatus: ${String(parent?.futureBillingStatus || '—')}`);
   }
   if (!created) {
     console.log(

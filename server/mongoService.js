@@ -257,23 +257,6 @@ export async function setDealPaymentArrears(parentDealId, recurringId = '', opti
   });
 }
 
-function collectCardcomRecurringIdValues(seed, master) {
-  const vals = [];
-  const add = (v) => {
-    if (v == null || v === '') return;
-    const s = String(v).trim();
-    if (!s) return;
-    vals.push(s);
-    const n = Number(s);
-    if (Number.isFinite(n) && !Number.isNaN(n) && String(n) === s) vals.push(n);
-  };
-  add(seed?.cardcomRecurringId);
-  add(master?.cardcomRecurringId);
-  add(seed?.formState?.cardcomRecurringId);
-  add(master?.formState?.cardcomRecurringId);
-  return [...new Set(vals)];
-}
-
 export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
   const db = await getDb();
   if (!ObjectId.isValid(String(dealId || ''))) return { cardcomRecurringId: '', rows: [] };
@@ -281,39 +264,39 @@ export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
   const seed = await deals.findOne({ _id: new ObjectId(String(dealId)) });
   if (!seed) return { cardcomRecurringId: '', rows: [] };
 
-  const masterIdStr =
+  const mainDealIdStr =
     seed.isRecurringCycle === true && seed.parentDealId != null && String(seed.parentDealId).trim() !== ''
       ? String(seed.parentDealId).trim()
       : String(seed._id);
 
-  let master = seed;
-  if (String(seed._id) !== masterIdStr && ObjectId.isValid(masterIdStr)) {
-    const m = await deals.findOne({ _id: new ObjectId(masterIdStr) });
-    if (m) master = m;
+  let mainDeal = seed;
+  if (String(seed._id) !== mainDealIdStr && ObjectId.isValid(mainDealIdStr)) {
+    const m = await deals.findOne({ _id: new ObjectId(mainDealIdStr) });
+    if (m) mainDeal = m;
   }
 
-  const recurringId = String(
-    master.cardcomRecurringId || seed.cardcomRecurringId || master.formState?.cardcomRecurringId || seed.formState?.cardcomRecurringId || ''
-  ).trim();
-
-  const ridValues = collectCardcomRecurringIdValues(seed, master);
-  const or = [];
-  if (ridValues.length) {
-    or.push({ cardcomRecurringId: { $in: ridValues } });
+  const recurringId = String(mainDeal.cardcomRecurringId || mainDeal.formState?.cardcomRecurringId || '').trim();
+  const recurringIdValues = [];
+  if (recurringId) {
+    recurringIdValues.push(recurringId);
+    const asNum = Number(recurringId);
+    if (Number.isFinite(asNum) && !Number.isNaN(asNum) && String(asNum) === recurringId) {
+      recurringIdValues.push(asNum);
+    }
   }
-  if (masterIdStr && ObjectId.isValid(masterIdStr)) {
-    const oid = new ObjectId(masterIdStr);
-    or.push({ _id: oid });
-    or.push({ parentDealId: masterIdStr });
-    or.push({ parentDealId: oid });
+  const filterOr = [];
+  if (recurringIdValues.length) {
+    filterOr.push({ cardcomRecurringId: { $in: recurringIdValues } });
   }
-  if (!or.length) {
-    or.push({ _id: seed._id });
+  if (mainDealIdStr && ObjectId.isValid(mainDealIdStr)) {
+    filterOr.push({ _id: new ObjectId(mainDealIdStr) });
+  } else {
+    filterOr.push({ _id: seed._id });
   }
   const lim = Math.max(1, Math.min(Number(limit) || 500, 500));
-  /** ללא סינון isActive — רשומות היסטוריה חייבות להופיע; מיון עולה — עסקת הרישום (הישנה ביותר) ראשונה */
+  /** מיון עולה — עסקת הרישום (הישנה ביותר) ראשונה */
   const docs = await deals
-    .find({ $or: or })
+    .find({ $or: filterOr })
     .sort({ createdAt: 1 })
     .limit(lim)
     .toArray();
@@ -334,7 +317,7 @@ export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
     };
   });
   return {
-    cardcomRecurringId: recurringId || String(master.cardcomRecurringId || '').trim(),
+    cardcomRecurringId: recurringId,
     rows,
   };
 }

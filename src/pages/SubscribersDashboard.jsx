@@ -155,11 +155,11 @@ export default function SubscribersDashboard() {
         if (!res.ok || !j.success) throw new Error(j.error || 'טעינת היסטוריית חיובים נכשלה');
         if (cancelled) return;
         setBillingHistory(Array.isArray(j.rows) ? j.rows : []);
-        setBillingHistoryRecurringId(String(j.cardcomRecurringId || selected?.cardcomRecurringId || ''));
+        setBillingHistoryRecurringId(String(j.cardcomRecurringId || ''));
       } catch {
         if (!cancelled) {
           setBillingHistory([]);
-          setBillingHistoryRecurringId(String(selected?.cardcomRecurringId || ''));
+          setBillingHistoryRecurringId('');
         }
       } finally {
         if (!cancelled) setBillingHistoryLoading(false);
@@ -564,6 +564,8 @@ export default function SubscribersDashboard() {
     return (data.rows || []).filter((r) => {
       const hay = [
         r.transactionId,
+        r.internalDealNumber,
+        r.cardcomRecurringId,
         r.fullName,
         r.idNumber,
         r.organizationName,

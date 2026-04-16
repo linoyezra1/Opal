@@ -40,7 +40,7 @@ const CARD_META = {
   totalExpenses: { title: 'סה״כ הוצאות', icon: AlertCircle, money: true, className: 'border-red-300 bg-red-50/60' },
   totalProviderPayments: { title: 'סה״כ תשלום לספק', icon: Building2, money: true },
   totalAgentPayments: { title: 'סה״כ תשלום לסוכן', icon: UserCheck, money: true },
-  failedPayments: { title: 'תשלומים תקועים', icon: AlertCircle, task: true },
+  failedPayments: { title: 'פיגור תשלום', icon: AlertCircle, task: true },
   abandonedCarts: { title: 'עגלות נטושות', icon: CreditCard, task: true },
   pendingBeneficiaries: { title: 'לקוחות להשלמת פרטים', icon: Users, task: true },
   contactTasks: { title: 'פניות צור קשר', icon: CreditCard, task: true },
@@ -147,11 +147,10 @@ export default function AdminControlPanel() {
       navigate(`/admin/subscribers?search=${encodeURIComponent(search)}&editId=${encodeURIComponent(row.id)}`);
       return;
     }
-    if (key === 'failedPayments' && row.subscriberDealId) {
-      const search = String(row.orderId || row.transactionId || '').trim();
-      navigate(
-        `/admin/subscribers?search=${encodeURIComponent(search)}&editId=${encodeURIComponent(row.subscriberDealId)}`
-      );
+    if (key === 'failedPayments') {
+      const search = String(row.cardcomRecurringId || row.orderId || row.transactionId || '').trim();
+      if (!search) return;
+      navigate(`/admin/subscribers?search=${encodeURIComponent(search)}`);
       return;
     }
     if ((key === 'activeSubscribers' || key === 'totalTransactions') && row.id) {
