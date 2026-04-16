@@ -597,6 +597,8 @@ export default function SubscribersDashboard() {
       return hay.includes(q);
     });
   }, [data.rows, liveSearch]);
+  const statusSummaryTitle = filters.status === 'cancelled' ? 'מבוטלים (סיכום)' : 'מנויים פעילים (סיכום)';
+  const statusSummaryValue = filters.status === 'cancelled' ? visibleRows.length : (s.active ?? 0);
   const visibleRowIds = useMemo(
     () => visibleRows.map((r) => String(r.id || '')).filter(Boolean),
     [visibleRows]
@@ -1344,7 +1346,7 @@ export default function SubscribersDashboard() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="rounded-lg outline-none">
-                  <StatsCard title="מנויים פעילים (סיכום)" value={s.active ?? 0} icon={Calendar} loading={loading} />
+                  <StatsCard title={statusSummaryTitle} value={statusSummaryValue} icon={Calendar} loading={loading} />
                 </div>
               </TooltipTrigger>
               <TooltipContent>לפי מסנני הקטגוריות והדוח בשרת</TooltipContent>

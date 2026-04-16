@@ -2219,7 +2219,7 @@ export async function getControlPanelOverviewData(filters = {}) {
 
   console.log('[getControlPanelOverviewData] cancellation totals', {
     totalCancellations,
-    cancelledCustomerRowsLength: cancelledCustomerRows.length,
+    cancelledCustomerRowsLength: statusFilteredCancelledDeals.length,
   });
 
   return {
@@ -2238,7 +2238,7 @@ export async function getControlPanelOverviewData(filters = {}) {
       abandonedCarts: abandonedCartRows.length,
       contactTasks: contactTaskRows.length,
       organizationCollectionsDebt,
-      cancellationsCount: cancelledCustomerRows.length,
+      cancellationsCount: statusFilteredCancelledDeals.length,
       chartSeries: chartSeriesWithCancellations,
       totalCancellationRevenue,
       totalCancellations,

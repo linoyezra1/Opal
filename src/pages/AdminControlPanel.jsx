@@ -20,7 +20,7 @@ function toYmd(d) {
 function monthDefaults() {
   const now = new Date();
   const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  return { fromDate: toYmd(from), toDate: toYmd(now), month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`, status: 'all' };
+  return { fromDate: toYmd(from), toDate: toYmd(now), month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}` };
 }
 function formatCurrency(v) {
   return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(Number(v || 0));
@@ -184,7 +184,7 @@ export default function AdminControlPanel() {
 
         <Card>
           <CardContent className="pt-6">
-            <div className="grid gap-3 md:grid-cols-5">
+            <div className="grid gap-3 md:grid-cols-4">
               <Input
                 type="month"
                 value={filters.month}
@@ -203,15 +203,6 @@ export default function AdminControlPanel() {
               />
               <Input type="date" value={filters.fromDate} onChange={(e) => setFilters((f) => ({ ...f, fromDate: e.target.value }))} />
               <Input type="date" value={filters.toDate} onChange={(e) => setFilters((f) => ({ ...f, toDate: e.target.value }))} />
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={filters.status || 'all'}
-                onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
-              >
-                <option value="all">סטטוס: הכל</option>
-                <option value="active">סטטוס: פעילים</option>
-                <option value="cancelled">סטטוס: מבוטלים</option>
-              </select>
               <div className="text-sm text-muted-foreground flex items-center justify-end">טווח פעיל: {data?.range?.fromDate || filters.fromDate} - {data?.range?.toDate || filters.toDate}</div>
             </div>
           </CardContent>
@@ -309,14 +300,14 @@ export default function AdminControlPanel() {
                       <YAxis tickFormatter={(v) => cancelView === 'count' ? `${Math.round(Number(v || 0))}` : `₪${Math.round(Number(v || 0))}`} />
                       <RechartsTooltip
                         contentStyle={{ direction: 'rtl', textAlign: 'right' }}
-                        formatter={(value, key) => [key === 'cancellations' ? String(Math.round(Number(value || 0))) : formatCurrency(value), key === 'cancellations' ? 'כמות מבוטלים (כתום)' : 'אובדן הכנסה (אדום)']}
+                        formatter={(value, key) => [key === 'cancellations' ? String(Math.round(Number(value || 0))) : formatCurrency(value), key === 'cancellations' ? 'כמות מבוטלים ' : 'אובדן הכנסה ']}
                         labelFormatter={(label) => `תאריך: ${label}`}
                       />
                       {(cancelView === 'loss') ? (
-                        <Line type="monotone" dataKey="cancellationRevenue" stroke="#dc2626" name="אובדן הכנסה (אדום)" strokeWidth={2.5} dot={false} />
+                        <Line type="monotone" dataKey="cancellationRevenue" stroke="#dc2626" name="אובדן הכנסה " strokeWidth={2.5} dot={false} />
                       ) : null}
                       {(cancelView === 'count') ? (
-                        <Line type="monotone" dataKey="cancellations" stroke="#f97316" name="כמות מבוטלים (כתום)" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="cancellations" stroke="#f97316" name="כמות מבוטלים " strokeWidth={2} dot={false} />
                       ) : null}
                     </LineChart>
                   </ResponsiveContainer>
