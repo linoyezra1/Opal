@@ -29,7 +29,7 @@ function formatCurrency(v) {
 const SECTIONS = [
   { title: 'הכנסות', keys: ['totalRevenue', 'activeSubscribers', 'totalTransactions', 'organizationCollectionsDebt'] },
   { title: 'הוצאות', keys: ['totalExpenses', 'totalProviderPayments', 'totalAgentPayments'] },
-  { title: 'משימות לטיפול', keys: ['failedPayments', 'cancelledCustomers', 'abandonedCarts', 'pendingBeneficiaries', 'contactTasks'] },
+  { title: 'משימות לטיפול', keys: ['failedPayments', 'cancellationsCount', 'abandonedCarts', 'pendingBeneficiaries', 'contactTasks'] },
 ];
 
 const CARD_META = {
@@ -41,7 +41,7 @@ const CARD_META = {
   totalProviderPayments: { title: 'סה״כ תשלום לספק', icon: Building2, money: true },
   totalAgentPayments: { title: 'סה״כ תשלום לסוכן', icon: UserCheck, money: true },
   failedPayments: { title: 'פיגור תשלום', icon: AlertCircle, task: true },
-  cancelledCustomers: { title: 'מבוטלים', icon: AlertCircle, task: true, className: 'border-red-300 bg-red-50/60' },
+  cancellationsCount: { title: 'מבוטלים', icon: AlertCircle, task: true, className: 'border-red-300 bg-red-50/60' },
   abandonedCarts: { title: 'עגלות נטושות', icon: CreditCard, task: true },
   pendingBeneficiaries: { title: 'לקוחות להשלמת פרטים', icon: Users, task: true },
   contactTasks: { title: 'פניות צור קשר', icon: CreditCard, task: true },
@@ -216,9 +216,10 @@ export default function AdminControlPanel() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {section.keys.map((key) => {
                 const meta = CARD_META[key];
+                const drilldownKey = key === 'cancellationsCount' ? 'cancelledCustomers' : key;
                 return (
                   cardClickable(key) ? (
-                    <button key={key} type="button" className="text-right" onClick={() => setModalKey(key)}>
+                    <button key={key} type="button" className="text-right" onClick={() => setModalKey(drilldownKey)}>
                       <StatsCard title={meta.title} value={meta.money ? formatCurrency(overview[key]) : String(Math.round(Number(overview[key] || 0)))} icon={meta.icon} className={meta.className} loading={loading && !data} />
                     </button>
                   ) : (

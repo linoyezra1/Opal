@@ -2174,8 +2174,9 @@ export async function getControlPanelOverviewData(filters = {}) {
   const cancellationCountByDay = {};
   const cancellationRevenueByDay = {};
   let totalCancellationRevenue = 0;
-  let totalCancellations = 0;
+  const totalCancellations = statusFilteredCancelledDeals.length;
   for (const d of statusFilteredCancelledDeals) {
+    totalCancellationRevenue += Number(d.payerAmount || 0);
     const eventDateRaw = d.cancellationDate || d.updatedAt || d.createdAt;
     const dt = new Date(eventDateRaw);
     if (Number.isNaN(dt.getTime())) continue;
@@ -2183,8 +2184,6 @@ export async function getControlPanelOverviewData(filters = {}) {
     cancellationCountByDay[key] = Number(cancellationCountByDay[key] || 0) + 1;
     const amount = Number(d.payerAmount || 0);
     cancellationRevenueByDay[key] = Number(cancellationRevenueByDay[key] || 0) + amount;
-    totalCancellationRevenue += amount;
-    totalCancellations += 1;
   }
   const baseIncomeChartRows = statusFilteredCreatedDeals.filter((d) => d.isPaidSuccess && !isCancelledDeal(d));
   const dayMapForChart = new Map();
