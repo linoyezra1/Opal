@@ -1847,26 +1847,8 @@ export async function getControlPanelOverviewData(filters = {}) {
   const db = await getDb();
   const { from, to } = parseControlPanelDateRange(filters);
   const activityStatus = parseActivityStatus(filters.status);
-  const statusMatch =
-    activityStatus === 'active'
-      ? { isActive: { $ne: false }, isRecurringCycle: { $ne: true }, subscriptionStatus: { $not: /cancel/i } }
-      : activityStatus === 'cancelled'
-        ? {
-            $or: [
-              { subscriptionStatus: { $regex: /cancel|בוטל/i } },
-              { status: { $regex: /cancel|בוטל/i } },
-              { paymentStatus: { $regex: /cancel|בוטל/i } },
-              {
-                $and: [
-                  { cardcomRecurringId: { $exists: true, $ne: '' } },
-                  { isActive: false },
-                ],
-              },
-            ],
-          }
-      : {};
   const deals = await db.collection('deals').aggregate([
-    { $match: { createdAt: { $gte: from, $lte: to }, ...statusMatch } },
+    { $match: {} },
     {
       $addFields: {
         _productIdObj: {
@@ -2023,7 +2005,41 @@ export async function getControlPanelOverviewData(filters = {}) {
     },
   ]).toArray();
 
-  const paidRows = deals.filter((d) => d.isPaidSuccess && !d.isCancelled);
+  const isDateInRange = (value) => {
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return false;
+    return dt >= from && dt <= to;
+  };
+  const isCancelledDeal = (d) => {
+    const sub = String(d.subscriptionStatus || '').trim().toLowerCase();
+    const st = String(d.status || '').trim().toLowerCase();
+    const pay = String(d.paymentStatus || '').trim().toLowerCase();
+    const recurringId = String(d.cardcomRecurringId || '').trim();
+    const recurringStopped = d.isActive === false && recurringId !== '';
+    const manuallyCancelled = /cancel|בוטל/i.test(sub) || /cancel|בוטל/i.test(st) || /cancel|בוטל/i.test(pay);
+    return manuallyCancelled || recurringStopped;
+  };
+  const cancellationEventDate = (d) => d.cancellationDate || d.updatedAt || d.createdAt;
+  const isActiveDeal = (d) => d.isActive !== false && !isCancelledDeal(d) && d.isRecurringCycle !== true;
+
+  const createdRangeDeals = deals.filter((d) => isDateInRange(d.createdAt));
+  const cancelledByEventDate = deals.filter((d) => isCancelledDeal(d) && isDateInRange(cancellationEventDate(d)));
+
+  const statusFilteredCreatedDeals =
+    activityStatus === 'active'
+      ? createdRangeDeals.filter((d) => isActiveDeal(d))
+      : activityStatus === 'cancelled'
+        ? []
+      : createdRangeDeals;
+  const statusFilteredCancelledDeals =
+    activityStatus === 'cancelled'
+      ? cancelledByEventDate
+      : activityStatus === 'active'
+        ? []
+        : cancelledByEventDate;
+
+  // Summary cards are always computed from full selected range (independent of status filter).
+  const paidRows = createdRangeDeals.filter((d) => d.isPaidSuccess && !isCancelledDeal(d));
   const totalRevenue = paidRows.reduce((s, d) => s + Number(d.revenue || 0), 0);
   const totalProviderPayments = paidRows.reduce((s, d) => s + Number(d.providerCost || 0), 0);
   const totalAgentPayments = paidRows.reduce((s, d) => s + Number(d.agentCommission || 0), 0);
@@ -2031,7 +2047,7 @@ export async function getControlPanelOverviewData(filters = {}) {
   const totalNetProfit = totalRevenue - totalProviderPayments - totalAgentPayments;
   const activeSubscribers = paidRows.reduce((s, d) => s + Number(d.individualsCount || 1), 0);
   const totalTransactions = paidRows.length;
-  const failedPaymentRows = deals.filter((d) => {
+  const failedPaymentRows = createdRangeDeals.filter((d) => {
     const ps = String(d.paymentStatus || '').toLowerCase();
     const isCancelled = ps.includes('cancel') || ps.includes('בוטל') || ps === 'cancelled';
     const isError = /fail|declin|error|denied|נכשל/i.test(String(d.paymentStatus || ''));
@@ -2040,17 +2056,9 @@ export async function getControlPanelOverviewData(filters = {}) {
       (d.cardcomRecurringId != null && String(d.cardcomRecurringId).trim() !== '');
     return hasCardcom && isError && !isCancelled;
   });
-  const cancelledCustomerRows = deals.filter((d) => {
-    const sub = String(d.subscriptionStatus || '').trim().toLowerCase();
-    const st = String(d.status || '').trim().toLowerCase();
-    const pay = String(d.paymentStatus || '').trim().toLowerCase();
-    const recurringId = String(d.cardcomRecurringId || '').trim();
-    const recurringStopped = d.isActive === false && recurringId !== '';
-    const manuallyCancelled = /cancel|בוטל/i.test(sub) || /cancel|בוטל/i.test(st) || /cancel|בוטל/i.test(pay);
-    return manuallyCancelled || recurringStopped;
-  });
+  const cancelledCustomerRows = cancelledByEventDate;
 
-  const pendingBeneficiaryRows = deals.filter((d) => {
+  const pendingBeneficiaryRows = createdRangeDeals.filter((d) => {
     if (!d.isPaidSuccess || d.isCancelled) return false;
     const pm = d.formState?.primaryMember || d.beneficiaryUpdate?.primaryMember || {};
     const idNum = String(pm.id || d.formState?.id || '').trim();
@@ -2167,7 +2175,7 @@ export async function getControlPanelOverviewData(filters = {}) {
   const cancellationRevenueByDay = {};
   let totalCancellationRevenue = 0;
   let totalCancellations = 0;
-  for (const d of cancelledCustomerRows) {
+  for (const d of statusFilteredCancelledDeals) {
     const eventDateRaw = d.cancellationDate || d.updatedAt || d.createdAt;
     const dt = new Date(eventDateRaw);
     if (Number.isNaN(dt.getTime())) continue;
@@ -2178,12 +2186,29 @@ export async function getControlPanelOverviewData(filters = {}) {
     totalCancellationRevenue += amount;
     totalCancellations += 1;
   }
-  const chartDays = new Set(chartSeries.map((r) => r.date));
+  const baseIncomeChartRows = statusFilteredCreatedDeals.filter((d) => d.isPaidSuccess && !isCancelledDeal(d));
+  const dayMapForChart = new Map();
+  for (const d of baseIncomeChartRows) {
+    const day = new Date(d.createdAt);
+    if (Number.isNaN(day.getTime())) continue;
+    const key = day.toISOString().slice(0, 10);
+    const prev = dayMapForChart.get(key) || { date: key, revenue: 0, netProfit: 0, count: 0 };
+    prev.revenue += Number(d.revenue || 0);
+    prev.netProfit += Number(d.netProfit || 0);
+    prev.count += 1;
+    dayMapForChart.set(key, prev);
+  }
+  const filteredIncomeChartSeries = [...dayMapForChart.values()].sort((a, b) => a.date.localeCompare(b.date)).map((d) => ({
+    ...d,
+    label: new Date(d.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }),
+  }));
+
+  const chartDays = new Set(filteredIncomeChartSeries.map((r) => r.date));
   Object.keys(cancellationCountByDay).forEach((d) => chartDays.add(d));
   const chartSeriesWithCancellations = Array.from(chartDays)
     .sort((a, b) => a.localeCompare(b))
     .map((date) => {
-      const base = chartSeries.find((r) => r.date === date) || { date, revenue: 0, netProfit: 0, count: 0 };
+      const base = filteredIncomeChartSeries.find((r) => r.date === date) || { date, revenue: 0, netProfit: 0, count: 0 };
       return {
         ...base,
         cancellations: Number(cancellationCountByDay[date] || 0),
@@ -2267,7 +2292,7 @@ export async function getControlPanelOverviewData(filters = {}) {
           comments: String(d.formState?.failedPaymentComment || ''),
         };
       }),
-      cancelledCustomers: cancelledCustomerRows.map((d) => ({
+      cancelledCustomers: statusFilteredCancelledDeals.map((d) => ({
         id: String(d._id || ''),
         orderId: d.transactionId || '',
         customerName: d.formState?.fullName || '—',
