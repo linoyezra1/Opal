@@ -29,7 +29,7 @@ function formatCurrency(v) {
 const SECTIONS = [
   { title: 'הכנסות', keys: ['totalRevenue', 'activeSubscribers', 'totalTransactions', 'organizationCollectionsDebt'] },
   { title: 'הוצאות', keys: ['totalExpenses', 'totalProviderPayments', 'totalAgentPayments'] },
-  { title: 'משימות לטיפול', keys: ['failedPayments', 'abandonedCarts', 'pendingBeneficiaries', 'contactTasks'] },
+  { title: 'משימות לטיפול', keys: ['failedPayments', 'cancelledCustomers', 'abandonedCarts', 'pendingBeneficiaries', 'contactTasks'] },
 ];
 
 const CARD_META = {
@@ -41,6 +41,7 @@ const CARD_META = {
   totalProviderPayments: { title: 'סה״כ תשלום לספק', icon: Building2, money: true },
   totalAgentPayments: { title: 'סה״כ תשלום לסוכן', icon: UserCheck, money: true },
   failedPayments: { title: 'פיגור תשלום', icon: AlertCircle, task: true },
+  cancelledCustomers: { title: 'מבוטלים', icon: AlertCircle, task: true, className: 'border-red-300 bg-red-50/60' },
   abandonedCarts: { title: 'עגלות נטושות', icon: CreditCard, task: true },
   pendingBeneficiaries: { title: 'לקוחות להשלמת פרטים', icon: Users, task: true },
   contactTasks: { title: 'פניות צור קשר', icon: CreditCard, task: true },
@@ -82,6 +83,7 @@ const HEADER_LABELS = {
   price: 'מחיר',
   comments: 'הערות',
   chargeDate: 'תאריך חיוב',
+  cancellationDate: 'תאריך ביטול',
 };
 
 function labelForColumn(key) {
@@ -150,10 +152,10 @@ export default function AdminControlPanel() {
       navigate(`/admin/subscribers?search=${encodeURIComponent(search)}&editId=${encodeURIComponent(row.id)}`);
       return;
     }
-    if (key === 'failedPayments') {
+    if (key === 'failedPayments' || key === 'cancelledCustomers') {
       const search = String(row.cardcomRecurringId || row.orderId || row.transactionId || '').trim();
       if (!search) return;
-      navigate(`/admin/subscribers?search=${encodeURIComponent(search)}`);
+      navigate(`/admin/subscribers?search=${encodeURIComponent(search)}&status=cancelled`);
       return;
     }
     if ((key === 'activeSubscribers' || key === 'totalTransactions') && row.id) {
@@ -295,7 +297,6 @@ export default function AdminControlPanel() {
                 <div className="flex items-center gap-1 rounded-md border bg-background p-1">
                   <Button size="sm" variant={cancelView === 'loss' ? 'default' : 'ghost'} onClick={() => setCancelView('loss')}>אובדן הכנסה</Button>
                   <Button size="sm" variant={cancelView === 'count' ? 'default' : 'ghost'} onClick={() => setCancelView('count')}>כמות מבוטלים</Button>
-                  <Button size="sm" variant={cancelView === 'both' ? 'default' : 'ghost'} onClick={() => setCancelView('both')}>שניהם</Button>
                 </div>
               </div>
             </CardHeader>
@@ -312,14 +313,18 @@ export default function AdminControlPanel() {
                         formatter={(value, key) => [key === 'cancellations' ? String(Math.round(Number(value || 0))) : formatCurrency(value), key === 'cancellations' ? 'כמות מבוטלים (כתום)' : 'אובדן הכנסה (אדום)']}
                         labelFormatter={(label) => `תאריך: ${label}`}
                       />
-                      {(cancelView === 'loss' || cancelView === 'both') ? (
+                      {(cancelView === 'loss') ? (
                         <Line type="monotone" dataKey="cancellationRevenue" stroke="#dc2626" name="אובדן הכנסה (אדום)" strokeWidth={2.5} dot={false} />
                       ) : null}
-                      {(cancelView === 'count' || cancelView === 'both') ? (
+                      {(cancelView === 'count') ? (
                         <Line type="monotone" dataKey="cancellations" stroke="#f97316" name="כמות מבוטלים (כתום)" strokeWidth={2} dot={false} />
                       ) : null}
                     </LineChart>
                   </ResponsiveContainer>
+                  <div className="flex items-center justify-end gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setModalKey('cancelledCustomers')}>לרשומות</Button>
+                    <Button size="sm" onClick={() => navigate('/admin/subscribers?status=cancelled')}>ניהול מלא</Button>
+                  </div>
                   <div className="text-right text-sm">
                     <span className="text-muted-foreground">Revenue Churn Rate: </span>
                     <span className="font-semibold text-red-700">{Number(overview.churnRate || 0).toFixed(1)}%</span>
@@ -343,6 +348,7 @@ export default function AdminControlPanel() {
             <div className="flex items-center justify-between gap-3">
               <DialogTitle>{CARD_META[modalKey]?.title || 'פירוט'}</DialogTitle>
               {modalKey === 'activeSubscribers' ? <Button asChild size="sm" variant="outline"><Link to="/admin/subscribers">ניהול מלא</Link></Button> : null}
+              {modalKey === 'cancelledCustomers' ? <Button asChild size="sm" variant="outline"><Link to="/admin/subscribers?status=cancelled">ניהול מלא</Link></Button> : null}
               {modalKey === 'totalProviderPayments' ? <Button asChild size="sm" variant="outline"><Link to="/admin/reports?tab=provider">ניהול מלא</Link></Button> : null}
               {modalKey === 'totalAgentPayments' ? <Button asChild size="sm" variant="outline"><Link to="/admin/reports?tab=agents">ניהול מלא</Link></Button> : null}
               {modalKey === 'organizationCollectionsDebt' ? <Button asChild size="sm" variant="outline"><Link to="/admin/reports?tab=orgs">ניהול מלא</Link></Button> : null}

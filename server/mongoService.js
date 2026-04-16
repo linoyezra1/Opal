@@ -1440,8 +1440,25 @@ export async function getSalesDashboardData(filters = {}) {
   const db = await getDb();
   const dealsCol = db.collection('deals');
 
-  const match = { isActive: { $ne: false } };
+  const statusFilter = String(filters.status || 'all').trim().toLowerCase();
+  const match =
+    statusFilter === 'cancelled'
+      ? {}
+      : { isActive: { $ne: false } };
   const andClauses = [{ isRecurringCycle: { $ne: true } }];
+  if (statusFilter === 'cancelled') {
+    andClauses.push({
+      $or: [
+        { subscriptionStatus: { $regex: /^cancelled$/i } },
+        {
+          $and: [
+            { isActive: false },
+            { cardcomRecurringId: { $exists: true, $ne: '' } },
+          ],
+        },
+      ],
+    });
+  }
   const dateRange = getDateRange(filters);
   if (dateRange) match.createdAt = dateRange;
 
@@ -1837,10 +1854,7 @@ export async function getControlPanelOverviewData(filters = {}) {
       : activityStatus === 'cancelled'
         ? {
             $or: [
-              { subscriptionStatus: { $regex: /cancel|בוטל/i } },
-              { status: { $regex: /cancel|בוטל/i } },
-              { paymentStatus: { $regex: /cancel|בוטל/i } },
-              { cancellationDate: { $exists: true, $ne: null } },
+              { subscriptionStatus: { $regex: /^cancelled$/i } },
               {
                 $and: [
                   { cardcomRecurringId: { $exists: true, $ne: '' } },
@@ -2028,6 +2042,12 @@ export async function getControlPanelOverviewData(filters = {}) {
       (d.cardcomRecurringId != null && String(d.cardcomRecurringId).trim() !== '');
     return hasCardcom && isError && !isCancelled;
   });
+  const cancelledCustomerRows = deals.filter((d) => {
+    const sub = String(d.subscriptionStatus || '').trim().toLowerCase();
+    const recurringId = String(d.cardcomRecurringId || '').trim();
+    const recurringStopped = d.isActive === false && recurringId !== '';
+    return sub === 'cancelled' || recurringStopped;
+  });
 
   const pendingBeneficiaryRows = deals.filter((d) => {
     if (!d.isPaidSuccess || d.isCancelled) return false;
@@ -2181,6 +2201,7 @@ export async function getControlPanelOverviewData(filters = {}) {
       abandonedCarts: abandonedCartRows.length,
       contactTasks: contactTaskRows.length,
       organizationCollectionsDebt,
+      cancellationsCount: cancelledCustomerRows.length,
       chartSeries,
       churnRate,
       totalCancellationRevenue,
@@ -2235,6 +2256,15 @@ export async function getControlPanelOverviewData(filters = {}) {
           comments: String(d.formState?.failedPaymentComment || ''),
         };
       }),
+      cancelledCustomers: cancelledCustomerRows.map((d) => ({
+        id: String(d._id || ''),
+        orderId: d.transactionId || '',
+        customerName: d.formState?.fullName || '—',
+        phoneNumber: d.formState?.phone || '—',
+        cardcomRecurringId: String(d.cardcomRecurringId || ''),
+        cancellationDate: d.cancellationDate || d.updatedAt || d.createdAt,
+        status: String(d.subscriptionStatus || d.status || d.paymentStatus || 'cancelled'),
+      })),
       pendingBeneficiaries: pendingBeneficiaryRows.map((d) => ({
         id: String(d._id || ''),
         transactionId: d.transactionId || '',

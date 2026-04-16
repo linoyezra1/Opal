@@ -179,9 +179,10 @@ export default function SubscribersDashboard() {
   const [liveSearch, setLiveSearch] = useState('');
 
   const [filters, setFilters] = useState({
-    month: '',
-    fromDate: '',
-    toDate: '',
+    month: String(searchParams.get('month') || ''),
+    fromDate: String(searchParams.get('fromDate') || ''),
+    toDate: String(searchParams.get('toDate') || ''),
+    status: String(searchParams.get('status') || 'all'),
     providerEnabled: false,
     providerValue: '',
     providerSearchEnabled: false,
@@ -217,6 +218,7 @@ export default function SubscribersDashboard() {
       !!filters.month ||
       !!filters.fromDate ||
       !!filters.toDate ||
+      (filters.status && filters.status !== 'all') ||
       filters.providerEnabled ||
       !!filters.providerValue ||
       filters.providerSearchEnabled ||
@@ -248,6 +250,7 @@ export default function SubscribersDashboard() {
         month: filters.month || '',
         fromDate: filters.fromDate || '',
         toDate: filters.toDate || '',
+        status: filters.status || 'all',
         providerEnabled: String(!!filters.providerEnabled),
         providerValue: filters.providerValue || '',
         agentEnabled: String(!!filters.agentEnabled),
@@ -284,7 +287,7 @@ export default function SubscribersDashboard() {
   useEffect(() => {
     loadDashboard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [filters.month, filters.fromDate, filters.toDate, filters.status]);
 
   useEffect(() => {
     const search = String(searchParams.get('search') || '').trim();
@@ -292,6 +295,21 @@ export default function SubscribersDashboard() {
       setLiveSearch(search);
     }
   }, [searchParams, liveSearch]);
+
+  useEffect(() => {
+    const status = String(searchParams.get('status') || '').trim();
+    const month = String(searchParams.get('month') || '').trim();
+    const fromDate = String(searchParams.get('fromDate') || '').trim();
+    const toDate = String(searchParams.get('toDate') || '').trim();
+    if (!status && !month && !fromDate && !toDate) return;
+    setFilters((prev) => ({
+      ...prev,
+      status: status || prev.status || 'all',
+      month: month || prev.month,
+      fromDate: fromDate || prev.fromDate,
+      toDate: toDate || prev.toDate,
+    }));
+  }, [searchParams]);
 
   useEffect(() => {
     const editId = String(searchParams.get('editId') || searchParams.get('editDealId') || '').trim();
@@ -538,6 +556,7 @@ export default function SubscribersDashboard() {
       month: '',
       fromDate: '',
       toDate: '',
+      status: 'all',
       providerEnabled: false,
       providerValue: '',
       providerSearchEnabled: false,
@@ -1360,6 +1379,34 @@ export default function SubscribersDashboard() {
                     <option value="organization">חברי ארגון</option>
                   </select>
                 </Field>
+                <Input
+                  type="month"
+                  className="w-full sm:w-44"
+                  value={filters.month}
+                  onChange={(e) => setFilters((p) => ({ ...p, month: e.target.value }))}
+                />
+                <Input
+                  type="date"
+                  className="w-full sm:w-40"
+                  value={filters.fromDate}
+                  onChange={(e) => setFilters((p) => ({ ...p, fromDate: e.target.value }))}
+                />
+                <Input
+                  type="date"
+                  className="w-full sm:w-40"
+                  value={filters.toDate}
+                  onChange={(e) => setFilters((p) => ({ ...p, toDate: e.target.value }))}
+                />
+                <select
+                  className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm w-full sm:w-44"
+                  value={filters.status || 'all'}
+                  onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))}
+                >
+                  <option value="all">סטטוס: הכל</option>
+                  <option value="active">סטטוס: פעיל</option>
+                  <option value="not_active">סטטוס: לא פעיל</option>
+                  <option value="cancelled">סטטוס: מבוטלים</option>
+                </select>
                 <Button type="button" onClick={loadDashboard} disabled={loading}>
                   {loading && <Spinner className="me-2" />}
                   רענון
