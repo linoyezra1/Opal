@@ -2145,16 +2145,19 @@ export async function getControlPanelOverviewData(filters = {}) {
   const cancellationCountByDay = {};
   const cancellationRevenueByDay = {};
   let totalCancellationRevenue = 0;
+  let totalCancellations = 0;
   for (const d of deals) {
     if (d.isRecurringCycle !== true) continue;
     if (!(d.isFailedPayment || d.isCancelled)) continue;
-    const dt = new Date(d.createdAt);
+    const eventDateRaw = d.cancellationDate || d.updatedAt || d.createdAt;
+    const dt = new Date(eventDateRaw);
     if (Number.isNaN(dt.getTime())) continue;
     const key = dt.toISOString().slice(0, 10);
     cancellationCountByDay[key] = Number(cancellationCountByDay[key] || 0) + 1;
     const amount = Number(d.payerAmount || 0);
     cancellationRevenueByDay[key] = Number(cancellationRevenueByDay[key] || 0) + amount;
     totalCancellationRevenue += amount;
+    totalCancellations += 1;
   }
   for (const row of chartSeries) {
     row.cancellations = Number(cancellationCountByDay[row.date] || 0);
@@ -2181,6 +2184,7 @@ export async function getControlPanelOverviewData(filters = {}) {
       chartSeries,
       churnRate,
       totalCancellationRevenue,
+      totalCancellations,
     },
     drilldowns: {
       activeSubscribers: paidRows.map((d) => ({

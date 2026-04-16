@@ -99,6 +99,8 @@ export default function AdminControlPanel() {
   const [commentOpen, setCommentOpen] = React.useState(false);
   const [commentTarget, setCommentTarget] = React.useState(null);
   const [commentText, setCommentText] = React.useState('');
+  const [incomeView, setIncomeView] = React.useState('revenue');
+  const [cancelView, setCancelView] = React.useState('loss');
 
   const load = React.useCallback(async (next = filters) => {
     if (!token) return;
@@ -241,26 +243,61 @@ export default function AdminControlPanel() {
         <div className="grid gap-4 lg:grid-cols-2">
           <Card className="border-emerald-200/70 bg-emerald-50/30">
             <CardHeader>
-              <CardTitle className="text-emerald-800">גרף הכנסות (עסקאות מוצלחות)</CardTitle>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-emerald-800">גרף הכנסות (עסקאות מוצלחות)</CardTitle>
+                <div className="flex items-center gap-1 rounded-md border bg-background p-1">
+                  <Button size="sm" variant={incomeView === 'revenue' ? 'default' : 'ghost'} onClick={() => setIncomeView('revenue')}>הכנסות</Button>
+                  <Button size="sm" variant={incomeView === 'count' ? 'default' : 'ghost'} onClick={() => setIncomeView('count')}>כמות</Button>
+                  <Button size="sm" variant={incomeView === 'net' ? 'default' : 'ghost'} onClick={() => setIncomeView('net')}>רווח</Button>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent className="h-[300px] w-full" dir="ltr">
+            <CardContent className="h-[300px] w-full space-y-2" dir="ltr">
               {Array.isArray(overview.chartSeries) && overview.chartSeries.length ? (
-                <ResponsiveContainer width="100%" height="100%">
+                <>
+                <ResponsiveContainer width="100%" height="86%">
                   <BarChart data={overview.chartSeries}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="label" />
-                    <YAxis tickFormatter={(v) => `₪${Math.round(v)}`} />
-                    <RechartsTooltip formatter={(value) => [formatCurrency(value), 'סכום']} />
-                    <Bar dataKey="revenue" fill="#16a34a" name="הכנסות" />
+                    <YAxis tickFormatter={(v) => incomeView === 'count' ? `${Math.round(Number(v || 0))}` : `₪${Math.round(Number(v || 0))}`} />
+                    <RechartsTooltip
+                      contentStyle={{ direction: 'rtl', textAlign: 'right' }}
+                      formatter={(value) => {
+                        if (incomeView === 'count') return [String(Math.round(Number(value || 0))), 'כמות לקוחות חדשים ששילמו'];
+                        if (incomeView === 'net') return [formatCurrency(value), 'רווח נקי'];
+                        return [formatCurrency(value), 'הכנסות'];
+                      }}
+                    />
+                    {incomeView === 'count' ? (
+                      <Bar dataKey="count" fill="#16a34a" name="כמות לקוחות חדשים ששילמו" />
+                    ) : incomeView === 'net' ? (
+                      <Bar dataKey="netProfit" fill="#22c55e" name="רווח נקי" />
+                    ) : (
+                      <Bar dataKey="revenue" fill="#16a34a" name="הכנסות" />
+                    )}
                   </BarChart>
                 </ResponsiveContainer>
+                <div className="text-right text-sm">
+                  <span className="text-muted-foreground">סה"כ לקוחות חדשים ששילמו: </span>
+                  <span className="font-semibold text-emerald-800">{Number(overview.totalTransactions || 0)}</span>
+                  <span className="text-muted-foreground"> | סה"כ הכנסות: </span>
+                  <span className="font-semibold text-emerald-800">{formatCurrency(overview.successfulRevenue || 0)}</span>
+                </div>
+                </>
               ) : <div className="flex h-full items-center justify-center text-muted-foreground">אין רשומות להצגה</div>}
             </CardContent>
           </Card>
 
           <Card className="border-red-200/70 bg-red-50/30">
             <CardHeader>
-              <CardTitle className="text-red-800">גרף ביטולים / אובדן הכנסה</CardTitle>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-red-800">גרף ביטולים / אובדן הכנסה</CardTitle>
+                <div className="flex items-center gap-1 rounded-md border bg-background p-1">
+                  <Button size="sm" variant={cancelView === 'loss' ? 'default' : 'ghost'} onClick={() => setCancelView('loss')}>אובדן הכנסה</Button>
+                  <Button size="sm" variant={cancelView === 'count' ? 'default' : 'ghost'} onClick={() => setCancelView('count')}>כמות מבוטלים</Button>
+                  <Button size="sm" variant={cancelView === 'both' ? 'default' : 'ghost'} onClick={() => setCancelView('both')}>שניהם</Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="h-[300px] w-full space-y-2" dir="ltr">
               {Array.isArray(overview.chartSeries) && overview.chartSeries.length ? (
@@ -269,15 +306,29 @@ export default function AdminControlPanel() {
                     <LineChart data={overview.chartSeries}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                       <XAxis dataKey="label" />
-                      <YAxis tickFormatter={(v) => `₪${Math.round(v)}`} />
-                      <RechartsTooltip formatter={(value, key) => [key === 'cancellations' ? String(value) : formatCurrency(value), key === 'cancellations' ? 'כמות מבוטלים' : 'אובדן הכנסה']} />
-                      <Line type="monotone" dataKey="cancellationRevenue" stroke="#dc2626" name="אובדן הכנסה" strokeWidth={2.5} dot={false} />
-                      <Line type="monotone" dataKey="cancellations" stroke="#f97316" name="כמות מבוטלים" strokeWidth={2} dot={false} />
+                      <YAxis tickFormatter={(v) => cancelView === 'count' ? `${Math.round(Number(v || 0))}` : `₪${Math.round(Number(v || 0))}`} />
+                      <RechartsTooltip
+                        contentStyle={{ direction: 'rtl', textAlign: 'right' }}
+                        formatter={(value, key) => [key === 'cancellations' ? String(Math.round(Number(value || 0))) : formatCurrency(value), key === 'cancellations' ? 'כמות מבוטלים (כתום)' : 'אובדן הכנסה (אדום)']}
+                        labelFormatter={(label) => `תאריך: ${label}`}
+                      />
+                      {(cancelView === 'loss' || cancelView === 'both') ? (
+                        <Line type="monotone" dataKey="cancellationRevenue" stroke="#dc2626" name="אובדן הכנסה (אדום)" strokeWidth={2.5} dot={false} />
+                      ) : null}
+                      {(cancelView === 'count' || cancelView === 'both') ? (
+                        <Line type="monotone" dataKey="cancellations" stroke="#f97316" name="כמות מבוטלים (כתום)" strokeWidth={2} dot={false} />
+                      ) : null}
                     </LineChart>
                   </ResponsiveContainer>
                   <div className="text-right text-sm">
                     <span className="text-muted-foreground">Revenue Churn Rate: </span>
                     <span className="font-semibold text-red-700">{Number(overview.churnRate || 0).toFixed(1)}%</span>
+                  </div>
+                  <div className="text-right text-sm">
+                    <span className="text-muted-foreground">סה"כ מבוטלים: </span>
+                    <span className="font-semibold text-red-800">{Number(overview.totalCancellations || 0)}</span>
+                    <span className="text-muted-foreground"> | סה"כ אובדן הכנסה: </span>
+                    <span className="font-semibold text-red-800">{formatCurrency(overview.totalCancellationRevenue || 0)}</span>
                   </div>
                 </>
               ) : <div className="flex h-full items-center justify-center text-muted-foreground">אין רשומות להצגה</div>}
