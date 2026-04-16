@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, RefreshCw, Wallet, Users, CreditCard, UserCheck, AlertCircle, Building2, Pencil, MessageSquareText } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { StatsCard } from '../components/admin/stats-card.jsx';
@@ -20,7 +20,7 @@ function toYmd(d) {
 function monthDefaults() {
   const now = new Date();
   const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  return { fromDate: toYmd(from), toDate: toYmd(now), month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}` };
+  return { fromDate: toYmd(from), toDate: toYmd(now), month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`, status: 'all' };
 }
 function formatCurrency(v) {
   return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(Number(v || 0));
@@ -81,6 +81,7 @@ const HEADER_LABELS = {
   cardcomRecurringId: 'אסמכתא קארדקום',
   price: 'מחיר',
   comments: 'הערות',
+  chargeDate: 'תאריך חיוב',
 };
 
 function labelForColumn(key) {
@@ -179,7 +180,7 @@ export default function AdminControlPanel() {
 
         <Card>
           <CardContent className="pt-6">
-            <div className="grid gap-3 md:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-5">
               <Input
                 type="month"
                 value={filters.month}
@@ -198,6 +199,15 @@ export default function AdminControlPanel() {
               />
               <Input type="date" value={filters.fromDate} onChange={(e) => setFilters((f) => ({ ...f, fromDate: e.target.value }))} />
               <Input type="date" value={filters.toDate} onChange={(e) => setFilters((f) => ({ ...f, toDate: e.target.value }))} />
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={filters.status || 'all'}
+                onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
+              >
+                <option value="all">סטטוס: הכל</option>
+                <option value="active">סטטוס: פעיל</option>
+                <option value="not_active">סטטוס: לא פעיל</option>
+              </select>
               <div className="text-sm text-muted-foreground flex items-center justify-end">טווח פעיל: {data?.range?.fromDate || filters.fromDate} - {data?.range?.toDate || filters.toDate}</div>
             </div>
           </CardContent>
@@ -232,14 +242,15 @@ export default function AdminControlPanel() {
           <CardContent className="h-[320px] w-full" dir="ltr">
             {Array.isArray(overview.chartSeries) && overview.chartSeries.length ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={overview.chartSeries}>
+                <ComposedChart data={overview.chartSeries}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis dataKey="label" />
                   <YAxis tickFormatter={(v) => `₪${Math.round(v)}`} />
                   <RechartsTooltip formatter={(value) => [formatCurrency(value), 'סכום']} />
                   <Bar dataKey="revenue" fill="hsl(var(--primary))" name="הכנסות" />
                   <Bar dataKey="netProfit" fill="#c89b3c" name="רווח נקי" />
-                </BarChart>
+                  <Line type="monotone" dataKey="cancellations" stroke="#ef4444" name="ביטולים/כשלים חוזרים" strokeWidth={2} dot={false} />
+                </ComposedChart>
               </ResponsiveContainer>
             ) : <div className="flex h-full items-center justify-center text-muted-foreground">אין רשומות להצגה</div>}
           </CardContent>

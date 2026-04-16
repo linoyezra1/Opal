@@ -1819,11 +1819,31 @@ function parseControlPanelDateRange({ fromDate, toDate, month } = {}) {
   return range;
 }
 
+function parseActivityStatus(statusRaw) {
+  const s = String(statusRaw || '').trim().toLowerCase();
+  if (s === 'active') return 'active';
+  if (s === 'not_active' || s === 'inactive' || s === 'not-active') return 'not_active';
+  return 'all';
+}
+
 export async function getControlPanelOverviewData(filters = {}) {
   const db = await getDb();
   const { from, to } = parseControlPanelDateRange(filters);
+  const activityStatus = parseActivityStatus(filters.status);
+  const statusMatch =
+    activityStatus === 'active'
+      ? { isActive: { $ne: false }, isRecurringCycle: { $ne: true }, subscriptionStatus: { $not: /cancel/i } }
+      : activityStatus === 'not_active'
+        ? {
+            $or: [
+              { isActive: false },
+              { subscriptionStatus: { $regex: /cancel|בוטל/i } },
+              { paymentStatus: { $regex: /cancel|בוטל|fail|declin|error|denied|נכשל/i } },
+            ],
+          }
+        : {};
   const deals = await db.collection('deals').aggregate([
-    { $match: { createdAt: { $gte: from, $lte: to } } },
+    { $match: { createdAt: { $gte: from, $lte: to }, ...statusMatch } },
     {
       $addFields: {
         _productIdObj: {
@@ -2106,6 +2126,18 @@ export async function getControlPanelOverviewData(filters = {}) {
     ...d,
     label: new Date(d.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }),
   }));
+  const cancellationCountByDay = {};
+  for (const d of deals) {
+    if (d.isRecurringCycle !== true) continue;
+    if (!(d.isFailedPayment || d.isCancelled)) continue;
+    const dt = new Date(d.createdAt);
+    if (Number.isNaN(dt.getTime())) continue;
+    const key = dt.toISOString().slice(0, 10);
+    cancellationCountByDay[key] = Number(cancellationCountByDay[key] || 0) + 1;
+  }
+  for (const row of chartSeries) {
+    row.cancellations = Number(cancellationCountByDay[row.date] || 0);
+  }
 
   return {
     range: { fromDate: from.toISOString().slice(0, 10), toDate: to.toISOString().slice(0, 10) },
@@ -2164,6 +2196,7 @@ export async function getControlPanelOverviewData(filters = {}) {
           subscriberDealId,
           orderId: d.transactionId || '',
           price: Number(d.payerAmount || 0),
+          chargeDate: String(d.billingMonth || '').trim() || (d.createdAt ? new Date(d.createdAt).toISOString() : ''),
           cardcomStatus: String(
             d?.indicator?.responsdescription || d?.formState?.cardcomResponseDescription || d.paymentStatus || '—'
           ),
@@ -2207,6 +2240,26 @@ export async function getControlPanelOverviewData(filters = {}) {
         createdAt: d.createdAt,
       })),
     },
+  };
+}
+
+export async function getAlertsSummary(filters = {}) {
+  const data = await getControlPanelOverviewData(filters);
+  const failed = Array.isArray(data?.drilldowns?.failedPayments) ? data.drilldowns.failedPayments : [];
+  const pendingBeneficiaries = Array.isArray(data?.drilldowns?.pendingBeneficiaries)
+    ? data.drilldowns.pendingBeneficiaries
+    : [];
+  const orgDebt = Array.isArray(data?.drilldowns?.organizationCollectionsDebt)
+    ? data.drilldowns.organizationCollectionsDebt
+    : [];
+  const contactTasks = Array.isArray(data?.drilldowns?.contactTasks) ? data.drilldowns.contactTasks : [];
+  const orgPending = contactTasks.filter((x) => String(x.kind || '').toLowerCase() === 'corporate');
+  return {
+    contactTasks: contactTasks.length,
+    orgPendingApproval: orgPending.length,
+    pendingBeneficiaries: pendingBeneficiaries.length,
+    paymentArrears: failed.length,
+    organizationsToBill: orgDebt.length,
   };
 }
 

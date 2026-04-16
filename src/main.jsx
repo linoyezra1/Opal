@@ -22,6 +22,7 @@ import OrgRegisterPage from './pages/OrgRegisterPage.jsx';
 import OrganizationJoinRequest from './pages/OrganizationJoinRequest.jsx';
 import BeneficiarySuccess from './pages/BeneficiarySuccess.jsx';
 import ArchiveDashboard from './pages/ArchiveDashboard.jsx';
+import AlertsDashboard from './pages/AlertsDashboard.jsx';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -49,8 +50,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/register" element={<OrgRegisterPage />} />
         <Route path="/admin/agents" element={<AgentSetup />} />
         <Route path="/admin/landing-pages" element={<LandingPagesManagement />} />
+        <Route path="/admin/product-page-setup" element={<LandingPagesManagement />} />
         <Route path="/admin/reports" element={<ReportsDashboard />} />
         <Route path="/admin/archive" element={<ArchiveDashboard />} />
+        <Route path="/admin/alerts" element={<AlertsDashboard />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>

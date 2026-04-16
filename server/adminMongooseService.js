@@ -114,6 +114,7 @@ const pricingEntrySchema = new mongoose.Schema(
     netProfit: { type: Number, default: 0 },
     /** mirrors netProfit for legacy */
     profit: { type: Number, default: 0 },
+    isActive: { type: Boolean, default: true, index: true },
     createdAt: { type: Date, default: Date.now },
   },
   { versionKey: false }
@@ -231,6 +232,7 @@ const priceListSchema = new mongoose.Schema(
     listName: { type: String, required: true, trim: true },
     orgName: { type: String, default: '' },
     lines: { type: [priceListLineSchema], default: [] },
+    isActive: { type: Boolean, default: true, index: true },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
   },
@@ -288,6 +290,7 @@ const landingPageSchema = new mongoose.Schema(
     whatYouGetItems: { type: [whatYouGetItemSchema], default: [] },
     registrationTitle: { type: String, default: '' },
     registrationSubtitle: { type: String, default: '' },
+    isActive: { type: Boolean, default: true, index: true },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
   },
@@ -921,7 +924,7 @@ function serializePriceListDoc(d) {
 
 export async function listPriceLists() {
   await ensureConnection();
-  const docs = await PriceList.find({}).sort({ updatedAt: -1 }).lean();
+  const docs = await PriceList.find({ isActive: { $ne: false } }).sort({ updatedAt: -1 }).lean();
   return docs.map((d) => serializePriceListDoc(d));
 }
 
@@ -1042,7 +1045,7 @@ export async function updatePriceList(id, payload) {
 export async function deletePriceList(id) {
   await ensureConnection();
   if (!mongoose.isValidObjectId(id)) throw new Error('Invalid id');
-  const r = await PriceList.findByIdAndDelete(id);
+  const r = await PriceList.findByIdAndUpdate(id, { $set: { isActive: false, updatedAt: new Date() } });
   if (!r) throw new Error('Price list not found');
   return { ok: true };
 }
@@ -1088,7 +1091,7 @@ function serializeLandingPageDoc(d) {
 
 export async function listLandingPages() {
   await ensureConnection();
-  const docs = await LandingPage.find({}).sort({ updatedAt: -1 }).lean();
+  const docs = await LandingPage.find({ isActive: { $ne: false } }).sort({ updatedAt: -1 }).lean();
   return docs.map(serializeLandingPageDoc);
 }
 
@@ -1194,7 +1197,7 @@ export async function updateLandingPage(id, payload) {
 export async function deleteLandingPage(id) {
   await ensureConnection();
   if (!mongoose.isValidObjectId(id)) throw new Error('Invalid id');
-  const r = await LandingPage.findByIdAndDelete(id);
+  const r = await LandingPage.findByIdAndUpdate(id, { $set: { isActive: false, updatedAt: new Date() } });
   if (!r) throw new Error('?? ?? ????');
   return { ok: true };
 }
@@ -1204,7 +1207,7 @@ export async function getPublicLandingPageBySlug(slug) {
   await ensureConnection();
   const s = String(slug || '').trim().toLowerCase();
   if (!s) return null;
-  const doc = await LandingPage.findOne({ slug: s }).lean();
+  const doc = await LandingPage.findOne({ slug: s, isActive: { $ne: false } }).lean();
   if (!doc) return null;
   const pageType = doc.pageType === 'contact' ? 'contact' : 'sales';
   const items = Array.isArray(doc.whatYouGetItems)
@@ -1316,7 +1319,7 @@ export async function createPricingEntry(payload) {
 
 export async function listPricingEntries() {
   await ensureConnection();
-  const docs = await PricingEntry.find({})
+  const docs = await PricingEntry.find({ isActive: { $ne: false } })
     .sort({ createdAt: -1 })
     .populate('vendorId')
     .populate('productId')
@@ -1395,7 +1398,7 @@ export async function updatePricingEntry(id, payload) {
 export async function deletePricingEntry(id) {
   await ensureConnection();
   if (!mongoose.isValidObjectId(id)) throw new Error('Invalid id');
-  const r = await PricingEntry.findByIdAndDelete(id);
+  const r = await PricingEntry.findByIdAndUpdate(id, { $set: { isActive: false } });
   if (!r) throw new Error('Pricing entry not found');
   return { ok: true };
 }
@@ -1547,7 +1550,7 @@ export async function listPublicSalesAgents() {
 export async function getArchiveSnapshot(limit = 300) {
   await ensureConnection();
   const db = mongoose.connection.db;
-  const [products, vendors, organizations, agents, personalContacts, orgContacts] = await Promise.all([
+  const [products, vendors, organizations, agents, subscribers, personalContacts, orgContacts] = await Promise.all([
     listProducts({ activeOnly: false }).then((rows) => rows.filter((r) => r.isActive === false).slice(0, limit)),
     listVendors({ activeOnly: false }).then((rows) => rows.filter((r) => r.isActive === false).slice(0, limit)),
     db
@@ -1557,6 +1560,12 @@ export async function getArchiveSnapshot(limit = 300) {
       .limit(limit)
       .toArray(),
     listSalesAgentsWithSales({ activeOnly: false }).then((rows) => rows.filter((r) => r.isActive === false).slice(0, limit)),
+    db
+      .collection('deals')
+      .find({ isActive: false, isRecurringCycle: { $ne: true } })
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .limit(limit)
+      .toArray(),
     db
       .collection('contactLeads')
       .find({ isActive: false })
@@ -1575,6 +1584,16 @@ export async function getArchiveSnapshot(limit = 300) {
     vendors,
     organizations: organizations.map((d) => ({ id: String(d._id), ...d })),
     agents,
+    subscribers: subscribers.map((d) => ({
+      id: String(d._id),
+      transactionId: String(d.transactionId || ''),
+      fullName: String(d?.formState?.fullName || ''),
+      phone: String(d?.formState?.phone || ''),
+      cardcomRecurringId: String(d.cardcomRecurringId || ''),
+      createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
+      updatedAt: d.updatedAt ? new Date(d.updatedAt).toISOString() : null,
+      isActive: d.isActive !== false,
+    })),
     personalContacts: personalContacts.map((d) => ({
       id: String(d._id),
       ...d,
@@ -1585,6 +1604,28 @@ export async function getArchiveSnapshot(limit = 300) {
       ...d,
       notes: d.notes || d.adminNotes || d.message || '',
     })),
+    contactRequests: [
+      ...personalContacts.map((d) => ({
+        id: String(d._id),
+        kind: 'private',
+        fullName: d.name || '',
+        organizationName: '',
+        phone: d.phone || '',
+        email: d.email || '',
+        notes: d.notes || d.adminNotes || d.message || '',
+        createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
+      })),
+      ...orgContacts.map((d) => ({
+        id: String(d._id),
+        kind: 'corporate',
+        fullName: d.contactName || d.organizationName || '',
+        organizationName: d.organizationName || '',
+        phone: d.phone || '',
+        email: d.email || '',
+        notes: d.notes || d.adminNotes || d.message || '',
+        createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
+      })),
+    ].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))),
   };
 }
 
@@ -1612,6 +1653,11 @@ export async function restoreArchiveItem(entity, id) {
   if (e === 'agents') {
     const r = await SalesAgent.updateOne({ _id: oid }, { $set: { isActive: true, updatedAt: now } });
     if (!r.matchedCount) throw new Error('Agent not found');
+    return { ok: true };
+  }
+  if (e === 'subscribers') {
+    const r = await mongoose.connection.db.collection('deals').updateOne({ _id: oid }, { $set: { isActive: true, updatedAt: now } });
+    if (!r.matchedCount) throw new Error('Subscriber not found');
     return { ok: true };
   }
   if (e === 'personalContacts') {

@@ -16,31 +16,44 @@ import {
   Phone,
   FileBarChart2,
   Archive,
+  Bell,
 } from 'lucide-react';
 import { cn } from '../../lib/cn.js';
 import { Button } from '../ui/button.jsx';
+import { API_BASE } from '../../apiBase.js';
 
 const TOKEN_KEY = 'opal_admin_token';
 
 const groups = [
   {
-    title: 'ניהול',
+    title: 'לוח בקרה',
     items: [
       { label: 'לוח בקרה', to: '/admin/control-panel', icon: LayoutDashboard },
-      { label: 'מוצרים', to: '/admin/products', icon: Package },
-      { label: 'ספקים', to: '/admin/vendors', icon: Building2 },
-      { label: 'סוכנים', to: '/admin/agents', icon: Users },
-      { label: 'מחירונים', to: '/admin/price-list', icon: Receipt },
-      { label: 'דפי נחיתה', to: '/admin/landing-pages', icon: LayoutTemplate },
-      { label: 'צור קשר', to: '/admin/contacts', icon: Phone },
+      { label: 'ספק', to: '/admin/vendors', icon: Building2 },
+      { label: 'הקמת דף מוצר', to: '/admin/product-page-setup', icon: LayoutTemplate },
+      { label: 'מוצר', to: '/admin/products', icon: Package },
+      { label: 'מחירון', to: '/admin/price-list', icon: Receipt },
+      { label: 'דף נחיתה', to: '/admin/landing-pages', icon: LayoutTemplate },
+      { label: 'סוכן', to: '/admin/agents', icon: Users },
+    ],
+  },
+  {
+    title: 'לקוחות',
+    items: [
+      { label: 'לקוחות פרטיים', to: '/admin/subscribers', icon: UserCheck },
       { label: 'מרכז ניהול ארגונים', to: '/admin/organizations', icon: Building2 },
       { label: 'ארכיון', to: '/admin/archive', icon: Archive },
     ],
   },
   {
-    title: 'דוחות',
+    title: 'התראות',
     items: [
-      { label: 'לקוחות', to: '/admin/subscribers', icon: UserCheck },
+      { label: 'צור קשר', to: '/admin/alerts?tab=contactTasks', icon: Phone, badgeKey: 'contactTasks' },
+      { label: 'ארגון ממתין לאישור', to: '/admin/alerts?tab=orgPendingApproval', icon: Building2, badgeKey: 'orgPendingApproval' },
+      { label: 'השלמת טפסים', to: '/admin/alerts?tab=pendingBeneficiaries', icon: UserCheck, badgeKey: 'pendingBeneficiaries' },
+      { label: 'פיגור תשלום', to: '/admin/alerts?tab=paymentArrears', icon: Bell, badgeKey: 'paymentArrears' },
+      { label: 'ארגונים לחיוב', to: '/admin/alerts?tab=organizationsToBill', icon: Receipt, badgeKey: 'organizationsToBill' },
+      { label: 'מרכז התראות', to: '/admin/alerts', icon: Bell },
       { label: 'דוחות ובילינג', to: '/admin/reports', icon: FileBarChart2 },
     ],
   },
@@ -50,6 +63,31 @@ export default function AdminPageShell({ children }) {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [alerts, setAlerts] = React.useState({});
+
+  React.useEffect(() => {
+    const token = localStorage.getItem(TOKEN_KEY) || '';
+    if (!token) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/alerts-summary`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || !j.success || cancelled) return;
+        setAlerts(j || {});
+      } catch {
+        /* ignore summary poll errors in shell */
+      }
+    };
+    load();
+    const timer = setInterval(load, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
 
   function logout() {
     localStorage.removeItem(TOKEN_KEY);
@@ -119,6 +157,11 @@ export default function AdminPageShell({ children }) {
                     >
                       <item.icon className="size-4 shrink-0" />
                       {!collapsed && <span>{item.label}</span>}
+                      {!collapsed && item.badgeKey ? (
+                        <span className="ms-auto rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-semibold text-destructive">
+                          {Number(alerts?.[item.badgeKey] || 0)}
+                        </span>
+                      ) : null}
                     </NavLink>
                   </li>
                 ))}

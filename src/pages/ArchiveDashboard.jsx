@@ -10,10 +10,12 @@ import { Button } from '../components/ui/button.jsx';
 const TOKEN_KEY = 'opal_admin_token';
 
 const TAB_CONFIG = [
+  { key: 'subscribers', label: 'לקוחות / מנויים' },
   { key: 'products', label: 'מוצרים' },
   { key: 'vendors', label: 'ספקים' },
   { key: 'organizations', label: 'ארגונים' },
   { key: 'agents', label: 'סוכנים' },
+  { key: 'contactRequests', label: 'פניות צור קשר' },
   { key: 'personalContacts', label: 'פניות - פרטי' },
   { key: 'orgContacts', label: 'פניות - ארגון' },
 ];
@@ -130,6 +132,7 @@ export default function ArchiveDashboard() {
           </TabsList>
           {TAB_CONFIG.map((tab) => {
             const rows = Array.isArray(data?.[tab.key]) ? data[tab.key] : [];
+            const canRestore = tab.key !== 'contactRequests';
             const columns = rows.length ? Object.keys(rows[0]).filter((k) => !['_id', 'id', 'productLinks', 'products', 'bankDetails', 'contactPerson', 'accounting', 'additionalContact'].includes(k)) : [];
             const preferredOrder = ['companyName', 'fullName', 'organizationName', 'email', 'phone', 'notes'];
             const displayColumns = [...columns].sort((a, b) => {
@@ -159,9 +162,9 @@ export default function ArchiveDashboard() {
                           <TableRow key={row.id}>
                             {displayColumns.slice(0, 5).map((c) => <TableCell key={`${row.id}-${c}`}>{String(row[c] ?? '')}</TableCell>)}
                             <TableCell>
-                              <Button size="sm" variant="outline" onClick={() => restore(tab.key, row.id)} disabled={loading}>
+                              <Button size="sm" variant="outline" onClick={() => restore(tab.key, row.id)} disabled={loading || !canRestore}>
                                 <ArchiveRestore className="size-4 me-1" />
-                                שחזר
+                                {canRestore ? 'שחזר' : '—'}
                               </Button>
                             </TableCell>
                           </TableRow>

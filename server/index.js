@@ -49,6 +49,7 @@ import {
   getPaymentArrearsDeals,
   getControlPanelOverviewStats,
   getControlPanelOverviewData,
+  getAlertsSummary,
   markControlPanelItemHandled,
   updateContactHubItem,
   updateDealAdmin,
@@ -2101,6 +2102,21 @@ app.get('/api/admin/archive', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(`[${ts()}] admin/archive error:`, e);
     res.status(500).json({ success: false, error: e.message || 'Failed to load archive' });
+  }
+});
+
+app.get('/api/admin/alerts-summary', requireAdmin, async (req, res) => {
+  try {
+    const payload = await getAlertsSummary({
+      month: req.query.month || '',
+      fromDate: req.query.fromDate || '',
+      toDate: req.query.toDate || '',
+      status: req.query.status || '',
+    });
+    res.json({ success: true, ...payload });
+  } catch (e) {
+    console.error(`[${ts()}] admin/alerts-summary error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to load alerts summary' });
   }
 });
 
