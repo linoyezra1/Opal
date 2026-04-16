@@ -1460,10 +1460,7 @@ export default function SubscribersDashboard() {
                           סטטוס השלמה
                         </TableHead>
                         <TableHead dir="rtl" className="text-right">
-                          סטטוס תשלום
-                        </TableHead>
-                        <TableHead dir="rtl" className="text-right">
-                          סטטוס חיוב עתידי
+                          סטטוס חיוב עתידי (קארדקום)
                         </TableHead>
                         <TableHead dir="rtl" className="text-right">
                           מס&apos; הזמנה
@@ -1520,25 +1517,22 @@ export default function SubscribersDashboard() {
                               </Badge>
                             )}
                           </TableCell>
-                          <TableCell dir="rtl" className="text-right text-sm whitespace-pre-wrap max-w-[12rem]">
-                            {String(r.cardcomRecurringId || '').trim() ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="cursor-help">{r.displayPaymentStatus || r.paymentStatus || '—'}</span>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  {`למידע נוסף, ניתן לבדוק בממשק קארדקום תחת מזהה הוראת קבע: ${r.cardcomRecurringId}`}
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : (
-                              r.displayPaymentStatus || r.paymentStatus || '—'
-                            )}
-                          </TableCell>
                           <TableCell dir="rtl" className="text-right whitespace-nowrap">
                             {isCancelled ? (
                               <Badge variant="destructive" className="font-normal">
                                 {`בוטל מול קארדקום${cancelledAtText ? ` ב-${cancelledAtText}` : ''}`}
                               </Badge>
+                            ) : String(r.futureBillingStatus || '').trim() ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="cursor-help text-sm whitespace-pre-wrap max-w-[12rem] inline-block">
+                                    {String(r.futureBillingStatus || '').trim()}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {`למידע נוסף, ניתן לבדוק בממשק קארדקום תחת מזהה הוראת קבע: ${r.cardcomRecurringId || '—'}`}
+                                </TooltipContent>
+                              </Tooltip>
                             ) : (
                               <Badge variant="secondary">פעיל</Badge>
                             )}

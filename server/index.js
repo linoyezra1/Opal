@@ -31,7 +31,7 @@ import {
   saveContactLead,
   saveDeal,
   findDealForRecurringEvent,
-  setDealPaymentArrears,
+  syncParentFutureBillingAfterRecurringWebhook,
   getSubscriberBillingHistoryByDealId,
   mergeDealCardcomRecurringIds,
   saveOrUpdateAbandonedCheckoutLead,
@@ -994,9 +994,11 @@ async function handleMasterRecurringWebhook(body = {}, query = {}) {
     cardcomRecurringId,
     cardcomToken,
   });
-  if (!paymentSuccess) {
-    await setDealPaymentArrears(parent.id, cardcomRecurringId || parent.cardcomRecurringId || '');
-  }
+  await syncParentFutureBillingAfterRecurringWebhook(
+    parent.id,
+    cardcomRecurringId || parent.cardcomRecurringId || '',
+    { paymentSuccess, responseDescription }
+  );
 }
 
 const OPAL_EMAIL = process.env.OPAL_EMAIL || 'opal2000@zahav.net.il';

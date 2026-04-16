@@ -197,30 +197,81 @@ export async function findDealForRecurringEvent(params = {}) {
   };
 }
 
-export async function setDealPaymentArrears(parentDealId, recurringId = '') {
+const SUBSCRIPTION_ARREARS_LABEL = 'שגיאת סליקה - פיגור בתשלום';
+
+/**
+ * מסנכרן את עסקת האב אחרי חיוב חוזר מקארדקום: futureBillingStatus מתוך responsdescription (לא קבוע מקומי),
+ * ומעדכן subscriptionStatus בכשל / משחזר Active אחרי הצלחה כשהיה פיגור.
+ */
+export async function syncParentFutureBillingAfterRecurringWebhook(parentDealId, recurringId = '', opts = {}) {
+  const paymentSuccess = opts.paymentSuccess === true;
+  const responseDescription = String(opts.responseDescription ?? '').trim();
   const db = await getDb();
   const deals = db.collection('deals');
   const now = new Date();
-  const rid = String(recurringId || '').trim();
+
+  const buildSet = (existing) => {
+    const set = {
+      futureBillingStatus: responseDescription,
+      updatedAt: now,
+    };
+    if (paymentSuccess) {
+      if (String(existing?.subscriptionStatus || '') === SUBSCRIPTION_ARREARS_LABEL) {
+        set.subscriptionStatus = 'Active';
+      }
+    } else {
+      set.subscriptionStatus = SUBSCRIPTION_ARREARS_LABEL;
+    }
+    return set;
+  };
+
   const parentId = String(parentDealId || '').trim();
   if (parentId && ObjectId.isValid(parentId)) {
-    await deals.updateOne(
-      { _id: new ObjectId(parentId) },
-      { $set: { subscriptionStatus: 'שגיאת סליקה - פיגור בתשלום', updatedAt: now } }
-    );
+    const oid = new ObjectId(parentId);
+    const existing = await deals.findOne({ _id: oid });
+    if (!existing) return;
+    await deals.updateOne({ _id: oid }, { $set: buildSet(existing) });
     return;
   }
-  if (rid) {
-    const asNum = Number(rid);
-    const idFilter =
-      Number.isFinite(asNum) && !Number.isNaN(asNum) && String(asNum) === rid
-        ? { cardcomRecurringId: { $in: [rid, asNum] } }
-        : { cardcomRecurringId: rid };
-    await deals.updateMany(
-      { ...idFilter, isRecurringCycle: { $ne: true }, isActive: { $ne: false } },
-      { $set: { subscriptionStatus: 'שגיאת סליקה - פיגור בתשלום', updatedAt: now } }
-    );
+
+  const rid = String(recurringId || '').trim();
+  if (!rid) return;
+  const asNum = Number(rid);
+  const idFilter =
+    Number.isFinite(asNum) && !Number.isNaN(asNum) && String(asNum) === rid
+      ? { cardcomRecurringId: { $in: [rid, asNum] } }
+      : { cardcomRecurringId: rid };
+  const masters = await deals
+    .find({ ...idFilter, isRecurringCycle: { $ne: true }, isActive: { $ne: false } })
+    .toArray();
+  for (const existing of masters) {
+    await deals.updateOne({ _id: existing._id }, { $set: buildSet(existing) });
   }
+}
+
+/** @deprecated — נשמר לתאימות; מעדיף syncParentFutureBillingAfterRecurringWebhook */
+export async function setDealPaymentArrears(parentDealId, recurringId = '', options = {}) {
+  return syncParentFutureBillingAfterRecurringWebhook(parentDealId, recurringId, {
+    paymentSuccess: false,
+    responseDescription: String(options.responseDescription ?? options.futureBillingStatus ?? ''),
+  });
+}
+
+function collectCardcomRecurringIdValues(seed, master) {
+  const vals = [];
+  const add = (v) => {
+    if (v == null || v === '') return;
+    const s = String(v).trim();
+    if (!s) return;
+    vals.push(s);
+    const n = Number(s);
+    if (Number.isFinite(n) && !Number.isNaN(n) && String(n) === s) vals.push(n);
+  };
+  add(seed?.cardcomRecurringId);
+  add(master?.cardcomRecurringId);
+  add(seed?.formState?.cardcomRecurringId);
+  add(master?.formState?.cardcomRecurringId);
+  return [...new Set(vals)];
 }
 
 export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
@@ -242,17 +293,13 @@ export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
   }
 
   const recurringId = String(
-    seed.cardcomRecurringId || master.cardcomRecurringId || seed.formState?.cardcomRecurringId || ''
+    master.cardcomRecurringId || seed.cardcomRecurringId || master.formState?.cardcomRecurringId || seed.formState?.cardcomRecurringId || ''
   ).trim();
 
+  const ridValues = collectCardcomRecurringIdValues(seed, master);
   const or = [];
-  if (recurringId) {
-    const asNum = Number(recurringId);
-    const idMatch =
-      Number.isFinite(asNum) && !Number.isNaN(asNum) && String(asNum) === recurringId
-        ? { cardcomRecurringId: { $in: [recurringId, asNum] } }
-        : { cardcomRecurringId: recurringId };
-    or.push(idMatch);
+  if (ridValues.length) {
+    or.push({ cardcomRecurringId: { $in: ridValues } });
   }
   if (masterIdStr && ObjectId.isValid(masterIdStr)) {
     const oid = new ObjectId(masterIdStr);
@@ -263,10 +310,11 @@ export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
   if (!or.length) {
     or.push({ _id: seed._id });
   }
-  const lim = Math.max(1, Math.min(Number(limit) || 120, 500));
+  const lim = Math.max(1, Math.min(Number(limit) || 500, 500));
+  /** ללא סינון isActive — רשומות היסטוריה חייבות להופיע; מיון עולה — עסקת הרישום (הישנה ביותר) ראשונה */
   const docs = await deals
-    .find({ $or: or, isActive: { $ne: false } })
-    .sort({ createdAt: -1 })
+    .find({ $or: or })
+    .sort({ createdAt: 1 })
     .limit(lim)
     .toArray();
   const rows = docs.map((d) => {
@@ -1667,6 +1715,8 @@ export async function getSalesDashboardData(filters = {}) {
         beneficiarySubmitted: !!d.beneficiarySubmitted,
         pendingBeneficiaryCompletion: !!d.pendingBeneficiaryCompletion,
         completionStatus: d.completionStatus || '—',
+        /** תוצאת חיוב חוזר אחרונה מקארדקום (responsdescription מהשרת) */
+        futureBillingStatus: String(d.futureBillingStatus ?? '').trim(),
         raw: d,
       };
     }),
