@@ -1854,6 +1854,8 @@ export async function getControlPanelOverviewData(filters = {}) {
         ? {
             $or: [
               { subscriptionStatus: { $regex: /cancel|בוטל/i } },
+              { status: { $regex: /cancel|בוטל/i } },
+              { paymentStatus: { $regex: /cancel|בוטל/i } },
               {
                 $and: [
                   { cardcomRecurringId: { $exists: true, $ne: '' } },
@@ -1982,6 +1984,11 @@ export async function getControlPanelOverviewData(filters = {}) {
         transactionId: 1,
         dashboardHandled: 1,
         createdAt: 1,
+        updatedAt: 1,
+        cancellationDate: 1,
+        status: 1,
+        subscriptionStatus: 1,
+        isActive: 1,
         agentId: {
           $cond: [
             { $ifNull: ['$_agentIdObj', false] },
@@ -2035,9 +2042,11 @@ export async function getControlPanelOverviewData(filters = {}) {
   });
   const cancelledCustomerRows = deals.filter((d) => {
     const sub = String(d.subscriptionStatus || '').trim().toLowerCase();
+    const st = String(d.status || '').trim().toLowerCase();
+    const pay = String(d.paymentStatus || '').trim().toLowerCase();
     const recurringId = String(d.cardcomRecurringId || '').trim();
     const recurringStopped = d.isActive === false && recurringId !== '';
-    const manuallyCancelled = /cancel|בוטל/i.test(sub);
+    const manuallyCancelled = /cancel|בוטל/i.test(sub) || /cancel|בוטל/i.test(st) || /cancel|בוטל/i.test(pay);
     return manuallyCancelled || recurringStopped;
   });
 
@@ -2182,6 +2191,11 @@ export async function getControlPanelOverviewData(filters = {}) {
         label: new Date(date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }),
       };
     });
+
+  console.log('[getControlPanelOverviewData] cancellation totals', {
+    totalCancellations,
+    cancelledCustomerRowsLength: cancelledCustomerRows.length,
+  });
 
   return {
     range: { fromDate: from.toISOString().slice(0, 10), toDate: to.toISOString().slice(0, 10) },
