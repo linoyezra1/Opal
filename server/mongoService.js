@@ -1823,6 +1823,7 @@ function parseActivityStatus(statusRaw) {
   const s = String(statusRaw || '').trim().toLowerCase();
   if (s === 'active') return 'active';
   if (s === 'not_active' || s === 'inactive' || s === 'not-active') return 'not_active';
+  if (s === 'cancelled' || s === 'canceled' || s === 'מבוטלים') return 'cancelled';
   return 'all';
 }
 
@@ -1833,6 +1834,21 @@ export async function getControlPanelOverviewData(filters = {}) {
   const statusMatch =
     activityStatus === 'active'
       ? { isActive: { $ne: false }, isRecurringCycle: { $ne: true }, subscriptionStatus: { $not: /cancel/i } }
+      : activityStatus === 'cancelled'
+        ? {
+            $or: [
+              { subscriptionStatus: { $regex: /cancel|בוטל/i } },
+              { status: { $regex: /cancel|בוטל/i } },
+              { paymentStatus: { $regex: /cancel|בוטל/i } },
+              { cancellationDate: { $exists: true, $ne: null } },
+              {
+                $and: [
+                  { cardcomRecurringId: { $exists: true, $ne: '' } },
+                  { isActive: false },
+                ],
+              },
+            ],
+          }
       : activityStatus === 'not_active'
         ? {
             $or: [
@@ -2127,6 +2143,8 @@ export async function getControlPanelOverviewData(filters = {}) {
     label: new Date(d.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }),
   }));
   const cancellationCountByDay = {};
+  const cancellationRevenueByDay = {};
+  let totalCancellationRevenue = 0;
   for (const d of deals) {
     if (d.isRecurringCycle !== true) continue;
     if (!(d.isFailedPayment || d.isCancelled)) continue;
@@ -2134,10 +2152,15 @@ export async function getControlPanelOverviewData(filters = {}) {
     if (Number.isNaN(dt.getTime())) continue;
     const key = dt.toISOString().slice(0, 10);
     cancellationCountByDay[key] = Number(cancellationCountByDay[key] || 0) + 1;
+    const amount = Number(d.payerAmount || 0);
+    cancellationRevenueByDay[key] = Number(cancellationRevenueByDay[key] || 0) + amount;
+    totalCancellationRevenue += amount;
   }
   for (const row of chartSeries) {
     row.cancellations = Number(cancellationCountByDay[row.date] || 0);
+    row.cancellationRevenue = Number(cancellationRevenueByDay[row.date] || 0);
   }
+  const churnRate = totalRevenue > 0 ? (totalCancellationRevenue / totalRevenue) * 100 : 0;
 
   return {
     range: { fromDate: from.toISOString().slice(0, 10), toDate: to.toISOString().slice(0, 10) },
@@ -2156,6 +2179,8 @@ export async function getControlPanelOverviewData(filters = {}) {
       contactTasks: contactTaskRows.length,
       organizationCollectionsDebt,
       chartSeries,
+      churnRate,
+      totalCancellationRevenue,
     },
     drilldowns: {
       activeSubscribers: paidRows.map((d) => ({

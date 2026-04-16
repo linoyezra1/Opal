@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, RefreshCw, Wallet, Users, CreditCard, UserCheck, AlertCircle, Building2, Pencil, MessageSquareText } from 'lucide-react';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { StatsCard } from '../components/admin/stats-card.jsx';
@@ -207,6 +207,7 @@ export default function AdminControlPanel() {
                 <option value="all">סטטוס: הכל</option>
                 <option value="active">סטטוס: פעיל</option>
                 <option value="not_active">סטטוס: לא פעיל</option>
+                <option value="cancelled">סטטוס: מבוטלים</option>
               </select>
               <div className="text-sm text-muted-foreground flex items-center justify-end">טווח פעיל: {data?.range?.fromDate || filters.fromDate} - {data?.range?.toDate || filters.toDate}</div>
             </div>
@@ -237,24 +238,52 @@ export default function AdminControlPanel() {
           </div>
         ))}
 
-        <Card>
-          <CardHeader><CardTitle>גרף הכנסות ורווח נקי לפי יום</CardTitle></CardHeader>
-          <CardContent className="h-[320px] w-full" dir="ltr">
-            {Array.isArray(overview.chartSeries) && overview.chartSeries.length ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={overview.chartSeries}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis dataKey="label" />
-                  <YAxis tickFormatter={(v) => `₪${Math.round(v)}`} />
-                  <RechartsTooltip formatter={(value) => [formatCurrency(value), 'סכום']} />
-                  <Bar dataKey="revenue" fill="hsl(var(--primary))" name="הכנסות" />
-                  <Bar dataKey="netProfit" fill="#c89b3c" name="רווח נקי" />
-                  <Line type="monotone" dataKey="cancellations" stroke="#ef4444" name="ביטולים/כשלים חוזרים" strokeWidth={2} dot={false} />
-                </ComposedChart>
-              </ResponsiveContainer>
-            ) : <div className="flex h-full items-center justify-center text-muted-foreground">אין רשומות להצגה</div>}
-          </CardContent>
-        </Card>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card className="border-emerald-200/70 bg-emerald-50/30">
+            <CardHeader>
+              <CardTitle className="text-emerald-800">גרף הכנסות (עסקאות מוצלחות)</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[300px] w-full" dir="ltr">
+              {Array.isArray(overview.chartSeries) && overview.chartSeries.length ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={overview.chartSeries}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="label" />
+                    <YAxis tickFormatter={(v) => `₪${Math.round(v)}`} />
+                    <RechartsTooltip formatter={(value) => [formatCurrency(value), 'סכום']} />
+                    <Bar dataKey="revenue" fill="#16a34a" name="הכנסות" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : <div className="flex h-full items-center justify-center text-muted-foreground">אין רשומות להצגה</div>}
+            </CardContent>
+          </Card>
+
+          <Card className="border-red-200/70 bg-red-50/30">
+            <CardHeader>
+              <CardTitle className="text-red-800">גרף ביטולים / אובדן הכנסה</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[300px] w-full space-y-2" dir="ltr">
+              {Array.isArray(overview.chartSeries) && overview.chartSeries.length ? (
+                <>
+                  <ResponsiveContainer width="100%" height="85%">
+                    <LineChart data={overview.chartSeries}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis dataKey="label" />
+                      <YAxis tickFormatter={(v) => `₪${Math.round(v)}`} />
+                      <RechartsTooltip formatter={(value, key) => [key === 'cancellations' ? String(value) : formatCurrency(value), key === 'cancellations' ? 'כמות מבוטלים' : 'אובדן הכנסה']} />
+                      <Line type="monotone" dataKey="cancellationRevenue" stroke="#dc2626" name="אובדן הכנסה" strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="cancellations" stroke="#f97316" name="כמות מבוטלים" strokeWidth={2} dot={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                  <div className="text-right text-sm">
+                    <span className="text-muted-foreground">Revenue Churn Rate: </span>
+                    <span className="font-semibold text-red-700">{Number(overview.churnRate || 0).toFixed(1)}%</span>
+                  </div>
+                </>
+              ) : <div className="flex h-full items-center justify-center text-muted-foreground">אין רשומות להצגה</div>}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <Dialog open={!!modalKey} onOpenChange={(open) => !open && setModalKey('')}>

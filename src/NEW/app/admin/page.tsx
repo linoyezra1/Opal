@@ -1,10 +1,13 @@
 'use client'
 
-import { Users, Package, Receipt, TrendingUp, Building2, UserCheck } from 'lucide-react'
+import { Users, Package, Receipt, TrendingUp, Building2, UserCheck, Bell, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 import { StatsCard } from '@/components/admin/stats-card'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { RevenueChart } from '@/components/admin/charts/revenue-chart'
+import { CancellationChart } from '@/components/admin/charts/cancellation-chart'
 
 // Mock data - replace with actual API calls
 const stats = {
@@ -28,14 +31,58 @@ const recentActivity = [
   { id: 4, action: 'מוצר חדש', entity: 'ביטוח בריאות פרימיום', time: 'לפני 2 שעות' },
 ]
 
+const alerts = [
+  { id: 1, type: 'warning', message: '5 מנויים לא השלימו פרטי מוטבים', link: '/admin/alerts' },
+  { id: 2, type: 'error', message: '2 עסקאות עם פיגור בתשלום', link: '/admin/alerts' },
+  { id: 3, type: 'info', message: '3 פניות חדשות ממתינות לטיפול', link: '/admin/contacts' },
+]
+
 export default function AdminDashboard() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">לוח בקרה</h1>
-        <p className="text-muted-foreground">סקירה כללית של פעילות המערכת</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">לוח בקרה</h1>
+          <p className="text-muted-foreground">סקירה כללית של פעילות המערכת</p>
+        </div>
+        <Button variant="outline" asChild>
+          <Link href="/admin/alerts">
+            <Bell className="size-4 me-2" />
+            התראות
+            <Badge variant="destructive" className="ms-2 size-5 p-0 flex items-center justify-center text-xs">
+              {alerts.length}
+            </Badge>
+          </Link>
+        </Button>
       </div>
+
+      {/* Alerts Banner */}
+      {alerts.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="size-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-medium text-amber-800">יש פריטים הדורשים תשומת לב</p>
+              <ul className="mt-2 space-y-1">
+                {alerts.map((alert) => (
+                  <li key={alert.id}>
+                    <Link 
+                      href={alert.link} 
+                      className="text-sm text-amber-700 hover:text-amber-900 hover:underline"
+                    >
+                      {alert.message}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <Button variant="outline" size="sm" className="border-amber-300 text-amber-700 hover:bg-amber-100" asChild>
+              <Link href="/admin/alerts">צפה בהתראות</Link>
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Stats Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -63,6 +110,12 @@ export default function AdminDashboard() {
           icon={Package}
           trend={{ value: -2.3, label: 'מהחודש שעבר' }}
         />
+      </div>
+
+      {/* Charts Row */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <RevenueChart />
+        <CancellationChart />
       </div>
 
       {/* Quick Actions + Recent Activity */}
