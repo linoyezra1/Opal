@@ -16,6 +16,7 @@ import {
   FileText,
   MessageSquare,
   Archive,
+  Bell,
 } from 'lucide-react'
 
 import {
@@ -52,6 +53,7 @@ const navigationItems = [
     items: [
       { label: 'מנויים', href: '/admin/subscribers', icon: UserCheck },
       { label: 'פניות ולידים', href: '/admin/contacts', icon: MessageSquare },
+      { label: 'התראות', href: '/admin/alerts', icon: Bell },
     ],
   },
   {
