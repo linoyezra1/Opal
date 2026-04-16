@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, RefreshCw, Wallet, Users, CreditCard, UserCheck, AlertCircle, Building2, Pencil, MessageSquareText } from 'lucide-react';
+import { LayoutDashboard, RefreshCw, Wallet, Users, CreditCard, UserCheck, AlertCircle, Building2, Pencil, MessageSquareText, Bell } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -103,6 +103,7 @@ export default function AdminControlPanel() {
   const [commentText, setCommentText] = React.useState('');
   const [incomeView, setIncomeView] = React.useState('revenue');
   const [cancelView, setCancelView] = React.useState('loss');
+  const [alertsSummary, setAlertsSummary] = React.useState({});
 
   const load = React.useCallback(async (next = filters) => {
     if (!token) return;
@@ -122,6 +123,28 @@ export default function AdminControlPanel() {
   }, [filters, token]);
 
   React.useEffect(() => { load(filters); }, [load, filters]);
+  React.useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    const loadAlerts = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/alerts-summary`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || !j.success || cancelled) return;
+        setAlertsSummary(j);
+      } catch {
+        /* ignore */
+      }
+    };
+    loadAlerts();
+    const timer = setInterval(loadAlerts, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [token]);
 
   const overview = data?.overview || {};
   const rows = Array.isArray(data?.drilldowns?.[modalKey]) ? data.drilldowns[modalKey] : [];
@@ -172,6 +195,12 @@ export default function AdminControlPanel() {
 
   const cardClickable = (key) => !['totalRevenue', 'totalExpenses'].includes(key);
   const readOnlyDrilldown = ['totalProviderPayments', 'totalAgentPayments'].includes(modalKey);
+  const totalActiveAlerts =
+    Number(alertsSummary?.contactTasks || 0)
+    + Number(alertsSummary?.orgPendingApproval || 0)
+    + Number(alertsSummary?.pendingBeneficiaries || 0)
+    + Number(alertsSummary?.paymentArrears || 0)
+    + Number(alertsSummary?.organizationsToBill || 0);
 
   return (
     <TooltipProvider delayDuration={250}>
@@ -179,7 +208,17 @@ export default function AdminControlPanel() {
       <div className="space-y-6 text-right" dir="rtl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2"><LayoutDashboard className="size-7 text-primary" />לוח בקרה — סקירה פיננסית</h1>
-          <Button type="button" onClick={() => load(filters)} disabled={loading}><RefreshCw className={`size-4 me-2 ${loading ? 'animate-spin' : ''}`} />רענון</Button>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" className="relative" onClick={() => navigate('/admin/alerts')} aria-label="מעבר למרכז התראות">
+              <Bell className="size-4" />
+              {totalActiveAlerts > 0 ? (
+                <span className="absolute -top-2 -end-2 inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                  {totalActiveAlerts}
+                </span>
+              ) : null}
+            </Button>
+            <Button type="button" onClick={() => load(filters)} disabled={loading}><RefreshCw className={`size-4 me-2 ${loading ? 'animate-spin' : ''}`} />רענון</Button>
+          </div>
         </div>
 
         <Card>

@@ -205,7 +205,13 @@ export default function ArchiveDashboard() {
                         <CardDescription>{rows.length} רשומות</CardDescription>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="rounded-full bg-secondary px-2 py-0.5 text-xs">{rows.length}</span>
+                        <span
+                          className={`inline-flex min-w-7 items-center justify-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            rows.length > 0 ? 'bg-blue-600 text-white' : 'bg-muted text-muted-foreground'
+                          }`}
+                        >
+                          {rows.length}
+                        </span>
                         {openSections[tab.key] ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
                       </div>
                     </div>

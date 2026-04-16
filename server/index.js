@@ -114,7 +114,6 @@ import {
   buildAgentCommissionPayload,
   generateFlattenedSubscriberRows,
   filterDealsByProvider,
-  listProviderNamesFromDeals,
   buildSubscribersXlsxBuffer,
 } from './reportController.js';
 import multer from 'multer';
@@ -2227,7 +2226,7 @@ app.get('/api/admin/reports/subscribers-export-xlsx', requireAdmin, async (req, 
     const provider = String(req.query.provider || '').trim();
     const allDeals = await findDealsCreatedInRange(fromDate || null, toDate || null);
     const deals = provider ? filterDealsByProvider(allDeals, provider) : allDeals;
-    const file = buildSubscribersXlsxBuffer(deals);
+    const file = await buildSubscribersXlsxBuffer(deals);
     res.setHeader(
       'Content-Disposition',
       'attachment; filename="opal-subscribers-by-person.xlsx"'
@@ -2245,10 +2244,11 @@ app.get('/api/admin/reports/subscribers-export-xlsx', requireAdmin, async (req, 
 
 app.get('/api/admin/reports/providers', requireAdmin, async (req, res) => {
   try {
-    const fromDate = req.query.fromDate || req.query.from || '';
-    const toDate = req.query.toDate || req.query.to || '';
-    const deals = await findDealsCreatedInRange(fromDate || null, toDate || null);
-    const providers = listProviderNamesFromDeals(deals);
+    const vendors = await listVendors({ limit: 1000 });
+    const providers = (Array.isArray(vendors) ? vendors : [])
+      .map((v) => String(v.vendorName || '').trim())
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, 'he'));
     res.json({ success: true, providers });
   } catch (e) {
     console.error(`[${ts()}] reports/providers error:`, e);

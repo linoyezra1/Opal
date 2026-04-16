@@ -168,8 +168,6 @@ export default function AlertsDashboard() {
             const rows = filteredRows(a.key);
             const count = countFor(a.key);
             const Icon = a.icon;
-            const severityBadgeVariant =
-              a.severity === 'critical' ? 'destructive' : a.severity === 'warning' ? 'outline' : 'secondary';
             return (
               <Card key={a.key}>
                 <button type="button" className="w-full text-right" onClick={() => toggleSection(a.key)} aria-expanded={!!openSections[a.key]}>
@@ -185,7 +183,13 @@ export default function AlertsDashboard() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant={severityBadgeVariant}>{count}</Badge>
+                        <span
+                          className={`inline-flex min-w-7 items-center justify-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            count > 0 ? 'bg-red-600 text-white' : 'bg-muted text-muted-foreground'
+                          }`}
+                        >
+                          {count}
+                        </span>
                         {openSections[a.key] ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
                       </div>
                     </div>

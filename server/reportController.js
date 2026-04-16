@@ -2,7 +2,7 @@
  * דוחות וייצוא CSV — מרכז הדוחות והבילינג של אופאל
  */
 import { Parser } from 'json2csv';
-import XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 /**
  * סינון חודשי לדוחות בילינג ארגוני: רק עסקאות שחודש הבילינג שלהן (שדה billingMonth) תואם בדיוק ל־YYYY-MM.
@@ -289,54 +289,77 @@ export function listProviderNamesFromDeals(deals) {
   return Array.from(set).sort((a, b) => a.localeCompare(b, 'he'));
 }
 
-export function buildSubscribersXlsxBuffer(deals) {
+export async function buildSubscribersXlsxBuffer(deals) {
   const rows = generateFlattenedSubscriberRows(deals);
-  const sheetRows = rows.map((r) => ({
-    'מזהה עסקה DB': r.dealId,
-    'מספר הזמנה': r.transactionId,
-    'סוג שורה': r.rowRole === 'primary' ? 'מבוטח ראשי' : 'מוטב משני',
-    'ארגון': r.organizationName,
-    'סוכן': r.agentName,
-    'מזהה סוכן': r.agentId,
-    'שם פרטי': r.firstName,
-    'שם משפחה': r.lastName,
-    'תעודת זהות': r.idNumber,
-    'טלפון': r.phone,
-    'אימייל': r.email,
-    'כתובת': r.address,
-    'תאריך לידה': r.dateOfBirth,
-    'מין': r.gender,
-    'קופת חולים': r.healthFund,
-    'ביטוח משלים': r.supplementalInsurance,
-    'סכום תשלום': Number(r.payerAmount || 0),
-    'חודש בילינג': r.billingMonth,
-    'עמלה': Number(r.commissionAmount || 0),
-    'סטטוס תשלום': r.paymentStatus,
-    'סטטוס מנוי': r.subscriptionStatus,
-    'מוצר': r.productName,
-    'נוצר בתאריך': r.createdAt,
-  }));
-  const ws = XLSX.utils.json_to_sheet(sheetRows);
-  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
-  for (let row = 1; row <= range.e.r; row += 1) {
-    const source = rows[row - 1];
-    if (!source || source.rowRole !== 'primary') continue;
-    for (let col = range.s.c; col <= range.e.c; col += 1) {
-      const ref = XLSX.utils.encode_cell({ r: row, c: col });
-      if (!ws[ref]) ws[ref] = { t: 's', v: '' };
-      ws[ref].s = {
-        ...(ws[ref].s || {}),
-        fill: {
-          patternType: 'solid',
-          fgColor: { rgb: 'FFFDEB3B' },
-          bgColor: { rgb: 'FFFDEB3B' },
-        },
-      };
+  const headers = [
+    'מזהה עסקה DB',
+    'מספר הזמנה',
+    'סוג שורה',
+    'ארגון',
+    'סוכן',
+    'מזהה סוכן',
+    'שם פרטי',
+    'שם משפחה',
+    'תעודת זהות',
+    'טלפון',
+    'אימייל',
+    'כתובת',
+    'תאריך לידה',
+    'מין',
+    'קופת חולים',
+    'ביטוח משלים',
+    'סכום תשלום',
+    'חודש בילינג',
+    'עמלה',
+    'סטטוס תשלום',
+    'סטטוס מנוי',
+    'מוצר',
+    'נוצר בתאריך',
+  ];
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Subscribers', { views: [{ rightToLeft: true }] });
+  sheet.addRow(headers);
+  for (const r of rows) {
+    const row = sheet.addRow([
+      r.dealId,
+      r.transactionId,
+      r.rowRole === 'primary' ? 'מבוטח ראשי' : 'מוטב משני',
+      r.organizationName,
+      r.agentName,
+      r.agentId,
+      r.firstName,
+      r.lastName,
+      r.idNumber,
+      r.phone,
+      r.email,
+      r.address,
+      r.dateOfBirth,
+      r.gender,
+      r.healthFund,
+      r.supplementalInsurance,
+      Number(r.payerAmount || 0),
+      r.billingMonth,
+      Number(r.commissionAmount || 0),
+      r.paymentStatus,
+      r.subscriptionStatus,
+      r.productName,
+      r.createdAt,
+    ]);
+    if (r.rowRole === 'primary') {
+      row.eachCell((cell) => {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFFFF00' },
+        };
+      });
     }
   }
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Subscribers');
-  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', cellStyles: true });
+  sheet.getRow(1).font = { bold: true };
+  sheet.columns.forEach((col) => {
+    col.width = 18;
+  });
+  return workbook.xlsx.writeBuffer();
 }
 
 export function buildCancellationsCsv(deals) {

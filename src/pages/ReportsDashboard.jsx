@@ -190,6 +190,10 @@ export default function ReportsDashboard() {
   useEffect(() => {
     loadProviders();
   }, [loadProviders]);
+  useEffect(() => {
+    if (tab !== 'provider') return;
+    loadPreview();
+  }, [tab, loadPreview]);
 
   const runSubscribersExport = async () => {
     setExportErr('');
