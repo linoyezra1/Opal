@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { Building2, Upload, Download, ArrowRight, Users, Link as LinkIcon, Copy } from 'lucide-react';
+import { Building2, Upload, Download, ArrowRight, Users } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -65,7 +65,6 @@ export default function OrganizationDetailPage() {
   const [billingChangePending, setBillingChangePending] = useState(null);
   const [products, setProducts] = useState([]);
   const [payments, setPayments] = useState([]);
-  const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
     if (!token || !id) return;
@@ -271,24 +270,14 @@ export default function OrganizationDetailPage() {
             </p>
             {org.billingType === 'Private' ? (
               <div className="mt-2 flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(privateRegistrationUrl);
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 1200);
-                    } catch {
-                      setCopied(false);
-                    }
-                  }}
-                  aria-label="העתקת קישור הרשמה"
+                <a
+                  href={privateRegistrationUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sm text-blue-600 underline underline-offset-4 hover:text-blue-700"
                 >
-                  {copied ? <Copy className="size-4 text-emerald-600" /> : <LinkIcon className="size-4" />}
-                </Button>
-                <span className="text-xs text-muted-foreground break-all">{privateRegistrationUrl}</span>
+                  קישור הרשמה (תשלום פרטי)
+                </a>
               </div>
             ) : null}
           </div>

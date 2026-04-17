@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import {
   Plus,
+  Edit2,
   Archive,
   Building2,
   CreditCard,
@@ -470,9 +471,8 @@ export default function VendorDashboard() {
           {editVendor ? (
             <form onSubmit={saveEdit} className="space-y-4">
               <VendorFormFields data={editVendor} setData={setEditVendor} />
-              <div className="border-t pt-4">
-                <h4 className="font-medium mb-2">מוצרים ומחירי ספק</h4>
-                <ProductLinksEditor isEdit />
+              <div className="border-t pt-4 text-sm text-muted-foreground">
+                עריכת מוצרים אינה זמינה במסך זה. רשימת המוצרים מוצגת לצפייה בלבד בכרטיס הספק.
               </div>
               {error ? <p className="text-destructive text-sm">{error}</p> : null}
               <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
@@ -534,9 +534,6 @@ export default function VendorDashboard() {
             <CardTitle>רשימת ספקים</CardTitle>
             <CardDescription>
               {filteredVendors.length} / {vendors.length} ספקים
-              <Button variant="link" className="px-2 h-auto font-normal text-primary" type="button" onClick={() => loadVendors()}>
-                רענון
-              </Button>
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -586,6 +583,9 @@ export default function VendorDashboard() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="icon" type="button" onClick={() => setEditVendor(vendorToEditForm(v))}>
+                                <Edit2 className="size-4" />
+                              </Button>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button variant="ghost" size="icon" type="button" onClick={() => setDeleteTarget(v)} aria-label="הפוך ללא פעיל">

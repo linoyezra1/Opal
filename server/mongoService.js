@@ -1404,16 +1404,16 @@ function isCentralizedOrgPayment(d) {
 function applyCategoryFilters(deals, categories = []) {
   if (!Array.isArray(categories) || !categories.length) return deals;
   const set = new Set(categories);
+  if (set.has('all')) return deals;
   return deals.filter((d) => {
     const checks = [];
-    if (set.has('all')) checks.push(true);
     if (set.has('primary')) checks.push(d.primaryCount > 0);
     if (set.has('active')) checks.push(d.activeCustomersCount > 0);
     if (set.has('canceled')) checks.push(d.isCanceled);
     if (set.has('private_org')) checks.push(d.isPrivateOrg);
     if (set.has('centralized_org')) checks.push(d.isCentralizedOrg);
     if (set.has('centralized_canceled')) checks.push(d.isCentralizedOrg && d.isCanceled);
-    return checks.some(Boolean);
+    return checks.length ? checks.every(Boolean) : true;
   });
 }
 
@@ -1460,7 +1460,7 @@ export async function getSalesDashboardData(filters = {}) {
     });
   }
   const dateRange = getDateRange(filters);
-  if (dateRange) match.createdAt = dateRange;
+  if (dateRange && statusFilter !== 'cancelled') match.createdAt = dateRange;
 
   if (filters.agentEnabled && filters.agentValue) {
     const av = String(filters.agentValue).trim();
@@ -1587,7 +1587,25 @@ export async function getSalesDashboardData(filters = {}) {
       resolvedAgentId: aid,
     };
   });
-  let shown = applyCategoryFilters(enriched, filters.summaryCategories);
+  let shown = enriched;
+  if (statusFilter === 'cancelled') {
+    shown = shown.filter((d) => {
+      const sub = String(d.subscriptionStatus || '').trim().toLowerCase();
+      const recurringId = String(d.cardcomRecurringId || '').trim();
+      const recurringStopped = d.isActive === false && recurringId !== '';
+      const manuallyCancelled = /cancel|בוטל/i.test(sub);
+      if (!(manuallyCancelled || recurringStopped)) return false;
+      if (!dateRange) return true;
+      const eventDate = d.cancellationDate || d.updatedAt || d.createdAt;
+      const dt = new Date(eventDate);
+      if (Number.isNaN(dt.getTime())) return false;
+      if (dateRange.$gte && dt < dateRange.$gte) return false;
+      if (dateRange.$lte && dt > dateRange.$lte) return false;
+      if (dateRange.$lt && dt >= dateRange.$lt) return false;
+      return true;
+    });
+  }
+  shown = applyCategoryFilters(shown, filters.summaryCategories);
   if (filters.providerEnabled && filters.providerValue) {
     const pv = String(filters.providerValue).trim();
     shown = shown.filter((d) => String(d.vendorName || '').trim() === pv);

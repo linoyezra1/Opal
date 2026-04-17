@@ -19,6 +19,27 @@ const ALERT_DEFS = [
   { key: 'organizationCollectionsDebt', title: 'ארגונים לחיוב', icon: Receipt, severity: 'warning' },
 ];
 
+const HEADER_LABELS = {
+  customerName: 'שם לקוח',
+  orderId: 'מספר הזמנה',
+  price: 'סכום',
+  cardcomStatus: 'סטטוס כרטיס',
+  chargeDate: 'תאריך חיוב',
+  fullName: 'שם מלא',
+  phone: 'טלפון',
+  email: 'אימייל',
+  organizationName: 'ארגון',
+  createdAt: 'תאריך יצירה',
+  updatedAt: 'תאריך עדכון',
+  kind: 'סוג',
+  comments: 'הערות',
+  transactionId: 'מספר הזמנה',
+};
+
+function labelForColumn(key) {
+  return HEADER_LABELS[key] || key;
+}
+
 export default function AlertsDashboard() {
   const [searchParams] = useSearchParams();
   const [token] = React.useState(() => localStorage.getItem(TOKEN_KEY) || '');
@@ -213,7 +234,7 @@ export default function AlertsDashboard() {
                               Object.keys(rows[0] || {})
                                 .filter((k) => !['id', 'subscriberDealId'].includes(k))
                                 .slice(0, 5)
-                                .map((c) => <TableHead key={`${a.key}-${c}`} className="text-right">{c}</TableHead>)
+                                .map((c) => <TableHead key={`${a.key}-${c}`} className="text-right">{labelForColumn(c)}</TableHead>)
                             )}
                           </TableRow>
                         </TableHeader>

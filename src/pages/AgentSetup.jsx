@@ -693,9 +693,6 @@ export default function AgentSetup() {
             <CardTitle>רשימת סוכנים</CardTitle>
             <CardDescription>
               {filteredRows.length} / {rows.length} סוכנים
-              <Button variant="link" className="px-2 h-auto font-normal text-primary" type="button" onClick={() => loadAgents()}>
-                רענון
-              </Button>
             </CardDescription>
           </CardHeader>
           <CardContent>

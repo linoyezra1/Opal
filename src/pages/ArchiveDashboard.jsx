@@ -110,7 +110,7 @@ export default function ArchiveDashboard() {
   React.useEffect(() => {
     const next = {};
     for (const tab of TAB_CONFIG) {
-      next[tab.key] = true;
+      next[tab.key] = false;
     }
     setOpenSections(next);
   }, []);

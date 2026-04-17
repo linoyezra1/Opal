@@ -381,9 +381,6 @@ export default function OrganizationPricing() {
             <CardTitle>ארגונים רשומים (מחירונים שמורים)</CardTitle>
             <CardDescription>
               רשימה מהשרת
-              <Button variant="link" className="px-2 h-auto font-normal text-primary" type="button" onClick={() => loadRows()}>
-                רענון
-              </Button>
             </CardDescription>
           </CardHeader>
           <CardContent className="overflow-auto">

@@ -437,9 +437,6 @@ export default function ProductManagement() {
             <CardTitle>רשימת מוצרים</CardTitle>
             <CardDescription>
               {filteredProducts.length} / {products.length} מוצרים
-              <Button variant="link" className="px-2 h-auto font-normal text-primary" type="button" onClick={() => loadProducts()}>
-                רענון
-              </Button>
             </CardDescription>
           </CardHeader>
           <CardContent>

@@ -466,9 +466,6 @@ export default function PricingDashboard() {
             <CardTitle>רשימת מחירונים</CardTitle>
             <CardDescription>
               {lists.length} מחירונים
-              <Button variant="link" className="px-2 h-auto font-normal text-primary" type="button" onClick={() => loadAll()}>
-                רענון
-              </Button>
             </CardDescription>
           </CardHeader>
           <CardContent>

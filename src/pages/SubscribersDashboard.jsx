@@ -284,9 +284,12 @@ export default function SubscribersDashboard() {
   }
 
   useEffect(() => {
-    loadDashboard();
+    const t = setTimeout(() => {
+      loadDashboard();
+    }, 250);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.month, filters.fromDate, filters.toDate, filters.status]);
+  }, [filters]);
 
   useEffect(() => {
     const search = String(searchParams.get('search') || '').trim();
@@ -1308,10 +1311,9 @@ export default function SubscribersDashboard() {
                   type="button"
                   onClick={() => {
                     setFilterDialogOpen(false);
-                    loadDashboard();
                   }}
                 >
-                  החל והצג
+                  סגירה
                 </Button>
                 <Button type="button" variant="outline" onClick={clearFilters}>
                   נקה הכל
@@ -1406,10 +1408,6 @@ export default function SubscribersDashboard() {
                   <option value="active">סטטוס: פעילים</option>
                   <option value="cancelled">סטטוס: מבוטלים</option>
                 </select>
-                <Button type="button" onClick={loadDashboard} disabled={loading}>
-                  {loading && <Spinner className="me-2" />}
-                  רענון
-                </Button>
                 <Button type="button" variant="outline" onClick={() => setFilterDialogOpen(true)} className="shrink-0">
                   <Filter className="size-4 me-2" />
                   סינון מתקדם
@@ -1449,17 +1447,6 @@ export default function SubscribersDashboard() {
                   <span className="border-s border-border ps-3 ms-1 whitespace-nowrap">
                     סה״כ: <strong>{formatCurrency(s.totalRevenue || 0)}</strong>
                   </span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="h-8 shrink-0"
-                    onClick={loadDashboard}
-                    disabled={loading}
-                  >
-                    {loading && <Spinner className="size-3 me-1" />}
-                    עדכן דוח
-                  </Button>
                 </div>
               </div>
             </CardHeader>

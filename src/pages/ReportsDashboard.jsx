@@ -194,6 +194,17 @@ export default function ReportsDashboard() {
     if (tab !== 'provider') return;
     loadPreview();
   }, [tab, loadPreview]);
+  useEffect(() => {
+    if (tab !== 'agents') return;
+    if (!agentId || !agentMonth) return;
+    loadAgentCommissions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, agentId, agentMonth]);
+  useEffect(() => {
+    if (tab !== 'orgs') return;
+    loadInvoices(billingMonth);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, billingMonth]);
 
   const runSubscribersExport = async () => {
     setExportErr('');
@@ -387,10 +398,6 @@ export default function ReportsDashboard() {
                     {exportBusy ? <Spinner className="size-4" /> : null}
                     הורד אקסל מנויים לספק
                   </Button>
-                  <Button type="button" variant="outline" disabled={previewLoading} onClick={loadPreview}>
-                    {previewLoading ? <Spinner className="size-4" /> : null}
-                    תצוגה מקדימה
-                  </Button>
                   <Button type="button" variant="secondary" disabled={exportBusy} onClick={runCancellationsExport}>
                     הורד אקסל ביטולים
                   </Button>
@@ -464,10 +471,6 @@ export default function ReportsDashboard() {
                       onChange={(e) => setAgentMonth(e.target.value)}
                     />
                   </Field>
-                  <Button type="button" onClick={loadAgentCommissions} disabled={agentLoading}>
-                    {agentLoading ? <Spinner className="size-4" /> : null}
-                    הצג דוח
-                  </Button>
                 </FieldGroup>
                 {agentErr ? <p className="text-sm text-destructive">{agentErr}</p> : null}
                 {agentData && (
@@ -521,7 +524,7 @@ export default function ReportsDashboard() {
                 <div>
                   <CardTitle>גבייה מארגונים (תשלום מרוכז)</CardTitle>
                   <CardDescription>
-                    חשבוניות חודשיות מקובצות לפי ארגון — עדכנו מספרי מסמכים וסטטוס תשלום. בחרו חודש לחיוב ולחצו &quot;רענן טבלה&quot; או &quot;צור / עדכן&quot;.
+                    חשבוניות חודשיות מקובצות לפי ארגון — עדכנו מספרי מסמכים וסטטוס תשלום. בחירת חודש מעדכנת את הטבלה אוטומטית.
                   </CardDescription>
                 </div>
                 <div className="flex flex-wrap items-end justify-end gap-2">
