@@ -22,6 +22,7 @@ import {
 } from '../utils/israeliId.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { StatsCard } from '../components/admin/stats-card.jsx';
+import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
 import { Button } from '../components/ui/button.jsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
@@ -1356,16 +1357,14 @@ export default function SubscribersDashboard() {
           {/* שורת חיפוש + סינון */}
           <Card dir="rtl" className="text-right border-border/60 shadow-sm">
             <CardContent className="pt-6">
-              <div className="flex flex-wrap items-end gap-2 rounded-xl border border-border/60 bg-muted/20 p-3">
-                <div className="relative flex-1 min-w-[200px]">
-                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
-                  <Input
-                    className="pe-10"
-                    placeholder="חיפוש חי: שם לקוח, ת.ז, מס׳ הזמנה…"
-                    value={liveSearch}
-                    onChange={(e) => setLiveSearch(e.target.value)}
-                  />
-                </div>
+              <UnifiedFilterShell
+                searchValue={liveSearch}
+                onSearchChange={setLiveSearch}
+                searchPlaceholder="חיפוש חי: שם לקוח, ת.ז, מס׳ הזמנה…"
+                activeCount={hasActiveFilters ? 1 : 0}
+                onClear={clearFilters}
+                basicControls={(
+                  <>
                 <Field className="w-full sm:w-44 shrink-0 space-y-1.5">
                   <FieldLabel className="text-xs text-muted-foreground">סוג לקוח</FieldLabel>
                   <select
@@ -1408,16 +1407,17 @@ export default function SubscribersDashboard() {
                   <option value="active">סטטוס: פעילים</option>
                   <option value="cancelled">סטטוס: מבוטלים</option>
                 </select>
-                <Button type="button" variant="outline" onClick={() => setFilterDialogOpen(true)} className="shrink-0">
-                  <Filter className="size-4 me-2" />
-                  סינון מתקדם
-                  {hasActiveFilters ? (
-                    <Badge variant="secondary" className="me-2">
-                      פעיל
-                    </Badge>
-                  ) : null}
-                </Button>
-              </div>
+                  </>
+                )}
+                advancedContent={(
+                  <div className="text-sm text-muted-foreground">
+                    למסננים מתקדמים מלאים פתחו את חלון הסינון.
+                    <Button type="button" variant="outline" size="sm" onClick={() => setFilterDialogOpen(true)} className="ms-2">
+                      פתח מסננים
+                    </Button>
+                  </div>
+                )}
+              />
             </CardContent>
           </Card>
 

@@ -1,22 +1,14 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { 
-  UserCheck, Filter, Download, TrendingUp, Receipt, Users, Calendar,
-  ChevronDown, ChevronUp, Edit2, Save, X, FileCheck, FileX, User,
+  UserCheck, Download, TrendingUp, Receipt, Users,
+  ChevronDown, ChevronUp, Edit2, Save, X, User,
   Phone, Mail, MapPin, CreditCard, Clock, Building2, UserPlus, Trash2,
-  CheckCircle2, AlertCircle, Circle
+  CheckCircle2, AlertCircle
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { Input } from '@/components/ui/input'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
@@ -32,14 +24,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet'
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -48,7 +32,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/admin/confirm-dialog'
+import { UnifiedFilter, FilterConfig, FilterValues } from '@/components/admin/unified-filter'
 import type { Subscriber, Beneficiary } from '@/lib/api'
+
+// Opal Brand Colors
+const OPAL_BLUE = '#1A365D'
 
 // Mock data
 const mockProducts = [
@@ -66,6 +54,54 @@ const mockOrganizations = [
   'חברת היי-טק בע"מ',
   'לקוחות פרטיים',
   'עיריית תל אביב',
+]
+
+// Filter configuration for subscribers
+const filterConfig: FilterConfig[] = [
+  {
+    key: 'search',
+    label: 'חיפוש',
+    type: 'text',
+    placeholder: 'חיפוש לפי שם, טלפון או ת.ז...',
+  },
+  {
+    key: 'productId',
+    label: 'מוצר',
+    type: 'select',
+    options: mockProducts.map(p => ({ value: p.id, label: p.name })),
+  },
+  {
+    key: 'agentId',
+    label: 'סוכן',
+    type: 'select',
+    options: mockAgents.map(a => ({ value: a.id, label: a.name })),
+  },
+  {
+    key: 'organizationName',
+    label: 'ארגון',
+    type: 'select',
+    options: mockOrganizations.map(o => ({ value: o, label: o })),
+  },
+  {
+    key: 'status',
+    label: 'סטטוס',
+    type: 'select',
+    options: [
+      { value: 'active', label: 'פעיל' },
+      { value: 'pending', label: 'ממתין' },
+      { value: 'cancelled', label: 'מבוטל' },
+    ],
+  },
+  {
+    key: 'dateFrom',
+    label: 'מתאריך',
+    type: 'date',
+  },
+  {
+    key: 'dateTo',
+    label: 'עד תאריך',
+    type: 'date',
+  },
 ]
 
 const mockSubscribers: Subscriber[] = [
@@ -180,27 +216,20 @@ const mockSubscribers: Subscriber[] = [
   },
 ]
 
-interface Filters {
-  productId: string
-  agentId: string
-  organizationName: string
-  dateFrom: string
-  dateTo: string
-}
-
 export default function SubscribersPage() {
   const [subscribers, setSubscribers] = useState<Subscriber[]>(mockSubscribers)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<Subscriber | null>(null)
-  const [filters, setFilters] = useState<Filters>({
+  const [filterValues, setFilterValues] = useState<FilterValues>({
+    search: '',
     productId: '',
     agentId: '',
     organizationName: '',
+    status: '',
     dateFrom: '',
     dateTo: '',
   })
-  const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [beneficiaryDialog, setBeneficiaryDialog] = useState<{ open: boolean; subscriberId: string; beneficiary?: Beneficiary }>({
     open: false,
     subscriberId: '',
@@ -211,15 +240,30 @@ export default function SubscribersPage() {
     beneficiaryId: '',
   })
 
-  // Apply filters
-  const filteredSubscribers = subscribers.filter((sub) => {
-    if (filters.productId && sub.productId !== filters.productId) return false
-    if (filters.agentId && sub.agentId !== filters.agentId) return false
-    if (filters.organizationName && sub.organizationName !== filters.organizationName) return false
-    if (filters.dateFrom && sub.createdAt && sub.createdAt < filters.dateFrom) return false
-    if (filters.dateTo && sub.createdAt && sub.createdAt > filters.dateTo) return false
-    return true
-  })
+  // Apply filters with useMemo for performance
+  const filteredSubscribers = useMemo(() => {
+    return subscribers.filter((sub) => {
+      // Text search
+      if (filterValues.search) {
+        const search = filterValues.search.toLowerCase()
+        const matchesSearch = 
+          `${sub.firstName} ${sub.lastName}`.toLowerCase().includes(search) ||
+          sub.phone?.includes(search) ||
+          sub.idNumber?.includes(search) ||
+          sub.email?.toLowerCase().includes(search)
+        if (!matchesSearch) return false
+      }
+      if (filterValues.productId && sub.productId !== filterValues.productId) return false
+      if (filterValues.agentId && sub.agentId !== filterValues.agentId) return false
+      if (filterValues.organizationName && sub.organizationName !== filterValues.organizationName) return false
+      if (filterValues.status && sub.status !== filterValues.status) return false
+      if (filterValues.dateFrom && sub.createdAt && sub.createdAt < filterValues.dateFrom) return false
+      if (filterValues.dateTo && sub.createdAt && sub.createdAt > filterValues.dateTo) return false
+      return true
+    })
+  }, [subscribers, filterValues])
+  
+  const hasActiveFilters = Object.values(filterValues).some(v => v !== '')
 
   // Calculate stats
   const stats = {
@@ -229,17 +273,21 @@ export default function SubscribersPage() {
     activeCount: filteredSubscribers.filter(s => s.status === 'active').length,
   }
 
-  const clearFilters = () => {
-    setFilters({
+  const handleFilterChange = (values: FilterValues) => {
+    setFilterValues(values)
+  }
+
+  const handleFilterClear = () => {
+    setFilterValues({
+      search: '',
       productId: '',
       agentId: '',
       organizationName: '',
+      status: '',
       dateFrom: '',
       dateTo: '',
     })
   }
-
-  const hasActiveFilters = Object.values(filters).some(v => v !== '')
 
   const toggleExpand = (id: string) => {
     if (expandedId === id) {
@@ -360,129 +408,24 @@ export default function SubscribersPage() {
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">מנויים</h1>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ color: OPAL_BLUE }}>מנויים</h1>
           <p className="text-muted-foreground">צפייה בעסקאות ומנויים</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Sheet open={isFilterOpen} onOpenChange={setIsFilterOpen}>
-            <SheetTrigger asChild>
-              <Button variant="outline">
-                <Filter className="size-4 me-2" />
-                סינון
-                {hasActiveFilters && (
-                  <Badge variant="secondary" className="ms-2">
-                    פעיל
-                  </Badge>
-                )}
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left">
-              <SheetHeader>
-                <SheetTitle>סינון מנויים</SheetTitle>
-                <SheetDescription>
-                  הגדר פילטרים להצגת מנויים ספציפיים
-                </SheetDescription>
-              </SheetHeader>
-              
-              <div className="mt-6 space-y-6">
-                <FieldGroup>
-                  <Field>
-                    <FieldLabel>מוצר</FieldLabel>
-                    <Select
-                      value={filters.productId || 'all'}
-                      onValueChange={(value) => setFilters({ ...filters, productId: value === 'all' ? '' : value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="כל המוצרים" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">כל המוצרים</SelectItem>
-                        {mockProducts.map((product) => (
-                          <SelectItem key={product.id} value={product.id}>
-                            {product.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-
-                  <Field>
-                    <FieldLabel>סוכן</FieldLabel>
-                    <Select
-                      value={filters.agentId || 'all'}
-                      onValueChange={(value) => setFilters({ ...filters, agentId: value === 'all' ? '' : value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="כל הסוכנים" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">כל הסוכנים</SelectItem>
-                        {mockAgents.map((agent) => (
-                          <SelectItem key={agent.id} value={agent.id}>
-                            {agent.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-
-                  <Field>
-                    <FieldLabel>ארגון</FieldLabel>
-                    <Select
-                      value={filters.organizationName || 'all'}
-                      onValueChange={(value) => setFilters({ ...filters, organizationName: value === 'all' ? '' : value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="כל הארגונים" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">כל הארגונים</SelectItem>
-                        {mockOrganizations.map((org) => (
-                          <SelectItem key={org} value={org}>
-                            {org}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-
-                  <Field>
-                    <FieldLabel>מתאריך</FieldLabel>
-                    <Input
-                      type="date"
-                      value={filters.dateFrom}
-                      onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-                    />
-                  </Field>
-
-                  <Field>
-                    <FieldLabel>עד תאריך</FieldLabel>
-                    <Input
-                      type="date"
-                      value={filters.dateTo}
-                      onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-                    />
-                  </Field>
-                </FieldGroup>
-
-                <div className="flex gap-2">
-                  <Button onClick={() => setIsFilterOpen(false)} className="flex-1">
-                    החל
-                  </Button>
-                  <Button variant="outline" onClick={clearFilters}>
-                    נקה
-                  </Button>
-                </div>
-              </div>
-            </SheetContent>
-          </Sheet>
-          
-          <Button variant="outline">
-            <Download className="size-4 me-2" />
-            ייצוא
-          </Button>
-        </div>
+        <Button variant="outline">
+          <Download className="size-4 me-2" />
+          ייצוא
+        </Button>
       </div>
+
+      {/* Unified Filter */}
+      <UnifiedFilter
+        filters={filterConfig}
+        values={filterValues}
+        onChange={handleFilterChange}
+        onClear={handleFilterClear}
+        resultsCount={filteredSubscribers.length}
+        totalCount={subscribers.length}
+      />
 
       {/* Stats Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -530,7 +473,7 @@ export default function SubscribersPage() {
                   : 'מנויים חדשים יופיעו כאן לאחר הרשמה'}
               </EmptyDescription>
               {hasActiveFilters && (
-                <Button variant="outline" onClick={clearFilters} className="mt-4">
+                <Button variant="outline" onClick={handleFilterClear} className="mt-4">
                   נקה פילטרים
                 </Button>
               )}

@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Button } from '../components/ui/button.jsx';
 import { Input } from '../components/ui/input.jsx';
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '../components/ui/empty.jsx';
+import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -161,15 +162,12 @@ export default function ArchiveDashboard() {
           </CardContent>
         </Card>
 
-        <div className="max-w-md relative">
-          <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input
-            className="ps-10"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="חיפוש בארכיון..."
-          />
-        </div>
+        <UnifiedFilterShell
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="חיפוש בארכיון..."
+          className="max-w-2xl"
+        />
 
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <div className="space-y-4">

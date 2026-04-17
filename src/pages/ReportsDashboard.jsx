@@ -20,6 +20,7 @@ import {
 import { Badge } from '../components/ui/badge.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 import { Textarea } from '../components/ui/textarea.jsx';
+import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -369,29 +370,33 @@ export default function ReportsDashboard() {
                 <CardDescription>בחרו טווח תאריכים לפי תאריך יצירת העסקה במערכת</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <FieldGroup className="flex flex-col sm:flex-row gap-4">
-                  <Field>
-                    <FieldLabel>מתאריך</FieldLabel>
-                    <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-                  </Field>
-                  <Field>
-                    <FieldLabel>עד תאריך</FieldLabel>
-                    <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
-                  </Field>
-                  <Field>
-                    <FieldLabel>ספק</FieldLabel>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      value={providerFilter}
-                      onChange={(e) => setProviderFilter(e.target.value)}
-                    >
-                      <option value="">כל הספקים</option>
-                      {providers.map((p) => (
-                        <option key={p} value={p}>{p}</option>
-                      ))}
-                    </select>
-                  </Field>
-                </FieldGroup>
+                <UnifiedFilterShell
+                  searchValue={providerFilter}
+                  onSearchChange={setProviderFilter}
+                  searchPlaceholder="חיפוש ספק..."
+                  basicControls={(
+                    <>
+                      <Field>
+                        <FieldLabel>מתאריך</FieldLabel>
+                        <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+                      </Field>
+                      <Field>
+                        <FieldLabel>עד תאריך</FieldLabel>
+                        <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+                      </Field>
+                      <select
+                        className="flex h-10 w-full sm:w-56 rounded-md border border-slate-200 bg-background px-3 py-2 text-sm shadow-sm"
+                        value={providerFilter}
+                        onChange={(e) => setProviderFilter(e.target.value)}
+                      >
+                        <option value="">כל הספקים</option>
+                        {providers.map((p) => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                    </>
+                  )}
+                />
                 {exportErr ? <p className="text-sm text-destructive">{exportErr}</p> : null}
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" disabled={exportBusy} onClick={runSubscribersExport}>

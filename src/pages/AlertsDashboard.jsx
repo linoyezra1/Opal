@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Input } from '../components/ui/input.jsx';
 import { Badge } from '../components/ui/badge.jsx';
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '../components/ui/empty.jsx';
+import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -163,15 +164,12 @@ export default function AlertsDashboard() {
           </Card>
         </div>
 
-        <div className="max-w-md relative">
-          <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input
-            className="ps-10"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="חיפוש בהתראות..."
-          />
-        </div>
+        <UnifiedFilterShell
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="חיפוש בהתראות..."
+          className="max-w-2xl"
+        />
 
         {totalAlerts === 0 && !loading ? (
           <Card>
