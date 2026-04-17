@@ -21,6 +21,7 @@ import { FieldGroup, Field, FieldLabel } from '../components/ui/field.jsx';
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '../components/ui/empty.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
+import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 const PRODUCT_FLOW_TYPE_LABEL = 'רופא עד הבית';
@@ -46,6 +47,18 @@ export default function ProductManagement() {
   const [createOpen, setCreateOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
   const [providerFilter, setProviderFilter] = React.useState('all');
+  const productFilterConfig = React.useMemo(
+    () => [
+      { key: 'search', label: 'חיפוש', type: 'text', placeholder: 'חיפוש חופשי: מוצר, ספק, מק״ט, תיאור' },
+      {
+        key: 'providerId',
+        label: 'ספק',
+        type: 'select',
+        options: (providers || []).map((v) => ({ value: String(v.id || ''), label: String(v.vendorName || '') })).filter((x) => x.value),
+      },
+    ],
+    [providers]
+  );
 
   async function loadProducts() {
     if (!token) return;
@@ -410,25 +423,21 @@ export default function ProductManagement() {
 
         <Card>
           <CardContent className="pt-6">
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="חיפוש חופשי: מוצר, ספק, מק״ט, תיאור"
-              />
-              <select
-                className="flex h-10 min-w-48 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={providerFilter}
-                onChange={(e) => setProviderFilter(e.target.value)}
-              >
-                <option value="all">כל הספקים</option>
-                {providers.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.vendorName}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <UnifiedFilterShell
+              filters={productFilterConfig}
+              values={{ search, providerId: providerFilter === 'all' ? '' : providerFilter }}
+              onChange={(next) => {
+                setSearch(String(next.search || ''));
+                setProviderFilter(String(next.providerId || 'all'));
+              }}
+              onClear={() => {
+                setSearch('');
+                setProviderFilter('all');
+              }}
+              resultsCount={filteredProducts.length}
+              totalCount={products.length}
+              isLoading={loading}
+            />
           </CardContent>
         </Card>
 

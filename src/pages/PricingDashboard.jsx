@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Edit2, Trash2, Receipt } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
@@ -20,6 +20,7 @@ import { FieldGroup, Field, FieldLabel } from '../components/ui/field.jsx';
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '../components/ui/empty.jsx';
 import { Badge } from '../components/ui/badge.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
+import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -43,10 +44,20 @@ export default function PricingDashboard() {
   const [error, setError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
+  const [search, setSearch] = useState('');
+  const [orgFilter, setOrgFilter] = useState('');
   const [listName, setListName] = useState('');
   const [orgName, setOrgName] = useState('');
   const [lines, setLines] = useState([emptyLine()]);
   const [deleteId, setDeleteId] = useState(null);
+  const filteredLists = useMemo(() => {
+    const q = String(search || '').trim().toLowerCase();
+    return (lists || []).filter((row) => {
+      if (orgFilter && String(row.orgName || '') !== orgFilter) return false;
+      if (!q) return true;
+      return `${String(row.listName || '')} ${String(row.orgName || '')}`.toLowerCase().includes(q);
+    });
+  }, [lists, search, orgFilter]);
 
   async function loadAll() {
     if (!token) return;
@@ -460,16 +471,43 @@ export default function PricingDashboard() {
         </div>
 
         {error && !showModal ? <p className="text-destructive text-sm">{error}</p> : null}
+        <Card>
+          <CardContent className="pt-6">
+            <UnifiedFilterShell
+              filters={[
+                { key: 'search', label: 'חיפוש', type: 'text', placeholder: 'חיפוש מחירון / ארגון' },
+                {
+                  key: 'orgName',
+                  label: 'ארגון',
+                  type: 'select',
+                  options: Array.from(new Set((lists || []).map((x) => String(x.orgName || '').trim()).filter(Boolean))).map((x) => ({ value: x, label: x })),
+                },
+              ]}
+              values={{ search, orgName: orgFilter }}
+              onChange={(next) => {
+                setSearch(String(next.search || ''));
+                setOrgFilter(String(next.orgName || ''));
+              }}
+              onClear={() => {
+                setSearch('');
+                setOrgFilter('');
+              }}
+              resultsCount={filteredLists.length}
+              totalCount={lists.length}
+              isLoading={loading}
+            />
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
             <CardTitle>רשימת מחירונים</CardTitle>
             <CardDescription>
-              {lists.length} מחירונים
+              {filteredLists.length} / {lists.length} מחירונים
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {lists.length === 0 && !loading ? (
+            {filteredLists.length === 0 && !loading ? (
               <Empty>
                 <EmptyMedia variant="icon">
                   <Receipt className="size-8" />
@@ -493,7 +531,7 @@ export default function PricingDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {lists.map((row) => {
+                    {filteredLists.map((row) => {
                       return (
                         <TableRow key={row.id}>
                           <TableCell className="font-medium">{row.listName}</TableCell>
@@ -524,7 +562,7 @@ export default function PricingDashboard() {
                 </Table>
               </div>
             )}
-            {loading && lists.length > 0 ? <p className="text-sm text-muted-foreground mt-2">טוען…</p> : null}
+            {loading && filteredLists.length > 0 ? <p className="text-sm text-muted-foreground mt-2">טוען…</p> : null}
           </CardContent>
         </Card>
       </div>

@@ -237,6 +237,46 @@ export default function SubscribersDashboard() {
       (filters.customerSegment && filters.customerSegment !== 'all')
     );
   }, [filters]);
+  const unifiedFilterConfig = useMemo(
+    () => [
+      { key: 'search', label: 'חיפוש', type: 'text', placeholder: 'חיפוש חי: שם לקוח, ת.ז, מס׳ הזמנה…' },
+      {
+        key: 'customerSegment',
+        label: 'סוג לקוח',
+        type: 'select',
+        options: [
+          { value: 'all', label: 'הכל' },
+          { value: 'private', label: 'לקוחות פרטיים' },
+          { value: 'organization', label: 'חברי ארגון' },
+        ],
+      },
+      { key: 'month', label: 'חודש', type: 'text', placeholder: 'YYYY-MM' },
+      { key: 'fromDate', label: 'מתאריך', type: 'date' },
+      { key: 'toDate', label: 'עד תאריך', type: 'date' },
+      {
+        key: 'status',
+        label: 'סטטוס',
+        type: 'select',
+        options: [
+          { value: 'all', label: 'הכל' },
+          { value: 'active', label: 'פעילים' },
+          { value: 'cancelled', label: 'מבוטלים' },
+        ],
+      },
+    ],
+    []
+  );
+  const unifiedFilterValues = useMemo(
+    () => ({
+      search: liveSearch,
+      customerSegment: filters.customerSegment || 'all',
+      month: filters.month || '',
+      fromDate: filters.fromDate || '',
+      toDate: filters.toDate || '',
+      status: filters.status || 'all',
+    }),
+    [liveSearch, filters]
+  );
 
   async function loadDashboard() {
     if (!token) {
@@ -1358,57 +1398,21 @@ export default function SubscribersDashboard() {
           <Card dir="rtl" className="text-right border-border/60 shadow-sm">
             <CardContent className="pt-6">
               <UnifiedFilterShell
-                searchValue={liveSearch}
-                onSearchChange={setLiveSearch}
-                searchPlaceholder="חיפוש חי: שם לקוח, ת.ז, מס׳ הזמנה…"
+                filters={unifiedFilterConfig}
+                values={unifiedFilterValues}
+                onChange={(next) => {
+                  setLiveSearch(String(next.search || ''));
+                  setFilters((p) => ({
+                    ...p,
+                    customerSegment: String(next.customerSegment || 'all'),
+                    month: String(next.month || ''),
+                    fromDate: String(next.fromDate || ''),
+                    toDate: String(next.toDate || ''),
+                    status: String(next.status || 'all'),
+                  }));
+                }}
                 activeCount={hasActiveFilters ? 1 : 0}
                 onClear={clearFilters}
-                basicControls={(
-                  <>
-                <Field className="w-full sm:w-44 shrink-0 space-y-1.5">
-                  <FieldLabel className="text-xs text-muted-foreground">סוג לקוח</FieldLabel>
-                  <select
-                    value={filters.customerSegment}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setFilters((p) => ({ ...p, customerSegment: v }));
-                    }}
-                    className="flex h-10 w-full rounded-md border border-input/70 bg-background px-3 py-2 text-sm"
-                  >
-                    <option value="all">הכל</option>
-                    <option value="private">לקוחות פרטיים</option>
-                    <option value="organization">חברי ארגון</option>
-                  </select>
-                </Field>
-                <Input
-                  type="month"
-                  className="w-full sm:w-40 border-input/70"
-                  value={filters.month}
-                  onChange={(e) => setFilters((p) => ({ ...p, month: e.target.value }))}
-                />
-                <Input
-                  type="date"
-                  className="w-full sm:w-36 border-input/70"
-                  value={filters.fromDate}
-                  onChange={(e) => setFilters((p) => ({ ...p, fromDate: e.target.value }))}
-                />
-                <Input
-                  type="date"
-                  className="w-full sm:w-36 border-input/70"
-                  value={filters.toDate}
-                  onChange={(e) => setFilters((p) => ({ ...p, toDate: e.target.value }))}
-                />
-                <select
-                  className="flex h-10 rounded-md border border-input/70 bg-background px-3 py-2 text-sm w-full sm:w-40"
-                  value={filters.status || 'all'}
-                  onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))}
-                >
-                  <option value="all">סטטוס: הכל</option>
-                  <option value="active">סטטוס: פעילים</option>
-                  <option value="cancelled">סטטוס: מבוטלים</option>
-                </select>
-                  </>
-                )}
                 advancedContent={(
                   <div className="text-sm text-muted-foreground">
                     למסננים מתקדמים מלאים פתחו את חלון הסינון.

@@ -23,6 +23,7 @@ import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '../components/u
 import { Badge } from '../components/ui/badge.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
+import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -169,6 +170,21 @@ export default function AgentSetup() {
   const [addForm, setAddForm] = useState(() => emptyForm());
   const [search, setSearch] = useState('');
   const [commissionFilter, setCommissionFilter] = useState('all');
+  const agentFilterConfig = React.useMemo(
+    () => [
+      { key: 'search', label: 'חיפוש', type: 'text', placeholder: 'חיפוש חופשי: סוכן, ת״ז/ח.פ, טלפון, אימייל, מוצר' },
+      {
+        key: 'commissionFilter',
+        label: 'סינון',
+        type: 'select',
+        options: [
+          { value: 'with_commission', label: 'עם הגדרות עמלה' },
+          { value: 'without_commission', label: 'ללא הגדרות עמלה' },
+        ],
+      },
+    ],
+    []
+  );
 
   const loadAgents = useCallback(async () => {
     if (!token) return;
@@ -669,22 +685,21 @@ export default function AgentSetup() {
 
         <Card>
           <CardContent className="pt-6">
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="חיפוש חופשי: סוכן, ת״ז/ח.פ, טלפון, אימייל, מוצר"
-              />
-              <select
-                className="flex h-10 min-w-56 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={commissionFilter}
-                onChange={(e) => setCommissionFilter(e.target.value)}
-              >
-                <option value="all">כל הסוכנים</option>
-                <option value="with_commission">עם הגדרות עמלה</option>
-                <option value="without_commission">ללא הגדרות עמלה</option>
-              </select>
-            </div>
+            <UnifiedFilterShell
+              filters={agentFilterConfig}
+              values={{ search, commissionFilter: commissionFilter === 'all' ? '' : commissionFilter }}
+              onChange={(next) => {
+                setSearch(String(next.search || ''));
+                setCommissionFilter(String(next.commissionFilter || 'all'));
+              }}
+              onClear={() => {
+                setSearch('');
+                setCommissionFilter('all');
+              }}
+              resultsCount={filteredRows.length}
+              totalCount={rows.length}
+              isLoading={loading}
+            />
           </CardContent>
         </Card>
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Phone, RefreshCw, Search, MessageSquare, ShoppingCart, Pencil, Archive } from 'lucide-react';
+import { Phone, RefreshCw, MessageSquare, ShoppingCart, Pencil, Archive } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -19,6 +19,7 @@ import {
 } from '../components/ui/dialog.jsx';
 import { cn } from '../lib/cn.js';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
+import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -355,48 +356,45 @@ export default function ContactManagement() {
             </div>
 
             <div className="rounded-xl border p-3 md:p-4">
-              <div className="flex flex-col lg:flex-row gap-3">
-                <div className="relative flex-1">
-                  <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                  <Input
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="חיפוש לפי שם, טלפון או אימייל"
-                    className="ps-10"
-                  />
-                </div>
-                <select
-                  className="flex h-10 w-full lg:w-56 rounded-md border border-input bg-background px-3 text-sm"
-                  value={filterCategory}
-                  onChange={(e) => setFilterCategory(e.target.value)}
-                >
-                  <option value="all">כל הקטגוריות</option>
-                  <option value="general">כללי</option>
-                  <option value="landing">דף נחיתה</option>
-                  <option value="abandoned_checkout">לא המשיכו לתשלום</option>
-                </select>
-                <select
-                  className="flex h-10 w-full lg:w-44 rounded-md border border-input bg-background px-3 text-sm"
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                >
-                  <option value="all">כל הסטטוסים</option>
-                  <option value="חדש">חדש</option>
-                  <option value="בטיפול">בטיפול</option>
-                  <option value="טופל">טופל</option>
-                </select>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    setSearchQuery('');
-                    setFilterCategory('all');
-                    setFilterStatus('all');
-                  }}
-                >
-                  איפוס
-                </Button>
-              </div>
+              <UnifiedFilterShell
+                filters={[
+                  { key: 'search', label: 'חיפוש', type: 'text', placeholder: 'חיפוש לפי שם, טלפון או אימייל' },
+                  {
+                    key: 'category',
+                    label: 'קטגוריה',
+                    type: 'select',
+                    options: [
+                      { value: 'general', label: 'כללי' },
+                      { value: 'landing', label: 'דף נחיתה' },
+                      { value: 'abandoned_checkout', label: 'לא המשיכו לתשלום' },
+                    ],
+                  },
+                  {
+                    key: 'status',
+                    label: 'סטטוס',
+                    type: 'select',
+                    options: [
+                      { value: 'חדש', label: 'חדש' },
+                      { value: 'בטיפול', label: 'בטיפול' },
+                      { value: 'טופל', label: 'טופל' },
+                    ],
+                  },
+                ]}
+                values={{ search: searchQuery, category: filterCategory === 'all' ? '' : filterCategory, status: filterStatus === 'all' ? '' : filterStatus }}
+                onChange={(next) => {
+                  setSearchQuery(String(next.search || ''));
+                  setFilterCategory(String(next.category || 'all'));
+                  setFilterStatus(String(next.status || 'all'));
+                }}
+                onClear={() => {
+                  setSearchQuery('');
+                  setFilterCategory('all');
+                  setFilterStatus('all');
+                }}
+                resultsCount={filteredLeads.length}
+                totalCount={allLeads.length}
+                isLoading={loading}
+              />
             </div>
 
             <div className="rounded-md border overflow-auto">

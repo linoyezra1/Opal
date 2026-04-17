@@ -171,6 +171,28 @@ export default function VendorDashboard() {
   const [expandedVendor, setExpandedVendor] = React.useState(null);
   const [search, setSearch] = React.useState('');
   const [productFilter, setProductFilter] = React.useState('all');
+  const vendorFilterConfig = React.useMemo(
+    () => [
+      { key: 'search', label: 'חיפוש', type: 'text', placeholder: 'חיפוש חופשי: ספק, ח.פ, טלפון, אימייל, מוצר' },
+      {
+        key: 'hasProducts',
+        label: 'מוצרים',
+        type: 'select',
+        options: [
+          { value: 'with_products', label: 'רק ספקים עם מוצרים' },
+          { value: 'without_products', label: 'ספקים ללא מוצרים' },
+        ],
+      },
+    ],
+    []
+  );
+  const vendorFilterValues = React.useMemo(
+    () => ({
+      search,
+      hasProducts: productFilter === 'all' ? '' : productFilter,
+    }),
+    [search, productFilter]
+  );
 
   async function loadProducts() {
     const res = await fetch(`${API_BASE}/api/admin/products`, { headers: { Authorization: `Bearer ${token}` } });
@@ -512,20 +534,19 @@ export default function VendorDashboard() {
         <Card>
           <CardContent className="pt-6">
             <UnifiedFilterShell
-              searchValue={search}
-              onSearchChange={setSearch}
-              searchPlaceholder="חיפוש חופשי: ספק, ח.פ, טלפון, אימייל, מוצר"
-              basicControls={(
-                <select
-                  className="flex h-10 min-w-56 rounded-md border border-slate-200 bg-background px-3 py-2 text-sm shadow-sm"
-                  value={productFilter}
-                  onChange={(e) => setProductFilter(e.target.value)}
-                >
-                  <option value="all">כל הספקים</option>
-                  <option value="with_products">רק ספקים עם מוצרים</option>
-                  <option value="without_products">ספקים ללא מוצרים</option>
-                </select>
-              )}
+              filters={vendorFilterConfig}
+              values={vendorFilterValues}
+              onChange={(next) => {
+                setSearch(String(next.search || ''));
+                setProductFilter(String(next.hasProducts || 'all'));
+              }}
+              onClear={() => {
+                setSearch('');
+                setProductFilter('all');
+              }}
+              resultsCount={filteredVendors.length}
+              totalCount={vendors.length}
+              isLoading={loading}
             />
           </CardContent>
         </Card>

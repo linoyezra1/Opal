@@ -4,32 +4,59 @@ import { Input } from '../ui/input.jsx';
 import { Button } from '../ui/button.jsx';
 import { Badge } from '../ui/badge.jsx';
 
-export default function UnifiedFilterShell({
-  searchValue = '',
-  onSearchChange,
-  searchPlaceholder = 'חיפוש...',
-  activeCount = 0,
-  onClear,
-  basicControls,
-  advancedContent = null,
-  className = '',
-}) {
+export default function UnifiedFilterShell(props) {
+  const {
+    filters = null,
+    values = null,
+    onChange = null,
+    onClear = null,
+    resultsCount,
+    totalCount,
+    isLoading = false,
+    className = '',
+    searchValue = '',
+    onSearchChange = null,
+    searchPlaceholder = 'חיפוש...',
+    activeCount = 0,
+    basicControls = null,
+    advancedContent = null,
+  } = props;
   const [expanded, setExpanded] = React.useState(false);
+  const hasNewApi = Array.isArray(filters) && values && typeof onChange === 'function';
+  const searchFilter = hasNewApi ? filters.find((f) => f.key === 'search' || f.type === 'text') : null;
+  const otherFilters = hasNewApi ? filters.filter((f) => !(f.key === (searchFilter?.key || '') || f.type === 'text')) : [];
+  const activeFiltersCount = hasNewApi
+    ? Object.values(values).filter((v) => String(v || '').trim() !== '').length
+    : activeCount;
+  const resolvedSearchValue = hasNewApi ? String(values?.[searchFilter?.key] || '') : searchValue;
+  const resolvedSearchPlaceholder = hasNewApi ? (searchFilter?.placeholder || searchPlaceholder) : searchPlaceholder;
+
+  function updateValue(key, value) {
+    if (!hasNewApi) return;
+    onChange({ ...values, [key]: value });
+  }
+
   return (
     <div className={`space-y-3 ${className}`} dir="rtl">
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[220px] max-w-xl">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
           <Input
-            value={searchValue}
-            onChange={(e) => onSearchChange?.(e.target.value)}
-            placeholder={searchPlaceholder}
+            value={resolvedSearchValue}
+            onChange={(e) => {
+              if (hasNewApi && searchFilter) updateValue(searchFilter.key, e.target.value);
+              else onSearchChange?.(e.target.value);
+            }}
+            placeholder={resolvedSearchPlaceholder}
             className="h-10 pe-10 ps-9 bg-white border-slate-200 shadow-sm"
           />
-          {searchValue ? (
+          {resolvedSearchValue ? (
             <button
               type="button"
-              onClick={() => onSearchChange?.('')}
+              onClick={() => {
+                if (hasNewApi && searchFilter) updateValue(searchFilter.key, '');
+                else onSearchChange?.('');
+              }}
               className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               aria-label="נקה חיפוש"
             >
@@ -37,8 +64,10 @@ export default function UnifiedFilterShell({
             </button>
           ) : null}
         </div>
-        {basicControls}
-        {advancedContent ? (
+
+        {!hasNewApi ? basicControls : null}
+
+        {(hasNewApi ? otherFilters.length > 0 : !!advancedContent) ? (
           <Button
             type="button"
             variant="outline"
@@ -46,15 +75,22 @@ export default function UnifiedFilterShell({
             onClick={() => setExpanded((v) => !v)}
           >
             <Filter className="size-4" />
-            סינון מתקדם
-            {activeCount > 0 ? (
-              <Badge className="size-5 p-0 rounded-full bg-blue-600 text-white flex items-center justify-center">{activeCount}</Badge>
+            סינון
+            {activeFiltersCount > 0 ? (
+              <Badge className="size-5 p-0 rounded-full bg-blue-600 text-white flex items-center justify-center">{activeFiltersCount}</Badge>
             ) : null}
             {expanded ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
           </Button>
         ) : null}
+
+        {resultsCount !== undefined && totalCount !== undefined ? (
+          <div className="text-sm text-muted-foreground hidden sm:block">
+            {isLoading ? 'מחפש...' : resultsCount === totalCount ? `${totalCount} תוצאות` : `${resultsCount} מתוך ${totalCount}`}
+          </div>
+        ) : null}
       </div>
-      {advancedContent && expanded ? (
+
+      {(hasNewApi ? otherFilters.length > 0 : !!advancedContent) && expanded ? (
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <h4 className="text-sm font-medium text-slate-800">סינון מתקדם</h4>
@@ -65,7 +101,36 @@ export default function UnifiedFilterShell({
               </Button>
             ) : null}
           </div>
-          {advancedContent}
+
+          {hasNewApi ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              {otherFilters.map((filter) => (
+                <div key={filter.key} className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">{filter.label}</label>
+                  {filter.type === 'select' && Array.isArray(filter.options) ? (
+                    <select
+                      value={String(values?.[filter.key] || '')}
+                      onChange={(e) => updateValue(filter.key, e.target.value)}
+                      className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-sm"
+                    >
+                      <option value="">הכל</option>
+                      {filter.options.map((opt) => (
+                        <option key={`${filter.key}-${opt.value}`} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <Input
+                      type={filter.type === 'date' || filter.type === 'dateRange' ? 'date' : 'text'}
+                      value={String(values?.[filter.key] || '')}
+                      onChange={(e) => updateValue(filter.key, e.target.value)}
+                      placeholder={filter.placeholder || ''}
+                      className="h-9 bg-slate-50 border-slate-200 text-sm"
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : advancedContent}
         </div>
       ) : null}
     </div>
