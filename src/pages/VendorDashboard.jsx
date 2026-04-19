@@ -258,16 +258,10 @@ export default function VendorDashboard() {
     setLoading(true);
     setError('');
     try {
-      const links = productLinks
-        .filter((l) => l.productId)
-        .map((l) => ({
-          productId: l.productId,
-          vendorCost: Number(l.vendorCost || 0),
-        }));
       const res = await fetch(`${API_BASE}/api/admin/vendors`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ...form, productLinks: links }),
+        body: JSON.stringify({ ...form, productLinks: [] }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.error || 'שמירה נכשלה');
@@ -467,9 +461,8 @@ export default function VendorDashboard() {
           </DialogHeader>
           <form onSubmit={submit} className="space-y-4">
             <VendorFormFields data={form} setData={setForm} />
-            <div className="border-t pt-4">
-              <h4 className="font-medium mb-2">מוצרים ומחירי ספק</h4>
-              <ProductLinksEditor isEdit={false} />
+            <div className="border-t pt-4 text-sm text-muted-foreground">
+              קישור מוצרים לספק מתבצע דרך עמוד "הגדרת מוצר חדש" (/admin/product-page-setup).
             </div>
             {error ? <p className="text-destructive text-sm">{error}</p> : null}
             <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">

@@ -1,17 +1,32 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Check, ChevronDown, ChevronUp, ExternalLink, Eye, EyeOff, Plus, Trash2, X } from 'lucide-react';
+import {
+  Check, ChevronDown, ChevronUp, Clock, ExternalLink, Eye, EyeOff,
+  Heart, Phone, Plus, Shield, Star, Users, Pill, Stethoscope, Syringe, FileText, X,
+} from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { Button } from '../components/ui/button.jsx';
 import { Input } from '../components/ui/input.jsx';
 import { Textarea } from '../components/ui/textarea.jsx';
 import { Field, FieldGroup, FieldLabel } from '../components/ui/field.jsx';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card.jsx';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Badge } from '../components/ui/badge.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
+const PREVIEW_ICON_MAP = {
+  phone: Phone, users: Users, pill: Pill,
+  stethoscope: Stethoscope, syringe: Syringe, file: FileText,
+};
+
+const STATIC_BENEFITS = [
+  { icon: Clock, title: 'זמינות 24/7', description: 'שירות רפואי בכל שעה, כל יום' },
+  { icon: Heart, title: 'טיפול אישי', description: 'רופאים מנוסים עד הבית' },
+  { icon: Shield, title: 'מקצועיות', description: 'צוות רפואי מוסמך ואמין' },
+  { icon: Star, title: 'מחיר הוגן', description: 'פחות משקל ליום' },
+];
 
 function slugify(str) {
   return String(str || '')
@@ -19,6 +34,11 @@ function slugify(str) {
     .replace(/\s+/g, '-')
     .replace(/[^\w\u0590-\u05FF-]/g, '')
     .slice(0, 60);
+}
+
+function friendlyError(msg) {
+  if (/providerId/i.test(msg)) return 'חובה לבחור או להקים ספק לפני שמירת המוצר';
+  return msg || 'שגיאה';
 }
 
 // ─── Step Accordion ────────────────────────────────────────────────────────────
@@ -41,44 +61,146 @@ function StepCard({ number, title, subtitle, done, locked, open, onToggle, child
           <p className="font-semibold text-slate-800 text-sm sm:text-base">{title}</p>
           {subtitle ? <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p> : null}
         </div>
-        {locked ? null : open ? <ChevronUp className="size-5 text-muted-foreground shrink-0" /> : <ChevronDown className="size-5 text-muted-foreground shrink-0" />}
+        {locked ? null : open
+          ? <ChevronUp className="size-5 text-muted-foreground shrink-0" />
+          : <ChevronDown className="size-5 text-muted-foreground shrink-0" />}
       </button>
       {open && !locked ? (
-        <div className="border-t px-4 sm:px-5 py-4 sm:py-5 space-y-4">
-          {children}
-        </div>
+        <div className="border-t px-4 sm:px-5 py-4 sm:py-5 space-y-4">{children}</div>
       ) : null}
     </div>
   );
 }
 
-// ─── Inline Preview Panel ──────────────────────────────────────────────────────
-function LandingPreview({ form }) {
+// ─── Landing Page Preview — mirrors LandingPage.jsx structure ─────────────────
+function LandingPreview({ form, retailPrice }) {
+  const validItems = (form.whatYouGetItems || []).filter((i) => i.title && i.title.trim());
+  const whatYouGetTitle = form.whatYouGetTitle?.trim() || 'מה אתם מקבלים?';
+  const whatYouGetSubtitle = form.whatYouGetSubtitle?.trim() || 'חבילת שירותים רפואיים מקיפה';
+
   return (
-    <div className="rounded-lg border bg-slate-50 p-4 space-y-3 text-sm max-h-96 overflow-y-auto" dir="rtl">
-      {form.imageUrl ? (
-        <img src={form.imageUrl} alt="" className="w-full max-h-40 object-cover rounded-md" />
-      ) : (
-        <div className="w-full h-24 bg-slate-200 rounded-md flex items-center justify-center text-muted-foreground text-xs">תמונה</div>
-      )}
-      <h2 className="text-lg font-bold">{form.pageTitle || 'כותרת הדף'}</h2>
-      {form.subTitle ? <p className="text-muted-foreground">{form.subTitle}</p> : null}
-      {form.mainContent ? <p className="whitespace-pre-line text-xs">{form.mainContent}</p> : null}
-      {form.whatYouGetTitle ? (
-        <div className="border rounded p-3 space-y-1 bg-white">
-          <p className="font-semibold">{form.whatYouGetTitle}</p>
-          {form.whatYouGetSubtitle ? <p className="text-muted-foreground text-xs">{form.whatYouGetSubtitle}</p> : null}
-          {(form.whatYouGetItems || []).map((item, i) => (
-            <p key={i} className="text-xs flex gap-1"><span className="text-green-600">✓</span>{item}</p>
+    <div
+      dir="rtl"
+      className="rounded-xl border border-slate-200 overflow-hidden bg-white text-right text-sm"
+      style={{ maxHeight: 540, overflowY: 'auto' }}
+    >
+      {/* Hero */}
+      <section className="bg-gradient-to-b from-[#D9EAF3]/40 via-white to-white px-4 py-6">
+        <div className="grid sm:grid-cols-2 gap-4 items-center">
+          <div className="space-y-2 order-2 sm:order-1">
+            {form.subTitle ? (
+              <span className="inline-flex items-center rounded-full bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 text-xs font-medium">
+                {form.subTitle}
+              </span>
+            ) : null}
+            <h1 className="text-lg font-bold leading-tight text-foreground">
+              {form.pageTitle || 'כותרת הדף'}
+            </h1>
+            {form.mainContent ? (
+              <p className="text-xs text-muted-foreground whitespace-pre-line leading-relaxed">
+                {form.mainContent}
+              </p>
+            ) : null}
+            <div className="flex gap-2 pt-1">
+              <span className="inline-flex items-center h-7 px-3 rounded-md bg-primary text-white text-xs font-medium">בחירת מסלול</span>
+              <span className="inline-flex items-center h-7 px-3 rounded-md border border-slate-200 text-xs font-medium">הרשמה לשירות</span>
+            </div>
+          </div>
+          <div className="order-1 sm:order-2">
+            {form.imageUrl ? (
+              <img src={form.imageUrl} alt="" className="w-full rounded-xl object-cover max-h-36" />
+            ) : (
+              <div className="w-full rounded-xl bg-slate-100 border-2 border-dashed border-slate-300 flex items-center justify-center h-28 text-muted-foreground text-xs">
+                תמונת מוצר
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Benefits bar */}
+      <section className="bg-slate-50 border-y px-4 py-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {STATIC_BENEFITS.map((b) => (
+            <div key={b.title} className="flex items-center gap-2 bg-white rounded-lg border p-2">
+              <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <b.icon className="size-3.5" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold leading-none">{b.title}</p>
+                <p className="text-[10px] text-muted-foreground">{b.description}</p>
+              </div>
+            </div>
           ))}
         </div>
+      </section>
+
+      {/* Services */}
+      {validItems.length > 0 ? (
+        <section className="px-4 py-5">
+          <div className="text-center mb-4">
+            <h2 className="text-base font-bold">{whatYouGetTitle}</h2>
+            <p className="text-xs text-muted-foreground mt-1">{whatYouGetSubtitle}</p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {validItems.map((item, i) => {
+              const Ico = PREVIEW_ICON_MAP[item.icon] || Phone;
+              return (
+                <div key={i} className="border rounded-xl bg-card p-3">
+                  <div className="mb-2 flex size-9 items-center justify-center rounded-xl bg-[#D9EAF3]">
+                    <Ico className="size-4 text-primary" />
+                  </div>
+                  <p className="text-xs font-semibold">{item.title}</p>
+                  {item.description ? <p className="text-[10px] text-muted-foreground mt-0.5">{item.description}</p> : null}
+                </div>
+              );
+            })}
+          </div>
+        </section>
       ) : null}
-      {form.registrationTitle ? (
-        <div className="border rounded p-3 bg-primary/5">
-          <p className="font-semibold">{form.registrationTitle}</p>
-          {form.registrationSubtitle ? <p className="text-xs text-muted-foreground">{form.registrationSubtitle}</p> : null}
+
+      {/* Plan card */}
+      {retailPrice ? (
+        <section className="px-4 py-4 bg-slate-50 border-t">
+          <p className="text-center text-xs text-muted-foreground mb-3">בחר את המסלול שלך</p>
+          <div className="max-w-xs mx-auto border-2 border-primary/30 rounded-xl bg-white p-4 text-center shadow-sm">
+            <h3 className="font-semibold text-sm">{form.pageTitle || 'מסלול ראשי'}</h3>
+            <div className="my-2">
+              <span className="text-3xl font-bold">₪{Number(retailPrice)}</span>
+              <span className="text-muted-foreground text-xs"> / חודש</span>
+            </div>
+            <span className="inline-flex items-center h-8 px-4 rounded-md bg-primary text-white text-xs font-medium w-full justify-center">
+              בחר מסלול
+            </span>
+          </div>
+        </section>
+      ) : null}
+
+      {/* Registration section */}
+      <section className="px-4 py-5 border-t bg-gradient-to-b from-slate-50/50 to-white">
+        <div className="text-center mb-3">
+          <h2 className="text-base font-bold">{form.registrationTitle || 'הרשמה לשירות'}</h2>
+          {form.registrationSubtitle ? (
+            <p className="text-xs text-muted-foreground mt-1">{form.registrationSubtitle}</p>
+          ) : null}
         </div>
-      ) : null}
+        <div className="max-w-xs mx-auto border rounded-xl bg-white overflow-hidden">
+          <div className="bg-[#D9EAF3]/30 border-b px-3 py-2 text-xs font-medium text-center">
+            טופס הרשמה ותשלום
+          </div>
+          <div className="p-3 space-y-2">
+            {['שם מלא', 'טלפון', 'דוא"ל'].map((label) => (
+              <div key={label}>
+                <p className="text-[10px] font-medium text-muted-foreground mb-0.5">{label} *</p>
+                <div className="h-7 rounded-md border bg-slate-50" />
+              </div>
+            ))}
+            <div className="mt-2 h-9 rounded-md bg-primary/80 flex items-center justify-center text-white text-xs font-medium">
+              המשך לתשלום מאובטח
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
@@ -87,18 +209,15 @@ function LandingPreview({ form }) {
 export default function UnifiedProductWizard() {
   const [token] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
 
-  // Reference data
   const [vendors, setVendors] = useState([]);
-  const [products, setProducts] = useState([]);
   const [agents, setAgents] = useState([]);
   const [orgs, setOrgs] = useState([]);
   const [loadingRef, setLoadingRef] = useState(false);
 
-  // Wizard state
   const [openStep, setOpenStep] = useState(1);
 
   // Step 1 — Vendor & Product
-  const [vendorMode, setVendorMode] = useState('existing'); // 'existing' | 'new'
+  const [vendorMode, setVendorMode] = useState('existing');
   const [s1, setS1] = useState({
     vendorId: '',
     vendorName: '',
@@ -116,18 +235,14 @@ export default function UnifiedProductWizard() {
   const [savedVendorId, setSavedVendorId] = useState('');
 
   // Step 2 — Pricing
-  const [s2, setS2] = useState({
-    listName: '',
-    retailPrice: '',
-    globalCommission: '',
-    vendorCost: '',
-  });
+  const [s2, setS2] = useState({ listName: '', retailPrice: '', globalCommission: '', vendorCost: '' });
   const [s2Loading, setS2Loading] = useState(false);
   const [s2Error, setS2Error] = useState('');
   const [priceListId, setPriceListId] = useState('');
   const [priceListName, setPriceListName] = useState('');
 
   // Step 3 — Landing Page
+  // whatYouGetItems stored as {title, description, icon} objects to match LandingPage.jsx
   const [s3, setS3] = useState({
     slug: '',
     pageTitle: '',
@@ -137,7 +252,7 @@ export default function UnifiedProductWizard() {
     imageUrl: '',
     whatYouGetTitle: '',
     whatYouGetSubtitle: '',
-    whatYouGetItems: [''],
+    whatYouGetItems: [{ title: '', description: '', icon: 'phone' }],
     registrationTitle: '',
     registrationSubtitle: '',
   });
@@ -147,7 +262,7 @@ export default function UnifiedProductWizard() {
   const [showPreview, setShowPreview] = useState(false);
 
   // Step 4 — Distribution
-  const [selectedAgents, setSelectedAgents] = useState({});   // agentId → commission string
+  const [selectedAgents, setSelectedAgents] = useState({});
   const [selectedOrgs, setSelectedOrgs] = useState(new Set());
   const [s4Loading, setS4Loading] = useState(false);
   const [s4Error, setS4Error] = useState('');
@@ -158,14 +273,12 @@ export default function UnifiedProductWizard() {
     if (!token) return;
     setLoadingRef(true);
     try {
-      const [vRes, prRes, agRes, orgRes] = await Promise.all([
+      const [vRes, agRes, orgRes] = await Promise.all([
         fetch(`${API_BASE}/api/admin/vendors`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
-        fetch(`${API_BASE}/api/admin/products`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/agents`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/organizations`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
       ]);
       setVendors(Array.isArray(vRes?.vendors) ? vRes.vendors : []);
-      setProducts(Array.isArray(prRes?.products) ? prRes.products : []);
       setAgents(Array.isArray(agRes?.rows) ? agRes.rows : []);
       setOrgs(Array.isArray(orgRes?.rows) ? orgRes.rows : []);
     } catch (_) {}
@@ -174,14 +287,22 @@ export default function UnifiedProductWizard() {
 
   useEffect(() => { loadRef(); }, [loadRef]);
 
-  // ── Auto-fill derived fields ───────────────────────────────────────────────
+  // ── Auto-fill derived fields on productName / vendorCost change ───────────
   useEffect(() => {
     if (!s1.productName) return;
-    setS2((p) => ({ ...p, listName: p.listName || s1.productName, vendorCost: p.vendorCost || s1.vendorCost }));
-    setS3((p) => ({ ...p, slug: p.slug || slugify(s1.productName), pageTitle: p.pageTitle || s1.productName }));
+    setS2((p) => ({
+      ...p,
+      listName: p.listName || s1.productName,
+      vendorCost: s1.vendorCost, // always sync from Step 1
+    }));
+    setS3((p) => ({
+      ...p,
+      slug: p.slug || slugify(s1.productName),
+      pageTitle: p.pageTitle || s1.productName,
+    }));
   }, [s1.productName, s1.vendorCost]);
 
-  // ── Step 1 save ───────────────────────────────────────────────────────────
+  // ── Step 1 save — vendor FIRST, then product ──────────────────────────────
   async function saveStep1() {
     setS1Error('');
     if (!s1.productName.trim()) { setS1Error('נא למלא שם מוצר'); return; }
@@ -189,24 +310,9 @@ export default function UnifiedProductWizard() {
     if (vendorMode === 'existing' && !s1.vendorId) { setS1Error('נא לבחור ספק'); return; }
     setS1Loading(true);
     try {
-      // 1a. Create product
-      const prRes = await fetch(`${API_BASE}/api/admin/products`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          productName: s1.productName.trim(),
-          sku: s1.sku.trim() || slugify(s1.productName).toUpperCase(),
-          baseDescription: s1.baseDescription.trim(),
-          providerId: vendorMode === 'existing' ? s1.vendorId : '',
-          providerCost: Number(s1.vendorCost || 0),
-        }),
-      });
-      const prData = await prRes.json().catch(() => ({}));
-      if (!prRes.ok || !prData.success) throw new Error(prData.error || 'שמירת מוצר נכשלה');
-      const newProductId = prData.product?.id || prData.id || '';
-
-      // 1b. Create vendor if new
       let resolvedVendorId = s1.vendorId;
+
+      // 1a. Create vendor FIRST when mode is 'new' (product needs providerId)
       if (vendorMode === 'new') {
         const vRes = await fetch(`${API_BASE}/api/admin/vendors`, {
           method: 'POST',
@@ -222,21 +328,67 @@ export default function UnifiedProductWizard() {
             accountHolder: '',
             branchNum: '',
             accountNum: '',
-            productLinks: newProductId ? [{ productId: newProductId, sku: s1.sku.trim(), vendorCost: Number(s1.vendorCost || 0) }] : [],
+            productLinks: [],
           }),
         });
         const vData = await vRes.json().catch(() => ({}));
-        if (!vRes.ok || !vData.success) throw new Error(vData.error || 'שמירת ספק נכשלה');
-        resolvedVendorId = vData.vendor?.id || vData.id || '';
+        if (!vRes.ok || !vData.success) throw new Error(friendlyError(vData.error || 'שמירת ספק נכשלה'));
+        resolvedVendorId = vData.vendor?.id || vData.vendorId || vData.id || '';
+      }
+
+      // 1b. Create product with correct providerId
+      const prRes = await fetch(`${API_BASE}/api/admin/products`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          productName: s1.productName.trim(),
+          sku: s1.sku.trim() || slugify(s1.productName).toUpperCase(),
+          baseDescription: s1.baseDescription.trim(),
+          providerId: resolvedVendorId,
+          providerCost: Number(s1.vendorCost || 0),
+        }),
+      });
+      const prData = await prRes.json().catch(() => ({}));
+      if (!prRes.ok || !prData.success) throw new Error(friendlyError(prData.error || 'שמירת מוצר נכשלה'));
+      const newProductId = prData.product?.id || prData.id || '';
+
+      // 1c. If new vendor: update its productLinks now that we have productId
+      if (vendorMode === 'new' && resolvedVendorId && newProductId) {
+        await fetch(`${API_BASE}/api/admin/vendors/${encodeURIComponent(resolvedVendorId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            vendorName: s1.vendorName.trim(),
+            idNum: s1.vendorIdNum.trim(),
+            phone: s1.vendorPhone.trim(),
+            email: s1.vendorEmail.trim(),
+            address: '',
+            bankName: '',
+            bankNum: '',
+            accountHolder: '',
+            branchNum: '',
+            accountNum: '',
+            productLinks: [{
+              productId: newProductId,
+              sku: s1.sku.trim() || slugify(s1.productName).toUpperCase(),
+              vendorCost: Number(s1.vendorCost || 0),
+            }],
+          }),
+        }).catch(() => {}); // non-critical: link can be set later
       }
 
       setProductId(newProductId);
       setSavedVendorId(resolvedVendorId);
-      setS2((p) => ({ ...p, vendorCost: p.vendorCost || s1.vendorCost, listName: p.listName || s1.productName }));
+      // Always propagate vendorCost to Step 2
+      setS2((p) => ({
+        ...p,
+        listName: p.listName || s1.productName,
+        vendorCost: s1.vendorCost,
+      }));
       await loadRef();
       setOpenStep(2);
     } catch (e) {
-      setS1Error(e.message || 'שגיאה');
+      setS1Error(friendlyError(e.message));
     } finally {
       setS1Loading(false);
     }
@@ -261,7 +413,7 @@ export default function UnifiedProductWizard() {
             agentId: '',
             retailPrice: Number(s2.retailPrice || 0),
             defaultAgentCommission: Number(s2.globalCommission || 0),
-            vendorCost: Number(s2.vendorCost || s1.vendorCost || 0),
+            vendorCost: Number(s2.vendorCost || 0),
           }],
         }),
       });
@@ -270,7 +422,11 @@ export default function UnifiedProductWizard() {
       const newPriceListId = data.priceList?.id || data.id || '';
       setPriceListId(newPriceListId);
       setPriceListName(s2.listName.trim());
-      setS3((p) => ({ ...p, slug: p.slug || slugify(s2.listName), pageTitle: p.pageTitle || s2.listName }));
+      setS3((p) => ({
+        ...p,
+        slug: p.slug || slugify(s2.listName),
+        pageTitle: p.pageTitle || s2.listName,
+      }));
       setOpenStep(3);
     } catch (e) {
       setS2Error(e.message || 'שגיאה');
@@ -286,7 +442,9 @@ export default function UnifiedProductWizard() {
     if (!priceListId) { setS3Error('מחירון חסר — השלם שלב 2 תחילה'); return; }
     setS3Loading(true);
     try {
-      const items = (s3.whatYouGetItems || []).filter((i) => i.trim());
+      const items = (s3.whatYouGetItems || [])
+        .filter((i) => i.title && i.title.trim())
+        .map((i) => ({ icon: i.icon || 'phone', title: i.title.trim(), description: (i.description || '').trim() }));
       const res = await fetch(`${API_BASE}/api/admin/landing-pages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -322,23 +480,21 @@ export default function UnifiedProductWizard() {
     setS4Error('');
     setS4Loading(true);
     try {
-      const agentUpdates = Object.entries(selectedAgents)
-        .filter(([, c]) => c !== undefined)
-        .map(([agentId, commission]) => {
-          const agent = agents.find((a) => a.id === agentId);
-          if (!agent) return Promise.resolve();
-          const existing = Array.isArray(agent.productCommissions) ? agent.productCommissions : [];
-          const already = existing.find((x) => x.productId === productId);
-          const updated = already
-            ? existing.map((x) => x.productId === productId ? { ...x, commission: Number(commission || 0) } : x)
-            : [...existing, { productId, commission: Number(commission || 0) }];
-          const { id, ...rest } = agent;
-          return fetch(`${API_BASE}/api/admin/agents/${encodeURIComponent(agentId)}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ ...rest, productCommissions: updated.filter((x) => x.productId) }),
-          });
+      const agentUpdates = Object.entries(selectedAgents).map(([agentId, commission]) => {
+        const agent = agents.find((a) => a.id === agentId);
+        if (!agent) return Promise.resolve();
+        const existing = Array.isArray(agent.productCommissions) ? agent.productCommissions : [];
+        const already = existing.find((x) => x.productId === productId);
+        const updated = already
+          ? existing.map((x) => x.productId === productId ? { ...x, commission: Number(commission || 0) } : x)
+          : [...existing, { productId, commission: Number(commission || 0) }];
+        const { id, ...rest } = agent;
+        return fetch(`${API_BASE}/api/admin/agents/${encodeURIComponent(agentId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ ...rest, productCommissions: updated.filter((x) => x.productId) }),
         });
+      });
 
       const orgUpdates = Array.from(selectedOrgs).map((orgId) => {
         const org = orgs.find((o) => o.id === orgId);
@@ -369,6 +525,14 @@ export default function UnifiedProductWizard() {
     reader.readAsDataURL(file);
   }
 
+  function updateWhatYouGetItem(idx, field, value) {
+    setS3((p) => {
+      const next = [...(p.whatYouGetItems || [])];
+      next[idx] = { ...(next[idx] || { title: '', description: '', icon: 'phone' }), [field]: value };
+      return { ...p, whatYouGetItems: next };
+    });
+  }
+
   const publicUrl = pageSlug ? `${window.location.origin}/p/${pageSlug}` : '';
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -384,11 +548,30 @@ export default function UnifiedProductWizard() {
           <div className="flex items-center gap-2 text-muted-foreground text-sm"><Spinner className="size-4" />טוען נתונים…</div>
         ) : null}
 
+        {/* ── Persistent published URL banner ── */}
+        {pageSlug ? (
+          <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Check className="size-4 text-green-700 shrink-0" />
+              <span className="text-sm font-medium text-green-800">דף נחיתה פורסם</span>
+            </div>
+            <a
+              href={publicUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm text-green-700 underline font-mono"
+            >
+              {publicUrl}
+              <ExternalLink className="size-3.5 shrink-0" />
+            </a>
+          </div>
+        ) : null}
+
         {/* ── Step 1 ── */}
         <StepCard
           number={1}
           title="ספק ומוצר"
-          subtitle={productId ? `מוצר נשמר · ${s1.productName}` : 'הגדירו את הספק ופרטי המוצר'}
+          subtitle={productId ? `נשמר · ${s1.productName}` : 'הגדירו את הספק ופרטי המוצר'}
           done={!!productId}
           locked={false}
           open={openStep === 1}
@@ -398,26 +581,23 @@ export default function UnifiedProductWizard() {
             <Field>
               <FieldLabel>ספק</FieldLabel>
               <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setVendorMode('existing')}
-                  className={`flex-1 h-9 rounded-md border text-sm transition-colors ${vendorMode === 'existing' ? 'bg-primary text-white border-primary' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
-                >
-                  ספק קיים
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setVendorMode('new')}
-                  className={`flex-1 h-9 rounded-md border text-sm transition-colors ${vendorMode === 'new' ? 'bg-primary text-white border-primary' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
-                >
-                  ספק חדש
-                </button>
+                {['existing', 'new'].map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setVendorMode(mode)}
+                    className={`flex-1 h-9 rounded-md border text-sm transition-colors
+                      ${vendorMode === mode ? 'bg-primary text-white border-primary' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
+                  >
+                    {mode === 'existing' ? 'ספק קיים' : 'ספק חדש'}
+                  </button>
+                ))}
               </div>
             </Field>
 
             {vendorMode === 'existing' ? (
               <Field>
-                <FieldLabel>בחר ספק קיים</FieldLabel>
+                <FieldLabel>בחר ספק קיים *</FieldLabel>
                 <select
                   className="flex h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-sm"
                   value={s1.vendorId}
@@ -465,7 +645,8 @@ export default function UnifiedProductWizard() {
               </Field>
               <Field>
                 <FieldLabel>עלות ספק (₪)</FieldLabel>
-                <Input dir="ltr" type="number" min="0" step="0.01" value={s1.vendorCost} onChange={(e) => setS1((p) => ({ ...p, vendorCost: e.target.value }))} placeholder="0" />
+                <Input dir="ltr" type="number" min="0" step="0.01" value={s1.vendorCost}
+                  onChange={(e) => setS1((p) => ({ ...p, vendorCost: e.target.value }))} placeholder="0" />
               </Field>
             </div>
 
@@ -481,7 +662,7 @@ export default function UnifiedProductWizard() {
         <StepCard
           number={2}
           title="מחירון ועמלה"
-          subtitle={priceListId ? `מחירון נשמר · ${priceListName}` : 'קבעו מחיר קמעונאי ועמלת סוכן גלובלית'}
+          subtitle={priceListId ? `נשמר · ${priceListName}` : 'קבעו מחיר קמעונאי ועמלת סוכן גלובלית'}
           done={!!priceListId}
           locked={!productId}
           open={openStep === 2}
@@ -495,15 +676,18 @@ export default function UnifiedProductWizard() {
               </Field>
               <Field>
                 <FieldLabel>מחיר קמעונאי (₪) *</FieldLabel>
-                <Input dir="ltr" type="number" min="0" step="0.01" value={s2.retailPrice} onChange={(e) => setS2((p) => ({ ...p, retailPrice: e.target.value }))} placeholder="0" />
+                <Input dir="ltr" type="number" min="0" step="0.01" value={s2.retailPrice}
+                  onChange={(e) => setS2((p) => ({ ...p, retailPrice: e.target.value }))} placeholder="0" />
               </Field>
               <Field>
                 <FieldLabel>עמלת סוכן גלובלית (₪)</FieldLabel>
-                <Input dir="ltr" type="number" min="0" step="0.01" value={s2.globalCommission} onChange={(e) => setS2((p) => ({ ...p, globalCommission: e.target.value }))} placeholder="0" />
+                <Input dir="ltr" type="number" min="0" step="0.01" value={s2.globalCommission}
+                  onChange={(e) => setS2((p) => ({ ...p, globalCommission: e.target.value }))} placeholder="0" />
               </Field>
               <Field>
                 <FieldLabel>עלות ספק (₪)</FieldLabel>
-                <Input dir="ltr" type="number" min="0" step="0.01" value={s2.vendorCost} onChange={(e) => setS2((p) => ({ ...p, vendorCost: e.target.value }))} placeholder="0" />
+                <Input dir="ltr" type="number" min="0" step="0.01" value={s2.vendorCost}
+                  onChange={(e) => setS2((p) => ({ ...p, vendorCost: e.target.value }))} placeholder="0" />
               </Field>
             </div>
           </FieldGroup>
@@ -556,11 +740,11 @@ export default function UnifiedProductWizard() {
                 <Input value={s3.pageTitle} onChange={(e) => setS3((p) => ({ ...p, pageTitle: e.target.value }))} />
               </Field>
               <Field className="sm:col-span-2">
-                <FieldLabel>כותרת משנה</FieldLabel>
-                <Input value={s3.subTitle} onChange={(e) => setS3((p) => ({ ...p, subTitle: e.target.value }))} />
+                <FieldLabel>תגית / Badge כותרת משנה</FieldLabel>
+                <Input value={s3.subTitle} onChange={(e) => setS3((p) => ({ ...p, subTitle: e.target.value }))} placeholder="למשל: ייעוץ רפואי 24/7" />
               </Field>
               <Field className="sm:col-span-2">
-                <FieldLabel>תוכן ראשי</FieldLabel>
+                <FieldLabel>תוכן ראשי (פסקת תיאור)</FieldLabel>
                 <Textarea rows={3} value={s3.mainContent} onChange={(e) => setS3((p) => ({ ...p, mainContent: e.target.value }))} />
               </Field>
             </div>
@@ -571,7 +755,8 @@ export default function UnifiedProductWizard() {
               {s3.imageUrl ? (
                 <div className="relative inline-block">
                   <img src={s3.imageUrl} alt="" className="h-20 rounded border object-cover" />
-                  <button type="button" onClick={() => setS3((p) => ({ ...p, imageUrl: '' }))} className="absolute -top-1 -end-1 size-5 rounded-full bg-white border flex items-center justify-center shadow">
+                  <button type="button" onClick={() => setS3((p) => ({ ...p, imageUrl: '' }))}
+                    className="absolute -top-1 -end-1 size-5 rounded-full bg-white border flex items-center justify-center shadow">
                     <X className="size-3" />
                   </button>
                 </div>
@@ -579,12 +764,13 @@ export default function UnifiedProductWizard() {
               <p className="text-xs text-muted-foreground">מקס׳ 2MB</p>
             </div>
 
+            {/* "מה תקבלו" — items with title + description matching LandingPage.jsx structure */}
             <div className="border rounded-lg p-3 space-y-3">
-              <p className="text-xs font-medium text-slate-700">מה תקבלו?</p>
+              <p className="text-xs font-medium text-slate-700">קטגוריית "מה תקבלו"</p>
               <div className="grid gap-2 sm:grid-cols-2">
                 <Field>
-                  <FieldLabel>כותרת</FieldLabel>
-                  <Input value={s3.whatYouGetTitle} onChange={(e) => setS3((p) => ({ ...p, whatYouGetTitle: e.target.value }))} />
+                  <FieldLabel>כותרת הקטגוריה</FieldLabel>
+                  <Input value={s3.whatYouGetTitle} onChange={(e) => setS3((p) => ({ ...p, whatYouGetTitle: e.target.value }))} placeholder="מה אתם מקבלים?" />
                 </Field>
                 <Field>
                   <FieldLabel>כותרת משנה</FieldLabel>
@@ -592,24 +778,39 @@ export default function UnifiedProductWizard() {
                 </Field>
               </div>
               <div className="space-y-2">
-                {(s3.whatYouGetItems || ['']).map((item, idx) => (
-                  <div key={idx} className="flex gap-2 items-center">
-                    <span className="text-green-600 text-sm shrink-0">✓</span>
-                    <Input
-                      value={item}
-                      onChange={(e) => {
-                        const next = [...(s3.whatYouGetItems || [''])];
-                        next[idx] = e.target.value;
-                        setS3((p) => ({ ...p, whatYouGetItems: next }));
-                      }}
-                      placeholder={`פריט ${idx + 1}`}
-                    />
-                    <button type="button" onClick={() => setS3((p) => ({ ...p, whatYouGetItems: (p.whatYouGetItems || []).filter((_, i) => i !== idx) }))} className="text-muted-foreground hover:text-destructive shrink-0">
+                {(s3.whatYouGetItems || []).map((item, idx) => (
+                  <div key={idx} className="border rounded-lg p-2 grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-start bg-slate-50">
+                    <div>
+                      <p className="text-[10px] text-muted-foreground mb-1">כותרת</p>
+                      <Input
+                        value={item.title || ''}
+                        onChange={(e) => updateWhatYouGetItem(idx, 'title', e.target.value)}
+                        placeholder={`פריט ${idx + 1}`}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground mb-1">תיאור</p>
+                      <Input
+                        value={item.description || ''}
+                        onChange={(e) => updateWhatYouGetItem(idx, 'description', e.target.value)}
+                        placeholder="תיאור קצר"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setS3((p) => ({ ...p, whatYouGetItems: (p.whatYouGetItems || []).filter((_, i) => i !== idx) }))}
+                      className="text-muted-foreground hover:text-destructive mt-5"
+                    >
                       <X className="size-4" />
                     </button>
                   </div>
                 ))}
-                <Button type="button" variant="outline" size="sm" onClick={() => setS3((p) => ({ ...p, whatYouGetItems: [...(p.whatYouGetItems || []), ''] }))}>
+                <Button
+                  type="button" variant="outline" size="sm"
+                  onClick={() => setS3((p) => ({ ...p, whatYouGetItems: [...(p.whatYouGetItems || []), { title: '', description: '', icon: 'phone' }] }))}
+                >
                   <Plus className="size-3 me-1" />
                   הוסף פריט
                 </Button>
@@ -618,11 +819,11 @@ export default function UnifiedProductWizard() {
 
             <div className="grid gap-3 sm:grid-cols-2">
               <Field>
-                <FieldLabel>כותרת כפתור הרשמה</FieldLabel>
-                <Input value={s3.registrationTitle} onChange={(e) => setS3((p) => ({ ...p, registrationTitle: e.target.value }))} />
+                <FieldLabel>כותרת אזור הרשמה</FieldLabel>
+                <Input value={s3.registrationTitle} onChange={(e) => setS3((p) => ({ ...p, registrationTitle: e.target.value }))} placeholder="הרשמה לשירות" />
               </Field>
               <Field>
-                <FieldLabel>טקסט משנה להרשמה</FieldLabel>
+                <FieldLabel>כותרת משנה להרשמה</FieldLabel>
                 <Input value={s3.registrationSubtitle} onChange={(e) => setS3((p) => ({ ...p, registrationSubtitle: e.target.value }))} />
               </Field>
             </div>
@@ -634,7 +835,7 @@ export default function UnifiedProductWizard() {
               </Button>
             </div>
 
-            {showPreview ? <LandingPreview form={s3} /> : null}
+            {showPreview ? <LandingPreview form={s3} retailPrice={s2.retailPrice} /> : null}
 
             {s3Error ? <p className="text-destructive text-sm">{s3Error}</p> : null}
             <div className="flex flex-wrap gap-2">
@@ -646,13 +847,6 @@ export default function UnifiedProductWizard() {
                 דלג על שלב זה
               </Button>
             </div>
-
-            {pageSlug ? (
-              <a href={`/p/${pageSlug}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-primary underline">
-                <ExternalLink className="size-3.5" />
-                {window.location.origin}/p/{pageSlug}
-              </a>
-            ) : null}
           </div>
         </StepCard>
 
@@ -669,7 +863,7 @@ export default function UnifiedProductWizard() {
           <div className="space-y-5">
             <div className="space-y-2">
               <p className="text-sm font-medium text-slate-800">סוכנים</p>
-              <p className="text-xs text-muted-foreground">בחרו סוכנים שיקבלו גישה למוצר. ניתן להגדיר עמלה ייחודית לכל סוכן (יעדכן productCommissions).</p>
+              <p className="text-xs text-muted-foreground">בחרו סוכנים — יתעדכן productCommissions. העמלה מתמלאת מהגלובלית (ניתן לשנות לכל סוכן).</p>
               {agents.length === 0 ? (
                 <p className="text-sm text-muted-foreground">אין סוכנים במערכת</p>
               ) : (
@@ -693,9 +887,7 @@ export default function UnifiedProductWizard() {
                         <span className="flex-1 text-sm">{a.agentName}</span>
                         {checked ? (
                           <Input
-                            type="number"
-                            min="0"
-                            dir="ltr"
+                            type="number" min="0" dir="ltr"
                             className="w-24 h-7 text-xs"
                             value={selectedAgents[a.id] ?? ''}
                             placeholder="עמלה ₪"
@@ -712,7 +904,7 @@ export default function UnifiedProductWizard() {
 
             <div className="space-y-2">
               <p className="text-sm font-medium text-slate-800">ארגונים</p>
-              <p className="text-xs text-muted-foreground">ארגונים שנבחרו יקושרו למחירון שנוצר בשלב 2 ({priceListName}).</p>
+              <p className="text-xs text-muted-foreground">ארגונים שנבחרו יקושרו למחירון: <strong>{priceListName}</strong></p>
               {orgs.length === 0 ? (
                 <p className="text-sm text-muted-foreground">אין ארגונים במערכת</p>
               ) : (
@@ -743,15 +935,17 @@ export default function UnifiedProductWizard() {
 
             {s4Done ? (
               <div className="rounded-lg bg-green-50 border border-green-200 p-4 space-y-2">
-                <p className="text-green-800 font-semibold text-sm flex items-center gap-2"><Check className="size-4" />המוצר הוגדר בהצלחה!</p>
+                <p className="text-green-800 font-semibold text-sm flex items-center gap-2">
+                  <Check className="size-4" />המוצר הוגדר בהצלחה!
+                </p>
                 <div className="text-xs text-green-700 space-y-1">
-                  {productId ? <p>מוצר: <span className="font-mono">{productId}</span></p> : null}
-                  {priceListId ? <p>מחירון: <span className="font-mono">{priceListId}</span></p> : null}
+                  {productId ? <p>מזהה מוצר: <span className="font-mono">{productId}</span></p> : null}
+                  {priceListId ? <p>מזהה מחירון: <span className="font-mono">{priceListId}</span></p> : null}
                   {pageSlug ? (
                     <p>
                       דף נחיתה:{' '}
-                      <a href={`/p/${pageSlug}`} target="_blank" rel="noreferrer" className="underline inline-flex items-center gap-1">
-                        /p/{pageSlug} <ExternalLink className="size-3" />
+                      <a href={publicUrl} target="_blank" rel="noreferrer" className="underline inline-flex items-center gap-1">
+                        {publicUrl} <ExternalLink className="size-3" />
                       </a>
                     </p>
                   ) : null}
@@ -759,7 +953,11 @@ export default function UnifiedProductWizard() {
               </div>
             ) : (
               <div className="flex flex-wrap gap-2">
-                <Button type="button" onClick={saveStep4} disabled={s4Loading || (Object.keys(selectedAgents).length === 0 && selectedOrgs.size === 0)}>
+                <Button
+                  type="button"
+                  onClick={saveStep4}
+                  disabled={s4Loading || (Object.keys(selectedAgents).length === 0 && selectedOrgs.size === 0)}
+                >
                   {s4Loading && <Spinner className="me-2" />}
                   שמור הפצה
                 </Button>
