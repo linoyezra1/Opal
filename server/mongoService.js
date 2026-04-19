@@ -1140,8 +1140,8 @@ export async function getDeals() {
 }
 
 function isCancelledStatus(doc) {
-  if (String(doc?.subscriptionStatus || '').toLowerCase() === 'cancelled') return true;
-  return /cancel|fail|error|declin|void|refund|בוטל|נכשל/i.test(String(doc?.paymentStatus || ''));
+  const sub = String(doc?.subscriptionStatus || '').toLowerCase();
+  return sub === 'cancelled' || /cancel|בוטל/i.test(sub);
 }
 
 /** Count successful/paid subscribers (deals) linked to an agent */
@@ -1408,7 +1408,7 @@ function applyCategoryFilters(deals, categories = []) {
   return deals.filter((d) => {
     const checks = [];
     if (set.has('primary')) checks.push(d.primaryCount > 0);
-    if (set.has('active')) checks.push(d.activeCustomersCount > 0);
+    if (set.has('active')) checks.push(d.activeCustomersCount > 0 && !d.isCanceled);
     if (set.has('canceled')) checks.push(d.isCanceled);
     if (set.has('private_org')) checks.push(d.isPrivateOrg);
     if (set.has('centralized_org')) checks.push(d.isCentralizedOrg);
@@ -1450,6 +1450,7 @@ export async function getSalesDashboardData(filters = {}) {
     andClauses.push({
       $or: [
         { subscriptionStatus: { $regex: /cancel|בוטל/i } },
+        { paymentStatus: { $regex: /arrears|פיגור/i } },
         {
           $and: [
             { isActive: false },
@@ -1460,7 +1461,16 @@ export async function getSalesDashboardData(filters = {}) {
     });
   }
   const dateRange = getDateRange(filters);
-  if (dateRange && statusFilter !== 'cancelled') match.createdAt = dateRange;
+  if (dateRange && statusFilter !== 'cancelled') {
+    match.createdAt = dateRange;
+  } else if (dateRange && statusFilter === 'cancelled') {
+    andClauses.push({
+      $or: [
+        { cancellationDate: dateRange },
+        { updatedAt: dateRange },
+      ],
+    });
+  }
 
   if (filters.agentEnabled && filters.agentValue) {
     const av = String(filters.agentValue).trim();
@@ -1510,6 +1520,20 @@ export async function getSalesDashboardData(filters = {}) {
   }
   if (filters.agentNameSearch) {
     match['formState.agentName'] = { $regex: String(filters.agentNameSearch).trim(), $options: 'i' };
+  }
+  if (filters.search) {
+    const sq = String(filters.search).trim();
+    andClauses.push({
+      $or: [
+        { transactionId: { $regex: sq, $options: 'i' } },
+        { cardcomRecurringId: { $regex: sq, $options: 'i' } },
+        { internalDealNumber: { $regex: sq, $options: 'i' } },
+        { fullTextCustomer: { $regex: sq, $options: 'i' } },
+        { 'formState.fullName': { $regex: sq, $options: 'i' } },
+        { 'formState.id': { $regex: sq, $options: 'i' } },
+        { 'formState.organizationName': { $regex: sq, $options: 'i' } },
+      ],
+    });
   }
   if (andClauses.length) match.$and = andClauses;
 
@@ -1591,10 +1615,12 @@ export async function getSalesDashboardData(filters = {}) {
   if (statusFilter === 'cancelled') {
     shown = shown.filter((d) => {
       const sub = String(d.subscriptionStatus || '').trim().toLowerCase();
+      const pay = String(d.paymentStatus || '').trim().toLowerCase();
       const recurringId = String(d.cardcomRecurringId || '').trim();
       const recurringStopped = d.isActive === false && recurringId !== '';
       const manuallyCancelled = /cancel|בוטל/i.test(sub);
-      if (!(manuallyCancelled || recurringStopped)) return false;
+      const isArrears = /arrears|פיגור/.test(pay);
+      if (!(manuallyCancelled || recurringStopped || isArrears)) return false;
       if (!dateRange) return true;
       const eventDate = d.cancellationDate || d.updatedAt || d.createdAt;
       const dt = new Date(eventDate);
@@ -1627,8 +1653,8 @@ export async function getSalesDashboardData(filters = {}) {
   const canceledDeals = shown.filter((d) => d.isCanceled);
   const totalPrimary = completedDeals.length;
   const totalSecondary = shown.reduce((sum, d) => sum + Number(d.secondaryCount || 0), 0);
-  const totalActive = completedDeals.reduce((sum, d) => sum + Number(d.individualsCount || 0), 0);
-  const totalCanceled = canceledDeals.reduce((sum, d) => sum + Number(d.individualsCount || 0), 0);
+  const totalActive = completedDeals.length;
+  const totalCanceled = canceledDeals.length;
   const totalPrivateOrg = shown
     .filter((d) => d.isOrganization && d.paymentMethod === 'private')
     .reduce((sum, d) => sum + Number(d.individualsCount || 0), 0);

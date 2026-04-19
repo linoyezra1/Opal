@@ -1,12 +1,13 @@
 import React from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { AlertTriangle, Bell, Building2, ChevronDown, ChevronUp, CreditCard, FileText, Receipt, Search, Users } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { AlertTriangle, Bell, Building2, ChevronDown, ChevronUp, CreditCard, FileText, Receipt, Users, Pencil } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
 import { Input } from '../components/ui/input.jsx';
 import { Badge } from '../components/ui/badge.jsx';
+import { Button } from '../components/ui/button.jsx';
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '../components/ui/empty.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
 
@@ -42,6 +43,7 @@ function labelForColumn(key) {
 }
 
 export default function AlertsDashboard() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [token] = React.useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [loading, setLoading] = React.useState(false);
@@ -126,6 +128,43 @@ export default function AlertsDashboard() {
 
   function toggleSection(key) {
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  function openAlertRecord(key, row) {
+    if (!row) return;
+    if (key === 'failedPayments') {
+      const search = String(row.cardcomRecurringId || row.orderId || row.transactionId || '').trim();
+      if (!search) return;
+      navigate(`/admin/subscribers?search=${encodeURIComponent(search)}`);
+      return;
+    }
+    if (key === 'pendingBeneficiaries') {
+      const search = String(row.transactionId || row.id || '').trim();
+      if (!search) return;
+      navigate(`/admin/subscribers?search=${encodeURIComponent(search)}&editId=${encodeURIComponent(String(row.id || ''))}`);
+      return;
+    }
+    if (key === 'contactTasks') {
+      const kind = String(row.kind || '').toLowerCase();
+      if (kind === 'corporate') {
+        const orgName = String(row.organizationName || row.fullName || '').trim();
+        navigate(`/admin/organizations?search=${encodeURIComponent(orgName)}&editId=${encodeURIComponent(String(row.organizationId || ''))}`);
+      } else {
+        const search = String(row.fullName || row.customerName || row.name || row.id || '').trim();
+        navigate(`/admin/contacts?search=${encodeURIComponent(search)}&editKind=${encodeURIComponent(kind || 'private')}&editId=${encodeURIComponent(String(row.id || ''))}`);
+      }
+      return;
+    }
+    if (key === 'orgPendingApproval') {
+      const orgName = String(row.organizationName || row.fullName || '').trim();
+      navigate(`/admin/organizations?search=${encodeURIComponent(orgName)}&editId=${encodeURIComponent(String(row.organizationId || ''))}`);
+      return;
+    }
+    if (key === 'organizationCollectionsDebt') {
+      const orgId = String(row.organizationId || '').trim();
+      if (!orgId) return;
+      navigate(`/admin/organizations/${encodeURIComponent(orgId)}?tab=payments`);
+    }
   }
 
   return (
@@ -227,6 +266,7 @@ export default function AlertsDashboard() {
                                 <TableHead className="text-right">סכום</TableHead>
                                 <TableHead className="text-right">סטטוס כרטיס</TableHead>
                                 <TableHead className="text-right">תאריך חיוב</TableHead>
+                                <TableHead className="text-right">פעולה</TableHead>
                               </>
                             ) : (
                               Object.keys(rows[0] || {})
@@ -234,11 +274,12 @@ export default function AlertsDashboard() {
                                 .slice(0, 5)
                                 .map((c) => <TableHead key={`${a.key}-${c}`} className="text-right">{labelForColumn(c)}</TableHead>)
                             )}
+                            {a.key !== 'failedPayments' ? <TableHead className="text-right">פעולה</TableHead> : null}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {rows.map((r, idx) => (
-                            <TableRow key={`${a.key}-${idx}`}>
+                            <TableRow key={`${a.key}-${idx}`} className="cursor-pointer hover:bg-muted/30" onClick={() => openAlertRecord(a.key, r)}>
                               {a.key === 'failedPayments' ? (
                                 <>
                                   <TableCell>{String(r.customerName || '—')}</TableCell>
@@ -246,6 +287,17 @@ export default function AlertsDashboard() {
                                   <TableCell className="font-bold text-red-600">{Number(r.price || 0)} ₪</TableCell>
                                   <TableCell><Badge variant="destructive" className="text-xs">{String(r.cardcomStatus || '—')}</Badge></TableCell>
                                   <TableCell>{String(r.chargeDate || '—')}</TableCell>
+                                  <TableCell>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-8 rounded-lg border-slate-200 bg-white shadow-sm hover:bg-slate-50"
+                                      onClick={(e) => { e.stopPropagation(); openAlertRecord(a.key, r); }}
+                                    >
+                                      <Pencil className="size-3.5 me-1" />
+                                      עריכה
+                                    </Button>
+                                  </TableCell>
                                 </>
                               ) : (
                                 Object.keys(rows[0] || {})
@@ -253,11 +305,24 @@ export default function AlertsDashboard() {
                                   .slice(0, 5)
                                   .map((c) => <TableCell key={`${a.key}-${idx}-${c}`}>{String(r[c] ?? '')}</TableCell>)
                               )}
+                              {a.key !== 'failedPayments' ? (
+                                <TableCell>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 rounded-lg border-slate-200 bg-white shadow-sm hover:bg-slate-50"
+                                    onClick={(e) => { e.stopPropagation(); openAlertRecord(a.key, r); }}
+                                  >
+                                    <Pencil className="size-3.5 me-1" />
+                                    עריכה
+                                  </Button>
+                                </TableCell>
+                              ) : null}
                             </TableRow>
                           ))}
                           {!rows.length ? (
                             <TableRow>
-                              <TableCell colSpan={5} className="text-center text-muted-foreground">
+                              <TableCell colSpan={6} className="text-center text-muted-foreground">
                                 אין רשומות להצגה
                               </TableCell>
                             </TableRow>

@@ -287,6 +287,7 @@ export default function SubscribersDashboard() {
     setError('');
     try {
       const params = new URLSearchParams({
+        search: liveSearch || '',
         month: filters.month || '',
         fromDate: filters.fromDate || '',
         toDate: filters.toDate || '',
@@ -330,11 +331,11 @@ export default function SubscribersDashboard() {
     }, 250);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters]);
+  }, [filters, liveSearch]);
 
   useEffect(() => {
     const search = String(searchParams.get('search') || '').trim();
-    if (search && search !== liveSearch) {
+    if (search !== liveSearch) {
       setLiveSearch(search);
     }
   }, [searchParams, liveSearch]);
@@ -641,7 +642,7 @@ export default function SubscribersDashboard() {
     });
   }, [data.rows, liveSearch]);
   const statusSummaryTitle = filters.status === 'cancelled' ? 'מבוטלים (סיכום)' : 'מנויים פעילים (סיכום)';
-  const statusSummaryValue = filters.status === 'cancelled' ? visibleRows.length : (s.active ?? 0);
+  const statusSummaryValue = filters.status === 'cancelled' ? (s.canceled ?? 0) : (s.active ?? 0);
   const visibleRowIds = useMemo(
     () => visibleRows.map((r) => String(r.id || '')).filter(Boolean),
     [visibleRows]
@@ -1411,7 +1412,6 @@ export default function SubscribersDashboard() {
                     status: String(next.status || 'all'),
                   }));
                 }}
-                activeCount={hasActiveFilters ? 1 : 0}
                 onClear={clearFilters}
                 advancedContent={(
                   <div className="text-sm text-muted-foreground">
