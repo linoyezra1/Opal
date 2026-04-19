@@ -194,7 +194,7 @@ export default function Admin() {
               <h2 className="text-xl font-semibold text-medical-blue-dark">פרטי עסקה מלאים</h2>
               <button onClick={() => setSelected(null)} className="text-slate-500">סגור</button>
             </div>
-            <pre className="text-xs bg-slate-50 border rounded p-3 overflow-auto max-h-[70vh] text-left">{JSON.stringify(selected, null, 2)}</pre>
+            <pre className="text-xs bg-slate-50 border rounded p-3 overflow-auto max-h-[70vh] text-left" dir="ltr">{JSON.stringify(selected, null, 2)}</pre>
           </div>
         </div>
       ) : null}

@@ -826,7 +826,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                         <p className="text-sm text-muted-foreground">תוכנית נבחרת:</p>
                         <p className="font-semibold text-foreground">{selectedProduct.productName}</p>
                       </div>
-                      <div className="text-left sm:text-right">
+                      <div className="text-start sm:text-end">
                         <p className="text-2xl font-bold text-primary">₪{Number(selectedProduct.retailPrice || 0)}</p>
                         <p className="text-xs text-muted-foreground">לחודש</p>
                       </div>

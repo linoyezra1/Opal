@@ -242,7 +242,7 @@ export default function ProductManagement() {
       />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md text-right" dir="rtl">
           <DialogHeader>
             <DialogTitle>הוספת מוצר חדש</DialogTitle>
             <DialogDescription>הזן את פרטי המוצר החדש</DialogDescription>
@@ -324,7 +324,7 @@ export default function ProductManagement() {
       </Dialog>
 
       <Dialog open={!!editProduct} onOpenChange={(o) => !o && setEditProduct(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md text-right" dir="rtl">
           <DialogHeader>
             <DialogTitle>עריכת מוצר</DialogTitle>
             <DialogDescription>עדכן את פרטי המוצר</DialogDescription>

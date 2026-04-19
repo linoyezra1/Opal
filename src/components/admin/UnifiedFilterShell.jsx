@@ -2,8 +2,6 @@ import React from 'react';
 import { Search, Filter, ChevronDown, ChevronUp, RotateCcw, X } from 'lucide-react';
 import { Input } from '../ui/input.jsx';
 import { Button } from '../ui/button.jsx';
-import { Badge } from '../ui/badge.jsx';
-
 export default function UnifiedFilterShell(props) {
   const {
     filters = null,
@@ -17,7 +15,6 @@ export default function UnifiedFilterShell(props) {
     searchValue = '',
     onSearchChange = null,
     searchPlaceholder = 'חיפוש...',
-    activeCount = 0,
     basicControls = null,
     advancedContent = null,
   } = props;
@@ -25,9 +22,6 @@ export default function UnifiedFilterShell(props) {
   const hasNewApi = Array.isArray(filters) && values && typeof onChange === 'function';
   const searchFilter = hasNewApi ? filters.find((f) => f.key === 'search' || f.type === 'text') : null;
   const otherFilters = hasNewApi ? filters.filter((f) => !(f.key === (searchFilter?.key || '') || f.type === 'text')) : [];
-  const activeFiltersCount = hasNewApi
-    ? Object.values(values).filter((v) => String(v || '').trim() !== '').length
-    : activeCount;
   const resolvedSearchValue = hasNewApi ? String(values?.[searchFilter?.key] || '') : searchValue;
   const resolvedSearchPlaceholder = hasNewApi ? (searchFilter?.placeholder || searchPlaceholder) : searchPlaceholder;
 
@@ -40,7 +34,7 @@ export default function UnifiedFilterShell(props) {
     <div className={`space-y-3 ${className}`} dir="rtl">
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative w-full sm:flex-1 sm:min-w-[220px] sm:max-w-xl">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
           <Input
             value={resolvedSearchValue}
             onChange={(e) => {
@@ -57,7 +51,7 @@ export default function UnifiedFilterShell(props) {
                 if (hasNewApi && searchFilter) updateValue(searchFilter.key, '');
                 else onSearchChange?.('');
               }}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               aria-label="נקה חיפוש"
             >
               <X className="size-4" />
@@ -76,9 +70,6 @@ export default function UnifiedFilterShell(props) {
           >
             <Filter className="size-4" />
             סינון
-            {activeFiltersCount > 0 ? (
-              <Badge className="size-5 p-0 rounded-full bg-blue-600 text-white flex items-center justify-center">{activeFiltersCount}</Badge>
-            ) : null}
             {expanded ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
           </Button>
         ) : null}

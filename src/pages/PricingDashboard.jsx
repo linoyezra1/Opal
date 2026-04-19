@@ -321,7 +321,7 @@ export default function PricingDashboard() {
           if (!o) setError('');
         }}
       >
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto text-right" dir="rtl">
           <DialogHeader>
             <DialogTitle>{editId ? 'עריכת מחירון' : 'מחירון חדש'}</DialogTitle>
             <DialogDescription>

@@ -95,7 +95,7 @@ export default function Success() {
                 <span>טוען מספר הזמנה…</span>
               </div>
             ) : transactionId ? (
-              <p className="text-2xl font-mono font-semibold text-foreground dir-ltr text-left" dir="ltr">
+              <p className="text-2xl font-mono font-semibold text-foreground text-start" dir="ltr">
                 {transactionId}
               </p>
             ) : (

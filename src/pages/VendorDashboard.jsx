@@ -460,7 +460,7 @@ export default function VendorDashboard() {
       />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto text-right" dir="rtl">
           <DialogHeader>
             <DialogTitle>הוספת ספק חדש</DialogTitle>
             <DialogDescription>הזן פרטי ספק, בנק וקישור מוצרים</DialogDescription>
@@ -486,7 +486,7 @@ export default function VendorDashboard() {
       </Dialog>
 
       <Dialog open={!!editVendor} onOpenChange={(o) => !o && setEditVendor(null)}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto text-right" dir="rtl">
           <DialogHeader>
             <DialogTitle>עריכת ספק</DialogTitle>
             <DialogDescription>עדכון פרטים ומוצרים</DialogDescription>

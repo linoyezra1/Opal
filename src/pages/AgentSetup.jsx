@@ -382,7 +382,7 @@ export default function AgentSetup() {
           if (!o) setError('');
         }}
       >
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto text-right" dir="rtl">
           <DialogHeader>
             <DialogTitle>הוספת סוכן</DialogTitle>
             <DialogDescription>הזינו פרטי סוכן, בנק ועמלות למוצרים</DialogDescription>
@@ -533,7 +533,7 @@ export default function AgentSetup() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto text-right" dir="rtl">
           <DialogHeader>
             <DialogTitle>עריכת סוכן</DialogTitle>
             <DialogDescription>עדכנו פרטי סוכן, בנק ועמלות</DialogDescription>

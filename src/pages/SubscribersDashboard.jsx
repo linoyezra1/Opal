@@ -66,6 +66,12 @@ function formatCurrency(value) {
   return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n);
 }
 
+/** סגירת תפריט הפעולות במובייל (אלמנט details) אחרי בחירה */
+function closeActionDetailsMenu(ev) {
+  const root = ev?.currentTarget?.closest?.('details');
+  if (root) root.open = false;
+}
+
 function dealCentralizedPayment(deal) {
   if (!deal) return false;
   const fs = deal.formState && typeof deal.formState === 'object' ? deal.formState : {};
@@ -1475,7 +1481,7 @@ export default function SubscribersDashboard() {
             </CardHeader>
             <CardContent className="pt-2" dir="rtl">
               {selectedCount > 0 ? (
-                <div className="fixed bottom-4 left-1/2 z-40 w-[min(96vw,48rem)] -translate-x-1/2 rounded-lg border bg-background/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80">
+                <div className="fixed bottom-4 inset-x-0 z-40 mx-auto w-[min(96vw,48rem)] rounded-lg border bg-background/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-medium">{`${selectedCount} מנויים נבחרו`}</p>
                     <div className="flex items-center gap-2">
@@ -1700,7 +1706,8 @@ export default function SubscribersDashboard() {
                                   variant="ghost"
                                   type="button"
                                   className="h-auto min-h-10 w-full justify-start gap-2 px-3 py-2 font-normal"
-                                  onClick={() => {
+                                  onClick={(e) => {
+                                    closeActionDetailsMenu(e);
                                     setSelected(r.raw ?? r);
                                     setSelectedDetailsTab('transaction');
                                   }}
@@ -1712,7 +1719,10 @@ export default function SubscribersDashboard() {
                                   variant="ghost"
                                   type="button"
                                   className="h-auto min-h-10 w-full justify-start gap-2 px-3 py-2 font-normal"
-                                  onClick={() => openEdit(r)}
+                                  onClick={(e) => {
+                                    closeActionDetailsMenu(e);
+                                    openEdit(r);
+                                  }}
                                 >
                                   <Edit2 className="size-4 shrink-0" />
                                   עריכה
@@ -1721,7 +1731,10 @@ export default function SubscribersDashboard() {
                                   variant="ghost"
                                   type="button"
                                   className="h-auto min-h-10 w-full justify-start gap-2 px-3 py-2 font-normal text-destructive hover:text-destructive"
-                                  onClick={() => setDeleteTarget({ id: r.id, transactionId: r.transactionId })}
+                                  onClick={(e) => {
+                                    closeActionDetailsMenu(e);
+                                    setDeleteTarget({ id: r.id, transactionId: r.transactionId });
+                                  }}
                                 >
                                   <Archive className="size-4 shrink-0" />
                                   מחיקה
@@ -1731,12 +1744,13 @@ export default function SubscribersDashboard() {
                                   variant="outline"
                                   className="h-auto min-h-10 w-full justify-start gap-2 px-3 py-2 text-xs font-normal"
                                   disabled={isCancelled || missingRecurringIds}
-                                  onClick={() =>
+                                  onClick={(e) => {
+                                    closeActionDetailsMenu(e);
                                     setCancelTarget({
                                       id: r.id,
                                       transactionId: r.transactionId,
-                                    })
-                                  }
+                                    });
+                                  }}
                                 >
                                   <Ban className="size-3.5 shrink-0 text-amber-600" />
                                   ביטול מנוי (עצירת חיוב)

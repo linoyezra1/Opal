@@ -77,6 +77,11 @@ const HEADER_LABELS = {
   sku: 'קוד מוצר',
   providerCost: 'עלות ספק',
   isActive: 'פעיל',
+  cardcomRecurringId: 'מזהה הוראת קבע',
+  cardcomAccountId: 'מזהה חשבון קארדקום',
+  cancellationDate: 'תאריך ביטול',
+  subscriptionStatus: 'סטטוס מנוי',
+  paymentStatus: 'סטטוס תשלום',
 };
 
 function labelForColumn(key) {

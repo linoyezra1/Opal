@@ -1140,8 +1140,14 @@ export async function getDeals() {
 }
 
 function isCancelledStatus(doc) {
-  const sub = String(doc?.subscriptionStatus || '').toLowerCase();
-  return sub === 'cancelled' || /cancel|בוטל/i.test(sub);
+  const sub = String(doc?.subscriptionStatus || '').trim().toLowerCase();
+  const st = String(doc?.status || '').trim().toLowerCase();
+  const pay = String(doc?.paymentStatus || '').trim().toLowerCase();
+  const recurringId = String(doc?.cardcomRecurringId || '').trim();
+  const recurringStopped = doc?.isActive === false && recurringId !== '';
+  const manuallyCancelled =
+    /cancel|בוטל/i.test(sub) || /cancel|בוטל/i.test(st) || /cancel|בוטל/i.test(pay);
+  return manuallyCancelled || recurringStopped;
 }
 
 /** Count successful/paid subscribers (deals) linked to an agent */
