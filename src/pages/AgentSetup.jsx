@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Edit2, Archive, Users, Percent } from 'lucide-react';
+import {
+  Archive, Check, Copy, Edit2, ExternalLink, Eye, Percent, Phone,
+  Plus, Users,
+} from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import { ISRAELI_ID_INVALID_MSG, validateIsraeliId } from '../utils/israeliId.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
@@ -27,29 +30,16 @@ import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
-/** ת״ז ישראלית (7–9 ספרות): ספרת ביקורת. מזהים שאינם ספרות בלבד — לא נבדקים כאן (למשל ח.פ). */
 function agentIsraeliIdHint(value) {
-  const compact = String(value || '')
-    .trim()
-    .replace(/\s/g, '');
+  const compact = String(value || '').trim().replace(/\s/g, '');
   if (compact.length < 7 || !/^\d{7,9}$/.test(compact)) return '';
   if (!validateIsraeliId(compact)) return ISRAELI_ID_INVALID_MSG;
   return '';
 }
 
 const emptyForm = () => ({
-  agentName: '',
-  idNum: '',
-  phone: '',
-  email: '',
-  address: '',
-  bankDetails: {
-    bankName: '',
-    bankNum: '',
-    accountHolder: '',
-    branchNum: '',
-    accountNum: '',
-  },
+  agentName: '', idNum: '', phone: '', email: '', address: '',
+  bankDetails: { bankName: '', bankNum: '', accountHolder: '', branchNum: '', accountNum: '' },
   productCommissions: [],
 });
 
@@ -64,11 +54,8 @@ function agentFromRow(r) {
     email: r.email || '',
     address: r.address || '',
     bankDetails: {
-      bankName: b.bankName || '',
-      bankNum: b.bankNum || '',
-      accountHolder: b.accountHolder || '',
-      branchNum: b.branchNum || '',
-      accountNum: b.accountNum || '',
+      bankName: b.bankName || '', bankNum: b.bankNum || '',
+      accountHolder: b.accountHolder || '', branchNum: b.branchNum || '', accountNum: b.accountNum || '',
     },
     productCommissions: pc.map((x) => ({
       productId: x.productId || '',
@@ -81,18 +68,16 @@ function agentFromRow(r) {
 function buildPayload(body) {
   const { productCommissions, ...rest } = body;
   const rows = Array.isArray(productCommissions)
-    ? productCommissions
-        .filter((x) => x.productId)
-        .map((x) => ({ productId: x.productId, commission: Number(x.commission || 0) }))
+    ? productCommissions.filter((x) => x.productId).map((x) => ({ productId: x.productId, commission: Number(x.commission || 0) }))
     : [];
   return { ...rest, productCommissions: rows };
 }
 
+// ─── Commission Matrix (used in Add/Edit dialogs) ──────────────────────────────
 function CommissionMatrix({ target, data, products, setAddForm, setEditAgent }) {
-  const apply =
-    target === 'add'
-      ? (fn) => setAddForm(fn)
-      : (fn) => setEditAgent((p) => (p ? fn(p) : null));
+  const apply = target === 'add'
+    ? (fn) => setAddForm(fn)
+    : (fn) => setEditAgent((p) => (p ? fn(p) : null));
 
   return (
     <div className="space-y-3">
@@ -115,24 +100,16 @@ function CommissionMatrix({ target, data, products, setAddForm, setEditAgent }) 
                   </TableCell>
                   <TableCell>
                     <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      dir="ltr"
-                      className="w-28"
+                      type="number" min="0" step="0.01" dir="ltr" className="w-28"
                       value={row?.commission ?? ''}
                       onChange={(e) => {
                         const v = e.target.value;
                         apply((p) => {
                           const list = [...(p.productCommissions || [])];
                           const i = list.findIndex((c) => c.productId === pr.id);
-                          if (v === '') {
-                            if (i >= 0) list.splice(i, 1);
-                          } else if (i >= 0) {
-                            list[i] = { ...list[i], productId: pr.id, commission: v };
-                          } else {
-                            list.push({ productId: pr.id, commission: v, productName: '' });
-                          }
+                          if (v === '') { if (i >= 0) list.splice(i, 1); }
+                          else if (i >= 0) { list[i] = { ...list[i], productId: pr.id, commission: v }; }
+                          else { list.push({ productId: pr.id, commission: v, productName: '' }); }
                           return { ...p, productCommissions: list };
                         });
                       }}
@@ -148,35 +125,229 @@ function CommissionMatrix({ target, data, products, setAddForm, setEditAgent }) 
       {!products.length ? (
         <p className="text-sm text-muted-foreground">אין מוצרים במערכת — הוסיפו מוצרים תחילה.</p>
       ) : (
-        <p className="text-sm text-muted-foreground">
-          עמלה ייחודית לכל מוצר — משמשת בדוחות רווח כשהמנוי קשור לסוכן ולמוצר. עמלה 0 או ריק מתעלמת מהמיפוי.
-        </p>
+        <p className="text-sm text-muted-foreground">עמלה ייחודית לכל מוצר — משמשת בדוחות רווח.</p>
       )}
     </div>
   );
 }
 
+// ─── View Agent Dialog ──────────────────────────────────────────────────────────
+function ViewAgentDialog({ agent, products, productSlugMap, onClose, onEdit }) {
+  const [copiedLink, setCopiedLink] = useState('');
+
+  if (!agent) return null;
+
+  function copyLink(link) {
+    navigator.clipboard.writeText(link).then(() => {
+      setCopiedLink(link);
+      setTimeout(() => setCopiedLink(''), 2000);
+    }).catch(() => {});
+  }
+
+  const comms = Array.isArray(agent.productCommissions) ? agent.productCommissions : [];
+  const b = agent.bankDetails || {};
+
+  return (
+    <Dialog open={!!agent} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+
+        {/* ── Header ── */}
+        <DialogHeader className="pb-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <DialogTitle className="text-xl font-bold text-foreground">{agent.agentName}</DialogTitle>
+              <DialogDescription className="flex flex-wrap gap-3 text-xs">
+                {agent.idNum ? <span dir="ltr" className="font-mono">{agent.idNum}</span> : null}
+                {agent.phone ? <a href={`tel:${agent.phone}`} dir="ltr" className="text-primary underline">{agent.phone}</a> : null}
+                {agent.email ? <a href={`mailto:${agent.email}`} dir="ltr" className="text-primary underline">{agent.email}</a> : null}
+              </DialogDescription>
+            </div>
+            <Badge className="shrink-0 bg-green-100 text-green-800 border-green-200 hover:bg-green-100">
+              פעיל
+            </Badge>
+          </div>
+        </DialogHeader>
+
+        {/* ── Summary stats ── */}
+        <div className="grid grid-cols-3 gap-3 rounded-xl border bg-gradient-to-l from-[#D9EAF3]/40 to-[#D9EAF3]/10 p-4">
+          <div className="text-center space-y-0.5">
+            <p className="text-2xl font-bold text-primary">{agent.totalSales ?? 0}</p>
+            <p className="text-xs text-muted-foreground">סה"כ מנויים</p>
+          </div>
+          <div className="text-center space-y-0.5">
+            <p className="text-2xl font-bold text-primary">{comms.length}</p>
+            <p className="text-xs text-muted-foreground">מוצרים פעילים</p>
+          </div>
+          <div className="text-center space-y-0.5">
+            <p className="text-2xl font-bold text-[#C9A227]">
+              {comms.reduce((s, c) => s + Number(c.commission || 0), 0) > 0
+                ? `₪${comms.reduce((s, c) => s + Number(c.commission || 0), 0)}`
+                : '—'}
+            </p>
+            <p className="text-xs text-muted-foreground">עמלה כוללת</p>
+          </div>
+        </div>
+
+        {/* ── Address + Bank ── */}
+        {(agent.address || b.bankName) ? (
+          <div className="grid sm:grid-cols-2 gap-4 rounded-xl border p-4 text-sm">
+            {agent.address ? (
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground mb-1">כתובת</p>
+                <p>{agent.address}</p>
+              </div>
+            ) : null}
+            {b.bankName ? (
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground mb-1">פרטי בנק</p>
+                <p>{b.bankName}{b.bankNum ? ` (${b.bankNum})` : ''}</p>
+                {b.branchNum ? <p className="text-muted-foreground">סניף {b.branchNum}</p> : null}
+                {b.accountNum ? <p className="text-muted-foreground">חשבון {b.accountNum}</p> : null}
+                {b.accountHolder ? <p className="text-muted-foreground">בעל חשבון: {b.accountHolder}</p> : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* ── Distribution Links Table ── */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-800">קישורי הפצה ייחודיים</h3>
+            <Badge variant="secondary" className="text-xs">{comms.length} מוצרים</Badge>
+          </div>
+
+          {comms.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-slate-200 p-6 text-center">
+              <Percent className="size-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">לא הוגדרו מוצרים לסוכן זה</p>
+              <p className="text-xs text-muted-foreground mt-1">ניתן להוסיף בעריכת הסוכן</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b">
+                  <tr>
+                    <th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600">מוצר</th>
+                    <th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600 w-24">עמלה</th>
+                    <th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600">קישור ייחודי</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {comms.map((c) => {
+                    const product = products.find((p) => p.id === c.productId);
+                    const productName = product?.productName || product?.name || c.productName || c.productId;
+                    const slugEntries = productSlugMap.get(c.productId) || [];
+                    return (
+                      <tr key={c.productId} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-3 py-3 font-medium text-foreground">
+                          {productName}
+                          {product?.sku ? (
+                            <span className="ms-1.5 text-xs font-mono text-muted-foreground">({product.sku})</span>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-3 text-[#C9A227] font-semibold">
+                          {Number(c.commission) > 0 ? `₪${Number(c.commission)}` : '—'}
+                        </td>
+                        <td className="px-3 py-3">
+                          {slugEntries.length === 0 ? (
+                            <span className="text-xs text-muted-foreground">אין דף נחיתה</span>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {slugEntries.map(({ slug, pageTitle }) => {
+                                const link = `${window.location.origin}/p/${slug}?agentId=${encodeURIComponent(agent.id)}`;
+                                const justCopied = copiedLink === link;
+                                return (
+                                  <div key={slug} className="flex items-center gap-1.5">
+                                    <span
+                                      className="flex-1 truncate text-xs font-mono text-slate-500 bg-slate-100 rounded px-2 py-1 max-w-[180px]"
+                                      title={link}
+                                    >
+                                      /p/{slug}?agentId=…
+                                    </span>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          type="button"
+                                          onClick={() => copyLink(link)}
+                                          className={`inline-flex items-center gap-1 h-7 px-2 rounded border text-xs transition-all shrink-0
+                                            ${justCopied
+                                              ? 'bg-green-100 border-green-300 text-green-700'
+                                              : 'bg-white border-slate-200 text-slate-600 hover:border-primary hover:text-primary'}`}
+                                        >
+                                          {justCopied ? <Check className="size-3" /> : <Copy className="size-3" />}
+                                          {justCopied ? 'הועתק' : 'העתק'}
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        {pageTitle || slug}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <a
+                                          href={link}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="inline-flex items-center justify-center h-7 w-7 rounded border border-slate-200 bg-white text-slate-500 hover:border-primary hover:text-primary transition-colors shrink-0"
+                                        >
+                                          <ExternalLink className="size-3" />
+                                        </a>
+                                      </TooltipTrigger>
+                                      <TooltipContent>פתח קישור</TooltipContent>
+                                    </Tooltip>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse border-t pt-4">
+          <Button type="button" variant="outline" onClick={onClose}>סגור</Button>
+          <Button type="button" onClick={() => { onClose(); onEdit(agent); }}>
+            <Edit2 className="size-3.5 me-1.5" />
+            עריכה
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 export default function AgentSetup() {
   const [token] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [products, setProducts] = useState([]);
   const [rows, setRows] = useState([]);
+  const [landingPages, setLandingPages] = useState([]);
+  const [priceLists, setPriceLists] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const [viewAgent, setViewAgent] = useState(null);
   const [editAgent, setEditAgent] = useState(null);
   const [editTab, setEditTab] = useState('details');
   const [deleteAgent, setDeleteAgent] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addTab, setAddTab] = useState('details');
   const [addForm, setAddForm] = useState(() => emptyForm());
+
   const [search, setSearch] = useState('');
   const [commissionFilter, setCommissionFilter] = useState('all');
+
   const agentFilterConfig = React.useMemo(
     () => [
       { key: 'search', label: 'חיפוש', type: 'text', placeholder: 'חיפוש חופשי: סוכן, ת״ז/ח.פ, טלפון, אימייל, מוצר' },
       {
-        key: 'commissionFilter',
-        label: 'סינון',
-        type: 'select',
+        key: 'commissionFilter', label: 'סינון', type: 'select',
         options: [
           { value: 'with_commission', label: 'עם הגדרות עמלה' },
           { value: 'without_commission', label: 'ללא הגדרות עמלה' },
@@ -186,18 +357,44 @@ export default function AgentSetup() {
     []
   );
 
+  // ── productSlugMap: productId → [{slug, pageTitle}] ───────────────────────
+  const productSlugMap = useMemo(() => {
+    const map = new Map();
+    const plIndex = new Map(priceLists.map((pl) => [pl.id, pl]));
+    for (const page of landingPages) {
+      if (!page.slug || !page.priceListId) continue;
+      const pl = plIndex.get(page.priceListId);
+      if (!pl) continue;
+      const lines = Array.isArray(pl.lines) ? pl.lines : [];
+      for (const line of lines) {
+        if (!line.productId) continue;
+        const existing = map.get(line.productId) || [];
+        const alreadyHasSlug = existing.some((e) => e.slug === page.slug);
+        if (!alreadyHasSlug) {
+          map.set(line.productId, [...existing, { slug: page.slug, pageTitle: page.pageTitle || page.slug }]);
+        }
+      }
+    }
+    return map;
+  }, [priceLists, landingPages]);
+
+  // ── Load data ──────────────────────────────────────────────────────────────
   const loadAgents = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     setError('');
     try {
-      const [agRes, prRes] = await Promise.all([
+      const [agRes, prRes, lpRes, plRes] = await Promise.all([
         fetch(`${API_BASE}/api/admin/agents`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/products`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+        fetch(`${API_BASE}/api/admin/landing-pages`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+        fetch(`${API_BASE}/api/admin/price-lists`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
       ]);
       if (!agRes.success) throw new Error(agRes.error || 'טעינה נכשלה');
       setRows(Array.isArray(agRes.rows) ? agRes.rows : []);
       if (prRes.success) setProducts(prRes.products || []);
+      if (lpRes.success) setLandingPages(lpRes.pages || []);
+      if (plRes.success) setPriceLists(plRes.lists || []);
     } catch (e) {
       setError(e.message || 'שגיאה');
     } finally {
@@ -205,10 +402,9 @@ export default function AgentSetup() {
     }
   }, [token]);
 
-  useEffect(() => {
-    loadAgents();
-  }, [loadAgents]);
+  useEffect(() => { loadAgents(); }, [loadAgents]);
 
+  // ── Add ────────────────────────────────────────────────────────────────────
   function openAdd() {
     setAddForm(emptyForm());
     setAddTab('details');
@@ -221,16 +417,10 @@ export default function AgentSetup() {
     setLoading(true);
     setError('');
     const idRaw = String(addForm.idNum || '').trim();
-    if (!idRaw) {
-      setError('נא למלא תעודת זהות / ח.פ');
-      setLoading(false);
-      return;
-    }
+    if (!idRaw) { setError('נא למלא תעודת זהות / ח.פ'); setLoading(false); return; }
     const idCompact = idRaw.replace(/\s/g, '');
     if (/^\d{7,9}$/.test(idCompact) && !validateIsraeliId(idCompact)) {
-      setError(ISRAELI_ID_INVALID_MSG);
-      setLoading(false);
-      return;
+      setError(ISRAELI_ID_INVALID_MSG); setLoading(false); return;
     }
     try {
       const res = await fetch(`${API_BASE}/api/admin/agents`, {
@@ -249,22 +439,17 @@ export default function AgentSetup() {
     }
   }
 
+  // ── Edit ───────────────────────────────────────────────────────────────────
   async function saveEdit(e) {
     e.preventDefault();
     if (!editAgent?.id) return;
     setLoading(true);
     setError('');
     const idRaw = String(editAgent.idNum || '').trim();
-    if (!idRaw) {
-      setError('נא למלא תעודת זהות / ח.פ');
-      setLoading(false);
-      return;
-    }
+    if (!idRaw) { setError('נא למלא תעודת זהות / ח.פ'); setLoading(false); return; }
     const idCompact = idRaw.replace(/\s/g, '');
     if (/^\d{7,9}$/.test(idCompact) && !validateIsraeliId(idCompact)) {
-      setError(ISRAELI_ID_INVALID_MSG);
-      setLoading(false);
-      return;
+      setError(ISRAELI_ID_INVALID_MSG); setLoading(false); return;
     }
     try {
       const { id, ...body } = editAgent;
@@ -284,6 +469,7 @@ export default function AgentSetup() {
     }
   }
 
+  // ── Delete ─────────────────────────────────────────────────────────────────
   async function confirmDelete() {
     if (!deleteAgent?.id) return;
     setLoading(true);
@@ -305,19 +491,9 @@ export default function AgentSetup() {
 
   function setBank(target, field, value) {
     if (target === 'add') {
-      setAddForm((prev) => ({
-        ...prev,
-        bankDetails: { ...prev.bankDetails, [field]: value },
-      }));
+      setAddForm((prev) => ({ ...prev, bankDetails: { ...prev.bankDetails, [field]: value } }));
     } else {
-      setEditAgent((prev) =>
-        prev
-          ? {
-              ...prev,
-              bankDetails: { ...prev.bankDetails, [field]: value },
-            }
-          : null
-      );
+      setEditAgent((prev) => prev ? { ...prev, bankDetails: { ...prev.bankDetails, [field]: value } } : null);
     }
   }
 
@@ -333,26 +509,96 @@ export default function AgentSetup() {
       if (commissionFilter === 'with_commission' && comms.length === 0) return false;
       if (commissionFilter === 'without_commission' && comms.length > 0) return false;
       if (!q) return true;
-      const hay = [
-        r.agentName,
-        r.idNum,
-        r.phone,
-        r.email,
-        ...comms.map((c) => getProductLabel(c.productId)),
-      ]
-        .map((x) => String(x || '').toLowerCase())
-        .join(' | ');
+      const hay = [r.agentName, r.idNum, r.phone, r.email, ...comms.map((c) => getProductLabel(c.productId))]
+        .map((x) => String(x || '').toLowerCase()).join(' | ');
       return hay.includes(q);
     });
   }, [rows, search, commissionFilter, products]);
+
+  // ── Agent form tabs (shared between Add + Edit) ───────────────────────────
+  function AgentFormTabs({ target, data, setData, tab, setTab }) {
+    const isAdd = target === 'add';
+    const setField = (field, value) => setData((p) => ({ ...p, [field]: value }));
+    return (
+      <Tabs value={tab} onValueChange={setTab} className="mt-0">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="details">פרטים אישיים</TabsTrigger>
+          <TabsTrigger value="bank">פרטי בנק</TabsTrigger>
+          <TabsTrigger value="commissions">עמלות</TabsTrigger>
+        </TabsList>
+        <TabsContent value="details" className="space-y-4 mt-4">
+          <FieldGroup>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel>שם סוכן *</FieldLabel>
+                <Input value={data.agentName} onChange={(e) => setField('agentName', e.target.value)} placeholder="שם מלא" required />
+              </Field>
+              <Field>
+                <FieldLabel>תעודת זהות / ח.פ *</FieldLabel>
+                <Input value={data.idNum} onChange={(e) => setField('idNum', e.target.value)} placeholder="מספר זיהוי" dir="ltr" required />
+                {agentIsraeliIdHint(data.idNum) ? <p className="text-destructive text-xs">{agentIsraeliIdHint(data.idNum)}</p> : null}
+              </Field>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel>טלפון</FieldLabel>
+                <Input value={data.phone} onChange={(e) => setField('phone', e.target.value)} placeholder="050-0000000" dir="ltr" />
+              </Field>
+              <Field>
+                <FieldLabel>אימייל</FieldLabel>
+                <Input type="email" value={data.email} onChange={(e) => setField('email', e.target.value)} placeholder="email@example.com" dir="ltr" />
+              </Field>
+            </div>
+            <Field>
+              <FieldLabel>כתובת</FieldLabel>
+              <Input value={data.address} onChange={(e) => setField('address', e.target.value)} placeholder="רחוב, עיר" />
+            </Field>
+          </FieldGroup>
+        </TabsContent>
+        <TabsContent value="bank" className="space-y-4 mt-4">
+          <FieldGroup>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel>שם בנק *</FieldLabel>
+                <Input value={data.bankDetails.bankName} onChange={(e) => setBank(target, 'bankName', e.target.value)} placeholder="למשל: בנק הפועלים" required />
+              </Field>
+              <Field>
+                <FieldLabel>מספר בנק</FieldLabel>
+                <Input value={data.bankDetails.bankNum} onChange={(e) => setBank(target, 'bankNum', e.target.value)} dir="ltr" />
+              </Field>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel>שם בעל חשבון *</FieldLabel>
+                <Input value={data.bankDetails.accountHolder} onChange={(e) => setBank(target, 'accountHolder', e.target.value)} required />
+              </Field>
+              <Field>
+                <FieldLabel>מספר סניף</FieldLabel>
+                <Input value={data.bankDetails.branchNum} onChange={(e) => setBank(target, 'branchNum', e.target.value)} dir="ltr" />
+              </Field>
+            </div>
+            <Field>
+              <FieldLabel>מספר חשבון</FieldLabel>
+              <Input value={data.bankDetails.accountNum} onChange={(e) => setBank(target, 'accountNum', e.target.value)} dir="ltr" />
+            </Field>
+          </FieldGroup>
+        </TabsContent>
+        <TabsContent value="commissions" className="mt-4">
+          <CommissionMatrix
+            target={target} data={data} products={products}
+            setAddForm={isAdd ? setData : undefined}
+            setEditAgent={!isAdd ? setData : undefined}
+          />
+        </TabsContent>
+      </Tabs>
+    );
+  }
 
   if (!token) {
     return (
       <div dir="rtl" className="min-h-screen bg-slate-50 p-6">
         <p className="text-slate-700">יש להתחבר דרך מסך המנהל.</p>
-        <Link to="/admin" className="text-primary underline">
-          מעבר לכניסת מנהל
-        </Link>
+        <Link to="/admin" className="text-primary underline">מעבר לכניסת מנהל</Link>
       </div>
     );
   }
@@ -360,459 +606,236 @@ export default function AgentSetup() {
   return (
     <TooltipProvider delayDuration={250}>
       <AdminPageShell>
-      <ConfirmDialog
-        open={!!deleteAgent}
-        title="מחיקת סוכן"
-        message={
-          deleteAgent
-            ? `להפוך את "${deleteAgent.agentName}" ללא פעיל? פעולה זו תעביר את המידע לארכיון.${deleteAgent.totalSales > 0 ? ' (לא ניתן אם יש עסקאות מקושרות)' : ''}`
-            : ''
-        }
-        confirmLabel="הפוך ללא פעיל"
-        danger
-        onConfirm={confirmDelete}
-        onCancel={() => setDeleteAgent(null)}
-        isLoading={loading}
-      />
 
-      <Dialog
-        open={showAddModal}
-        onOpenChange={(o) => {
-          setShowAddModal(o);
-          if (!o) setError('');
-        }}
-      >
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto text-right" dir="rtl">
-          <DialogHeader>
-            <DialogTitle>הוספת סוכן</DialogTitle>
-            <DialogDescription>הזינו פרטי סוכן, בנק ועמלות למוצרים</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={submitAdd} className="space-y-4">
-            <Tabs value={addTab} onValueChange={setAddTab} className="mt-0">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="details">פרטים אישיים</TabsTrigger>
-                <TabsTrigger value="bank">פרטי בנק</TabsTrigger>
-                <TabsTrigger value="commissions">עמלות</TabsTrigger>
-              </TabsList>
-              <TabsContent value="details" className="space-y-4 mt-4">
-                <FieldGroup>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel>שם סוכן *</FieldLabel>
-                      <Input
-                        value={addForm.agentName}
-                        onChange={(e) => setAddForm((p) => ({ ...p, agentName: e.target.value }))}
-                        placeholder="שם מלא"
-                        required
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel>תעודת זהות / ח.פ *</FieldLabel>
-                      <Input
-                        value={addForm.idNum}
-                        onChange={(e) => setAddForm((p) => ({ ...p, idNum: e.target.value }))}
-                        placeholder="מספר זיהוי"
-                        dir="ltr"
-                        required
-                      />
-                      {agentIsraeliIdHint(addForm.idNum) ? (
-                        <p className="text-destructive text-xs">{agentIsraeliIdHint(addForm.idNum)}</p>
-                      ) : null}
-                    </Field>
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel>טלפון</FieldLabel>
-                      <Input
-                        value={addForm.phone}
-                        onChange={(e) => setAddForm((p) => ({ ...p, phone: e.target.value }))}
-                        placeholder="050-0000000"
-                        dir="ltr"
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel>אימייל</FieldLabel>
-                      <Input
-                        type="email"
-                        value={addForm.email}
-                        onChange={(e) => setAddForm((p) => ({ ...p, email: e.target.value }))}
-                        placeholder="email@example.com"
-                        dir="ltr"
-                      />
-                    </Field>
-                  </div>
-                  <Field>
-                    <FieldLabel>כתובת</FieldLabel>
-                    <Input
-                      value={addForm.address}
-                      onChange={(e) => setAddForm((p) => ({ ...p, address: e.target.value }))}
-                      placeholder="רחוב, עיר"
-                    />
-                  </Field>
-                </FieldGroup>
-              </TabsContent>
-              <TabsContent value="bank" className="space-y-4 mt-4">
-                <FieldGroup>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel>שם בנק *</FieldLabel>
-                      <Input
-                        value={addForm.bankDetails.bankName}
-                        onChange={(e) => setBank('add', 'bankName', e.target.value)}
-                        placeholder="למשל: בנק הפועלים"
-                        required
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel>מספר בנק</FieldLabel>
-                      <Input
-                        value={addForm.bankDetails.bankNum}
-                        onChange={(e) => setBank('add', 'bankNum', e.target.value)}
-                        dir="ltr"
-                      />
-                    </Field>
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel>שם בעל חשבון *</FieldLabel>
-                      <Input
-                        value={addForm.bankDetails.accountHolder}
-                        onChange={(e) => setBank('add', 'accountHolder', e.target.value)}
-                        required
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel>מספר סניף</FieldLabel>
-                      <Input
-                        value={addForm.bankDetails.branchNum}
-                        onChange={(e) => setBank('add', 'branchNum', e.target.value)}
-                        dir="ltr"
-                      />
-                    </Field>
-                  </div>
-                  <Field>
-                    <FieldLabel>מספר חשבון</FieldLabel>
-                    <Input
-                      value={addForm.bankDetails.accountNum}
-                      onChange={(e) => setBank('add', 'accountNum', e.target.value)}
-                      dir="ltr"
-                    />
-                  </Field>
-                </FieldGroup>
-              </TabsContent>
-              <TabsContent value="commissions" className="mt-4">
-                <CommissionMatrix
-                  target="add"
-                  data={addForm}
-                  products={products}
-                  setAddForm={setAddForm}
-                  setEditAgent={setEditAgent}
-                />
-              </TabsContent>
-            </Tabs>
-            {error ? <p className="text-destructive text-sm">{error}</p> : null}
-            <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
-              <Button type="button" variant="outline" onClick={() => setShowAddModal(false)}>
-                ביטול
-              </Button>
-              <Button type="submit" disabled={loading}>
-                {loading && <Spinner className="me-2" />}
-                שמירה
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+        <ConfirmDialog
+          open={!!deleteAgent}
+          title="ניטרול סוכן"
+          message={deleteAgent
+            ? `להפוך את "${deleteAgent.agentName}" ללא פעיל?${deleteAgent.totalSales > 0 ? ' (לא ניתן אם יש עסקאות מקושרות)' : ''}`
+            : ''}
+          confirmLabel="הפוך ללא פעיל"
+          danger
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteAgent(null)}
+          isLoading={loading}
+        />
 
-      <Dialog
-        open={!!editAgent}
-        onOpenChange={(o) => {
-          if (!o) {
-            setEditAgent(null);
-            setError('');
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto text-right" dir="rtl">
-          <DialogHeader>
-            <DialogTitle>עריכת סוכן</DialogTitle>
-            <DialogDescription>עדכנו פרטי סוכן, בנק ועמלות</DialogDescription>
-          </DialogHeader>
-          {editAgent ? (
-            <form onSubmit={saveEdit} className="space-y-4">
-              <Tabs value={editTab} onValueChange={setEditTab} className="mt-0">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="details">פרטים אישיים</TabsTrigger>
-                  <TabsTrigger value="bank">פרטי בנק</TabsTrigger>
-                  <TabsTrigger value="commissions">עמלות</TabsTrigger>
-                </TabsList>
-                <TabsContent value="details" className="space-y-4 mt-4">
-                  <FieldGroup>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <Field>
-                        <FieldLabel>שם סוכן *</FieldLabel>
-                        <Input
-                          value={editAgent.agentName}
-                          onChange={(e) => setEditAgent((p) => ({ ...p, agentName: e.target.value }))}
-                          required
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel>תעודת זהות / ח.פ *</FieldLabel>
-                        <Input
-                          value={editAgent.idNum}
-                          onChange={(e) => setEditAgent((p) => ({ ...p, idNum: e.target.value }))}
-                          dir="ltr"
-                          required
-                        />
-                        {agentIsraeliIdHint(editAgent.idNum) ? (
-                          <p className="text-destructive text-xs">{agentIsraeliIdHint(editAgent.idNum)}</p>
-                        ) : null}
-                      </Field>
-                    </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <Field>
-                        <FieldLabel>טלפון</FieldLabel>
-                        <Input
-                          value={editAgent.phone}
-                          onChange={(e) => setEditAgent((p) => ({ ...p, phone: e.target.value }))}
-                          dir="ltr"
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel>אימייל</FieldLabel>
-                        <Input
-                          type="email"
-                          value={editAgent.email}
-                          onChange={(e) => setEditAgent((p) => ({ ...p, email: e.target.value }))}
-                          dir="ltr"
-                        />
-                      </Field>
-                    </div>
-                    <Field>
-                      <FieldLabel>כתובת</FieldLabel>
-                      <Input
-                        value={editAgent.address}
-                        onChange={(e) => setEditAgent((p) => ({ ...p, address: e.target.value }))}
-                      />
-                    </Field>
-                  </FieldGroup>
-                </TabsContent>
-                <TabsContent value="bank" className="space-y-4 mt-4">
-                  <FieldGroup>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <Field>
-                        <FieldLabel>שם בנק *</FieldLabel>
-                        <Input
-                          value={editAgent.bankDetails.bankName}
-                          onChange={(e) => setBank('edit', 'bankName', e.target.value)}
-                          required
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel>מספר בנק</FieldLabel>
-                        <Input
-                          value={editAgent.bankDetails.bankNum}
-                          onChange={(e) => setBank('edit', 'bankNum', e.target.value)}
-                          dir="ltr"
-                        />
-                      </Field>
-                    </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <Field>
-                        <FieldLabel>שם בעל חשבון *</FieldLabel>
-                        <Input
-                          value={editAgent.bankDetails.accountHolder}
-                          onChange={(e) => setBank('edit', 'accountHolder', e.target.value)}
-                          required
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel>מספר סניף</FieldLabel>
-                        <Input
-                          value={editAgent.bankDetails.branchNum}
-                          onChange={(e) => setBank('edit', 'branchNum', e.target.value)}
-                          dir="ltr"
-                        />
-                      </Field>
-                    </div>
-                    <Field>
-                      <FieldLabel>מספר חשבון</FieldLabel>
-                      <Input
-                        value={editAgent.bankDetails.accountNum}
-                        onChange={(e) => setBank('edit', 'accountNum', e.target.value)}
-                        dir="ltr"
-                      />
-                    </Field>
-                  </FieldGroup>
-                </TabsContent>
-                <TabsContent value="commissions" className="mt-4">
-                  <CommissionMatrix
-                    target="edit"
-                    data={editAgent}
-                    products={products}
-                    setAddForm={setAddForm}
-                    setEditAgent={setEditAgent}
-                  />
-                </TabsContent>
-              </Tabs>
+        {/* ── View Agent ── */}
+        <ViewAgentDialog
+          agent={viewAgent}
+          products={products}
+          productSlugMap={productSlugMap}
+          onClose={() => setViewAgent(null)}
+          onEdit={(a) => { setEditTab('details'); setEditAgent(agentFromRow(a)); }}
+        />
+
+        {/* ── Add Agent ── */}
+        <Dialog open={showAddModal} onOpenChange={(o) => { setShowAddModal(o); if (!o) setError(''); }}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto text-right" dir="rtl">
+            <DialogHeader>
+              <DialogTitle>הוספת סוכן</DialogTitle>
+              <DialogDescription>הזינו פרטי סוכן, בנק ועמלות למוצרים</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={submitAdd} className="space-y-4">
+              <AgentFormTabs target="add" data={addForm} setData={setAddForm} tab={addTab} setTab={setAddTab} />
               {error ? <p className="text-destructive text-sm">{error}</p> : null}
               <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
-                <Button type="button" variant="outline" onClick={() => setEditAgent(null)}>
-                  ביטול
-                </Button>
-                <Button type="submit" disabled={loading}>
-                  {loading && <Spinner className="me-2" />}
-                  שמירה
-                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowAddModal(false)}>ביטול</Button>
+                <Button type="submit" disabled={loading}>{loading && <Spinner className="me-2" />}שמירה</Button>
               </DialogFooter>
             </form>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
 
-      <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">סוכנים</h1>
-            <p className="text-muted-foreground">ניהול סוכנים ועמלות למוצרים</p>
+        {/* ── Edit Agent ── */}
+        <Dialog open={!!editAgent} onOpenChange={(o) => { if (!o) { setEditAgent(null); setError(''); } }}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto text-right" dir="rtl">
+            <DialogHeader>
+              <DialogTitle>עריכת סוכן</DialogTitle>
+              <DialogDescription>עדכנו פרטי סוכן, בנק ועמלות</DialogDescription>
+            </DialogHeader>
+            {editAgent ? (
+              <form onSubmit={saveEdit} className="space-y-4">
+                <AgentFormTabs target="edit" data={editAgent} setData={setEditAgent} tab={editTab} setTab={setEditTab} />
+                {error ? <p className="text-destructive text-sm">{error}</p> : null}
+                <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
+                  <Button type="button" variant="outline" onClick={() => setEditAgent(null)}>ביטול</Button>
+                  <Button type="submit" disabled={loading}>{loading && <Spinner className="me-2" />}שמירה</Button>
+                </DialogFooter>
+              </form>
+            ) : null}
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Main content ── */}
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">סוכנים</h1>
+              <p className="text-muted-foreground">ניהול סוכנים, עמלות וקישורי הפצה</p>
+            </div>
+            <Button type="button" onClick={openAdd}>
+              <Plus className="size-4 me-2" />
+              הוסף סוכן
+            </Button>
           </div>
-          <Button type="button" onClick={openAdd}>
-            <Plus className="size-4 me-2" />
-            הוסף סוכן
-          </Button>
-        </div>
 
-        <Card>
-          <CardContent className="pt-6">
-            <UnifiedFilterShell
-              filters={agentFilterConfig}
-              values={{ search, commissionFilter: commissionFilter === 'all' ? '' : commissionFilter }}
-              onChange={(next) => {
-                setSearch(String(next.search || ''));
-                setCommissionFilter(String(next.commissionFilter || 'all'));
-              }}
-              onClear={() => {
-                setSearch('');
-                setCommissionFilter('all');
-              }}
-              resultsCount={filteredRows.length}
-              totalCount={rows.length}
-              isLoading={loading}
-            />
-          </CardContent>
-        </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <UnifiedFilterShell
+                filters={agentFilterConfig}
+                values={{ search, commissionFilter: commissionFilter === 'all' ? '' : commissionFilter }}
+                onChange={(next) => {
+                  setSearch(String(next.search || ''));
+                  setCommissionFilter(String(next.commissionFilter || 'all'));
+                }}
+                onClear={() => { setSearch(''); setCommissionFilter('all'); }}
+                resultsCount={filteredRows.length}
+                totalCount={rows.length}
+                isLoading={loading}
+              />
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>רשימת סוכנים</CardTitle>
-            <CardDescription>
-              {filteredRows.length} / {rows.length} סוכנים
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {filteredRows.length === 0 && !loading ? (
-              <Empty>
-                <EmptyMedia variant="icon">
-                  <Users className="size-8" />
-                </EmptyMedia>
-                <EmptyTitle>אין סוכנים עדיין</EmptyTitle>
-                <EmptyDescription>הוסיפו סוכן ראשון כדי לקשר מנויים ועמלות</EmptyDescription>
-                <Button className="mt-4" type="button" onClick={openAdd}>
-                  <Plus className="size-4 me-2" />
-                  הוסף סוכן חדש
-                </Button>
-              </Empty>
-            ) : (
-              <div className="overflow-x-auto rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>שם</TableHead>
-                      <TableHead>ת&quot;ז / ח.פ</TableHead>
-                      <TableHead>טלפון</TableHead>
-                      <TableHead>אימייל</TableHead>
-                      <TableHead>עמלות</TableHead>
-                      <TableHead>סה&quot;כ מנויים</TableHead>
-                      <TableHead className="w-28">פעולות</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredRows.map((r) => {
-                      const comms = r.productCommissions || [];
-                      const preview = comms.slice(0, 2);
-                      const rest = comms.length - preview.length;
-                      return (
-                        <TableRow key={r.id}>
-                          <TableCell className="font-medium">{r.agentName}</TableCell>
-                          <TableCell dir="ltr" className="text-start font-mono text-sm">
-                            {r.idNum}
-                          </TableCell>
-                          <TableCell dir="ltr" className="text-start">
-                            {r.phone || '—'}
-                          </TableCell>
-                          <TableCell dir="ltr" className="text-start text-muted-foreground">
-                            {r.email || '—'}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {preview.map((c) => (
-                                <Badge key={c.productId} variant="outline" className="text-xs">
-                                  <Percent className="size-3 me-1" />
-                                  {getProductLabel(c.productId).slice(0, 14)}
-                                  {String(c.commission ?? '').length ? ` · ₪${c.commission}` : ''}
-                                </Badge>
-                              ))}
-                              {rest > 0 ? (
-                                <Badge variant="secondary" className="text-xs">
-                                  +{rest}
-                                </Badge>
-                              ) : null}
-                              {!comms.length ? <span className="text-muted-foreground text-sm">—</span> : null}
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-semibold text-primary">{r.totalSales ?? 0}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                type="button"
-                                onClick={() => {
-                                  setEditTab('details');
-                                  setEditAgent(agentFromRow(r));
-                                }}
-                                aria-label="ערוך"
-                              >
-                                <Edit2 className="size-4" />
-                              </Button>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    type="button"
-                                    onClick={() => setDeleteAgent(r)}
-                                    aria-label="הפוך ללא פעיל"
-                                  >
-                                    <Archive className="size-4 text-destructive" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>הפוך ללא פעיל</TooltipContent>
-                              </Tooltip>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+          <Card>
+            <CardHeader className="pb-0">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">רשימת סוכנים</CardTitle>
+                <CardDescription>{filteredRows.length} / {rows.length} סוכנים</CardDescription>
               </div>
-            )}
-            {loading && rows.length > 0 ? <p className="text-sm text-muted-foreground mt-2">טוען…</p> : null}
-          </CardContent>
-        </Card>
-      </div>
+            </CardHeader>
+            <CardContent className="pt-4">
+              {filteredRows.length === 0 && !loading ? (
+                <Empty>
+                  <EmptyMedia variant="icon"><Users className="size-8" /></EmptyMedia>
+                  <EmptyTitle>אין סוכנים עדיין</EmptyTitle>
+                  <EmptyDescription>הוסיפו סוכן ראשון כדי לקשר מנויים ועמלות</EmptyDescription>
+                  <Button className="mt-4" type="button" onClick={openAdd}>
+                    <Plus className="size-4 me-2" />הוסף סוכן חדש
+                  </Button>
+                </Empty>
+              ) : (
+                <div className="rounded-xl border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-slate-50 hover:bg-slate-50">
+                        <TableHead className="font-semibold">שם</TableHead>
+                        <TableHead className="font-semibold">ת"ז / ח.פ</TableHead>
+                        <TableHead className="font-semibold hidden sm:table-cell">טלפון</TableHead>
+                        <TableHead className="font-semibold hidden md:table-cell">אימייל</TableHead>
+                        <TableHead className="font-semibold">סטטוס</TableHead>
+                        <TableHead className="font-semibold">מוצרים</TableHead>
+                        <TableHead className="font-semibold text-center">מנויים</TableHead>
+                        <TableHead className="w-32 font-semibold">פעולות</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredRows.map((r) => {
+                        const comms = r.productCommissions || [];
+                        const preview = comms.slice(0, 2);
+                        const rest = comms.length - preview.length;
+                        return (
+                          <TableRow
+                            key={r.id}
+                            className="hover:bg-primary/[0.03] transition-colors group"
+                          >
+                            <TableCell>
+                              <button
+                                type="button"
+                                className="font-semibold text-foreground hover:text-primary transition-colors text-start"
+                                onClick={() => setViewAgent(r)}
+                              >
+                                {r.agentName}
+                              </button>
+                            </TableCell>
+                            <TableCell dir="ltr" className="text-start font-mono text-sm text-muted-foreground">
+                              {r.idNum}
+                            </TableCell>
+                            <TableCell dir="ltr" className="text-start hidden sm:table-cell text-muted-foreground">
+                              {r.phone || '—'}
+                            </TableCell>
+                            <TableCell dir="ltr" className="text-start hidden md:table-cell text-muted-foreground text-sm">
+                              {r.email || '—'}
+                            </TableCell>
+                            <TableCell>
+                              <Badge className="bg-green-100 text-green-800 border-green-200 hover:bg-green-100 text-xs">
+                                פעיל
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-1">
+                                {preview.map((c) => (
+                                  <Badge key={c.productId} variant="secondary" className="text-xs gap-1">
+                                    <Percent className="size-2.5" />
+                                    {getProductLabel(c.productId).slice(0, 12)}
+                                    {String(c.commission ?? '').length ? ` ₪${c.commission}` : ''}
+                                  </Badge>
+                                ))}
+                                {rest > 0 ? <Badge variant="outline" className="text-xs">+{rest}</Badge> : null}
+                                {!comms.length ? <span className="text-muted-foreground text-sm">—</span> : null}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center font-bold text-primary">
+                              {r.totalSales ?? 0}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost" size="icon" type="button"
+                                      className="size-8 text-primary hover:text-primary hover:bg-primary/10"
+                                      onClick={() => setViewAgent(r)}
+                                      aria-label="צפייה"
+                                    >
+                                      <Eye className="size-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>צפייה וקישורי הפצה</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost" size="icon" type="button"
+                                      className="size-8 hover:bg-slate-100"
+                                      onClick={() => { setEditTab('details'); setEditAgent(agentFromRow(r)); }}
+                                      aria-label="ערוך"
+                                    >
+                                      <Edit2 className="size-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>עריכה</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost" size="icon" type="button"
+                                      className="size-8 hover:bg-destructive/10 hover:text-destructive"
+                                      onClick={() => setDeleteAgent(r)}
+                                      aria-label="ניטרול"
+                                    >
+                                      <Archive className="size-4 text-destructive" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>הפוך ללא פעיל</TooltipContent>
+                                </Tooltip>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+              {loading && rows.length > 0 ? (
+                <p className="text-sm text-muted-foreground mt-3 flex items-center gap-2">
+                  <Spinner className="size-3.5" />טוען…
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+        </div>
       </AdminPageShell>
     </TooltipProvider>
   );

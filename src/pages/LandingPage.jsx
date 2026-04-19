@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import {
   Phone,
   Mail,
@@ -299,9 +299,12 @@ function ContactLandingView({ slug, content, whatYouGetRows, whatYouGetTitle, wh
  */
 export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp } = {}) {
   const params = useParams();
+  const [searchParams] = useSearchParams();
   const slug = slugProp ?? params.slug;
   const routePriceListId = params.priceListId;
   const priceListId = priceListIdProp ?? routePriceListId;
+  // agentId from URL takes priority over the price-list's default agent
+  const urlAgentId = searchParams.get('agentId') || '';
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -495,7 +498,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
         phone: phone.trim(),
         email: email.trim(),
         organizationName: ctx?.organizationName || 'לקוח פרטי',
-        agentId: String(selectedProduct?.agentId || ''),
+        agentId: urlAgentId || String(selectedProduct?.agentId || ''),
         agentName: '',
         beneficiaryCount: Math.max(0, Math.min(5, Number(beneficiaryCount) || 0)),
         beneficiaries: [],

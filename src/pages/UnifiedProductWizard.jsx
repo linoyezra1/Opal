@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Check, ChevronDown, ChevronUp, Clock, ExternalLink, Eye, EyeOff,
+  Check, ChevronDown, ChevronUp, Clock, Copy, ExternalLink, Eye, EyeOff,
   Heart, Phone, Plus, Shield, Star, Users, Pill, Stethoscope, Syringe, FileText, X,
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
@@ -267,6 +267,7 @@ export default function UnifiedProductWizard() {
   const [s4Loading, setS4Loading] = useState(false);
   const [s4Error, setS4Error] = useState('');
   const [s4Done, setS4Done] = useState(false);
+  const [copiedAgentId, setCopiedAgentId] = useState('');
 
   // ── Load reference data ────────────────────────────────────────────────────
   const loadRef = useCallback(async () => {
@@ -514,6 +515,20 @@ export default function UnifiedProductWizard() {
     } finally {
       setS4Loading(false);
     }
+  }
+
+  function agentLink(agentId) {
+    if (!pageSlug) return '';
+    return `${window.location.origin}/p/${pageSlug}?agentId=${encodeURIComponent(agentId)}`;
+  }
+
+  function copyAgentLink(agentId) {
+    const link = agentLink(agentId);
+    if (!link) return;
+    navigator.clipboard.writeText(link).then(() => {
+      setCopiedAgentId(agentId);
+      setTimeout(() => setCopiedAgentId(''), 2000);
+    }).catch(() => {});
   }
 
   function handleImageUpload(e) {
@@ -863,43 +878,82 @@ export default function UnifiedProductWizard() {
           <div className="space-y-5">
             <div className="space-y-2">
               <p className="text-sm font-medium text-slate-800">סוכנים</p>
-              <p className="text-xs text-muted-foreground">בחרו סוכנים — יתעדכן productCommissions. העמלה מתמלאת מהגלובלית (ניתן לשנות לכל סוכן).</p>
+              <p className="text-xs text-muted-foreground">
+                בחרו סוכנים — יתעדכן productCommissions. העמלה מתמלאת מהגלובלית (ניתן לשנות לכל סוכן).
+                {pageSlug ? ' לכל סוכן ייווצר קישור ייחודי לדף הנחיתה.' : ''}
+              </p>
               {agents.length === 0 ? (
                 <p className="text-sm text-muted-foreground">אין סוכנים במערכת</p>
               ) : (
-                <div className="border rounded-lg divide-y max-h-60 overflow-y-auto">
+                <div className="border rounded-lg divide-y">
                   {agents.map((a) => {
                     const checked = a.id in selectedAgents;
+                    const link = agentLink(a.id);
+                    const justCopied = copiedAgentId === a.id;
                     return (
-                      <label key={a.id} className="flex items-center gap-3 p-2.5 cursor-pointer hover:bg-slate-50">
-                        <input
-                          type="checkbox"
-                          className="size-4 rounded"
-                          checked={checked}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedAgents((p) => ({ ...p, [a.id]: String(s2.globalCommission || '') }));
-                            } else {
-                              setSelectedAgents((p) => { const n = { ...p }; delete n[a.id]; return n; });
-                            }
-                          }}
-                        />
-                        <span className="flex-1 text-sm">{a.agentName}</span>
-                        {checked ? (
-                          <Input
-                            type="number" min="0" dir="ltr"
-                            className="w-24 h-7 text-xs"
-                            value={selectedAgents[a.id] ?? ''}
-                            placeholder="עמלה ₪"
-                            onChange={(e) => setSelectedAgents((p) => ({ ...p, [a.id]: e.target.value }))}
-                            onClick={(e) => e.stopPropagation()}
+                      <div key={a.id} className={`${checked ? 'bg-blue-50/50' : ''}`}>
+                        <label className="flex items-center gap-3 p-2.5 cursor-pointer hover:bg-slate-50">
+                          <input
+                            type="checkbox"
+                            className="size-4 rounded shrink-0"
+                            checked={checked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedAgents((p) => ({ ...p, [a.id]: String(s2.globalCommission || '') }));
+                              } else {
+                                setSelectedAgents((p) => { const n = { ...p }; delete n[a.id]; return n; });
+                              }
+                            }}
                           />
+                          <span className="flex-1 text-sm font-medium">{a.agentName}</span>
+                          {checked ? (
+                            <Input
+                              type="number" min="0" dir="ltr"
+                              className="w-24 h-7 text-xs shrink-0"
+                              value={selectedAgents[a.id] ?? ''}
+                              placeholder="עמלה ₪"
+                              onChange={(e) => setSelectedAgents((p) => ({ ...p, [a.id]: e.target.value }))}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          ) : null}
+                        </label>
+                        {checked && link ? (
+                          <div className="px-2.5 pb-2.5 flex items-center gap-2" dir="ltr">
+                            <span className="flex-1 truncate text-xs font-mono text-muted-foreground bg-white border rounded px-2 py-1 select-all">
+                              {link}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => copyAgentLink(a.id)}
+                              className={`shrink-0 inline-flex items-center gap-1 h-7 px-2 rounded border text-xs transition-colors
+                                ${justCopied ? 'bg-green-100 border-green-300 text-green-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                              title="העתק קישור"
+                            >
+                              {justCopied ? <Check className="size-3" /> : <Copy className="size-3" />}
+                              {justCopied ? 'הועתק' : 'העתק'}
+                            </button>
+                            <a
+                              href={link}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="shrink-0 inline-flex items-center h-7 w-7 justify-center rounded border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                              title="פתח קישור"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <ExternalLink className="size-3" />
+                            </a>
+                          </div>
                         ) : null}
-                      </label>
+                      </div>
                     );
                   })}
                 </div>
               )}
+              {!pageSlug && Object.keys(selectedAgents).length > 0 ? (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                  להפקת קישורי הפצה ייחודיים — פרסם דף נחיתה בשלב 3.
+                </p>
+              ) : null}
             </div>
 
             <div className="space-y-2">
