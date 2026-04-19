@@ -39,7 +39,7 @@ export default function UnifiedFilterShell(props) {
   return (
     <div className={`space-y-3 ${className}`} dir="rtl">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[220px] max-w-xl">
+        <div className="relative w-full sm:flex-1 sm:min-w-[220px] sm:max-w-xl">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
           <Input
             value={resolvedSearchValue}
@@ -84,14 +84,14 @@ export default function UnifiedFilterShell(props) {
         ) : null}
 
         {resultsCount !== undefined && totalCount !== undefined ? (
-          <div className="text-sm text-muted-foreground hidden sm:block">
+          <div className="text-xs sm:text-sm text-muted-foreground w-full sm:w-auto text-center sm:text-right">
             {isLoading ? 'מחפש...' : resultsCount === totalCount ? `${totalCount} תוצאות` : `${resultsCount} מתוך ${totalCount}`}
           </div>
         ) : null}
       </div>
 
       {(hasNewApi ? otherFilters.length > 0 : !!advancedContent) && expanded ? (
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-xl p-3 sm:p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <h4 className="text-sm font-medium text-slate-800">סינון מתקדם</h4>
             {onClear ? (

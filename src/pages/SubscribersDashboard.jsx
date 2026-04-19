@@ -12,6 +12,7 @@ import {
   Download,
   Eye,
   Ban,
+  MoreVertical,
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import {
@@ -782,7 +783,7 @@ export default function SubscribersDashboard() {
                   value={bulkDeleteConfirmText}
                   onChange={(e) => setBulkDeleteConfirmText(e.target.value)}
                   placeholder="הקלד/י DELETE"
-                  className="text-left"
+                  className="text-center tracking-widest font-mono uppercase"
                   dir="ltr"
                 />
               </div>
@@ -808,7 +809,10 @@ export default function SubscribersDashboard() {
         </Dialog>
 
         <Dialog open={editOpen} onOpenChange={setEditOpen}>
-          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" dir="rtl">
+          <DialogContent
+            className="w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6"
+            dir="rtl"
+          >
             <DialogHeader>
               <DialogTitle>עריכת עסקה / מנוי</DialogTitle>
               <DialogDescription>עדכון פרטי העסקה</DialogDescription>
@@ -821,10 +825,25 @@ export default function SubscribersDashboard() {
                 </Field>
               ) : null}
               <Tabs value={editTab} onValueChange={setEditTab} className="mt-0">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="primary">מוטב ראשי</TabsTrigger>
-                  <TabsTrigger value="secondary">מוטבים משניים</TabsTrigger>
-                  <TabsTrigger value="transaction">פרטי עסקה</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-3 h-auto">
+                  <TabsTrigger
+                    value="primary"
+                    className="text-[11px] sm:text-sm whitespace-normal leading-tight"
+                  >
+                    מוטב ראשי
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="secondary"
+                    className="text-[11px] sm:text-sm whitespace-normal leading-tight"
+                  >
+                    מוטבים משניים
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="transaction"
+                    className="text-[11px] sm:text-sm whitespace-normal leading-tight"
+                  >
+                    פרטי עסקה
+                  </TabsTrigger>
                 </TabsList>
                 <TabsContent value="primary" className="space-y-4 mt-4">
                   <FieldGroup>
@@ -1382,7 +1401,7 @@ export default function SubscribersDashboard() {
           </div>
 
           {/* כרטיסי סטטיסטיקה — נתונים אמיתיים מהדוח */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
             <StatsCard title="סה״כ הכנסות" value={formatCurrency(s.totalRevenue || 0)} icon={TrendingUp} loading={loading} />
             <StatsCard title="עסקאות בתוצאות" value={visibleRows.length} icon={Users} loading={loading} />
             <Tooltip>
@@ -1454,7 +1473,7 @@ export default function SubscribersDashboard() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="overflow-auto pt-2" dir="rtl">
+            <CardContent className="pt-2" dir="rtl">
               {selectedCount > 0 ? (
                 <div className="fixed bottom-4 left-1/2 z-40 w-[min(96vw,48rem)] -translate-x-1/2 rounded-lg border bg-background/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80">
                   <div className="flex items-center justify-between gap-3">
@@ -1482,8 +1501,8 @@ export default function SubscribersDashboard() {
                   <EmptyDescription>נסו לשנות חיפוש או סינון מתקדם</EmptyDescription>
                 </Empty>
               ) : (
-                <div className="rounded-md border">
-                  <Table className="text-right">
+                <div className="rounded-md border overflow-x-auto -mx-4 md:mx-0">
+                  <Table className="text-right min-w-[900px]">
                     <TableHeader>
                       <TableRow className="[&_th]:text-right">
                         <TableHead dir="rtl" className="w-12 text-right">
@@ -1596,13 +1615,14 @@ export default function SubscribersDashboard() {
                             {r.createdAt ? new Date(r.createdAt).toLocaleString('he-IL') : '-'}
                           </TableCell>
                           <TableCell dir="rtl" className="text-right">
-                            <div className="flex items-center justify-end gap-1 flex-wrap">
+                            <div className="hidden md:flex items-center justify-end gap-1 flex-wrap">
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
                                     variant="ghost"
                                     size="icon"
                                     type="button"
+                                    className="min-h-9 min-w-9 shrink-0"
                                     onClick={() => {
                                       setSelected(r.raw ?? r);
                                       setSelectedDetailsTab('transaction');
@@ -1616,7 +1636,14 @@ export default function SubscribersDashboard() {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" type="button" onClick={() => openEdit(r)} aria-label="ערוך">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    type="button"
+                                    className="min-h-9 min-w-9 shrink-0"
+                                    onClick={() => openEdit(r)}
+                                    aria-label="ערוך"
+                                  >
                                     <Edit2 className="size-4" />
                                   </Button>
                                 </TooltipTrigger>
@@ -1628,6 +1655,7 @@ export default function SubscribersDashboard() {
                                     variant="ghost"
                                     size="icon"
                                     type="button"
+                                    className="min-h-9 min-w-9 shrink-0"
                                     onClick={() => setDeleteTarget({ id: r.id, transactionId: r.transactionId })}
                                     aria-label="מחק"
                                   >
@@ -1640,7 +1668,7 @@ export default function SubscribersDashboard() {
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                className="h-8 px-2 text-xs"
+                                className="h-8 px-2 text-xs shrink-0"
                                 disabled={isCancelled || missingRecurringIds}
                                 onClick={() =>
                                   setCancelTarget({
@@ -1658,6 +1686,63 @@ export default function SubscribersDashboard() {
                                 <span className="hidden sm:inline">ביטול מנוי (עצירת חיוב עתידי)</span>
                               </Button>
                             </div>
+                            <details className="relative md:hidden">
+                              <summary className="flex h-10 w-10 min-h-10 min-w-10 cursor-pointer list-none items-center justify-center rounded-md border border-input bg-background hover:bg-accent [&::-webkit-details-marker]:hidden">
+                                <MoreVertical className="size-4" aria-hidden />
+                                <span className="sr-only">תפריט פעולות</span>
+                              </summary>
+                              <div
+                                className="absolute end-0 top-full z-[60] mt-1 flex min-w-[12rem] flex-col rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+                                dir="rtl"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Button
+                                  variant="ghost"
+                                  type="button"
+                                  className="h-auto min-h-10 w-full justify-start gap-2 px-3 py-2 font-normal"
+                                  onClick={() => {
+                                    setSelected(r.raw ?? r);
+                                    setSelectedDetailsTab('transaction');
+                                  }}
+                                >
+                                  <Eye className="size-4 shrink-0" />
+                                  הצג פרטים
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  type="button"
+                                  className="h-auto min-h-10 w-full justify-start gap-2 px-3 py-2 font-normal"
+                                  onClick={() => openEdit(r)}
+                                >
+                                  <Edit2 className="size-4 shrink-0" />
+                                  עריכה
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  type="button"
+                                  className="h-auto min-h-10 w-full justify-start gap-2 px-3 py-2 font-normal text-destructive hover:text-destructive"
+                                  onClick={() => setDeleteTarget({ id: r.id, transactionId: r.transactionId })}
+                                >
+                                  <Archive className="size-4 shrink-0" />
+                                  מחיקה
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="h-auto min-h-10 w-full justify-start gap-2 px-3 py-2 text-xs font-normal"
+                                  disabled={isCancelled || missingRecurringIds}
+                                  onClick={() =>
+                                    setCancelTarget({
+                                      id: r.id,
+                                      transactionId: r.transactionId,
+                                    })
+                                  }
+                                >
+                                  <Ban className="size-3.5 shrink-0 text-amber-600" />
+                                  ביטול מנוי (עצירת חיוב)
+                                </Button>
+                              </div>
+                            </details>
                           </TableCell>
                         </TableRow>
                           );
@@ -1695,7 +1780,10 @@ export default function SubscribersDashboard() {
         </div>
 
         <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
-          <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col text-right" dir="rtl">
+          <DialogContent
+            className="w-[calc(100vw-2rem)] sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col text-right p-4 sm:p-6"
+            dir="rtl"
+          >
             <DialogHeader>
               <DialogTitle>פרטי מוטבים</DialogTitle>
               <DialogDescription>
@@ -1708,10 +1796,25 @@ export default function SubscribersDashboard() {
               dir="rtl"
               className="overflow-hidden text-right"
             >
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="transaction">פרטי עסקה</TabsTrigger>
-                <TabsTrigger value="beneficiary">פרטי מוטב</TabsTrigger>
-                <TabsTrigger value="billingHistory">היסטוריית חיובים</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-3 h-auto">
+                <TabsTrigger
+                  value="transaction"
+                  className="text-[11px] sm:text-sm whitespace-normal leading-tight"
+                >
+                  פרטי עסקה
+                </TabsTrigger>
+                <TabsTrigger
+                  value="beneficiary"
+                  className="text-[11px] sm:text-sm whitespace-normal leading-tight"
+                >
+                  פרטי מוטב
+                </TabsTrigger>
+                <TabsTrigger
+                  value="billingHistory"
+                  className="text-[11px] sm:text-sm whitespace-normal leading-tight"
+                >
+                  היסטוריית חיובים
+                </TabsTrigger>
               </TabsList>
               <TabsContent value="transaction" className="overflow-auto max-h-[68vh] space-y-4 mt-3">
                 {(() => {
@@ -1822,8 +1925,8 @@ export default function SubscribersDashboard() {
                     <CardTitle className="text-base">היסטוריית חיובים</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <div className="rounded-md border overflow-auto">
-                      <Table dir="rtl" className="text-right">
+                    <div className="rounded-md border overflow-x-auto -mx-4 md:mx-0">
+                      <Table dir="rtl" className="text-right min-w-[900px]">
                         <TableHeader>
                           <TableRow>
                             <TableHead className="text-right">חודש חיוב</TableHead>

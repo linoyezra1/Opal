@@ -170,13 +170,16 @@ function ContactLandingView({ slug, content, whatYouGetRows, whatYouGetTitle, wh
   return (
     <div dir="rtl" className="min-h-screen bg-background text-right">
       <section className="relative py-10 md:py-16 overflow-hidden bg-gradient-to-b from-[#D9EAF3]/40 via-background to-background">
-        <div className="container relative max-w-6xl mx-auto px-4">
+        <div className="container relative max-w-6xl mx-auto px-4 overflow-hidden">
           <div className="grid md:grid-cols-2 gap-8 md:gap-12 items-center">
             <div className="order-2 md:order-1 space-y-5 text-center md:text-right">
               {content.subtitle ? (
                 <Badge className="inline-flex bg-primary/10 text-primary border-primary/20">{content.subtitle}</Badge>
               ) : null}
-              <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-balance leading-tight text-foreground">
+              <h1
+                style={{ fontSize: 'clamp(1.75rem, 4vw + 0.5rem, 3rem)' }}
+                className="font-bold text-balance leading-tight text-foreground"
+              >
                 {content.title || 'צור קשר'}
               </h1>
               <p className="text-lg text-muted-foreground leading-relaxed whitespace-pre-line max-w-xl mx-auto md:mx-0 md:ms-0 md:me-auto">
@@ -195,7 +198,12 @@ function ContactLandingView({ slug, content, whatYouGetRows, whatYouGetTitle, wh
         <section className="py-16 md:py-20">
           <div className="container mx-auto max-w-6xl px-4">
             <div className="mb-12 text-center">
-              <h2 className="mb-4 text-3xl font-bold text-foreground md:text-4xl">{whatYouGetTitle}</h2>
+              <h2
+                style={{ fontSize: 'clamp(1.5rem, 3vw + 0.5rem, 2.25rem)' }}
+                className="mb-4 font-bold text-foreground"
+              >
+                {whatYouGetTitle}
+              </h2>
               <p className="mx-auto max-w-2xl text-lg text-muted-foreground">{whatYouGetSubtitle}</p>
             </div>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -607,13 +615,16 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
       {/* Hero — תמונת מוצר/דף בולטת + טקסט */}
       <section className="relative py-10 md:py-16 overflow-hidden bg-gradient-to-b from-[#D9EAF3]/40 via-background to-background">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent pointer-events-none" />
-        <div className="container relative max-w-6xl mx-auto px-4">
+        <div className="container relative max-w-6xl mx-auto px-4 overflow-hidden">
           <div className="grid md:grid-cols-2 gap-8 md:gap-12 items-center">
             <div className="order-2 md:order-1 space-y-5 text-center md:text-right">
               {content.subtitle ? (
                 <Badge className="inline-flex bg-primary/10 text-primary border-primary/20">{content.subtitle}</Badge>
               ) : null}
-              <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-balance leading-tight text-foreground">
+              <h1
+                style={{ fontSize: 'clamp(1.75rem, 4vw + 0.5rem, 3rem)' }}
+                className="font-bold text-balance leading-tight text-foreground"
+              >
                 {content.title}
               </h1>
               <p className="text-lg text-muted-foreground leading-relaxed whitespace-pre-line max-w-xl mx-auto md:mx-0 md:ms-0 md:me-auto">
@@ -640,7 +651,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
 
       <section className="py-12 bg-muted/30 border-y">
         <div className="container max-w-6xl mx-auto px-4">
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
             {benefits.map((benefit) => (
               <div key={benefit.title} className="flex items-center gap-4 p-4 rounded-lg bg-background border">
                 <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -660,7 +671,12 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
       <section id="services" className="py-16 md:py-20 scroll-mt-20">
         <div className="container mx-auto max-w-6xl px-4">
           <div className="mb-12 text-center">
-            <h2 className="mb-4 text-3xl font-bold text-foreground md:text-4xl">{whatYouGetTitle}</h2>
+            <h2
+              style={{ fontSize: 'clamp(1.5rem, 3vw + 0.5rem, 2.25rem)' }}
+              className="mb-4 font-bold text-foreground"
+            >
+              {whatYouGetTitle}
+            </h2>
             <p className="mx-auto max-w-2xl text-lg text-muted-foreground">{whatYouGetSubtitle}</p>
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -688,7 +704,12 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
       <section id="plans" className="py-16 bg-muted/30 scroll-mt-20">
         <div className="container max-w-6xl mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">בחר את המסלול שלך</h2>
+            <h2
+              style={{ fontSize: 'clamp(1.5rem, 3vw + 0.5rem, 2.25rem)' }}
+              className="font-bold mb-4"
+            >
+              בחר את המסלול שלך
+            </h2>
             {ctx.organizationName ? (
               <p className="text-muted-foreground">מחירים מיוחדים לעובדי {ctx.organizationName}</p>
             ) : (
@@ -712,7 +733,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                   key={product.productId}
                   className={cn(
                     'relative transition-all hover:shadow-lg cursor-pointer overflow-hidden pt-0',
-                    popular && 'border-2 border-opal-gold shadow-lg md:scale-[1.02]',
+                    popular && 'border-2 border-opal-gold shadow-lg md:scale-[1.02] origin-center',
                     selected && 'ring-2 ring-primary'
                   )}
                   onClick={() => setProductId(product.productId)}
@@ -780,7 +801,12 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
       <section id="registration" className="py-16 md:py-20 scroll-mt-20 bg-gradient-to-b from-muted/20 to-background">
         <div className="container mx-auto max-w-2xl px-4">
           <div className="mb-8 text-center">
-            <h2 className="mb-4 text-3xl font-bold text-foreground md:text-4xl">{registrationTitle}</h2>
+            <h2
+              style={{ fontSize: 'clamp(1.5rem, 3vw + 0.5rem, 2.25rem)' }}
+              className="mb-4 font-bold text-foreground"
+            >
+              {registrationTitle}
+            </h2>
             <p className="text-lg text-muted-foreground">{registrationSubtitle}</p>
           </div>
 
@@ -968,7 +994,12 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
       <section id="contact" className="py-16 bg-primary text-primary-foreground scroll-mt-20">
         <div className="container max-w-5xl mx-auto px-4">
           <div className="max-w-2xl mx-auto text-center">
-            <h2 className="text-3xl font-bold mb-4">צור קשר</h2>
+            <h2
+              style={{ fontSize: 'clamp(1.5rem, 3vw + 0.5rem, 2.25rem)' }}
+              className="font-bold mb-4"
+            >
+              צור קשר
+            </h2>
             <p className="text-primary-foreground/90 mb-8 text-lg">
               אופאל - בית ליזמות רפואית, המושתת על מקצועיות, מצוינות וחווית שירות פרטית.
             </p>
@@ -987,7 +1018,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                 className="flex items-center justify-center gap-3 p-4 rounded-lg bg-primary-foreground/10 hover:bg-primary-foreground/20 transition-colors"
               >
                 <Mail className="size-5" />
-                <span className="font-medium text-sm" dir="ltr">
+                <span className="font-medium text-xs sm:text-sm break-all" dir="ltr">
                   opal2000@zahav.net.il
                 </span>
               </a>

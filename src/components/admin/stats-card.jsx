@@ -21,7 +21,7 @@ export function StatsCard({ title, value, icon: Icon, trend, className, loading 
           <div className="h-8 w-24 animate-pulse rounded bg-muted" />
         ) : (
           <>
-            <div className="text-2xl font-bold tabular-nums">{value}</div>
+            <div className="text-xl sm:text-2xl font-bold tabular-nums">{value}</div>
             {trend && (
               <div className="mt-1 flex items-center gap-1 text-xs">
                 {isPositive ? (
