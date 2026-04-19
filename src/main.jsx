@@ -14,6 +14,7 @@ import AdminControlPanel from './pages/AdminControlPanel.jsx';
 import VendorDashboard from './pages/VendorDashboard.jsx';
 import PricingDashboard from './pages/PricingDashboard.jsx';
 import LandingPagesManagement from './pages/LandingPagesManagement.jsx';
+import UnifiedProductWizard from './pages/UnifiedProductWizard.jsx';
 import ReportsDashboard from './pages/ReportsDashboard.jsx';
 import ContactManagement from './pages/ContactManagement.jsx';
 import OrganizationsDashboard from './pages/OrganizationsDashboard.jsx';
@@ -50,7 +51,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/register" element={<OrgRegisterPage />} />
         <Route path="/admin/agents" element={<AgentSetup />} />
         <Route path="/admin/landing-pages" element={<LandingPagesManagement />} />
-        <Route path="/admin/product-page-setup" element={<LandingPagesManagement />} />
+        <Route path="/admin/product-page-setup" element={<UnifiedProductWizard />} />
         <Route path="/admin/reports" element={<ReportsDashboard />} />
         <Route path="/admin/archive" element={<ArchiveDashboard />} />
         <Route path="/admin/alerts" element={<AlertsDashboard />} />
