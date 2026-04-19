@@ -935,7 +935,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                 </div>
 
                 <div className="rounded-lg border border-primary/20 bg-[#D9EAF3]/30 p-4">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                     <span className="text-lg font-medium text-foreground">סה״כ לתשלום חודשי:</span>
                     <span className="text-3xl font-bold text-primary">
                       {selectedProduct ? `₪${Number(selectedProduct.retailPrice || 0)}` : '—'}

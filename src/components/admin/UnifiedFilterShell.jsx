@@ -103,7 +103,7 @@ export default function UnifiedFilterShell(props) {
           </div>
 
           {hasNewApi ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {otherFilters.map((filter) => (
                 <div key={filter.key} className="space-y-1.5">
                   <label className="text-xs font-medium text-muted-foreground">{filter.label}</label>

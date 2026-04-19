@@ -1651,11 +1651,11 @@ export default function SubscribersDashboard() {
                                 title={
                                   missingRecurringIds
                                     ? 'Subscription was not created as recurring - cancel manually in Cardcom'
-                                    : undefined
+                                    : 'ביטול מנוי (עצירת חיוב עתידי)'
                                 }
                               >
-                                <Ban className="size-3.5 me-1 text-amber-600" />
-                                ביטול מנוי (עצירת חיוב עתידי)
+                                <Ban className="size-3.5 text-amber-600 sm:me-1" />
+                                <span className="hidden sm:inline">ביטול מנוי (עצירת חיוב עתידי)</span>
                               </Button>
                             </div>
                           </TableCell>
