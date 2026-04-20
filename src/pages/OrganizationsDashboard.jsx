@@ -38,6 +38,7 @@ const emptyForm = () => ({
   subscriptionProductName: '',
   pricingMethod: 'priceList',
   priceListId: '',
+  singleProductId: '',
   customPricing: [],
   status: 'active',
   contactEmail: '',
@@ -128,6 +129,7 @@ export default function OrganizationsDashboard() {
         monthlyPricePerMember: Number(addForm.monthlyPricePerMember || 0),
         subscriptionProductName: String(addForm.subscriptionProductName || '').trim(),
         priceListId: addForm.pricingMethod === 'priceList' ? String(addForm.priceListId || '').trim() : '',
+        singleProductId: addForm.pricingMethod === 'singleProduct' ? String(addForm.singleProductId || '').trim() : '',
         customPricing:
           addForm.pricingMethod === 'custom'
             ? (addForm.customPricing || [])
@@ -173,6 +175,10 @@ export default function OrganizationsDashboard() {
         priceListId:
           rest.pricingMethod === 'priceList'
             ? String(rest.priceListId || '').trim()
+            : '',
+        singleProductId:
+          rest.pricingMethod === 'singleProduct'
+            ? String(rest.singleProductId || '').trim()
             : '',
         customPricing:
           rest.pricingMethod === 'custom'
@@ -279,7 +285,8 @@ export default function OrganizationsDashboard() {
     setEditOrg({
       ...emptyForm(),
       ...target,
-      pricingMethod: Array.isArray(target.customPricing) && target.customPricing.length ? 'custom' : 'priceList',
+      pricingMethod: Array.isArray(target.customPricing) && target.customPricing.length ? 'custom' : target.singleProductId ? 'singleProduct' : 'priceList',
+      singleProductId: target.singleProductId || '',
       billingType: target.billingType || (target.billingMethod?.includes('מרוכז') ? 'Centralized' : 'Private'),
     });
     setSearchParams((prev) => {
@@ -443,13 +450,11 @@ export default function OrganizationsDashboard() {
                       className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                       value={addForm.pricingMethod}
                       onChange={(e) =>
-                        setAddForm((p) => ({
-                          ...p,
-                          pricingMethod: e.target.value === 'custom' ? 'custom' : 'priceList',
-                        }))
+                        setAddForm((p) => ({ ...p, pricingMethod: e.target.value }))
                       }
                     >
                       <option value="priceList">מחירון קיים</option>
+                      <option value="singleProduct">מוצר בודד</option>
                       <option value="custom">תמחור מותאם לארגון</option>
                     </select>
                   </Field>
@@ -466,6 +471,20 @@ export default function OrganizationsDashboard() {
                           <option key={pl.id} value={pl.id}>
                             {pl.listName}
                           </option>
+                        ))}
+                      </select>
+                    </Field>
+                  ) : addForm.pricingMethod === 'singleProduct' ? (
+                    <Field>
+                      <FieldLabel>בחר מוצר בודד</FieldLabel>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                        value={addForm.singleProductId || ''}
+                        onChange={(e) => setAddForm((p) => ({ ...p, singleProductId: e.target.value }))}
+                      >
+                        <option value="">ללא</option>
+                        {products.map((pr) => (
+                          <option key={pr.id} value={pr.id}>{pr.productName || pr.name}</option>
                         ))}
                       </select>
                     </Field>
@@ -619,11 +638,12 @@ export default function OrganizationsDashboard() {
                         value={editOrg.pricingMethod || 'priceList'}
                         onChange={(e) =>
                           setEditOrg((p) =>
-                            p ? { ...p, pricingMethod: e.target.value === 'custom' ? 'custom' : 'priceList' } : p
+                            p ? { ...p, pricingMethod: e.target.value } : p
                           )
                         }
                       >
                         <option value="priceList">מחירון קיים</option>
+                        <option value="singleProduct">מוצר בודד</option>
                         <option value="custom">תמחור מותאם לארגון</option>
                       </select>
                     </Field>
@@ -640,6 +660,20 @@ export default function OrganizationsDashboard() {
                             <option key={pl.id} value={pl.id}>
                               {pl.listName}
                             </option>
+                          ))}
+                        </select>
+                      </Field>
+                    ) : editOrg.pricingMethod === 'singleProduct' ? (
+                      <Field>
+                        <FieldLabel>בחר מוצר בודד</FieldLabel>
+                        <select
+                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                          value={editOrg.singleProductId || ''}
+                          onChange={(e) => setEditOrg((p) => (p ? { ...p, singleProductId: e.target.value } : p))}
+                        >
+                          <option value="">ללא</option>
+                          {products.map((pr) => (
+                            <option key={pr.id} value={pr.id}>{pr.productName || pr.name}</option>
                           ))}
                         </select>
                       </Field>
