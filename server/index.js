@@ -57,6 +57,8 @@ import {
   bulkDeleteDealsAdmin,
   getDealForRecurringCancellation,
   markDealCancelledByAdmin,
+  markDealPendingCancellation,
+  runMonthlyOrgSnapshot,
   getDealEmailSentAt,
   getDealByTransactionId,
   markDealOrderEmailSent,
@@ -303,6 +305,24 @@ function cleanupPending() {
   }
 }
 setInterval(cleanupPending, 10 * 60 * 1000);
+
+/** Snapshot חודשי ב-1 לחודש בשעה 00:01 */
+(function scheduleMonthlySnapshot() {
+  function msUntilNextFirst() {
+    const now = new Date();
+    const next = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 1, 0, 0);
+    return next.getTime() - now.getTime();
+  }
+  function fireAndReschedule() {
+    runMonthlyOrgSnapshot().then((r) => {
+      console.log(`[monthly-snapshot] done:`, r);
+    }).catch((e) => {
+      console.error(`[monthly-snapshot] error:`, e?.message || e);
+    });
+    setTimeout(fireAndReschedule, msUntilNextFirst());
+  }
+  setTimeout(fireAndReschedule, msUntilNextFirst());
+})();
 
 /** Build payload with safe fallbacks so missing metadata never crashes. */
 function buildDealPayloadFromFormState(formState) {
@@ -2039,6 +2059,31 @@ app.post('/api/admin/deals/:id/cancel-future-charges', requireAdmin, async (req,
   } catch (e) {
     console.error(`[${ts()}] admin/deals cancel-future-charges error:`, e);
     res.status(400).json({ success: false, error: e.message || 'Failed to cancel future charges' });
+  }
+});
+
+/** ביטול מדורג לעובד ארגוני (חיוב מרוכז) — Pending Cancellation */
+app.post('/api/admin/deals/:id/cancel-org-employee', requireAdmin, async (req, res) => {
+  try {
+    const { terminationDate } = req.body || {};
+    if (!terminationDate) return res.status(400).json({ success: false, error: 'terminationDate is required' });
+    const result = await markDealPendingCancellation(req.params.id, terminationDate);
+    res.json(result);
+  } catch (e) {
+    console.error(`[${ts()}] cancel-org-employee error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'ביטול נכשל' });
+  }
+});
+
+/** הרצה ידנית של Snapshot חודשי (לטסטינג ולאחזור) */
+app.post('/api/admin/org-snapshot/run', requireAdmin, async (req, res) => {
+  try {
+    const { snapshotDate } = req.body || {};
+    const result = await runMonthlyOrgSnapshot(snapshotDate || null);
+    res.json({ success: true, ...result });
+  } catch (e) {
+    console.error(`[${ts()}] org-snapshot/run error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Snapshot נכשל' });
   }
 });
 

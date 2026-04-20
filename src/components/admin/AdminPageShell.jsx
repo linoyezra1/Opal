@@ -16,6 +16,7 @@ import {
   FileBarChart2,
   Archive,
   Bell,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '../../lib/cn.js';
 import { Button } from '../ui/button.jsx';
@@ -32,7 +33,6 @@ const groups = [
       { label: 'הקמת דף מוצר', to: '/admin/product-page-setup', icon: LayoutTemplate },
       { label: 'מוצר', to: '/admin/products', icon: Package },
       { label: 'מחירון', to: '/admin/price-list', icon: Receipt },
-      { label: 'דף נחיתה', to: '/admin/landing-pages', icon: LayoutTemplate },
       { label: 'סוכן', to: '/admin/agents', icon: Users },
       { label: 'דוחות ובילינג', to: '/admin/reports', icon: FileBarChart2 },
     ],
@@ -43,6 +43,7 @@ const groups = [
       { label: 'לקוחות פרטיים', to: '/admin/subscribers', icon: UserCheck },
       { label: 'מרכז ניהול ארגונים', to: '/admin/organizations', icon: Building2 },
       { label: 'ארכיון', to: '/admin/archive', icon: Archive },
+      { label: 'צור קשר', to: '/admin/contacts', icon: MessageSquare },
     ],
   },
   {

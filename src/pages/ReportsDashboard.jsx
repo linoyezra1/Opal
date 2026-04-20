@@ -77,6 +77,7 @@ export default function ReportsDashboard() {
   const [exportErr, setExportErr] = useState('');
   const [providers, setProviders] = useState([]);
   const [providerFilter, setProviderFilter] = useState('');
+  const [providerSearchText, setProviderSearchText] = useState('');
   const [previewRows, setPreviewRows] = useState([]);
   const [previewTotal, setPreviewTotal] = useState(0);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -371,9 +372,9 @@ export default function ReportsDashboard() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <UnifiedFilterShell
-                  searchValue={providerFilter}
-                  onSearchChange={setProviderFilter}
-                  searchPlaceholder="חיפוש ספק..."
+                  searchValue={providerSearchText}
+                  onSearchChange={setProviderSearchText}
+                  searchPlaceholder="סנן ספקים..."
                   basicControls={(
                     <>
                       <Field>
@@ -387,12 +388,14 @@ export default function ReportsDashboard() {
                       <select
                         className="flex h-10 w-full sm:w-56 rounded-md border border-slate-200 bg-background px-3 py-2 text-sm shadow-sm"
                         value={providerFilter}
-                        onChange={(e) => setProviderFilter(e.target.value)}
+                        onChange={(e) => { setProviderFilter(e.target.value); setProviderSearchText(''); }}
                       >
                         <option value="">כל הספקים</option>
-                        {providers.map((p) => (
-                          <option key={p} value={p}>{p}</option>
-                        ))}
+                        {providers
+                          .filter((p) => !providerSearchText || String(p).toLowerCase().includes(providerSearchText.toLowerCase()))
+                          .map((p) => (
+                            <option key={p} value={p}>{p}</option>
+                          ))}
                       </select>
                     </>
                   )}

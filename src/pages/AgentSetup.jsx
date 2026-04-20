@@ -74,11 +74,7 @@ function buildPayload(body) {
 }
 
 // ─── Commission Matrix (used in Add/Edit dialogs) ──────────────────────────────
-function CommissionMatrix({ target, data, products, setAddForm, setEditAgent }) {
-  const apply = target === 'add'
-    ? (fn) => setAddForm(fn)
-    : (fn) => setEditAgent((p) => (p ? fn(p) : null));
-
+function CommissionMatrix({ data, setData, products }) {
   return (
     <div className="space-y-3">
       <div className="rounded-md border overflow-x-auto">
@@ -104,7 +100,7 @@ function CommissionMatrix({ target, data, products, setAddForm, setEditAgent }) 
                       value={row?.commission ?? ''}
                       onChange={(e) => {
                         const v = e.target.value;
-                        apply((p) => {
+                        setData((p) => {
                           const list = [...(p.productCommissions || [])];
                           const i = list.findIndex((c) => c.productId === pr.id);
                           if (v === '') { if (i >= 0) list.splice(i, 1); }
@@ -322,6 +318,137 @@ function ViewAgentDialog({ agent, products, productSlugMap, onClose, onEdit }) {
   );
 }
 
+// ─── Agent form tabs (shared between Add + Edit) ──────────────────────────────
+function AgentFormTabs({ data, setData, tab, setTab, products }) {
+  const setField = (field, value) => setData((p) => ({ ...p, [field]: value }));
+  const setBankField = (field, value) =>
+    setData((p) => ({ ...p, bankDetails: { ...p.bankDetails, [field]: value } }));
+
+  return (
+    <Tabs value={tab} onValueChange={setTab} className="mt-0">
+      <TabsList className="grid w-full grid-cols-3">
+        <TabsTrigger value="details">פרטים אישיים</TabsTrigger>
+        <TabsTrigger value="bank">פרטי בנק</TabsTrigger>
+        <TabsTrigger value="commissions">עמלות</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="details" className="space-y-4 mt-4">
+        <FieldGroup>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field>
+              <FieldLabel>שם סוכן *</FieldLabel>
+              <Input
+                value={data.agentName}
+                onChange={(e) => setField('agentName', e.target.value)}
+                placeholder="שם מלא"
+                required
+              />
+            </Field>
+            <Field>
+              <FieldLabel>תעודת זהות / ח.פ *</FieldLabel>
+              <Input
+                value={data.idNum}
+                onChange={(e) => setField('idNum', e.target.value)}
+                placeholder="מספר זיהוי"
+                dir="ltr"
+                required
+              />
+              {agentIsraeliIdHint(data.idNum)
+                ? <p className="text-destructive text-xs">{agentIsraeliIdHint(data.idNum)}</p>
+                : null}
+            </Field>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field>
+              <FieldLabel>טלפון</FieldLabel>
+              <Input
+                value={data.phone}
+                onChange={(e) => setField('phone', e.target.value)}
+                placeholder="05X-XXXXXXX"
+                dir="ltr"
+              />
+            </Field>
+            <Field>
+              <FieldLabel>אימייל</FieldLabel>
+              <Input
+                type="email"
+                value={data.email}
+                onChange={(e) => setField('email', e.target.value)}
+                placeholder="agent@example.com"
+                dir="ltr"
+              />
+            </Field>
+          </div>
+          <Field>
+            <FieldLabel>כתובת</FieldLabel>
+            <Input
+              value={data.address}
+              onChange={(e) => setField('address', e.target.value)}
+              placeholder="רחוב, עיר"
+            />
+          </Field>
+        </FieldGroup>
+      </TabsContent>
+
+      <TabsContent value="bank" className="space-y-4 mt-4">
+        <FieldGroup>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field>
+              <FieldLabel>שם בנק</FieldLabel>
+              <Input
+                value={data.bankDetails?.bankName || ''}
+                onChange={(e) => setBankField('bankName', e.target.value)}
+                placeholder="לדוגמה: בנק הפועלים"
+              />
+            </Field>
+            <Field>
+              <FieldLabel>מספר בנק</FieldLabel>
+              <Input
+                value={data.bankDetails?.bankNum || ''}
+                onChange={(e) => setBankField('bankNum', e.target.value)}
+                placeholder="12"
+                dir="ltr"
+              />
+            </Field>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field>
+              <FieldLabel>מספר סניף</FieldLabel>
+              <Input
+                value={data.bankDetails?.branchNum || ''}
+                onChange={(e) => setBankField('branchNum', e.target.value)}
+                placeholder="123"
+                dir="ltr"
+              />
+            </Field>
+            <Field>
+              <FieldLabel>מספר חשבון</FieldLabel>
+              <Input
+                value={data.bankDetails?.accountNum || ''}
+                onChange={(e) => setBankField('accountNum', e.target.value)}
+                placeholder="123456"
+                dir="ltr"
+              />
+            </Field>
+          </div>
+          <Field>
+            <FieldLabel>שם בעל החשבון</FieldLabel>
+            <Input
+              value={data.bankDetails?.accountHolder || ''}
+              onChange={(e) => setBankField('accountHolder', e.target.value)}
+              placeholder="שם מלא"
+            />
+          </Field>
+        </FieldGroup>
+      </TabsContent>
+
+      <TabsContent value="commissions" className="mt-4">
+        <CommissionMatrix data={data} setData={setData} products={products || []} />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function AgentSetup() {
   const [token] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
@@ -515,84 +642,6 @@ export default function AgentSetup() {
     });
   }, [rows, search, commissionFilter, products]);
 
-  // ── Agent form tabs (shared between Add + Edit) ───────────────────────────
-  function AgentFormTabs({ target, data, setData, tab, setTab }) {
-    const isAdd = target === 'add';
-    const setField = (field, value) => setData((p) => ({ ...p, [field]: value }));
-    return (
-      <Tabs value={tab} onValueChange={setTab} className="mt-0">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="details">פרטים אישיים</TabsTrigger>
-          <TabsTrigger value="bank">פרטי בנק</TabsTrigger>
-          <TabsTrigger value="commissions">עמלות</TabsTrigger>
-        </TabsList>
-        <TabsContent value="details" className="space-y-4 mt-4">
-          <FieldGroup>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel>שם סוכן *</FieldLabel>
-                <Input value={data.agentName} onChange={(e) => setField('agentName', e.target.value)} placeholder="שם מלא" required />
-              </Field>
-              <Field>
-                <FieldLabel>תעודת זהות / ח.פ *</FieldLabel>
-                <Input value={data.idNum} onChange={(e) => setField('idNum', e.target.value)} placeholder="מספר זיהוי" dir="ltr" required />
-                {agentIsraeliIdHint(data.idNum) ? <p className="text-destructive text-xs">{agentIsraeliIdHint(data.idNum)}</p> : null}
-              </Field>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel>טלפון</FieldLabel>
-                <Input value={data.phone} onChange={(e) => setField('phone', e.target.value)} placeholder="050-0000000" dir="ltr" />
-              </Field>
-              <Field>
-                <FieldLabel>אימייל</FieldLabel>
-                <Input type="email" value={data.email} onChange={(e) => setField('email', e.target.value)} placeholder="email@example.com" dir="ltr" />
-              </Field>
-            </div>
-            <Field>
-              <FieldLabel>כתובת</FieldLabel>
-              <Input value={data.address} onChange={(e) => setField('address', e.target.value)} placeholder="רחוב, עיר" />
-            </Field>
-          </FieldGroup>
-        </TabsContent>
-        <TabsContent value="bank" className="space-y-4 mt-4">
-          <FieldGroup>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel>שם בנק *</FieldLabel>
-                <Input value={data.bankDetails.bankName} onChange={(e) => setBank(target, 'bankName', e.target.value)} placeholder="למשל: בנק הפועלים" required />
-              </Field>
-              <Field>
-                <FieldLabel>מספר בנק</FieldLabel>
-                <Input value={data.bankDetails.bankNum} onChange={(e) => setBank(target, 'bankNum', e.target.value)} dir="ltr" />
-              </Field>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel>שם בעל חשבון *</FieldLabel>
-                <Input value={data.bankDetails.accountHolder} onChange={(e) => setBank(target, 'accountHolder', e.target.value)} required />
-              </Field>
-              <Field>
-                <FieldLabel>מספר סניף</FieldLabel>
-                <Input value={data.bankDetails.branchNum} onChange={(e) => setBank(target, 'branchNum', e.target.value)} dir="ltr" />
-              </Field>
-            </div>
-            <Field>
-              <FieldLabel>מספר חשבון</FieldLabel>
-              <Input value={data.bankDetails.accountNum} onChange={(e) => setBank(target, 'accountNum', e.target.value)} dir="ltr" />
-            </Field>
-          </FieldGroup>
-        </TabsContent>
-        <TabsContent value="commissions" className="mt-4">
-          <CommissionMatrix
-            target={target} data={data} products={products}
-            setAddForm={isAdd ? setData : undefined}
-            setEditAgent={!isAdd ? setData : undefined}
-          />
-        </TabsContent>
-      </Tabs>
-    );
-  }
 
   if (!token) {
     return (
@@ -637,7 +686,7 @@ export default function AgentSetup() {
               <DialogDescription>הזינו פרטי סוכן, בנק ועמלות למוצרים</DialogDescription>
             </DialogHeader>
             <form onSubmit={submitAdd} className="space-y-4">
-              <AgentFormTabs target="add" data={addForm} setData={setAddForm} tab={addTab} setTab={setAddTab} />
+              <AgentFormTabs target="add" data={addForm} setData={setAddForm} tab={addTab} setTab={setAddTab} products={products} />
               {error ? <p className="text-destructive text-sm">{error}</p> : null}
               <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
                 <Button type="button" variant="outline" onClick={() => setShowAddModal(false)}>ביטול</Button>
@@ -656,7 +705,7 @@ export default function AgentSetup() {
             </DialogHeader>
             {editAgent ? (
               <form onSubmit={saveEdit} className="space-y-4">
-                <AgentFormTabs target="edit" data={editAgent} setData={setEditAgent} tab={editTab} setTab={setEditTab} />
+                <AgentFormTabs target="edit" data={editAgent} setData={setEditAgent} tab={editTab} setTab={setEditTab} products={products} />
                 {error ? <p className="text-destructive text-sm">{error}</p> : null}
                 <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
                   <Button type="button" variant="outline" onClick={() => setEditAgent(null)}>ביטול</Button>

@@ -82,6 +82,9 @@ const HEADER_LABELS = {
   cancellationDate: 'תאריך ביטול',
   subscriptionStatus: 'סטטוס מנוי',
   paymentStatus: 'סטטוס תשלום',
+  idNum: 'ח.פ/ת.ז',
+  address: 'כתובת',
+  baseDescription: 'תיאור',
 };
 
 function labelForColumn(key) {

@@ -140,6 +140,9 @@ export default function SubscribersDashboard() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelOrgTarget, setCancelOrgTarget] = useState(null);
+  const [terminationDate, setTerminationDate] = useState('');
+  const [cancelOrgLoading, setCancelOrgLoading] = useState(false);
   const [selectedSubscriptionIds, setSelectedSubscriptionIds] = useState([]);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
@@ -601,6 +604,28 @@ export default function SubscribersDashboard() {
     }
   }
 
+  async function confirmCancelOrgEmployee() {
+    if (!cancelOrgTarget?.id || !terminationDate || !token) return;
+    setCancelOrgLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/deals/${encodeURIComponent(cancelOrgTarget.id)}/cancel-org-employee`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ terminationDate }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) throw new Error(json.error || 'ביטול נכשל');
+      setCancelOrgTarget(null);
+      setTerminationDate('');
+      await loadDashboard();
+    } catch (err) {
+      setError(err.message || 'שגיאה');
+    } finally {
+      setCancelOrgLoading(false);
+    }
+  }
+
   function clearFilters() {
     setFilters((p) => ({
       ...p,
@@ -766,6 +791,60 @@ export default function SubscribersDashboard() {
           onCancel={() => setCancelTarget(null)}
           isLoading={cancelLoading}
         />
+        {/* ── Cancel org employee (centralized billing) ── */}
+        <Dialog open={!!cancelOrgTarget} onOpenChange={(o) => { if (!o) { setCancelOrgTarget(null); setTerminationDate(''); } }}>
+          <DialogContent className="sm:max-w-md text-right" dir="rtl">
+            <DialogHeader>
+              <DialogTitle>ביטול מנוי עובד ארגוני</DialogTitle>
+              <DialogDescription>
+                {cancelOrgTarget?.transactionId ? `עסקה: ${cancelOrgTarget.transactionId}` : ''}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <Field>
+                <FieldLabel>תאריך סיום התקשרות *</FieldLabel>
+                <Input
+                  type="date"
+                  value={terminationDate}
+                  onChange={(e) => setTerminationDate(e.target.value)}
+                  dir="ltr"
+                />
+              </Field>
+              {terminationDate ? (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 space-y-1">
+                  <p className="font-medium">לתשומת לבך:</p>
+                  <p>
+                    השירות יופסק והחיוב יחדל החל מהחודש הקלנדרי הבא לאחר{' '}
+                    <strong>{new Date(terminationDate).toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })}</strong>.
+                  </p>
+                  <p>
+                    חודש חיוב אחרון:{' '}
+                    <strong>{terminationDate.slice(0, 7).split('-').reverse().join('/')}</strong>.
+                    עובד זה ייספר כפעיל ב-Snapshot של ה-1/{terminationDate.slice(5, 7)} וייצא מהחיוב החל מה-1/{
+                      String(Number(terminationDate.slice(5, 7)) === 12 ? 1 : Number(terminationDate.slice(5, 7)) + 1).padStart(2, '0')
+                    }.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+            {error ? <p className="text-destructive text-sm">{error}</p> : null}
+            <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
+              <Button type="button" variant="outline" onClick={() => { setCancelOrgTarget(null); setTerminationDate(''); }}>
+                ביטול
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={!terminationDate || cancelOrgLoading}
+                onClick={confirmCancelOrgEmployee}
+              >
+                {cancelOrgLoading && <Spinner className="me-2" />}
+                אישור ביטול
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <Dialog
           open={bulkDeleteOpen}
           onOpenChange={(open) => {
@@ -1547,6 +1626,8 @@ export default function SubscribersDashboard() {
                       {visibleRows.map((r) => (
                         (() => {
                           const isCancelled = r.status === 'canceled' || String(r.subscriptionStatus || '').toLowerCase() === 'cancelled';
+                          const isPendingCancellation = String(r.subscriptionStatus || '') === 'Pending Cancellation';
+                          const isCentralized = !!r.isCentralized || String(r.dealSource || '') === 'org-bulk-import';
                           const missingRecurringIds =
                             !String(r.cardcomAccountId || '').trim() || !String(r.cardcomRecurringId || '').trim();
                           const cancelledAtText = r.cancellationDate
@@ -1584,8 +1665,19 @@ export default function SubscribersDashboard() {
                           <TableCell dir="rtl" className="text-right whitespace-nowrap">
                             {isCancelled ? (
                               <Badge variant="destructive" className="font-normal">
-                                {`בוטל מול קארדקום${cancelledAtText ? ` ב-${cancelledAtText}` : ''}`}
+                                {isCentralized
+                                  ? `בוטל${cancelledAtText ? ` ב-${cancelledAtText}` : ''}`
+                                  : `בוטל מול קארדקום${cancelledAtText ? ` ב-${cancelledAtText}` : ''}`}
                               </Badge>
+                            ) : isPendingCancellation ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge className="bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100 font-normal cursor-help">
+                                    ממתין לביטול · {r.finalBillingMonth || ''}
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>חודש חיוב אחרון: {r.finalBillingMonth}. החל מה-1 לחודש הבא לא ייספר בחיוב.</TooltipContent>
+                              </Tooltip>
                             ) : String(r.futureBillingStatus || '').trim() ? (
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -1675,21 +1767,29 @@ export default function SubscribersDashboard() {
                                 variant="outline"
                                 size="sm"
                                 className="h-8 px-2 text-xs shrink-0"
-                                disabled={isCancelled || missingRecurringIds}
-                                onClick={() =>
-                                  setCancelTarget({
-                                    id: r.id,
-                                    transactionId: r.transactionId,
-                                  })
-                                }
+                                disabled={isCancelled || isPendingCancellation || (!isCentralized && missingRecurringIds)}
+                                onClick={() => {
+                                  if (isCentralized) {
+                                    setCancelOrgTarget({ id: r.id, transactionId: r.transactionId });
+                                    setTerminationDate('');
+                                  } else {
+                                    setCancelTarget({ id: r.id, transactionId: r.transactionId });
+                                  }
+                                }}
                                 title={
-                                  missingRecurringIds
-                                    ? 'Subscription was not created as recurring - cancel manually in Cardcom'
-                                    : 'ביטול מנוי (עצירת חיוב עתידי)'
+                                  isPendingCancellation
+                                    ? `ממתין לביטול — חודש אחרון: ${r.finalBillingMonth}`
+                                    : !isCentralized && missingRecurringIds
+                                      ? 'Subscription was not created as recurring - cancel manually in Cardcom'
+                                      : isCentralized
+                                        ? 'ביטול מנוי עובד ארגוני (חיוב מרוכז)'
+                                        : 'ביטול מנוי (עצירת חיוב עתידי)'
                                 }
                               >
                                 <Ban className="size-3.5 text-amber-600 sm:me-1" />
-                                <span className="hidden sm:inline">ביטול מנוי (עצירת חיוב עתידי)</span>
+                                <span className="hidden sm:inline">
+                                  {isCentralized ? 'ביטול עובד ארגוני' : 'ביטול מנוי (עצירת חיוב עתידי)'}
+                                </span>
                               </Button>
                             </div>
                             <details className="relative md:hidden">
@@ -1743,17 +1843,19 @@ export default function SubscribersDashboard() {
                                   type="button"
                                   variant="outline"
                                   className="h-auto min-h-10 w-full justify-start gap-2 px-3 py-2 text-xs font-normal"
-                                  disabled={isCancelled || missingRecurringIds}
+                                  disabled={isCancelled || isPendingCancellation || (!isCentralized && missingRecurringIds)}
                                   onClick={(e) => {
                                     closeActionDetailsMenu(e);
-                                    setCancelTarget({
-                                      id: r.id,
-                                      transactionId: r.transactionId,
-                                    });
+                                    if (isCentralized) {
+                                      setCancelOrgTarget({ id: r.id, transactionId: r.transactionId });
+                                      setTerminationDate('');
+                                    } else {
+                                      setCancelTarget({ id: r.id, transactionId: r.transactionId });
+                                    }
                                   }}
                                 >
                                   <Ban className="size-3.5 shrink-0 text-amber-600" />
-                                  ביטול מנוי (עצירת חיוב)
+                                  {isCentralized ? 'ביטול עובד ארגוני' : 'ביטול מנוי (עצירת חיוב)'}
                                 </Button>
                               </div>
                             </details>
@@ -1769,28 +1871,6 @@ export default function SubscribersDashboard() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>סיכום רווח (עקבי במערכת)</CardTitle>
-              <CardDescription>רווח נקי = הכנסה − עלות ספק − עמלת סוכן</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
-                <div className="border rounded-lg p-3">
-                  סה&quot;כ עלויות ספק: <strong>{formatCurrency(s.totalVendorCost || 0)}</strong>
-                </div>
-                <div className="border rounded-lg p-3">
-                  סה&quot;כ עמלות סוכנים: <strong>{formatCurrency(s.totalAgentCommission || 0)}</strong>
-                </div>
-                <div className="border rounded-lg p-3 bg-primary/5 dark:bg-primary/15">
-                  סה&quot;כ רווח נקי: <strong>{formatCurrency(s.totalNetProfit || 0)}</strong>
-                </div>
-                <div className="border rounded-lg p-3">
-                  הוצאה ידנית (legacy): <strong>{formatCurrency(s.totalExpenses || 0)}</strong>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
 
         <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
@@ -1871,6 +1951,9 @@ export default function SubscribersDashboard() {
                     <div className="rounded-lg border p-3">
                       <p className="text-xs text-muted-foreground mb-1">עלות ספק</p>
                       <p className="font-semibold">{formatCurrency(selected?.formState?.resolvedVendorCost ?? 0)}</p>
+                      {(selected?.formState?.providerName || selected?.formState?.vendorName) && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{selected?.formState?.providerName || selected?.formState?.vendorName}</p>
+                      )}
                     </div>
                     <div className="rounded-lg border p-3">
                       <p className="text-xs text-muted-foreground mb-1">עמלת סוכן</p>

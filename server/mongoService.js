@@ -1767,6 +1767,8 @@ export async function getSalesDashboardData(filters = {}) {
         completionStatus: d.completionStatus || '—',
         /** תוצאת חיוב חוזר אחרונה מקארדקום (responsdescription מהשרת) */
         futureBillingStatus: String(d.futureBillingStatus ?? '').trim(),
+        isCentralized: centralized,
+        finalBillingMonth: String(d.finalBillingMonth || '').trim(),
         raw: d,
       };
     }),
@@ -2616,6 +2618,138 @@ export async function markDealCancelledByAdmin(dealId) {
   );
   if (!r.matchedCount) throw new Error('עסקה לא נמצאה');
   return { success: true, cancellationDate: cancellationDate.toISOString(), status: 'Cancelled' };
+}
+
+/**
+ * ביטול מרוכז לעובד ארגוני — Pending Cancellation עם finalBillingMonth
+ * terminationDate: "YYYY-MM-DD" — החודש הקלנדרי שלו הוא finalBillingMonth.
+ * העובד נספר בחיוב עד סוף אותו חודש; ה-Snapshot של ה-1 לחודש הבא מוציא אותו.
+ */
+export async function markDealPendingCancellation(dealId, terminationDate) {
+  const db = await getDb();
+  const deals = db.collection('deals');
+  let oid;
+  try { oid = new ObjectId(String(dealId)); } catch { throw new Error('מזהה עסקה לא תקין'); }
+
+  const dateObj = new Date(terminationDate);
+  if (Number.isNaN(dateObj.getTime())) throw new Error('תאריך ביטול לא תקין');
+
+  const finalBillingMonth = formatBillingMonthFromDate(dateObj); // "YYYY-MM"
+  const now = new Date();
+
+  const r = await deals.updateOne(
+    { _id: oid },
+    {
+      $set: {
+        subscriptionStatus: 'Pending Cancellation',
+        finalBillingMonth,
+        cancellationDate: dateObj,
+        updatedAt: now,
+      },
+    }
+  );
+  if (!r.matchedCount) throw new Error('עסקה לא נמצאה');
+  return { success: true, finalBillingMonth, cancellationDate: dateObj.toISOString(), status: 'Pending Cancellation' };
+}
+
+/**
+ * Snapshot חודשי לארגונים — ריצה ב-1 לחודש.
+ * snapshotDateStr: "YYYY-MM-DD" (ברירת מחדל: היום).
+ * מחשב כמה עובדים פעילים לכל ארגון ומעדכן monthly_invoices.
+ * עובד נספר אם: paymentMethod===centralized, subscriptionStatus !== 'Cancelled',
+ *   ו-finalBillingMonth (אם קיים) >= snapshotMonth.
+ */
+export async function runMonthlyOrgSnapshot(snapshotDateStr) {
+  const snapshotDate = snapshotDateStr ? new Date(snapshotDateStr) : new Date();
+  if (Number.isNaN(snapshotDate.getTime())) throw new Error('תאריך snapshot לא תקין');
+  const snapshotMonth = formatBillingMonthFromDate(snapshotDate); // "YYYY-MM"
+
+  const db = await getDb();
+  const deals = db.collection('deals');
+
+  // שלוף עסקאות מרוכזות שלא בוטלו לחלוטין
+  const candidates = await deals.find({
+    subscriptionStatus: { $nin: ['Cancelled'] },
+    $or: [
+      { 'formState.paymentMethod': 'centralized' },
+      { 'formState.organizationPaymentMethod': 'centralized' },
+      { source: 'org-bulk-import' },
+    ],
+  }).project({
+    _id: 1,
+    subscriptionStatus: 1,
+    finalBillingMonth: 1,
+    organizationId: 1,
+    'formState.organizationId': 1,
+    'formState.organizationName': 1,
+    organizationName: 1,
+    payerAmount: 1,
+    'formState.resolvedVendorCost': 1,
+    'formState.monthlyPricePerMember': 1,
+  }).limit(50000).toArray();
+
+  // קבץ לפי ארגון — ספור רק עובדים שעוד פעילים ב-snapshotMonth
+  const orgMap = new Map();
+  for (const d of candidates) {
+    const fbm = String(d.finalBillingMonth || '').trim();
+    // אם יש finalBillingMonth ו-finalBillingMonth < snapshotMonth → לא פעיל
+    if (fbm && fbm < snapshotMonth) continue;
+
+    const orgId = String(d.organizationId || d.formState?.organizationId || '').trim();
+    const orgName = String(d.organizationName || d.formState?.organizationName || '').trim();
+    const key = orgId || orgName;
+    if (!key) continue;
+
+    if (!orgMap.has(key)) {
+      orgMap.set(key, {
+        organizationId: orgId,
+        organizationName: orgName,
+        employeeCount: 0,
+        totalRevenue: 0,
+        totalVendorCost: 0,
+        employees: [],
+      });
+    }
+    const g = orgMap.get(key);
+    g.employeeCount += 1;
+    const unitRevenue = Number(d.formState?.monthlyPricePerMember || d.payerAmount || 0);
+    const unitCost = Number(d.formState?.resolvedVendorCost || 0);
+    g.totalRevenue += unitRevenue;
+    g.totalVendorCost += unitCost;
+    g.employees.push({ dealId: String(d._id), revenue: unitRevenue, vendorCost: unitCost });
+  }
+
+  const now = new Date();
+  let upsertCount = 0;
+  for (const g of orgMap.values()) {
+    await db.collection('monthly_invoices').updateOne(
+      { organizationName: g.organizationName, month: snapshotMonth },
+      {
+        $set: {
+          organizationName: g.organizationName,
+          organizationId: g.organizationId,
+          month: snapshotMonth,
+          dealCount: g.employeeCount,
+          totalAmount: g.totalRevenue,
+          totalVendorCost: g.totalVendorCost,
+          totalNetProfit: g.totalRevenue - g.totalVendorCost,
+          snapshotDate: snapshotDate,
+          updatedAt: now,
+        },
+        $setOnInsert: {
+          status: 'Pending',
+          invoiceNumber: '',
+          receiptNumber: '',
+          notes: '',
+          createdAt: now,
+        },
+      },
+      { upsert: true }
+    );
+    upsertCount += 1;
+  }
+
+  return { ok: true, snapshotMonth, organizationCount: upsertCount, totalEmployees: candidates.length };
 }
 
 export async function deleteDealAdmin(dealId) {
