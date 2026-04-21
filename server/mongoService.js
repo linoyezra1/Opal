@@ -1407,6 +1407,33 @@ function isCentralizedOrgPayment(d) {
   return pm === 'centralized' || String(d.source || '') === 'org-bulk-import';
 }
 
+function isCardcomBillingErrorByStatus(paymentStatusRaw = '') {
+  const pay = String(paymentStatusRaw || '').trim().toLowerCase();
+  return /fail|declin|error|denied|arrears|insufficient|expired|stopped|cancel|void|refund|נכשל|פיגור|בוטל/.test(pay);
+}
+
+function isCardcomBillingError(deal = {}) {
+  const cardcomResponseDescription = firstNonEmpty(
+    String(deal?.indicator?.responsdescription || '').trim(),
+    String(deal?.formState?.cardcomResponseDescription || '').trim(),
+    ''
+  ).toLowerCase();
+  const byResponse = /fail|declin|error|denied|insufficient|expired|stopped|cancel|void|refund|נכשל|פיגור|בוטל/.test(cardcomResponseDescription);
+  const byStatus = isCardcomBillingErrorByStatus(deal?.paymentStatus);
+  return byResponse || byStatus;
+}
+
+function isManualFutureCancellation(deal = {}) {
+  const sub = String(deal?.subscriptionStatus || '').trim().toLowerCase();
+  const st = String(deal?.status || '').trim().toLowerCase();
+  const recurringId = String(deal?.cardcomRecurringId || '').trim();
+  return /cancel|בוטל|pending cancellation/.test(sub) || /cancel|בוטל/.test(st) || (deal?.isActive === false && recurringId !== '');
+}
+
+function isCancelledByBusinessRule(deal = {}) {
+  return isManualFutureCancellation(deal) || isCardcomBillingError(deal);
+}
+
 function applyCategoryFilters(deals, categories = []) {
   if (!Array.isArray(categories) || !categories.length) return deals;
   const set = new Set(categories);
@@ -1620,13 +1647,7 @@ export async function getSalesDashboardData(filters = {}) {
   let shown = enriched;
   if (statusFilter === 'cancelled') {
     shown = shown.filter((d) => {
-      const sub = String(d.subscriptionStatus || '').trim().toLowerCase();
-      const pay = String(d.paymentStatus || '').trim().toLowerCase();
-      const recurringId = String(d.cardcomRecurringId || '').trim();
-      const recurringStopped = d.isActive === false && recurringId !== '';
-      const manuallyCancelled = /cancel|בוטל/i.test(sub);
-      const isArrears = /arrears|פיגור/.test(pay);
-      if (!(manuallyCancelled || recurringStopped || isArrears)) return false;
+      if (!isCancelledByBusinessRule(d)) return false;
       if (!dateRange) return true;
       const eventDate = d.cancellationDate || d.updatedAt || d.createdAt;
       const dt = new Date(eventDate);
@@ -1704,6 +1725,7 @@ export async function getSalesDashboardData(filters = {}) {
     filterOptions: {
       providers: vendorNames,
       agents: [...new Set(enriched.map((d) => d.agentName).filter(Boolean))],
+      organizations: [...new Set(enriched.map((d) => String(d.organizationName || d.formState?.organizationName || '').trim()).filter(Boolean))],
     },
     rows: shown.slice(0, 500).map((d) => {
       const e = economicsFromDeal(d);
@@ -2062,15 +2084,7 @@ export async function getControlPanelOverviewData(filters = {}) {
     if (Number.isNaN(dt.getTime())) return false;
     return dt >= from && dt <= to;
   };
-  const isCancelledDeal = (d) => {
-    const sub = String(d.subscriptionStatus || '').trim().toLowerCase();
-    const st = String(d.status || '').trim().toLowerCase();
-    const pay = String(d.paymentStatus || '').trim().toLowerCase();
-    const recurringId = String(d.cardcomRecurringId || '').trim();
-    const recurringStopped = d.isActive === false && recurringId !== '';
-    const manuallyCancelled = /cancel|בוטל/i.test(sub) || /cancel|בוטל/i.test(st) || /cancel|בוטל/i.test(pay);
-    return manuallyCancelled || recurringStopped;
-  };
+  const isCancelledDeal = (d) => isCancelledByBusinessRule(d);
   const cancellationEventDate = (d) => d.cancellationDate || d.updatedAt || d.createdAt;
   const isActiveDeal = (d) => d.isActive !== false && !isCancelledDeal(d) && d.isRecurringCycle !== true;
 
@@ -2761,6 +2775,11 @@ export async function deleteDealAdmin(dealId) {
   } catch {
     throw new Error('מזהה עסקה לא תקין');
   }
+  const deal = await deals.findOne({ _id: oid }, { projection: { _id: 1, subscriptionStatus: 1, status: 1, isActive: 1, cardcomRecurringId: 1, paymentStatus: 1, indicator: 1, formState: 1 } });
+  if (!deal) throw new Error('עסקה לא נמצאה');
+  if (!isCancelledByBusinessRule(deal)) {
+    throw new Error('ניתן להעביר לארכיון רק מנוי במצב מבוטל');
+  }
   const r = await deals.updateOne({ _id: oid }, { $set: { isActive: false, updatedAt: new Date() } });
   if (r.matchedCount === 0) throw new Error('עסקה לא נמצאה');
   return { success: true };
@@ -2779,13 +2798,21 @@ export async function bulkDeleteDealsAdmin(dealIds = []) {
     })
     .filter(Boolean);
   if (!objectIds.length) return { requested: 0, deleted: 0 };
+  const cancellableDeals = await db
+    .collection('deals')
+    .find(
+      { _id: { $in: objectIds } },
+      { projection: { _id: 1, subscriptionStatus: 1, status: 1, isActive: 1, cardcomRecurringId: 1, paymentStatus: 1, indicator: 1, formState: 1 } }
+    )
+    .toArray();
+  const allowedIds = cancellableDeals.filter((d) => isCancelledByBusinessRule(d)).map((d) => d._id);
   const r = await db.collection('deals').updateMany(
-    { _id: { $in: objectIds } },
+    { _id: { $in: allowedIds } },
     { $set: { isActive: false, updatedAt: new Date() } }
   );
   return {
     requested: objectIds.length,
-    deleted: Number(r.deletedCount || 0),
+    deleted: Number(r.modifiedCount || 0),
   };
 }
 
@@ -2847,6 +2874,7 @@ export async function findDealsCancelledInRange(fromDate, toDate) {
   if (to && !Number.isNaN(to.getTime())) to.setHours(23, 59, 59, 999);
 
   return docs.filter((d) => {
+    if (!isCancelledByBusinessRule(d)) return false;
     const cd = d.cancellationDate ? new Date(d.cancellationDate) : null;
     const ref =
       cd && !Number.isNaN(cd.getTime())

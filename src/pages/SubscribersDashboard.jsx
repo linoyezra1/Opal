@@ -222,6 +222,10 @@ export default function SubscribersDashboard() {
     const q = filters.agentSearch.trim().toLowerCase();
     return (data.filterOptions.agents || []).filter((x) => String(x).toLowerCase().includes(q));
   }, [data.filterOptions.agents, filters.agentSearchEnabled, filters.agentSearch]);
+  const organizationOptions = useMemo(
+    () => [...new Set((data.rows || []).map((r) => String(r.organizationName || r.organizationBadge || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'he')),
+    [data.rows]
+  );
 
   const hasActiveFilters = useMemo(() => {
     return (
@@ -1429,10 +1433,16 @@ export default function SubscribersDashboard() {
                 </Field>
                 <Field>
                   <FieldLabel>חיפוש לפי ארגון</FieldLabel>
-                  <Input
+                  <select
                     value={filters.organizationSearch}
                     onChange={(e) => setFilters((p) => ({ ...p, organizationSearch: e.target.value }))}
-                  />
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                  >
+                    <option value="">הכל</option>
+                    {organizationOptions.map((org) => (
+                      <option key={org} value={org}>{org}</option>
+                    ))}
+                  </select>
                 </Field>
                 <Field>
                   <FieldLabel>סוג לקוח</FieldLabel>

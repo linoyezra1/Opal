@@ -116,6 +116,7 @@ import {
   buildAgentCommissionPayload,
   generateFlattenedSubscriberRows,
   filterDealsByProvider,
+  listProviderNamesFromDeals,
   buildSubscribersXlsxBuffer,
 } from './reportController.js';
 import multer from 'multer';
@@ -2289,11 +2290,10 @@ app.get('/api/admin/reports/subscribers-export-xlsx', requireAdmin, async (req, 
 
 app.get('/api/admin/reports/providers', requireAdmin, async (req, res) => {
   try {
-    const vendors = await listVendors({ limit: 1000 });
-    const providers = (Array.isArray(vendors) ? vendors : [])
-      .map((v) => String(v.vendorName || '').trim())
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b, 'he'));
+    const fromDate = req.query.fromDate || req.query.from || '';
+    const toDate = req.query.toDate || req.query.to || '';
+    const allDeals = await findDealsCreatedInRange(fromDate || null, toDate || null);
+    const providers = listProviderNamesFromDeals(allDeals);
     res.json({ success: true, providers });
   } catch (e) {
     console.error(`[${ts()}] reports/providers error:`, e);

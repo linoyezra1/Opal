@@ -80,9 +80,11 @@ const HEADER_LABELS = {
   cardcomRecurringId: 'מזהה הוראת קבע',
   cardcomAccountId: 'מזהה חשבון קארדקום',
   cancellationDate: 'תאריך ביטול',
+  firstChargeDate: 'תאריך חיוב ראשון',
+  archivedAt: 'תאריך העברה לארכיון',
   subscriptionStatus: 'סטטוס מנוי',
   paymentStatus: 'סטטוס תשלום',
-  idNum: 'ח.פ/ת.ז',
+  idNum: 'ת.ז/ח.פ',
   address: 'כתובת',
   baseDescription: 'תיאור',
 };

@@ -19,7 +19,7 @@ const TOKEN_KEY = 'opal_admin_token';
 const DRAFT_KEY = 'opal_wizard_draft';
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
-const FLOW_TYPES = ['רופא עד הבית', 'ביטוח בריאות', 'שירות סיעוד', 'אחר'];
+const LOCKED_FLOW_TYPE = 'רופא עד הבית';
 
 const DEFAULT_WHAT_YOU_GET = [
   { icon: 'phone',       title: 'ייעוץ רפואי טלפוני 24/7',        description: 'שיחה עם רופא מוסמך בכל שעה ביום ובלילה' },
@@ -51,7 +51,7 @@ const INIT_S1 = () => ({
   existingProductId: '',
   productName: '', sku: '', baseDescription: '',
   vendorCost: '',
-  flowType: FLOW_TYPES[0],
+  flowType: LOCKED_FLOW_TYPE,
   productImages: ['', '', '', ''],
 });
 const INIT_S2 = () => ({ listName: '', retailPrice: '', globalCommission: '', vendorCost: '' });
@@ -61,6 +61,9 @@ const INIT_S3 = () => ({
   mainContent: DEFAULT_MAIN,
   subContent: '',
   imageUrl: '',
+  galleryImages: ['', '', '', ''],
+  validFrom: '',
+  validTo: '',
   whatYouGetTitle: '', whatYouGetSubtitle: '',
   whatYouGetItems: DEFAULT_WHAT_YOU_GET,
   registrationTitle: '', registrationSubtitle: '',
@@ -321,11 +324,12 @@ export default function UnifiedProductWizard() {
     if (!found) return;
     setS1((p) => ({
       ...p,
+      vendorId: found.providerId || p.vendorId,
       productName: found.productName || found.name || p.productName,
       sku: found.sku || p.sku,
       baseDescription: found.baseDescription || found.description || p.baseDescription,
       vendorCost: String(found.providerCost ?? found.vendorCost ?? p.vendorCost),
-      flowType: found.flowType || p.flowType,
+      flowType: LOCKED_FLOW_TYPE,
     }));
   }, [s1.existingProductId, productMode, products]);
 
@@ -376,8 +380,6 @@ export default function UnifiedProductWizard() {
     if (productMode === 'existing' && !s1.existingProductId) { setS1Error('נא לבחור מוצר קיים'); return; }
     setS2((p) => ({ ...p, listName: p.listName || s1.productName, vendorCost: s1.vendorCost }));
     setS3((p) => ({ ...p, slug: p.slug || slugify(s1.productName), pageTitle: p.pageTitle || s1.productName }));
-    const mainImg = s1.productImages?.[0] || '';
-    if (mainImg) setS3((p) => ({ ...p, imageUrl: mainImg }));
     setOpenStep(2);
   }
 
@@ -443,7 +445,7 @@ export default function UnifiedProductWizard() {
               baseDescription: s1.baseDescription.trim(),
               providerId: resolvedVendorId,
               providerCost: Number(s1.vendorCost || 0),
-              flowType: s1.flowType || FLOW_TYPES[0],
+              flowType: LOCKED_FLOW_TYPE,
             }),
           });
           const prData = await prRes.json().catch(() => ({}));
@@ -503,7 +505,10 @@ export default function UnifiedProductWizard() {
           slug: s3.slug.trim(), pageType: 'sales',
           pageTitle: s3.pageTitle.trim(), subTitle: s3.subTitle.trim(),
           mainContent: s3.mainContent.trim(), subContent: s3.subContent.trim(),
-          imageUrl: s3.imageUrl,
+          imageUrl: String(s3.galleryImages?.[0] || s3.imageUrl || '').trim(),
+          galleryImages: Array.isArray(s3.galleryImages) ? s3.galleryImages.filter(Boolean).slice(0, 4) : [],
+          validFrom: String(s3.validFrom || '').trim(),
+          validTo: String(s3.validTo || '').trim(),
           priceListId: resolvedPriceListId,
           whatYouGetTitle: s3.whatYouGetTitle.trim(), whatYouGetSubtitle: s3.whatYouGetSubtitle.trim(),
           whatYouGetItems: items,
@@ -597,24 +602,15 @@ export default function UnifiedProductWizard() {
     }).catch(() => {});
   }
 
-  function handleImageUpload(e) {
+  function handleImageUpload(e, slotIdx = 0) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > MAX_IMAGE_BYTES) { setS3Error('התמונה גדולה מ-2MB'); return; }
     const reader = new FileReader();
-    reader.onload = () => setS3((p) => ({ ...p, imageUrl: reader.result }));
-    reader.readAsDataURL(file);
-  }
-
-  function handleProductImageUpload(e, slotIdx) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > MAX_IMAGE_BYTES) { setS1Error('התמונה גדולה מ-2MB'); return; }
-    const reader = new FileReader();
-    reader.onload = () => setS1((p) => {
-      const imgs = [...(p.productImages || ['', '', '', ''])];
-      imgs[slotIdx] = reader.result;
-      return { ...p, productImages: imgs };
+    reader.onload = () => setS3((p) => {
+      const next = [...(p.galleryImages || ['', '', '', ''])];
+      next[slotIdx] = reader.result;
+      return { ...p, galleryImages: next, imageUrl: slotIdx === 0 ? reader.result : (p.imageUrl || next[0] || '') };
     });
     reader.readAsDataURL(file);
   }
@@ -639,7 +635,7 @@ export default function UnifiedProductWizard() {
         {/* Header + Abort */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">הגדרת מוצר חדש</h1>
+            <h1 className="text-2xl font-bold tracking-tight">הקמת דף מוצר</h1>
             <p className="text-muted-foreground text-sm mt-1">ספק · מוצר · מחירון · דף נחיתה · הפצה — מתבצע בפעולה אחת אטומית</p>
           </div>
           <Button
@@ -817,42 +813,8 @@ export default function UnifiedProductWizard() {
               </Field>
               <Field>
                 <FieldLabel>סוג זרימה (Flow Type)</FieldLabel>
-                <select className="flex h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-sm"
-                  value={s1.flowType} onChange={(e) => setS1((p) => ({ ...p, flowType: e.target.value }))}>
-                  {FLOW_TYPES.map((ft) => <option key={ft} value={ft}>{ft}</option>)}
-                </select>
+                <Input value={LOCKED_FLOW_TYPE} readOnly disabled className="bg-slate-100 text-muted-foreground" />
               </Field>
-            </div>
-
-            {/* Product images: 1 main + 3 optional */}
-            <div className="border rounded-lg p-3 space-y-2 bg-slate-50">
-              <p className="text-xs font-medium text-slate-700">תמונות מוצר</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[0, 1, 2, 3].map((idx) => {
-                  const img = s1.productImages?.[idx] || '';
-                  return (
-                    <div key={idx} className="space-y-1">
-                      <p className="text-[10px] text-muted-foreground">{idx === 0 ? 'ראשית *' : `תמונה ${idx + 1}`}</p>
-                      {img ? (
-                        <div className="relative">
-                          <img src={img} alt="" className="w-full h-20 object-cover rounded-lg border" />
-                          <button type="button"
-                            onClick={() => setS1((p) => { const imgs = [...p.productImages]; imgs[idx] = ''; return { ...p, productImages: imgs }; })}
-                            className="absolute -top-1 -end-1 size-5 rounded-full bg-white border flex items-center justify-center shadow">
-                            <X className="size-3" />
-                          </button>
-                        </div>
-                      ) : (
-                        <label className="flex flex-col items-center justify-center w-full h-20 rounded-lg border-2 border-dashed border-slate-200 bg-white cursor-pointer hover:border-primary/50 transition-colors">
-                          <Plus className="size-4 text-muted-foreground" />
-                          <input type="file" accept="image/*" className="sr-only" onChange={(e) => handleProductImageUpload(e, idx)} />
-                        </label>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="text-[10px] text-muted-foreground">מקס׳ 2MB לתמונה. התמונה הראשית תועבר אוטומטית לדף הנחיתה.</p>
             </div>
 
             {s1Error ? <p className="text-destructive text-sm">{s1Error}</p> : null}
@@ -958,18 +920,43 @@ export default function UnifiedProductWizard() {
                 </div>
 
                 <div className="border rounded-lg p-3 space-y-3 bg-slate-50">
-                  <p className="text-xs font-medium text-slate-700">תמונת כותרת</p>
-                  <input type="file" accept="image/*" onChange={handleImageUpload} className="text-sm" />
-                  {s3.imageUrl ? (
-                    <div className="relative inline-block">
-                      <img src={s3.imageUrl} alt="" className="h-20 rounded border object-cover" />
-                      <button type="button" onClick={() => setS3((p) => ({ ...p, imageUrl: '' }))}
-                        className="absolute -top-1 -end-1 size-5 rounded-full bg-white border flex items-center justify-center shadow">
-                        <X className="size-3" />
-                      </button>
-                    </div>
-                  ) : null}
-                  <p className="text-xs text-muted-foreground">מקס׳ 2MB</p>
+                  <p className="text-xs font-medium text-slate-700">תמונות מוצר בדף נחיתה (1 ראשית + 3 משניות)</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[0, 1, 2, 3].map((idx) => {
+                      const img = s3.galleryImages?.[idx] || '';
+                      return (
+                        <div key={idx} className="space-y-1">
+                          <p className="text-[10px] text-muted-foreground">{idx === 0 ? 'ראשית *' : `משנית ${idx}`}</p>
+                          {img ? (
+                            <div className="relative">
+                              <img src={img} alt="" className="w-full h-20 object-cover rounded-lg border" />
+                              <button type="button" onClick={() => setS3((p) => {
+                                const next = [...(p.galleryImages || ['', '', '', ''])];
+                                next[idx] = '';
+                                return { ...p, galleryImages: next, imageUrl: idx === 0 ? '' : p.imageUrl };
+                              })} className="absolute -top-1 -end-1 size-5 rounded-full bg-white border flex items-center justify-center shadow">
+                                <X className="size-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, idx)} className="text-xs" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground">מקס׳ 2MB לתמונה</p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field>
+                    <FieldLabel>מתאריך</FieldLabel>
+                    <Input type="date" value={s3.validFrom || ''} onChange={(e) => setS3((p) => ({ ...p, validFrom: e.target.value }))} />
+                  </Field>
+                  <Field>
+                    <FieldLabel>עד תאריך</FieldLabel>
+                    <Input type="date" value={s3.validTo || ''} onChange={(e) => setS3((p) => ({ ...p, validTo: e.target.value }))} />
+                  </Field>
                 </div>
 
                 <div className="border rounded-lg p-3 space-y-3">

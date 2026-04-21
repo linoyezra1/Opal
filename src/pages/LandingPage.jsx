@@ -924,7 +924,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">מוטבים נוספים</label>
+                  <label className="text-sm font-medium text-foreground">מס' מבוטחים</label>
                   <div className="flex items-center gap-4 flex-wrap">
                     <div className="flex items-center rounded-lg border border-input bg-background">
                       <Button
@@ -951,7 +951,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Users className="size-4" />
-                      <span>עד 5 מוטבים נוספים</span>
+                      <span>מילוי פרטי המוטבים לאחר ביצוע ההזמנה</span>
                     </div>
                   </div>
                 </div>
