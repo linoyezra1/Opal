@@ -889,7 +889,7 @@ export default function UnifiedProductWizard() {
                       טוען…
                     </p>
                   ) : null}
-                </div>
+                </CardContent>
               </Card>
             </div>
           );
