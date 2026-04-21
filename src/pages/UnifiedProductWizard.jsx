@@ -756,9 +756,25 @@ export default function UnifiedProductWizard() {
       <AdminPageShell>
       <div className="space-y-6" dir="rtl">
         {hubMode === 'hub' ? (() => {
+          // Parse "YYYY-MM-DD" as end-of-day in local time.
+          // new Date(string) parses as UTC midnight which shifts the calendar date
+          // in any timezone behind UTC — use the Date(y,m,d) constructor instead.
+          function parseEndOfDay(s) {
+            const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (!m) return null;
+            const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 23, 59, 59, 999);
+            return isNaN(d.getTime()) ? null : d;
+          }
+          function parseStartOfDay(s) {
+            const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (!m) return null;
+            const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 0, 0, 0, 0);
+            return isNaN(d.getTime()) ? null : d;
+          }
+
           const now = new Date();
           function pageStatus(pg) {
-            const to = pg.validTo ? new Date(pg.validTo) : null;
+            const to = parseEndOfDay(pg.validTo);
             if (to && now > to) return 'expired';
             return 'active';
           }
@@ -773,12 +789,16 @@ export default function UnifiedProductWizard() {
               ].map((v) => String(v || '').toLowerCase()).join(' | ');
               if (!hay.includes(q)) return false;
             }
-            const from = hubFilterFrom ? new Date(hubFilterFrom) : null;
-            const to   = hubFilterTo   ? new Date(hubFilterTo)   : null;
-            const pgFrom = pg.validFrom ? new Date(pg.validFrom) : null;
-            const pgTo   = pg.validTo   ? new Date(pg.validTo)   : null;
-            if (from && pgTo && pgTo < from) return false;
-            if (to   && pgFrom && pgFrom > to) return false;
+            if (!hubFilterFrom && !hubFilterTo) return true;
+            const filterStart = parseStartOfDay(hubFilterFrom);
+            const filterEnd   = parseEndOfDay(hubFilterTo);
+            const pgStart     = parseStartOfDay(pg.validFrom);
+            const pgEnd       = parseEndOfDay(pg.validTo);
+            // Pages with no date range are always shown (permanently active)
+            if (!pgStart && !pgEnd) return true;
+            // Overlap: page period must intersect filter period
+            if (filterEnd   && pgStart && pgStart > filterEnd)   return false;
+            if (filterStart && pgEnd   && pgEnd   < filterStart) return false;
             return true;
           });
           function copyLink(slug) {

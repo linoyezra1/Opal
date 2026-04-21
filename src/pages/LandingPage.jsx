@@ -67,6 +67,19 @@ const benefits = [
   { icon: Star, title: 'מחיר הוגן', description: 'פחות משקל ליום' },
 ];
 
+/**
+ * Parse a "YYYY-MM-DD" date string as end-of-day in LOCAL time.
+ * Using new Date(string) would parse as UTC midnight, which shifts the
+ * calendar date in timezones behind UTC and breaks expiry comparisons.
+ * The Date(year, month, day, ...) constructor always uses local time.
+ */
+function parseLocalEndOfDay(dateStr) {
+  const m = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 23, 59, 59, 999);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 function formatPrice(v) {
   const n = Math.round(parseFloat(v || 0) * 100) / 100;
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
@@ -387,14 +400,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
           if (!r.success) throw new Error(r.error || 'דף לא נמצא');
           const validToRaw = r?.validTo ?? null;
           console.log('[LandingPage] validTo raw value from API:', validToRaw);
-          let validTo = validToRaw ? new Date(validToRaw) : null;
-          if (validTo && !isNaN(validTo.getTime())) {
-            // A date-only string ("YYYY-MM-DD") parses as UTC midnight, which would
-            // expire a page hours early in UTC+ timezones. Extend to end of local day.
-            validTo.setHours(23, 59, 59, 999);
-          } else {
-            validTo = null;
-          }
+          const validTo = parseLocalEndOfDay(validToRaw);
           if (validTo && new Date() > validTo) {
             setPageType('deactivated');
             setIsExpired(true);

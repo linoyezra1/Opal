@@ -290,6 +290,8 @@ const landingPageSchema = new mongoose.Schema(
     whatYouGetItems: { type: [whatYouGetItemSchema], default: [] },
     registrationTitle: { type: String, default: '' },
     registrationSubtitle: { type: String, default: '' },
+    validFrom: { type: String, default: '' },
+    validTo: { type: String, default: '' },
     isActive: { type: Boolean, default: true, index: true },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
@@ -1084,6 +1086,8 @@ function serializeLandingPageDoc(d) {
     whatYouGetItems: items,
     registrationTitle: d.registrationTitle || '',
     registrationSubtitle: d.registrationSubtitle || '',
+    validFrom: d.validFrom || '',
+    validTo: d.validTo || '',
     createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
     updatedAt: d.updatedAt ? new Date(d.updatedAt).toISOString() : null,
   };
@@ -1150,6 +1154,8 @@ export async function createLandingPage(payload) {
     whatYouGetItems: wItems,
     registrationTitle: String(payload.registrationTitle || '').trim(),
     registrationSubtitle: String(payload.registrationSubtitle || '').trim(),
+    validFrom: String(payload.validFrom || '').trim(),
+    validTo: String(payload.validTo || '').trim(),
   });
   return { id: String(doc._id), slug };
 }
@@ -1174,6 +1180,8 @@ export async function updateLandingPage(id, payload) {
   if (payload.whatYouGetItems != null) set.whatYouGetItems = normalizeWhatYouGetItems(payload.whatYouGetItems);
   if (payload.registrationTitle != null) set.registrationTitle = String(payload.registrationTitle).trim();
   if (payload.registrationSubtitle != null) set.registrationSubtitle = String(payload.registrationSubtitle).trim();
+  if (payload.validFrom != null) set.validFrom = String(payload.validFrom).trim();
+  if (payload.validTo != null) set.validTo = String(payload.validTo).trim();
   if (payload.pageType != null) {
     const pt = payload.pageType === 'contact' ? 'contact' : 'sales';
     set.pageType = pt;
@@ -1232,6 +1240,8 @@ export async function getPublicLandingPageBySlug(slug) {
       whatYouGetItems: items,
       registrationTitle: doc.registrationTitle || '',
       registrationSubtitle: doc.registrationSubtitle || '',
+      validFrom: doc.validFrom || '',
+      validTo: doc.validTo || '',
       priceList: null,
     };
   }
@@ -1252,6 +1262,8 @@ export async function getPublicLandingPageBySlug(slug) {
     whatYouGetItems: items,
     registrationTitle: doc.registrationTitle || '',
     registrationSubtitle: doc.registrationSubtitle || '',
+    validFrom: doc.validFrom || '',
+    validTo: doc.validTo || '',
     priceList: pl,
   };
 }
