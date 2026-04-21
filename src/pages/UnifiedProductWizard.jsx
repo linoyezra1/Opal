@@ -13,6 +13,9 @@ import { Textarea } from '../components/ui/textarea.jsx';
 import { Field, FieldGroup, FieldLabel } from '../components/ui/field.jsx';
 import { Badge } from '../components/ui/badge.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 const TOKEN_KEY = 'opal_admin_token';
@@ -216,6 +219,7 @@ export default function UnifiedProductWizard() {
   const [hubMode, setHubMode] = useState('hub');
   const [hubFilterFrom, setHubFilterFrom] = useState('');
   const [hubFilterTo, setHubFilterTo] = useState('');
+  const [hubSearch, setHubSearch] = useState('');
   const [copiedSlug, setCopiedSlug] = useState('');
 
   // ── Wizard UI ──────────────────────────────────────────────────────────────
@@ -693,17 +697,27 @@ export default function UnifiedProductWizard() {
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <AdminPageShell>
+    <TooltipProvider delayDuration={250}>
+      <AdminPageShell>
       <div className="space-y-6" dir="rtl">
         {hubMode === 'hub' ? (() => {
-          const today = new Date(); today.setHours(0,0,0,0);
+          const now = new Date();
           function pageStatus(pg) {
             const to = pg.validTo ? new Date(pg.validTo) : null;
-            if (to && to < today) return 'expired';
+            if (to && now > to) return 'expired';
             return 'active';
           }
           const filteredPages = (landingPages || []).filter((pg) => {
-            if (!hubFilterFrom && !hubFilterTo) return true;
+            const q = hubSearch.trim().toLowerCase();
+            if (q) {
+              const hay = [
+                pg.pageTitle,
+                pg.productName,
+                pg.internalProductName,
+                pg.slug,
+              ].map((v) => String(v || '').toLowerCase()).join(' | ');
+              if (!hay.includes(q)) return false;
+            }
             const from = hubFilterFrom ? new Date(hubFilterFrom) : null;
             const to   = hubFilterTo   ? new Date(hubFilterTo)   : null;
             const pgFrom = pg.validFrom ? new Date(pg.validFrom) : null;
@@ -720,135 +734,163 @@ export default function UnifiedProductWizard() {
             });
           }
           return (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold tracking-tight">הקמת דף מוצר</h1>
-                <Button type="button" onClick={startNewWizard}>הקמת דף מוצר חדש</Button>
+            <div className="space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h1 className="text-2xl font-bold tracking-tight">הקמת דף מוצר</h1>
+                  <p className="text-muted-foreground">ניהול דפי נחיתה, תוקף והפצה</p>
+                </div>
+                <Button type="button" onClick={startNewWizard}>
+                  <Plus className="size-4 me-2" />
+                  הקמת דף חדש
+                </Button>
               </div>
 
-              {/* Date range filter */}
-              <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-600">מתאריך</label>
-                  <input
-                    type="date"
-                    value={hubFilterFrom}
-                    onChange={(e) => setHubFilterFrom(e.target.value)}
-                    className="rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-600">עד תאריך</label>
-                  <input
-                    type="date"
-                    value={hubFilterTo}
-                    onChange={(e) => setHubFilterTo(e.target.value)}
-                    className="rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                {(hubFilterFrom || hubFilterTo) ? (
-                  <Button type="button" variant="outline" size="sm" onClick={() => { setHubFilterFrom(''); setHubFilterTo(''); }}>
-                    ניקוי מסננים
-                  </Button>
-                ) : null}
-              </div>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
+                    <Input
+                      value={hubSearch}
+                      onChange={(e) => setHubSearch(e.target.value)}
+                      placeholder="חיפוש: שם דף נחיתה, שם מוצר, כתובת"
+                    />
+                    <Input type="date" value={hubFilterFrom} onChange={(e) => setHubFilterFrom(e.target.value)} />
+                    <Input type="date" value={hubFilterTo} onChange={(e) => setHubFilterTo(e.target.value)} />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => { setHubSearch(''); setHubFilterFrom(''); setHubFilterTo(''); }}
+                    >
+                      ניקוי
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
 
-              <div className="rounded-xl border overflow-auto shadow-sm">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr style={{ background: 'linear-gradient(135deg,#1e3a5f 0%,#2a5298 100%)' }}>
-                      <th className="px-4 py-3 text-right text-xs font-bold text-white tracking-wide">שם המוצר</th>
-                      <th className="px-4 py-3 text-right text-xs font-bold text-white tracking-wide">כתובת (slug)</th>
-                      <th className="px-4 py-3 text-right text-xs font-bold text-white tracking-wide">תקופת תוקף</th>
-                      <th className="px-4 py-3 text-right text-xs font-bold text-white tracking-wide">סטטוס</th>
-                      <th className="px-4 py-3 text-right text-xs font-bold text-white tracking-wide">פעולות</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredPages.map((pg, i) => {
-                      const status = pageStatus(pg);
-                      const isEven = i % 2 === 0;
-                      return (
-                        <tr
-                          key={pg.id}
-                          className="border-t transition-colors duration-100 hover:bg-blue-50/60"
-                          style={{ backgroundColor: isEven ? '#ffffff' : '#f9fafb' }}
-                        >
-                          <td className="px-4 py-3 font-semibold text-slate-800">{pg.pageTitle || '—'}</td>
-                          <td className="px-4 py-3 font-mono text-xs text-slate-500">/p/{pg.slug}</td>
-                          <td className="px-4 py-3 text-xs text-slate-500">
-                            {pg.validFrom || pg.validTo
-                              ? `${pg.validFrom ? new Date(pg.validFrom).toLocaleDateString('he-IL') : '—'} — ${pg.validTo ? new Date(pg.validTo).toLocaleDateString('he-IL') : '—'}`
-                              : '—'
-                            }
-                          </td>
-                          <td className="px-4 py-3">
-                            {status === 'expired' ? (
-                              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 border border-red-200">פג תוקף</span>
-                            ) : (
-                              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 border border-green-200">פעיל</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                title="עריכה"
-                                onClick={() => editLandingPage(pg)}
-                                className="rounded-md p-1.5 text-slate-500 hover:bg-blue-100 hover:text-blue-700 transition-colors"
-                              >
-                                <Pencil className="size-4" />
-                              </button>
-                              <button
-                                type="button"
-                                title="העתקת קישור"
-                                onClick={() => copyLink(pg.slug)}
-                                className="rounded-md p-1.5 transition-colors text-slate-500 hover:bg-emerald-100 hover:text-emerald-700"
-                              >
-                                {copiedSlug === pg.slug
-                                  ? <Check className="size-4 text-emerald-600" />
-                                  : <Copy className="size-4" />
+              <Card>
+                <CardHeader className="pb-0">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">רשימת דפי מוצר</CardTitle>
+                    <CardDescription>{filteredPages.length} / {landingPages.length} דפים</CardDescription>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="rounded-xl border overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-slate-50 hover:bg-slate-50">
+                          <TableHead className="font-semibold">שם דף הנחיתה</TableHead>
+                          <TableHead className="font-semibold">כתובת (slug)</TableHead>
+                          <TableHead className="font-semibold">תקופת תוקף</TableHead>
+                          <TableHead className="font-semibold">סטטוס</TableHead>
+                          <TableHead className="w-32 font-semibold">פעולות</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredPages.map((pg) => {
+                          const status = pageStatus(pg);
+                          const internalName = String(pg.productName || pg.internalProductName || '').trim();
+                          const landingTitle = String(pg.pageTitle || '—').trim();
+                          return (
+                            <TableRow key={pg.id} className="hover:bg-primary/[0.03] transition-colors group">
+                              <TableCell className="py-3.5">
+                                <div className="font-semibold text-slate-800">{landingTitle || '—'}</div>
+                                {internalName && internalName !== landingTitle ? (
+                                  <div className="text-xs text-muted-foreground mt-0.5">מוצר פנימי: {internalName}</div>
+                                ) : null}
+                              </TableCell>
+                              <TableCell className="font-mono text-xs text-slate-500">/p/{pg.slug}</TableCell>
+                              <TableCell className="text-xs text-slate-500">
+                                {pg.validFrom || pg.validTo
+                                  ? `${pg.validFrom ? new Date(pg.validFrom).toLocaleDateString('he-IL') : '—'} — ${pg.validTo ? new Date(pg.validTo).toLocaleDateString('he-IL') : '—'}`
+                                  : '—'
                                 }
-                              </button>
-                              <a
-                                href={`${window.location.origin}/p/${pg.slug}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                title="פתיחת דף נחיתה"
-                                className="rounded-md p-1.5 text-slate-500 hover:bg-amber-100 hover:text-amber-700 transition-colors"
-                              >
-                                <ExternalLink className="size-4" />
-                              </a>
-                              <button
-                                type="button"
-                                title="העברה לארכיון"
-                                onClick={() => deleteLandingPage(pg.id)}
-                                className="rounded-md p-1.5 text-slate-400 hover:bg-red-100 hover:text-red-600 transition-colors"
-                              >
-                                <Archive className="size-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {!hubLoading && filteredPages.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                          {(hubFilterFrom || hubFilterTo) ? 'לא נמצאו דפים בתאריכים אלו' : 'אין דפי נחיתה'}
-                        </td>
-                      </tr>
-                    ) : null}
-                    {hubLoading ? (
-                      <tr>
-                        <td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">
-                          <Loader2 className="size-4 animate-spin inline me-2" />טוען…
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
-              </div>
+                              </TableCell>
+                              <TableCell>
+                                {status === 'expired' ? (
+                                  <Badge className="bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100 text-xs">פג תוקף</Badge>
+                                ) : (
+                                  <Badge className="bg-green-100 text-green-800 border-green-200 hover:bg-green-100 text-xs">פעיל</Badge>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        type="button"
+                                        className="size-8 hover:bg-slate-100"
+                                        onClick={() => editLandingPage(pg)}
+                                        aria-label="עריכה"
+                                      >
+                                        <Pencil className="size-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>עריכה</TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        type="button"
+                                        className="size-8 hover:bg-emerald-100 hover:text-emerald-700"
+                                        onClick={() => copyLink(pg.slug)}
+                                        aria-label="העתקת קישור"
+                                      >
+                                        {copiedSlug === pg.slug ? <Check className="size-4 text-emerald-600" /> : <Copy className="size-4" />}
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{copiedSlug === pg.slug ? 'הועתק' : 'העתקת קישור'}</TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button variant="ghost" size="icon" asChild className="size-8 hover:bg-amber-100 hover:text-amber-700">
+                                        <a href={`${window.location.origin}/p/${pg.slug}`} target="_blank" rel="noreferrer" aria-label="פתיחת דף">
+                                          <ExternalLink className="size-4" />
+                                        </a>
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>פתיחת דף נחיתה</TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        type="button"
+                                        className="size-8 hover:bg-destructive/10 hover:text-destructive"
+                                        onClick={() => deleteLandingPage(pg.id)}
+                                        aria-label="העברה לארכיון"
+                                      >
+                                        <Archive className="size-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>העברה לארכיון</TooltipContent>
+                                  </Tooltip>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {!hubLoading && filteredPages.length === 0 ? (
+                    <p className="text-sm text-muted-foreground mt-3">
+                      {(hubFilterFrom || hubFilterTo || hubSearch) ? 'לא נמצאו דפים לפי הסינון' : 'אין דפי נחיתה'}
+                    </p>
+                  ) : null}
+                  {hubLoading ? (
+                    <p className="text-sm text-muted-foreground mt-3 flex items-center gap-2">
+                      <Loader2 className="size-3.5 animate-spin" />
+                      טוען…
+                    </p>
+                  ) : null}
+                </div>
+              </Card>
             </div>
           );
         })() : null}
@@ -1414,6 +1456,7 @@ export default function UnifiedProductWizard() {
           </>
         ) : null}
       </div>
-    </AdminPageShell>
+      </AdminPageShell>
+    </TooltipProvider>
   );
 }

@@ -330,6 +330,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [pageType, setPageType] = useState('sales');
+  const [isExpired, setIsExpired] = useState(false);
 
   useEffect(() => {
     if (pageType !== 'sales') return undefined;
@@ -373,11 +374,19 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
 
     setLoading(true);
     setError('');
+    setIsExpired(false);
     const run = async () => {
       try {
         if (slug) {
           const r = await fetch(`${API_BASE}/api/public/landing/${encodeURIComponent(slug)}`).then((x) => x.json());
           if (!r.success) throw new Error(r.error || 'דף לא נמצא');
+          const validTo = r?.validTo ? new Date(r.validTo) : null;
+          if (validTo && new Date() > validTo) {
+            setPageType('deactivated');
+            setIsExpired(true);
+            setLoading(false);
+            return;
+          }
           if (r.isActive === false) {
             setPageType('deactivated');
             setLoading(false);
@@ -592,17 +601,21 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
   if (pageType === 'deactivated') {
     return (
       <div dir="rtl" className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-center justify-center p-6">
-        <div className="max-w-md w-full rounded-2xl border bg-white shadow-sm p-8 text-center space-y-5">
-          <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-slate-100">
-            <svg xmlns="http://www.w3.org/2000/svg" className="size-7 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <div className="max-w-md w-full rounded-2xl border border-primary/20 bg-white shadow-sm p-8 text-center space-y-5">
+          <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-opal-gold/20">
+            <svg xmlns="http://www.w3.org/2000/svg" className="size-7 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
             </svg>
           </div>
           <div className="space-y-2">
-            <h1 className="text-xl font-bold text-slate-800">לקוח נכבד</h1>
-            <p className="text-slate-600 leading-relaxed">המבצע למוצר זה הסתיים.<br />לפרטים נוספים הנך מוזמן ליצור עמנו קשר.</p>
+            <h1 className="text-xl font-bold text-primary">לקוח נכבד</h1>
+            <p className="text-slate-700 leading-relaxed">
+              {isExpired ? 'לקוח נכבד, המבצע למוצר זה הסתיים...' : 'המבצע למוצר זה אינו פעיל כרגע.'}
+              <br />
+              לפרטים נוספים הנך מוזמן ליצור עמנו קשר.
+            </p>
           </div>
-          <Button asChild size="lg" className="w-full">
+          <Button asChild size="lg" variant="opalGold" className="w-full">
             <a href="tel:*9119">צור קשר</a>
           </Button>
         </div>
