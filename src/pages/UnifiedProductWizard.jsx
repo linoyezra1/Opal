@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  AlertTriangle, Check, ChevronDown, ChevronUp, Clock, Copy, ExternalLink, Eye, EyeOff,
-  Heart, Info, Phone, Plus, Shield, Star, Users, Pill, Stethoscope, Syringe, FileText, X,
+  AlertTriangle, Archive, Check, ChevronDown, ChevronUp, Clock, Copy, ExternalLink, Eye, EyeOff,
+  Heart, Info, Pencil, Phone, Plus, Shield, Star, Users, Pill, Stethoscope, Syringe, FileText, X,
   Loader2,
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
@@ -214,6 +214,9 @@ export default function UnifiedProductWizard() {
   const [landingPages, setLandingPages] = useState([]);
   const [hubLoading, setHubLoading] = useState(false);
   const [hubMode, setHubMode] = useState('hub');
+  const [hubFilterFrom, setHubFilterFrom] = useState('');
+  const [hubFilterTo, setHubFilterTo] = useState('');
+  const [copiedSlug, setCopiedSlug] = useState('');
 
   // ── Wizard UI ──────────────────────────────────────────────────────────────
   const [openStep, setOpenStep] = useState(1);
@@ -692,44 +695,163 @@ export default function UnifiedProductWizard() {
   return (
     <AdminPageShell>
       <div className="space-y-6" dir="rtl">
-        {hubMode === 'hub' ? (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-bold tracking-tight">הקמת דף מוצר</h1>
-              <Button type="button" onClick={startNewWizard}>הקמת דף מוצר חדש</Button>
-            </div>
-            <div className="rounded-lg border overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="p-2 text-right">slug</th>
-                    <th className="p-2 text-right">כותרת</th>
-                    <th className="p-2 text-right">מחירון</th>
-                    <th className="p-2 text-right">פעולות</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(landingPages || []).map((pg) => (
-                    <tr key={pg.id} className="border-t">
-                      <td className="p-2 font-mono">{pg.slug}</td>
-                      <td className="p-2">{pg.pageTitle || '—'}</td>
-                      <td className="p-2">{pg.priceListId || '—'}</td>
-                      <td className="p-2">
-                        <div className="flex gap-2">
-                          <Button type="button" size="sm" variant="outline" onClick={() => editLandingPage(pg)}>עריכה</Button>
-                          <Button type="button" size="sm" variant="destructive" onClick={() => deleteLandingPage(pg.id)}>מחיקה</Button>
-                        </div>
-                      </td>
+        {hubMode === 'hub' ? (() => {
+          const today = new Date(); today.setHours(0,0,0,0);
+          function pageStatus(pg) {
+            const to = pg.validTo ? new Date(pg.validTo) : null;
+            if (to && to < today) return 'expired';
+            return 'active';
+          }
+          const filteredPages = (landingPages || []).filter((pg) => {
+            if (!hubFilterFrom && !hubFilterTo) return true;
+            const from = hubFilterFrom ? new Date(hubFilterFrom) : null;
+            const to   = hubFilterTo   ? new Date(hubFilterTo)   : null;
+            const pgFrom = pg.validFrom ? new Date(pg.validFrom) : null;
+            const pgTo   = pg.validTo   ? new Date(pg.validTo)   : null;
+            if (from && pgTo && pgTo < from) return false;
+            if (to   && pgFrom && pgFrom > to) return false;
+            return true;
+          });
+          function copyLink(slug) {
+            const url = `${window.location.origin}/p/${slug}`;
+            navigator.clipboard.writeText(url).then(() => {
+              setCopiedSlug(slug);
+              setTimeout(() => setCopiedSlug(''), 2000);
+            });
+          }
+          return (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h1 className="text-2xl font-bold tracking-tight">הקמת דף מוצר</h1>
+                <Button type="button" onClick={startNewWizard}>הקמת דף מוצר חדש</Button>
+              </div>
+
+              {/* Date range filter */}
+              <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-600">מתאריך</label>
+                  <input
+                    type="date"
+                    value={hubFilterFrom}
+                    onChange={(e) => setHubFilterFrom(e.target.value)}
+                    className="rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-600">עד תאריך</label>
+                  <input
+                    type="date"
+                    value={hubFilterTo}
+                    onChange={(e) => setHubFilterTo(e.target.value)}
+                    className="rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                {(hubFilterFrom || hubFilterTo) ? (
+                  <Button type="button" variant="outline" size="sm" onClick={() => { setHubFilterFrom(''); setHubFilterTo(''); }}>
+                    ניקוי מסננים
+                  </Button>
+                ) : null}
+              </div>
+
+              <div className="rounded-xl border overflow-auto shadow-sm">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr style={{ background: 'linear-gradient(135deg,#1e3a5f 0%,#2a5298 100%)' }}>
+                      <th className="px-4 py-3 text-right text-xs font-bold text-white tracking-wide">שם המוצר</th>
+                      <th className="px-4 py-3 text-right text-xs font-bold text-white tracking-wide">כתובת (slug)</th>
+                      <th className="px-4 py-3 text-right text-xs font-bold text-white tracking-wide">תקופת תוקף</th>
+                      <th className="px-4 py-3 text-right text-xs font-bold text-white tracking-wide">סטטוס</th>
+                      <th className="px-4 py-3 text-right text-xs font-bold text-white tracking-wide">פעולות</th>
                     </tr>
-                  ))}
-                  {!hubLoading && !(landingPages || []).length ? (
-                    <tr><td colSpan={4} className="p-4 text-center text-muted-foreground">אין דפי נחיתה</td></tr>
-                  ) : null}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {filteredPages.map((pg, i) => {
+                      const status = pageStatus(pg);
+                      const isEven = i % 2 === 0;
+                      return (
+                        <tr
+                          key={pg.id}
+                          className="border-t transition-colors duration-100 hover:bg-blue-50/60"
+                          style={{ backgroundColor: isEven ? '#ffffff' : '#f9fafb' }}
+                        >
+                          <td className="px-4 py-3 font-semibold text-slate-800">{pg.pageTitle || '—'}</td>
+                          <td className="px-4 py-3 font-mono text-xs text-slate-500">/p/{pg.slug}</td>
+                          <td className="px-4 py-3 text-xs text-slate-500">
+                            {pg.validFrom || pg.validTo
+                              ? `${pg.validFrom ? new Date(pg.validFrom).toLocaleDateString('he-IL') : '—'} — ${pg.validTo ? new Date(pg.validTo).toLocaleDateString('he-IL') : '—'}`
+                              : '—'
+                            }
+                          </td>
+                          <td className="px-4 py-3">
+                            {status === 'expired' ? (
+                              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 border border-red-200">פג תוקף</span>
+                            ) : (
+                              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 border border-green-200">פעיל</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                title="עריכה"
+                                onClick={() => editLandingPage(pg)}
+                                className="rounded-md p-1.5 text-slate-500 hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                              >
+                                <Pencil className="size-4" />
+                              </button>
+                              <button
+                                type="button"
+                                title="העתקת קישור"
+                                onClick={() => copyLink(pg.slug)}
+                                className="rounded-md p-1.5 transition-colors text-slate-500 hover:bg-emerald-100 hover:text-emerald-700"
+                              >
+                                {copiedSlug === pg.slug
+                                  ? <Check className="size-4 text-emerald-600" />
+                                  : <Copy className="size-4" />
+                                }
+                              </button>
+                              <a
+                                href={`${window.location.origin}/p/${pg.slug}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                title="פתיחת דף נחיתה"
+                                className="rounded-md p-1.5 text-slate-500 hover:bg-amber-100 hover:text-amber-700 transition-colors"
+                              >
+                                <ExternalLink className="size-4" />
+                              </a>
+                              <button
+                                type="button"
+                                title="העברה לארכיון"
+                                onClick={() => deleteLandingPage(pg.id)}
+                                className="rounded-md p-1.5 text-slate-400 hover:bg-red-100 hover:text-red-600 transition-colors"
+                              >
+                                <Archive className="size-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {!hubLoading && filteredPages.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                          {(hubFilterFrom || hubFilterTo) ? 'לא נמצאו דפים בתאריכים אלו' : 'אין דפי נחיתה'}
+                        </td>
+                      </tr>
+                    ) : null}
+                    {hubLoading ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">
+                          <Loader2 className="size-4 animate-spin inline me-2" />טוען…
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        ) : null}
+          );
+        })() : null}
         {hubMode === 'wizard' ? (
           <Button type="button" variant="outline" onClick={() => setHubMode('hub')}>חזרה לטבלת דפי נחיתה</Button>
         ) : null}
