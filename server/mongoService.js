@@ -4,6 +4,7 @@ const MONGO_URL = process.env.MONGODB_URI || process.env.MONGO_URL || '';
 const DB_NAME = process.env.MONGO_DB_NAME || 'opal';
 
 let clientPromise = null;
+let dealsIndexesPromise = null;
 
 function getClient() {
   if (!MONGO_URL) {
@@ -18,7 +19,25 @@ function getClient() {
 
 async function getDb() {
   const client = await getClient();
-  return client.db(DB_NAME);
+  const db = client.db(DB_NAME);
+  if (!dealsIndexesPromise) {
+    dealsIndexesPromise = ensureDealsIndexes(db).catch((err) => {
+      dealsIndexesPromise = null;
+      throw err;
+    });
+  }
+  await dealsIndexesPromise;
+  return db;
+}
+
+async function ensureDealsIndexes(db) {
+  const deals = db.collection('deals');
+  await Promise.all([
+    deals.createIndex({ organizationId: 1 }),
+    deals.createIndex({ createdAt: -1 }),
+    deals.createIndex({ 'formState.id': 1 }),
+    deals.createIndex({ paymentStatus: 1, createdAt: -1 }),
+  ]);
 }
 
 /** חודש לדוחות בילינג — YYYY-MM */
@@ -1571,24 +1590,37 @@ export async function getSalesDashboardData(filters = {}) {
   }
   if (andClauses.length) match.$and = andClauses;
 
-  const pipeline = [
-    {
-      $addFields: {
-        fullTextCustomer: {
-          $concat: [
-            { $ifNull: ['$formState.fullName', ''] },
-            ' ',
-            { $ifNull: ['$transactionId', ''] },
-            ' ',
-            { $ifNull: ['$formState.id', ''] },
-          ],
-        },
+  const pipeline = [];
+  const preMatch = { ...match };
+  delete preMatch.fullTextCustomer;
+  if (preMatch.$and) {
+    preMatch.$and = preMatch.$and
+      .map((clause) => {
+        if (!clause || typeof clause !== 'object' || !Array.isArray(clause.$or)) return clause;
+        const filteredOr = clause.$or.filter((item) => !(item && typeof item === 'object' && 'fullTextCustomer' in item));
+        if (!filteredOr.length) return null;
+        return { ...clause, $or: filteredOr };
+      })
+      .filter(Boolean);
+    if (!preMatch.$and.length) delete preMatch.$and;
+  }
+  if (Object.keys(preMatch).length) pipeline.push({ $match: preMatch });
+  pipeline.push({
+    $addFields: {
+      fullTextCustomer: {
+        $concat: [
+          { $ifNull: ['$formState.fullName', ''] },
+          ' ',
+          { $ifNull: ['$transactionId', ''] },
+          ' ',
+          { $ifNull: ['$formState.id', ''] },
+        ],
       },
     },
-    { $match: match },
-    { $sort: { createdAt: -1 } },
-    { $limit: 1000 },
-  ];
+  });
+  pipeline.push({ $match: match });
+  pipeline.push({ $sort: { createdAt: -1 } });
+  pipeline.push({ $limit: 1000 });
 
   const baseDeals = await dealsCol.aggregate(pipeline).toArray();
   const vendors = await db
@@ -2712,11 +2744,10 @@ export async function runMonthlyOrgSnapshot(snapshotDateStr) {
 
     const orgId = String(d.organizationId || d.formState?.organizationId || '').trim();
     const orgName = String(d.organizationName || d.formState?.organizationName || '').trim();
-    const key = orgId || orgName;
-    if (!key) continue;
+    if (!orgId) continue;
 
-    if (!orgMap.has(key)) {
-      orgMap.set(key, {
+    if (!orgMap.has(orgId)) {
+      orgMap.set(orgId, {
         organizationId: orgId,
         organizationName: orgName,
         employeeCount: 0,
@@ -2725,7 +2756,7 @@ export async function runMonthlyOrgSnapshot(snapshotDateStr) {
         employees: [],
       });
     }
-    const g = orgMap.get(key);
+    const g = orgMap.get(orgId);
     g.employeeCount += 1;
     const unitRevenue = Number(d.formState?.monthlyPricePerMember || d.payerAmount || 0);
     const unitCost = Number(d.formState?.resolvedVendorCost || 0);
@@ -2737,8 +2768,18 @@ export async function runMonthlyOrgSnapshot(snapshotDateStr) {
   const now = new Date();
   let upsertCount = 0;
   for (const g of orgMap.values()) {
+    if (!g.organizationId) continue;
+    const legacyByName = g.organizationName
+      ? await db.collection('monthly_invoices').findOne(
+          { organizationName: g.organizationName, month: snapshotMonth },
+          { projection: { _id: 1 } }
+        )
+      : null;
+    const upsertFilter = legacyByName?._id
+      ? { _id: legacyByName._id }
+      : { organizationId: g.organizationId, month: snapshotMonth };
     await db.collection('monthly_invoices').updateOne(
-      { organizationName: g.organizationName, month: snapshotMonth },
+      upsertFilter,
       {
         $set: {
           organizationName: g.organizationName,
@@ -2959,29 +3000,42 @@ export async function generateMonthlyInvoicesForMonth(monthStr) {
   const groups = new Map();
   for (const d of deals) {
     const e = enrichDeal(d);
-    if (e.paymentMethod !== 'centralized' || !String(e.organizationName || '').trim()) continue;
-    const org = String(e.organizationName).trim();
-    if (!groups.has(org)) groups.set(org, { organizationName: org, totalAmount: 0, dealCount: 0 });
-    const g = groups.get(org);
+    const orgId = String(d.organizationId || d.formState?.organizationId || '').trim();
+    const orgName = String(e.organizationName || '').trim();
+    if (e.paymentMethod !== 'centralized' || !orgId) continue;
+    if (!groups.has(orgId)) groups.set(orgId, { organizationId: orgId, organizationName: orgName, totalAmount: 0, dealCount: 0 });
+    const g = groups.get(orgId);
     g.totalAmount += Number(d.payerAmount || 0);
     g.dealCount += 1;
+    if (!g.organizationName && orgName) g.organizationName = orgName;
   }
 
   const orgsCentralized = await getOrganizationCompaniesWithMemberCounts(500);
   for (const o of orgsCentralized) {
     if (o.billingType !== 'Centralized') continue;
     if (Number(o.activeMemberCount || 0) <= 0) continue;
+    const orgId = String(o.id || '').trim();
     const name = String(o.companyName || '').trim();
-    if (!name) continue;
-    if (!groups.has(name)) groups.set(name, { organizationName: name, totalAmount: 0, dealCount: 0 });
+    if (!orgId || !name) continue;
+    if (!groups.has(orgId)) groups.set(orgId, { organizationId: orgId, organizationName: name, totalAmount: 0, dealCount: 0 });
   }
 
   const now = new Date();
   for (const g of groups.values()) {
+    const legacyByName = g.organizationName
+      ? await db.collection('monthly_invoices').findOne(
+          { organizationName: g.organizationName, month: target },
+          { projection: { _id: 1 } }
+        )
+      : null;
+    const upsertFilter = legacyByName?._id
+      ? { _id: legacyByName._id }
+      : { organizationId: g.organizationId, month: target };
     await db.collection('monthly_invoices').updateOne(
-      { organizationName: g.organizationName, month: target },
+      upsertFilter,
       {
         $set: {
+          organizationId: g.organizationId,
           organizationName: g.organizationName,
           month: target,
           totalAmount: g.totalAmount,

@@ -298,6 +298,11 @@ app.get('/api/legal-document/:key', async (req, res) => {
 /** Pending deals: lowProfileCode → { formState, payerAmount, createdAt } */
 const pendingDeals = new Map();
 const PENDING_TTL_MS = 60 * 60 * 1000; // 1 hour
+let snapshotRunState = {
+  inProgress: false,
+  startedAt: 0,
+  lastRunAt: 0,
+};
 
 function cleanupPending() {
   const now = Date.now();
@@ -309,13 +314,18 @@ setInterval(cleanupPending, 10 * 60 * 1000);
 
 /** Snapshot חודשי ב-1 לחודש בשעה 00:01 */
 (function scheduleMonthlySnapshot() {
+  function monthLabelUtc(d) {
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  }
   function msUntilNextFirst() {
     const now = new Date();
-    const next = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 1, 0, 0);
+    const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 1, 0, 0));
     return next.getTime() - now.getTime();
   }
   function fireAndReschedule() {
-    runMonthlyOrgSnapshot().then((r) => {
+    const now = new Date();
+    const monthUtc = monthLabelUtc(now);
+    runMonthlyOrgSnapshot(`${monthUtc}-01`).then((r) => {
       console.log(`[monthly-snapshot] done:`, r);
     }).catch((e) => {
       console.error(`[monthly-snapshot] error:`, e?.message || e);
@@ -2078,13 +2088,24 @@ app.post('/api/admin/deals/:id/cancel-org-employee', requireAdmin, async (req, r
 
 /** הרצה ידנית של Snapshot חודשי (לטסטינג ולאחזור) */
 app.post('/api/admin/org-snapshot/run', requireAdmin, async (req, res) => {
+  if (snapshotRunState.inProgress) {
+    return res.status(409).json({ success: false, error: 'Snapshot כבר רץ כרגע, נסו שוב בעוד רגע' });
+  }
+  if (snapshotRunState.lastRunAt && Date.now() - snapshotRunState.lastRunAt < 15000) {
+    return res.status(429).json({ success: false, error: 'Snapshot הורץ ממש עכשיו. המתינו כמה שניות ונסו שוב' });
+  }
+  snapshotRunState.inProgress = true;
+  snapshotRunState.startedAt = Date.now();
   try {
     const { snapshotDate } = req.body || {};
     const result = await runMonthlyOrgSnapshot(snapshotDate || null);
+    snapshotRunState.lastRunAt = Date.now();
     res.json({ success: true, ...result });
   } catch (e) {
     console.error(`[${ts()}] org-snapshot/run error:`, e);
     res.status(400).json({ success: false, error: e.message || 'Snapshot נכשל' });
+  } finally {
+    snapshotRunState.inProgress = false;
   }
 });
 

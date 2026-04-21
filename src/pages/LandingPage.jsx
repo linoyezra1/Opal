@@ -67,6 +67,11 @@ const benefits = [
   { icon: Star, title: 'מחיר הוגן', description: 'פחות משקל ליום' },
 ];
 
+function formatPrice(v) {
+  const n = Math.round(parseFloat(v || 0) * 100) / 100;
+  return Number.isInteger(n) ? String(n) : n.toFixed(2);
+}
+
 function validatePhone(value) {
   const digits = value.replace(/\D/g, '');
   return digits.length >= 9 && digits.length <= 11;
@@ -380,7 +385,16 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
         if (slug) {
           const r = await fetch(`${API_BASE}/api/public/landing/${encodeURIComponent(slug)}`).then((x) => x.json());
           if (!r.success) throw new Error(r.error || 'דף לא נמצא');
-          const validTo = r?.validTo ? new Date(r.validTo) : null;
+          const validToRaw = r?.validTo ?? null;
+          console.log('[LandingPage] validTo raw value from API:', validToRaw);
+          let validTo = validToRaw ? new Date(validToRaw) : null;
+          if (validTo && !isNaN(validTo.getTime())) {
+            // A date-only string ("YYYY-MM-DD") parses as UTC midnight, which would
+            // expire a page hours early in UTC+ timezones. Extend to end of local day.
+            validTo.setHours(23, 59, 59, 999);
+          } else {
+            validTo = null;
+          }
           if (validTo && new Date() > validTo) {
             setPageType('deactivated');
             setIsExpired(true);
@@ -815,7 +829,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                   </CardHeader>
                   <CardContent className="space-y-4 text-center pb-6">
                     <div>
-                      <span className="text-4xl font-bold">₪{Number(product.retailPrice || 0)}</span>
+                      <span className="text-4xl font-bold">₪{formatPrice(product.retailPrice)}</span>
                       <span className="text-muted-foreground"> / חודש</span>
                     </div>
                     <Button
@@ -869,7 +883,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                         <p className="font-semibold text-foreground">{selectedProduct.productName}</p>
                       </div>
                       <div className="text-start sm:text-end">
-                        <p className="text-2xl font-bold text-primary">₪{Number(selectedProduct.retailPrice || 0)}</p>
+                        <p className="text-2xl font-bold text-primary">₪{formatPrice(selectedProduct.retailPrice)}</p>
                         <p className="text-xs text-muted-foreground">לחודש</p>
                       </div>
                     </div>
@@ -1006,7 +1020,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                     <span className="text-lg font-medium text-foreground">סה״כ לתשלום חודשי:</span>
                     <span className="text-3xl font-bold text-primary">
-                      {selectedProduct ? `₪${Number(selectedProduct.retailPrice || 0)}` : '—'}
+                      {selectedProduct ? `₪${formatPrice(selectedProduct.retailPrice)}` : '—'}
                     </span>
                   </div>
                 </div>

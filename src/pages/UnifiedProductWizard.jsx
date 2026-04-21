@@ -16,6 +16,7 @@ import { Spinner } from '../components/ui/spinner.jsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
+import { slugify } from '../utils/stringUtils.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 const TOKEN_KEY = 'opal_admin_token';
@@ -75,9 +76,6 @@ const INIT_S3 = () => ({
 const INIT_COMMITTED = () => ({ vendorId: '', productId: '', priceListId: '', priceListName: '', slug: '' });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────────
-function slugify(str) {
-  return String(str || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 60);
-}
 function friendlyError(msg) {
   if (/providerId/i.test(msg)) return 'חובה לבחור או להקים ספק לפני שמירת המוצר';
   return msg || 'שגיאה';
@@ -364,27 +362,84 @@ export default function UnifiedProductWizard() {
     setOpenStep(1);
   }
 
-  function editLandingPage(page) {
-    setHubMode('wizard');
-    setOpenStep(3);
-    setS3((prev) => ({
-      ...prev,
+  async function editLandingPage(page) {
+    // Always populate S3 first — all landing page content fields
+    setS3({
       slug: String(page.slug || ''),
       pageTitle: String(page.pageTitle || ''),
       subTitle: String(page.subTitle || ''),
       mainContent: String(page.mainContent || ''),
       subContent: String(page.subContent || ''),
       imageUrl: String(page.imageUrl || ''),
-      galleryImages: Array.isArray(page.galleryImages) ? [...page.galleryImages, '', '', '', ''].slice(0, 4) : [String(page.imageUrl || ''), '', '', ''],
-      whatYouGetTitle: String(page.whatYouGetTitle || ''),
-      whatYouGetSubtitle: String(page.whatYouGetSubtitle || ''),
-      whatYouGetItems: Array.isArray(page.whatYouGetItems) && page.whatYouGetItems.length ? page.whatYouGetItems : prev.whatYouGetItems,
-      registrationTitle: String(page.registrationTitle || ''),
-      registrationSubtitle: String(page.registrationSubtitle || ''),
+      galleryImages: Array.isArray(page.galleryImages)
+        ? [...page.galleryImages, '', '', '', ''].slice(0, 4)
+        : [String(page.imageUrl || ''), '', '', ''],
       validFrom: String(page.validFrom || ''),
       validTo: String(page.validTo || ''),
+      whatYouGetTitle: String(page.whatYouGetTitle || ''),
+      whatYouGetSubtitle: String(page.whatYouGetSubtitle || ''),
+      whatYouGetItems: Array.isArray(page.whatYouGetItems) && page.whatYouGetItems.length
+        ? page.whatYouGetItems
+        : DEFAULT_WHAT_YOU_GET,
+      registrationTitle: String(page.registrationTitle || ''),
+      registrationSubtitle: String(page.registrationSubtitle || ''),
       skipLanding: false,
-    }));
+    });
+
+    // Fetch the linked price list to pre-populate S2 and committed IDs
+    if (page.priceListId && token) {
+      try {
+        const res = await fetch(
+          `${API_BASE}/api/admin/price-lists/${encodeURIComponent(page.priceListId)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const data = await res.json().catch(() => ({}));
+        if (data.success && data.list) {
+          const pl = data.list;
+          const firstLine = Array.isArray(pl.lines) && pl.lines.length ? pl.lines[0] : null;
+
+          setS2({
+            listName: String(pl.listName || ''),
+            retailPrice: firstLine ? String(firstLine.retailPrice ?? '') : '',
+            globalCommission: firstLine ? String(firstLine.defaultAgentCommission ?? '') : '',
+            vendorCost: firstLine ? String(firstLine.vendorCost ?? '') : '',
+          });
+
+          // Pre-populate S1 using the already-loaded products/vendors lists
+          const linkedProductId = String(firstLine?.productId || '');
+          const linkedVendorId = String(firstLine?.vendorId || '');
+          const foundProduct = products.find((p) => String(p.id || p._id || '') === linkedProductId);
+          const foundVendor = vendors.find((v) => String(v.id || v._id || '') === linkedVendorId);
+
+          if (linkedProductId) {
+            setProductMode('existing');
+            setVendorMode('existing');
+            setS1((prev) => ({
+              ...prev,
+              existingProductId: linkedProductId,
+              productName: foundProduct?.productName || prev.productName,
+              vendorId: linkedVendorId,
+              vendorName: foundVendor?.vendorName || prev.vendorName,
+            }));
+          }
+
+          // Commit vendor/product/priceList IDs so finalize skips re-creation.
+          // Intentionally NOT committing slug — finalize will PUT-update the existing page.
+          setCommitted((prev) => ({
+            ...prev,
+            vendorId: linkedVendorId || prev.vendorId,
+            productId: linkedProductId || prev.productId,
+            priceListId: page.priceListId,
+            priceListName: pl.listName || '',
+          }));
+        }
+      } catch {
+        /* price-list fetch failed — user can review and adjust manually */
+      }
+    }
+
+    setHubMode('wizard');
+    setOpenStep(1);
   }
 
   async function deleteLandingPage(id) {
