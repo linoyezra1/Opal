@@ -31,13 +31,14 @@ async function getDb() {
 }
 
 async function ensureDealsIndexes(db) {
-  const deals = db.collection('deals');
-  await Promise.all([
-    deals.createIndex({ organizationId: 1 }),
-    deals.createIndex({ createdAt: -1 }),
-    deals.createIndex({ 'formState.id': 1 }),
-    deals.createIndex({ paymentStatus: 1, createdAt: -1 }),
-  ]);
+  // TODO: re-enable after DB disk space is freed.
+  // const deals = db.collection('deals');
+  // await Promise.all([
+  //   deals.createIndex({ organizationId: 1 }),
+  //   deals.createIndex({ createdAt: -1 }),
+  //   deals.createIndex({ 'formState.id': 1 }),
+  //   deals.createIndex({ paymentStatus: 1, createdAt: -1 }),
+  // ]);
 }
 
 /** חודש לדוחות בילינג — YYYY-MM */
