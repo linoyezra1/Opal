@@ -73,7 +73,7 @@ const INIT_COMMITTED = () => ({ vendorId: '', productId: '', priceListId: '', pr
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────────
 function slugify(str) {
-  return String(str || '').toLowerCase().replace(/\s+/g, '-').replace(/[^\w\u0590-\u05FF-]/g, '').slice(0, 60);
+  return String(str || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 60);
 }
 function friendlyError(msg) {
   if (/providerId/i.test(msg)) return 'חובה לבחור או להקים ספק לפני שמירת המוצר';
@@ -1006,8 +1006,9 @@ export default function UnifiedProductWizard() {
                     <div className="relative">
                       <span className="absolute start-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">/p/</span>
                       <Input dir="ltr" className="ps-8" value={s3.slug}
-                        onChange={(e) => setS3((p) => ({ ...p, slug: slugify(e.target.value) }))} placeholder="product-name" />
+                        onChange={(e) => setS3((p) => ({ ...p, slug: slugify(e.target.value) }))} placeholder="productname" />
                     </div>
+                    <p className="text-xs text-muted-foreground mt-1">הכתובת חייבת להיות באותיות אנגליות קטנות (a-z) ומספרים בלבד.</p>
                   </Field>
                   <Field>
                     <FieldLabel>כותרת ראשית</FieldLabel>

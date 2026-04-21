@@ -48,11 +48,12 @@ ${inner}
 function buildOrderConfirmationHtml(payload, logoDataUri = '') {
   const amount = Number(payload.monthlyTotal || 0).toLocaleString('he-IL');
   const link = String(payload.beneficiaryLink || '#').trim() || '#';
-  const monthlyDisplay = `₪${amount}`;
+  const monthlyDisplay = `${amount} ₪`;
 
   const orderId = escapeHtml(payload.orderNumber || '—');
   const orderDate = escapeHtml(payload.orderDate || '—');
   const customerName = escapeHtml(payload.customerName || 'לקוח');
+  const customerPhone = escapeHtml(String(payload.phone || '').trim() || '—');
   const productTitle = escapeHtml(
     String(payload.productName || payload.subscriptionType || '').trim() || 'רופא עד הבית'
   );
@@ -73,33 +74,36 @@ function buildOrderConfirmationHtml(payload, logoDataUri = '') {
       <td align="right" dir="rtl">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="right" dir="rtl" style="max-width:560px;background-color:#ffffff;direction:rtl;text-align:right;">
           <tr>
-            <td align="center" dir="rtl" style="padding:24px 32px 16px;text-align:center;background-color:#ffffff;">
-              ${logoBlock}
-            </td>
-          </tr>
-          <tr>
             <td align="center" dir="rtl" style="background-color:${OPAL_BLUE};padding:20px 32px;text-align:center;">
               <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;line-height:1.4;text-align:center;direction:rtl;">
-                אישור הזמנה - ${productTitle}
+                אישור הזמנה: <span dir="ltr" style="unicode-bidi:embed;">${orderId}</span>
               </h1>
             </td>
           </tr>
           <tr>
             <td align="right" dir="rtl" style="padding:28px 32px;direction:rtl;text-align:right;">
-              <p style="font-size:15px;color:#333;margin:0 0 16px;line-height:1.7;text-align:right;direction:rtl;">
-                שלום ${customerName}, כתב השירות וגילוי הנאות מצורפים למייל זה.
+              <p style="font-size:13px;color:#666;margin:0 0 16px;line-height:1.6;text-align:right;direction:rtl;">
+                כתב השירות וגילוי הנאות מצורפים למייל זה.
               </p>
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="right" dir="rtl" style="border-collapse:collapse;margin-bottom:24px;direction:rtl;text-align:right;">
                 <tr>
-                  <td align="right" style="padding:10px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;">מספר הזמנה</td>
-                  <td align="right" style="padding:10px 0;color:${OPAL_BLUE};font-size:14px;font-weight:600;border-bottom:1px solid #eee;text-align:right;direction:rtl;"><span dir="ltr" style="unicode-bidi:embed;">${orderId}</span></td>
-                </tr>
-                <tr>
-                  <td align="right" style="padding:10px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;">תאריך</td>
+                  <td align="right" style="padding:10px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;">תאריך הזמנה:</td>
                   <td align="right" style="padding:10px 0;color:${OPAL_BLUE};font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;"><span dir="ltr" style="unicode-bidi:embed;">${orderDate}</span></td>
                 </tr>
                 <tr>
-                  <td align="right" style="padding:12px 0;color:${OPAL_BLUE};font-size:15px;font-weight:600;text-align:right;direction:rtl;">תשלום חודשי</td>
+                  <td align="right" style="padding:10px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;">שם הלקוח:</td>
+                  <td align="right" style="padding:10px 0;color:${OPAL_BLUE};font-size:14px;font-weight:600;border-bottom:1px solid #eee;text-align:right;direction:rtl;">${customerName}</td>
+                </tr>
+                <tr>
+                  <td align="right" style="padding:10px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;">טלפון:</td>
+                  <td align="right" style="padding:10px 0;color:${OPAL_BLUE};font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;"><span dir="ltr" style="unicode-bidi:embed;">${customerPhone}</span></td>
+                </tr>
+                <tr>
+                  <td align="right" style="padding:10px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;">תיאור העסקה:</td>
+                  <td align="right" style="padding:10px 0;color:${OPAL_BLUE};font-size:14px;font-weight:600;border-bottom:1px solid #eee;text-align:right;direction:rtl;">${productTitle}</td>
+                </tr>
+                <tr>
+                  <td align="right" style="padding:12px 0;color:#666;font-size:14px;text-align:right;direction:rtl;">סה״כ תשלום חודשי:</td>
                   <td align="right" style="padding:12px 0;color:${OPAL_GOLD};font-size:18px;font-weight:700;text-align:right;direction:rtl;"><span dir="ltr" style="unicode-bidi:embed;">${escapeHtml(monthlyDisplay)}</span></td>
                 </tr>
               </table>
@@ -128,7 +132,8 @@ function buildOrderConfirmationHtml(payload, logoDataUri = '') {
             </td>
           </tr>
           <tr>
-            <td align="center" dir="rtl" style="background-color:#F5F5F5;padding:16px 32px;text-align:center;">
+            <td align="center" dir="rtl" style="background-color:#F5F5F5;padding:20px 32px;text-align:center;">
+              <div style="margin-bottom:12px;">${logoBlock}</div>
               <p style="font-size:12px;color:#666;margin:0 0 4px;text-align:center;direction:rtl;">החיוב החודשי דרך חברת אופאל תקשורת בע״מ</p>
               <p style="font-size:12px;color:#888;margin:0;text-align:center;" dir="ltr">${salesPhone} | ${contactEmail}</p>
             </td>
