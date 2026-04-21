@@ -49,7 +49,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/admin/organizations/:id" element={<OrganizationDetailPage />} />
         <Route path="/register" element={<OrgRegisterPage />} />
         <Route path="/admin/agents" element={<AgentSetup />} />
-        <Route path="/admin/landing-pages" element={<Navigate to="/admin/product-page-setup" replace />} />
         <Route path="/admin/product-page-setup" element={<UnifiedProductWizard />} />
         <Route path="/admin/reports" element={<ReportsDashboard />} />
         <Route path="/admin/archive" element={<ArchiveDashboard />} />

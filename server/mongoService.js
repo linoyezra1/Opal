@@ -1427,7 +1427,8 @@ function isManualFutureCancellation(deal = {}) {
   const sub = String(deal?.subscriptionStatus || '').trim().toLowerCase();
   const st = String(deal?.status || '').trim().toLowerCase();
   const recurringId = String(deal?.cardcomRecurringId || '').trim();
-  return /cancel|בוטל|pending cancellation/.test(sub) || /cancel|בוטל/.test(st) || (deal?.isActive === false && recurringId !== '');
+  if (sub === 'pending cancellation') return false;
+  return /cancel|בוטל/.test(sub) || /cancel|בוטל/.test(st) || (deal?.isActive === false && recurringId !== '');
 }
 
 function isCancelledByBusinessRule(deal = {}) {
@@ -2778,7 +2779,7 @@ export async function deleteDealAdmin(dealId) {
   const deal = await deals.findOne({ _id: oid }, { projection: { _id: 1, subscriptionStatus: 1, status: 1, isActive: 1, cardcomRecurringId: 1, paymentStatus: 1, indicator: 1, formState: 1 } });
   if (!deal) throw new Error('עסקה לא נמצאה');
   if (!isCancelledByBusinessRule(deal)) {
-    throw new Error('ניתן להעביר לארכיון רק מנוי במצב מבוטל');
+    throw new Error('לא ניתן להעביר לארכיון. לקוח זה נמצא במצב פעיל. יש לבצע ביטול מנוי לפני העברה לארכיון.');
   }
   const r = await deals.updateOne({ _id: oid }, { $set: { isActive: false, updatedAt: new Date() } });
   if (r.matchedCount === 0) throw new Error('עסקה לא נמצאה');

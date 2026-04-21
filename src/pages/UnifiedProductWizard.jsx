@@ -211,6 +211,9 @@ export default function UnifiedProductWizard() {
   const [agents, setAgents] = useState([]);
   const [orgs, setOrgs] = useState([]);
   const [loadingRef, setLoadingRef] = useState(false);
+  const [landingPages, setLandingPages] = useState([]);
+  const [hubLoading, setHubLoading] = useState(false);
+  const [hubMode, setHubMode] = useState('hub');
 
   // ── Wizard UI ──────────────────────────────────────────────────────────────
   const [openStep, setOpenStep] = useState(1);
@@ -269,7 +272,21 @@ export default function UnifiedProductWizard() {
     finally { setLoadingRef(false); }
   }, [token]);
 
-  useEffect(() => { loadRef(); }, [loadRef]);
+  const loadLandingPages = useCallback(async () => {
+    if (!token) return;
+    setHubLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/landing-pages`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json().catch(() => ({}));
+      setLandingPages(Array.isArray(data?.pages) ? data.pages : []);
+    } catch {
+      setLandingPages([]);
+    } finally {
+      setHubLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => { loadRef(); loadLandingPages(); }, [loadRef, loadLandingPages]);
 
   // ── Draft: load on mount ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -322,16 +339,60 @@ export default function UnifiedProductWizard() {
     if (productMode !== 'existing' || !s1.existingProductId) return;
     const found = products.find((p) => p.id === s1.existingProductId);
     if (!found) return;
+    setVendorMode('existing');
+    const billingVendor = (vendors || []).find((v) => String(v.vendorName || '').includes('בילדינג'));
     setS1((p) => ({
       ...p,
-      vendorId: found.providerId || p.vendorId,
+      vendorId: found.providerId || billingVendor?.id || p.vendorId,
       productName: found.productName || found.name || p.productName,
       sku: found.sku || p.sku,
       baseDescription: found.baseDescription || found.description || p.baseDescription,
       vendorCost: String(found.providerCost ?? found.vendorCost ?? p.vendorCost),
       flowType: LOCKED_FLOW_TYPE,
     }));
-  }, [s1.existingProductId, productMode, products]);
+  }, [s1.existingProductId, productMode, products, vendors]);
+
+  function startNewWizard() {
+    setHubMode('wizard');
+    setOpenStep(1);
+  }
+
+  function editLandingPage(page) {
+    setHubMode('wizard');
+    setOpenStep(3);
+    setS3((prev) => ({
+      ...prev,
+      slug: String(page.slug || ''),
+      pageTitle: String(page.pageTitle || ''),
+      subTitle: String(page.subTitle || ''),
+      mainContent: String(page.mainContent || ''),
+      subContent: String(page.subContent || ''),
+      imageUrl: String(page.imageUrl || ''),
+      galleryImages: Array.isArray(page.galleryImages) ? [...page.galleryImages, '', '', '', ''].slice(0, 4) : [String(page.imageUrl || ''), '', '', ''],
+      whatYouGetTitle: String(page.whatYouGetTitle || ''),
+      whatYouGetSubtitle: String(page.whatYouGetSubtitle || ''),
+      whatYouGetItems: Array.isArray(page.whatYouGetItems) && page.whatYouGetItems.length ? page.whatYouGetItems : prev.whatYouGetItems,
+      registrationTitle: String(page.registrationTitle || ''),
+      registrationSubtitle: String(page.registrationSubtitle || ''),
+      validFrom: String(page.validFrom || ''),
+      validTo: String(page.validTo || ''),
+      skipLanding: false,
+    }));
+  }
+
+  async function deleteLandingPage(id) {
+    if (!id) return;
+    setHubLoading(true);
+    try {
+      await fetch(`${API_BASE}/api/admin/landing-pages/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await loadLandingPages();
+    } finally {
+      setHubLoading(false);
+    }
+  }
 
   // ── Draft helpers ─────────────────────────────────────────────────────────────
   function restoreDraft() {
@@ -631,6 +692,49 @@ export default function UnifiedProductWizard() {
   return (
     <AdminPageShell>
       <div className="space-y-6" dir="rtl">
+        {hubMode === 'hub' ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl font-bold tracking-tight">הקמת דף מוצר</h1>
+              <Button type="button" onClick={startNewWizard}>הקמת דף מוצר חדש</Button>
+            </div>
+            <div className="rounded-lg border overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="p-2 text-right">slug</th>
+                    <th className="p-2 text-right">כותרת</th>
+                    <th className="p-2 text-right">מחירון</th>
+                    <th className="p-2 text-right">פעולות</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(landingPages || []).map((pg) => (
+                    <tr key={pg.id} className="border-t">
+                      <td className="p-2 font-mono">{pg.slug}</td>
+                      <td className="p-2">{pg.pageTitle || '—'}</td>
+                      <td className="p-2">{pg.priceListId || '—'}</td>
+                      <td className="p-2">
+                        <div className="flex gap-2">
+                          <Button type="button" size="sm" variant="outline" onClick={() => editLandingPage(pg)}>עריכה</Button>
+                          <Button type="button" size="sm" variant="destructive" onClick={() => deleteLandingPage(pg.id)}>מחיקה</Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {!hubLoading && !(landingPages || []).length ? (
+                    <tr><td colSpan={4} className="p-4 text-center text-muted-foreground">אין דפי נחיתה</td></tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
+        {hubMode === 'wizard' ? (
+          <Button type="button" variant="outline" onClick={() => setHubMode('hub')}>חזרה לטבלת דפי נחיתה</Button>
+        ) : null}
+        {hubMode === 'wizard' ? (
+          <>
 
         {/* Header + Abort */}
         <div className="flex items-start justify-between gap-4">
@@ -1184,6 +1288,8 @@ export default function UnifiedProductWizard() {
             )}
           </div>
         </StepCard>
+          </>
+        ) : null}
       </div>
     </AdminPageShell>
   );

@@ -582,7 +582,12 @@ export default function SubscribersDashboard() {
       setDeleteTarget(null);
       await loadDashboard();
     } catch (err) {
-      setError(err.message || 'שגיאה');
+      const msg = String(err?.message || '');
+      if (/לא ניתן להעביר לארכיון/.test(msg)) {
+        setError('לא ניתן להעביר לארכיון. לקוח זה נמצא במצב פעיל. יש לבצע ביטול מנוי לפני העברה לארכיון.');
+      } else {
+        setError(msg || 'שגיאה');
+      }
     } finally {
       setDeleteLoading(false);
     }
