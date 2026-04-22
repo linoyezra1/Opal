@@ -17,6 +17,7 @@ import {
   Minus,
   Plus,
   AlertCircle,
+  Loader2,
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import {
@@ -337,6 +338,12 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
   const [submitting, setSubmitting] = useState(false);
   const [pageType, setPageType] = useState('sales');
   const [pageExpired, setPageExpired] = useState(false);
+  const [expiredLeadName, setExpiredLeadName] = useState('');
+  const [expiredLeadPhone, setExpiredLeadPhone] = useState('');
+  const [expiredLeadEmail, setExpiredLeadEmail] = useState('');
+  const [expiredLeadSubmitting, setExpiredLeadSubmitting] = useState(false);
+  const [expiredLeadSuccess, setExpiredLeadSuccess] = useState(false);
+  const [expiredLeadError, setExpiredLeadError] = useState('');
 
   useEffect(() => {
     if (pageType !== 'sales') return undefined;
@@ -572,6 +579,39 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
     ]
   );
 
+  const handleExpiredLeadSubmit = useCallback(
+    async (e) => {
+      e.preventDefault();
+      setExpiredLeadError('');
+      if (!String(expiredLeadName || '').trim() || !String(expiredLeadPhone || '').trim()) {
+        setExpiredLeadError('נא למלא שם מלא וטלפון');
+        return;
+      }
+      setExpiredLeadSubmitting(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/public/contact-lead`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: String(expiredLeadName || '').trim(),
+            phone: String(expiredLeadPhone || '').trim(),
+            email: String(expiredLeadEmail || '').trim(),
+            message: 'פנייה מדף נחיתה פג תוקף',
+            landingSlug: String(slug || '').trim(),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) throw new Error(data.error || 'שליחת הפנייה נכשלה');
+        setExpiredLeadSuccess(true);
+      } catch (err) {
+        setExpiredLeadError(err.message || 'שגיאה');
+      } finally {
+        setExpiredLeadSubmitting(false);
+      }
+    },
+    [expiredLeadName, expiredLeadPhone, expiredLeadEmail, slug]
+  );
+
   if (loading) {
     return (
       <div dir="rtl" className="min-h-screen bg-background flex items-center justify-center p-6">
@@ -608,23 +648,97 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
   if (pageType === 'deactivated') {
     return (
       <div dir="rtl" className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-center justify-center p-6">
-        <div className="max-w-md w-full rounded-2xl border border-primary/20 bg-white shadow-sm p-8 text-center space-y-5">
-          <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-opal-gold/20">
-            <svg xmlns="http://www.w3.org/2000/svg" className="size-7 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-            </svg>
-          </div>
-          <div className="space-y-2">
-            <h1 className="text-xl font-bold text-primary">לקוח נכבד</h1>
-            <p className="text-slate-700 leading-relaxed">
-              {pageExpired ? 'לקוח נכבד, המבצע למוצר זה הסתיים...' : 'המבצע למוצר זה אינו פעיל כרגע.'}
+        <div className="max-w-4xl w-full rounded-2xl overflow-hidden shadow-2xl border border-primary/20 flex flex-col md:flex-row">
+          <div className="md:w-1/2 bg-gradient-to-b from-primary to-[#1e3a5f] text-white p-8 md:p-10 text-right">
+            <div className="size-12 rounded-full bg-white/15 border border-white/20 flex items-center justify-center mb-5">
+              <Clock className="size-6" />
+            </div>
+            <h1 className="text-2xl font-bold leading-tight mb-4">
+              {pageExpired ? 'לקוח נכבד, המבצע למוצר זה הסתיים.' : 'לקוח נכבד, דף זה אינו פעיל כרגע.'}
+            </h1>
+            <p className="text-white/90 leading-relaxed">
+              נשמח לעמוד לשירותך ולהתאים לך הצעה חדשה.
               <br />
-              לפרטים נוספים הנך מוזמן ליצור עמנו קשר.
+              השאר פרטים או צור קשר ישירות.
             </p>
           </div>
-          <Button asChild size="lg" variant="opalGold" className="w-full">
-            <a href="tel:*9119">צור קשר</a>
-          </Button>
+
+          <div className="md:w-1/2 bg-white p-8 md:p-10 text-right">
+            {expiredLeadSuccess ? (
+              <div className="rounded-xl border border-green-200 bg-green-50 p-6 text-center">
+                <p className="text-green-800 font-semibold text-lg">תודה! פרטיך התקבלו ונחזור אליך בהקדם.</p>
+              </div>
+            ) : (
+              <form onSubmit={handleExpiredLeadSubmit} className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-primary">שם מלא *</label>
+                  <input
+                    className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={expiredLeadName}
+                    onChange={(e) => setExpiredLeadName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-primary">טלפון *</label>
+                  <input
+                    type="tel"
+                    dir="ltr"
+                    className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={expiredLeadPhone}
+                    onChange={(e) => setExpiredLeadPhone(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-primary">אימייל</label>
+                  <input
+                    type="email"
+                    dir="ltr"
+                    className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={expiredLeadEmail}
+                    onChange={(e) => setExpiredLeadEmail(e.target.value)}
+                  />
+                </div>
+                {expiredLeadError ? <p className="text-destructive text-sm">{expiredLeadError}</p> : null}
+                <Button
+                  type="submit"
+                  className="w-full bg-opal-gold text-opal-gold-foreground hover:bg-opal-gold/90"
+                  disabled={expiredLeadSubmitting}
+                >
+                  {expiredLeadSubmitting ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin me-2" />
+                      שולח...
+                    </>
+                  ) : (
+                    'שלח פרטים'
+                  )}
+                </Button>
+
+                <div className="flex items-center gap-3 pt-1">
+                  <div className="h-px bg-slate-200 flex-1" />
+                  <span className="text-xs text-muted-foreground">או</span>
+                  <div className="h-px bg-slate-200 flex-1" />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <Button type="button" variant="outline" asChild className="justify-center">
+                    <a href="tel:0544261369">
+                      <Phone className="size-4 me-2" />
+                      התקשר עכשיו
+                    </a>
+                  </Button>
+                  <Button type="button" variant="outline" asChild className="justify-center">
+                    <a href="mailto:opal2000@zahav.net.il">
+                      <Mail className="size-4 me-2" />
+                      שלח אימייל
+                    </a>
+                  </Button>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
       </div>
     );
