@@ -259,20 +259,18 @@ export default function SubscribersDashboard() {
         label: 'סוג לקוח',
         type: 'select',
         options: [
-          { value: 'all', label: 'הכל' },
           { value: 'private', label: 'לקוחות פרטיים' },
           { value: 'organization', label: 'חברי ארגון' },
         ],
       },
       { key: 'month', label: 'חודש', type: 'text', placeholder: 'YYYY-MM' },
-      { key: 'fromDate', label: 'מתאריך', type: 'date' },
-      { key: 'toDate', label: 'עד תאריך', type: 'date' },
+      { key: 'fromDate', label: 'מתאריך(תאריך הצטרפות)', type: 'date' },
+      { key: 'toDate', label: 'עד תאריך(תאריך הצטרפות)', type: 'date' },
       {
         key: 'status',
         label: 'סטטוס',
         type: 'select',
         options: [
-          { value: 'all', label: 'הכל' },
           { value: 'active', label: 'פעילים' },
           { value: 'cancelled', label: 'מבוטלים' },
         ],
@@ -1664,7 +1662,7 @@ export default function SubscribersDashboard() {
                           סכום
                         </TableHead>
                         <TableHead dir="rtl" className="text-right">
-                          תאריך
+                          תאריך הצטרפות
                         </TableHead>
                         <TableHead dir="rtl" className="w-28 text-right">
                           פעולות

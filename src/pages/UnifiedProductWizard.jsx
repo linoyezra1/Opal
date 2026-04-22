@@ -770,22 +770,34 @@ export default function UnifiedProductWizard() {
           }
 
           const filteredPages = (landingPages || []).filter((pg) => {
-            // Text search
+            // ── Text search ────────────────────────────────────────────────────
             const q = hubSearch.trim().toLowerCase();
             if (q) {
               const hay = [pg.pageTitle, pg.productName, pg.internalProductName, pg.slug]
                 .map((v) => String(v || '').toLowerCase()).join(' | ');
               if (!hay.includes(q)) return false;
             }
-            // Date-range filter — use shared local-time parsers
-            if (!hubFilterFrom && !hubFilterTo) return true;
-            const filterStart = parseLocalStartOfDay(hubFilterFrom);
-            const filterEnd   = parseLocalEndOfDay(hubFilterTo);
-            const pgStart     = parseLocalStartOfDay(pg.validFrom);
-            const pgEnd       = parseLocalEndOfDay(pg.validTo);
-            // Pages with no date range are permanently active — always shown
-            if (!pgStart && !pgEnd) return true;
-            // Overlap check: page period must intersect the selected filter period
+
+            // ── Date-range filter ──────────────────────────────────────────────
+            // No filter active → show everything.
+            const filterActive = hubFilterFrom || hubFilterTo;
+            if (!filterActive) return true;
+
+            const filterStart = parseLocalStartOfDay(hubFilterFrom); // null when not set
+            const filterEnd   = parseLocalEndOfDay(hubFilterTo);     // null when not set
+
+            // These are the page's OWN validity dates (validFrom / validTo only —
+            // never createdAt or any other field).
+            const pgStart = parseLocalStartOfDay(pg.validFrom);
+            const pgEnd   = parseLocalEndOfDay(pg.validTo);
+
+            // When a filter IS active, pages with no validity dates have no
+            // explicit range and therefore don't match any specific period.
+            if (!pgStart && !pgEnd) return false;
+
+            // Overlap test: the page's period [pgStart, pgEnd] must intersect
+            // the filter period [filterStart, filterEnd].
+            // A one-sided page bound is treated as open-ended on that side.
             if (filterEnd   && pgStart && pgStart > filterEnd)   return false;
             if (filterStart && pgEnd   && pgEnd   < filterStart) return false;
             return true;
