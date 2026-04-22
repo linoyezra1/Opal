@@ -1,6 +1,6 @@
 import React from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Phone, RefreshCw, MessageSquare, ShoppingCart, Pencil, Archive } from 'lucide-react';
+import { Phone, RefreshCw, MessageSquare, ShoppingCart, Pencil, Archive, Clock } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -59,6 +59,10 @@ export default function ContactManagement() {
             name: x.fullName,
             phone: x.phone,
             email: x.email,
+            message: x.message || '',
+            source: x.source || '',
+            landingSlug: x.landingSlug || '',
+            landingPageTitle: x.landingPageTitle || '',
             createdAt: x.createdAt,
             leadStatus: 'חדש',
             adminNotes: '',
@@ -175,6 +179,9 @@ export default function ContactManagement() {
       if (l.source === 'abandoned_checkout') {
         category = 'abandoned_checkout';
         categoryLabel = l.category || 'לא המשיכו לתשלום';
+      } else if (String(l.message || '').includes('פג תוקף')) {
+        category = 'expired_product';
+        categoryLabel = 'מוצר שהסתיים';
       } else if (l.source === 'landing_contact' && String(l.landingSlug || '').trim()) {
         category = 'landing';
         const title = String(l.landingPageTitle || '').trim();
@@ -272,7 +279,7 @@ export default function ContactManagement() {
           <DialogContent className="sm:max-w-xl">
             <DialogHeader>
               <DialogTitle>עריכת רשומת צור קשר</DialogTitle>
-              <DialogDescription>עדכון סטטוס והערות פנימיות</DialogDescription>
+
             </DialogHeader>
             <div className="space-y-4">
               <div>
@@ -367,6 +374,7 @@ export default function ContactManagement() {
                       { value: 'general', label: 'כללי' },
                       { value: 'landing', label: 'דף נחיתה' },
                       { value: 'abandoned_checkout', label: 'לא המשיכו לתשלום' },
+                      { value: 'expired_product', label: 'מוצר שהסתיים' },
                     ],
                   },
                   {
@@ -426,11 +434,14 @@ export default function ContactManagement() {
                           className={cn(
                             'gap-1 max-w-[240px] truncate',
                             lead.category === 'abandoned_checkout' && 'text-amber-700 border-amber-300 bg-amber-50',
-                            lead.category === 'landing' && 'text-primary border-primary/30 bg-primary/5'
+                            lead.category === 'landing' && 'text-primary border-primary/30 bg-primary/5',
+                            lead.category === 'expired_product' && 'text-red-700 border-red-300 bg-red-50'
                           )}
                         >
                           {lead.category === 'abandoned_checkout' ? (
                             <ShoppingCart className="size-3 shrink-0" />
+                          ) : lead.category === 'expired_product' ? (
+                            <Clock className="size-3 shrink-0" />
                           ) : (
                             <MessageSquare className="size-3 shrink-0" />
                           )}
