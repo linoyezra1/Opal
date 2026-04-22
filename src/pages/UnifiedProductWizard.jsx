@@ -216,8 +216,14 @@ export default function UnifiedProductWizard() {
   const [landingPages, setLandingPages] = useState([]);
   const [hubLoading, setHubLoading] = useState(false);
   const [hubMode, setHubMode] = useState('hub');
-  const [hubFilterFrom, setHubFilterFrom] = useState('');
-  const [hubFilterTo, setHubFilterTo] = useState('');
+  const [hubFilterFrom, setHubFilterFrom] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+  });
+  const [hubFilterTo, setHubFilterTo] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
   const [hubSearch, setHubSearch] = useState('');
   const [copiedSlug, setCopiedSlug] = useState('');
 

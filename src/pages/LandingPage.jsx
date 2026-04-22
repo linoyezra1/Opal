@@ -336,7 +336,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [pageType, setPageType] = useState('sales');
-  const [isExpired, setIsExpired] = useState(false);
+  const [pageExpired, setPageExpired] = useState(false);
 
   useEffect(() => {
     if (pageType !== 'sales') return undefined;
@@ -380,7 +380,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
 
     setLoading(true);
     setError('');
-    setIsExpired(false);
+    setPageExpired(false);
     const run = async () => {
       try {
         if (slug) {
@@ -390,7 +390,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
           console.log('[LandingPage] validTo raw value from API:', validToRaw);
           if (isExpired(validToRaw)) {
             setPageType('deactivated');
-            setIsExpired(true);
+            setPageExpired(true);
             setLoading(false);
             return;
           }
@@ -617,7 +617,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
           <div className="space-y-2">
             <h1 className="text-xl font-bold text-primary">לקוח נכבד</h1>
             <p className="text-slate-700 leading-relaxed">
-              {isExpired ? 'לקוח נכבד, המבצע למוצר זה הסתיים...' : 'המבצע למוצר זה אינו פעיל כרגע.'}
+              {pageExpired ? 'לקוח נכבד, המבצע למוצר זה הסתיים...' : 'המבצע למוצר זה אינו פעיל כרגע.'}
               <br />
               לפרטים נוספים הנך מוזמן ליצור עמנו קשר.
             </p>

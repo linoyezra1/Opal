@@ -661,7 +661,6 @@ export default function SubscribersDashboard() {
     }));
   }
 
-  const s = data.summary || {};
   const visibleRows = useMemo(() => {
     let rows = data.rows || [];
 
@@ -701,8 +700,24 @@ export default function SubscribersDashboard() {
       return hay.includes(q);
     });
   }, [data.rows, liveSearch, filters.status]);
+
+  // Metrics derived entirely from the currently visible (filtered) rows,
+  // so summary cards always reflect what the user actually sees in the table.
+  const visibleSummary = useMemo(() => {
+    let totalRevenue = 0;
+    let canceled = 0;
+    for (const r of visibleRows) {
+      totalRevenue += Number(r.amount || 0);
+      if (r.status === 'canceled' || String(r.subscriptionStatus || '').toLowerCase() === 'cancelled') {
+        canceled += 1;
+      }
+    }
+    return { totalRevenue, canceled, active: visibleRows.length - canceled };
+  }, [visibleRows]);
+
+  const s = data.summary || {};
   const statusSummaryTitle = filters.status === 'cancelled' ? 'מבוטלים (סיכום)' : 'מנויים פעילים (סיכום)';
-  const statusSummaryValue = filters.status === 'cancelled' ? (s.canceled ?? 0) : (s.active ?? 0);
+  const statusSummaryValue = filters.status === 'cancelled' ? visibleSummary.canceled : visibleSummary.active;
   const visibleRowIds = useMemo(
     () => visibleRows.map((r) => String(r.id || '')).filter(Boolean),
     [visibleRows]
@@ -1521,7 +1536,7 @@ export default function SubscribersDashboard() {
 
           {/* כרטיסי סטטיסטיקה — נתונים אמיתיים מהדוח */}
           <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-            <StatsCard title="סה״כ הכנסות" value={formatCurrency(s.totalRevenue || 0)} icon={TrendingUp} loading={loading} />
+            <StatsCard title="סה״כ הכנסות" value={formatCurrency(visibleSummary.totalRevenue)} icon={TrendingUp} loading={loading} />
             <StatsCard title="עסקאות בתוצאות" value={visibleRows.length} icon={Users} loading={loading} />
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1587,7 +1602,7 @@ export default function SubscribersDashboard() {
                     </label>
                   ))}
                   <span className="border-s border-border ps-3 ms-1 whitespace-nowrap">
-                    סה״כ: <strong>{formatCurrency(s.totalRevenue || 0)}</strong>
+                    סה״כ: <strong>{formatCurrency(visibleSummary.totalRevenue)}</strong>
                   </span>
                 </div>
               </div>
