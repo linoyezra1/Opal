@@ -6,6 +6,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
+import { isExpired, parseLocalStartOfDay, parseLocalEndOfDay } from '../utils/dateUtils.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { Button } from '../components/ui/button.jsx';
 import { Input } from '../components/ui/input.jsx';
@@ -756,47 +757,29 @@ export default function UnifiedProductWizard() {
       <AdminPageShell>
       <div className="space-y-6" dir="rtl">
         {hubMode === 'hub' ? (() => {
-          // Parse "YYYY-MM-DD" as end-of-day in local time.
-          // new Date(string) parses as UTC midnight which shifts the calendar date
-          // in any timezone behind UTC — use the Date(y,m,d) constructor instead.
-          function parseEndOfDay(s) {
-            const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
-            if (!m) return null;
-            const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 23, 59, 59, 999);
-            return isNaN(d.getTime()) ? null : d;
-          }
-          function parseStartOfDay(s) {
-            const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
-            if (!m) return null;
-            const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 0, 0, 0, 0);
-            return isNaN(d.getTime()) ? null : d;
+          // pageStatus uses the shared isExpired helper from dateUtils.js —
+          // single source of truth across admin hub and public LandingPage.
+          function pageStatus(pg) {
+            return isExpired(pg.validTo) ? 'expired' : 'active';
           }
 
-          const now = new Date();
-          function pageStatus(pg) {
-            const to = parseEndOfDay(pg.validTo);
-            if (to && now > to) return 'expired';
-            return 'active';
-          }
           const filteredPages = (landingPages || []).filter((pg) => {
+            // Text search
             const q = hubSearch.trim().toLowerCase();
             if (q) {
-              const hay = [
-                pg.pageTitle,
-                pg.productName,
-                pg.internalProductName,
-                pg.slug,
-              ].map((v) => String(v || '').toLowerCase()).join(' | ');
+              const hay = [pg.pageTitle, pg.productName, pg.internalProductName, pg.slug]
+                .map((v) => String(v || '').toLowerCase()).join(' | ');
               if (!hay.includes(q)) return false;
             }
+            // Date-range filter — use shared local-time parsers
             if (!hubFilterFrom && !hubFilterTo) return true;
-            const filterStart = parseStartOfDay(hubFilterFrom);
-            const filterEnd   = parseEndOfDay(hubFilterTo);
-            const pgStart     = parseStartOfDay(pg.validFrom);
-            const pgEnd       = parseEndOfDay(pg.validTo);
-            // Pages with no date range are always shown (permanently active)
+            const filterStart = parseLocalStartOfDay(hubFilterFrom);
+            const filterEnd   = parseLocalEndOfDay(hubFilterTo);
+            const pgStart     = parseLocalStartOfDay(pg.validFrom);
+            const pgEnd       = parseLocalEndOfDay(pg.validTo);
+            // Pages with no date range are permanently active — always shown
             if (!pgStart && !pgEnd) return true;
-            // Overlap: page period must intersect filter period
+            // Overlap check: page period must intersect the selected filter period
             if (filterEnd   && pgStart && pgStart > filterEnd)   return false;
             if (filterStart && pgEnd   && pgEnd   < filterStart) return false;
             return true;

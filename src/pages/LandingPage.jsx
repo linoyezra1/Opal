@@ -22,6 +22,7 @@ import { API_BASE } from '../apiBase.js';
 import {
   normalizeIsraeliIdDigitsInput,
 } from '../utils/israeliId.js';
+import { isExpired } from '../utils/dateUtils.js';
 
 const ORG_JOIN_REQUEST_URL = 'https://opal-production-5fee.up.railway.app/organization-join-request';
 import { cn } from '../lib/cn.js';
@@ -66,19 +67,6 @@ const benefits = [
   { icon: Shield, title: 'מקצועיות', description: 'צוות רפואי מוסמך ואמין' },
   { icon: Star, title: 'מחיר הוגן', description: 'פחות משקל ליום' },
 ];
-
-/**
- * Parse a "YYYY-MM-DD" date string as end-of-day in LOCAL time.
- * Using new Date(string) would parse as UTC midnight, which shifts the
- * calendar date in timezones behind UTC and breaks expiry comparisons.
- * The Date(year, month, day, ...) constructor always uses local time.
- */
-function parseLocalEndOfDay(dateStr) {
-  const m = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!m) return null;
-  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 23, 59, 59, 999);
-  return isNaN(d.getTime()) ? null : d;
-}
 
 function formatPrice(v) {
   const n = Math.round(parseFloat(v || 0) * 100) / 100;
@@ -400,8 +388,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
           if (!r.success) throw new Error(r.error || 'דף לא נמצא');
           const validToRaw = r?.validTo ?? null;
           console.log('[LandingPage] validTo raw value from API:', validToRaw);
-          const validTo = parseLocalEndOfDay(validToRaw);
-          if (validTo && new Date() > validTo) {
+          if (isExpired(validToRaw)) {
             setPageType('deactivated');
             setIsExpired(true);
             setLoading(false);

@@ -663,9 +663,28 @@ export default function SubscribersDashboard() {
 
   const s = data.summary || {};
   const visibleRows = useMemo(() => {
+    let rows = data.rows || [];
+
+    // Status guard — re-applied client-side so stale server responses or race
+    // conditions never leak wrong-status rows into the visible table.
+    if (filters.status === 'cancelled') {
+      rows = rows.filter(
+        (r) =>
+          r.status === 'canceled' ||
+          String(r.subscriptionStatus || '').toLowerCase() === 'cancelled',
+      );
+    } else if (filters.status === 'active') {
+      rows = rows.filter(
+        (r) =>
+          r.status !== 'canceled' &&
+          String(r.subscriptionStatus || '').toLowerCase() !== 'cancelled',
+      );
+    }
+
+    // Live text search on top of the status-filtered set
     const q = String(liveSearch || '').trim().toLowerCase();
-    if (!q) return data.rows || [];
-    return (data.rows || []).filter((r) => {
+    if (!q) return rows;
+    return rows.filter((r) => {
       const hay = [
         r.transactionId,
         r.internalDealNumber,
@@ -681,7 +700,7 @@ export default function SubscribersDashboard() {
         .join(' | ');
       return hay.includes(q);
     });
-  }, [data.rows, liveSearch]);
+  }, [data.rows, liveSearch, filters.status]);
   const statusSummaryTitle = filters.status === 'cancelled' ? 'מבוטלים (סיכום)' : 'מנויים פעילים (סיכום)';
   const statusSummaryValue = filters.status === 'cancelled' ? (s.canceled ?? 0) : (s.active ?? 0);
   const visibleRowIds = useMemo(
