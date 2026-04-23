@@ -81,24 +81,41 @@ function formatDateDDMMYYYY(value) {
 function reorderVisualBidi(value, baseDirection = 'rtl') {
   const text = normalizeText(value);
   if (!text) return '';
-  const embedding = bidi.getEmbeddingLevels(text, baseDirection);
+
+  const embeddingResult = bidi.getEmbeddingLevels(text, baseDirection);
+  const { levels } = embeddingResult;
+
+  // Apply character mirroring (e.g. parentheses flip in RTL context)
+  const mirrored = bidi.getMirroredCharactersMap(text, embeddingResult);
   const chars = text.split('');
-  const flips = bidi.getReorderSegments(text, embedding);
-  flips.forEach(([start, end]) => {
-    let s = start;
-    let e = end;
-    while (s < e) {
-      const tmp = chars[s];
-      chars[s] = chars[e];
-      chars[e] = tmp;
-      s += 1;
-      e -= 1;
+  mirrored.forEach((ch, idx) => { chars[idx] = ch; });
+
+  // Unicode BiDi L2: from the highest embedding level down to the lowest odd
+  // level, reverse every maximal contiguous run at that level or higher.
+  // Embedded LTR runs (even levels) are never touched, so emails/numbers/URLs
+  // that appear inside Hebrew text keep their correct left-to-right character order.
+  let maxLevel = 0;
+  let minOdd = 256;
+  for (const l of levels) {
+    if (l > maxLevel) maxLevel = l;
+    if (l % 2 !== 0 && l < minOdd) minOdd = l;
+  }
+
+  for (let level = maxLevel; level >= minOdd; level--) {
+    for (let i = 0; i < chars.length; ) {
+      if (levels[i] >= level) {
+        let j = i;
+        while (j < chars.length && levels[j] >= level) j++;
+        for (let lo = i, hi = j - 1; lo < hi; lo++, hi--) {
+          [chars[lo], chars[hi]] = [chars[hi], chars[lo]];
+        }
+        i = j;
+      } else {
+        i++;
+      }
     }
-  });
-  const mirrored = bidi.getMirroredCharactersMap(text, embedding);
-  mirrored.forEach((ch, idx) => {
-    chars[idx] = ch;
-  });
+  }
+
   return chars.join('');
 }
 
@@ -131,20 +148,22 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
   const innerW = pageW - margin * 2;
   let page = pdfDoc.addPage([pageW, pageH]);
   const footerDisclaimer = normalizeText('המנוי כפוף לכתב השרות ולגילוי הנאות. מסמך זה נוצר אוטומטית מהמערכת.');
-  const footerContact = normalizeText('אופאל תקשורת בע״מ · בית ליזמות רפואית · 054-4261369 · opal2000@zahav.net.il');
+  const footerContact = normalizeText('אופאל תקשורת בע״מ  · 054-4261369 · opal2000@zahav.net.il');
 
   function drawRightText(pg, text, xRight, y, size, color = TEXT, dir = 'rtl') {
     const raw = normalizeText(text) || '—';
-    const value =
-      dir === 'ltr'
-        ? raw
-        : reorderVisualBidi(raw, dir === 'mixed' ? 'rtl' : 'rtl');
+    // LTR values (emails, phone numbers, URLs, dates) are drawn as-is — their
+    // character order must never be reversed, only their anchor point shifts left
+    // by the text width so the right edge sits at xRight.
+    const value = dir === 'ltr' ? raw : reorderVisualBidi(raw, 'rtl');
     const w = font.widthOfTextAtSize(value, size);
     pg.drawText(value, { x: xRight - w, y, size, font, color });
   }
 
   function drawCenterText(pg, text, y, size, color = TEXT) {
-    const value = normalizeText(text);
+    // Footer strings contain Hebrew — run them through BiDi so the characters
+    // appear in visual (screen) order rather than logical (storage) order.
+    const value = reorderVisualBidi(text, 'rtl');
     const w = font.widthOfTextAtSize(value, size);
     pg.drawText(value, { x: (pageW - w) / 2, y, size, font, color });
   }

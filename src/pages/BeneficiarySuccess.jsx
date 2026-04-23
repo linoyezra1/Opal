@@ -14,7 +14,7 @@ export default function BeneficiarySuccess() {
             <h1 className="text-2xl font-bold tracking-tight">הפרטים נשמרו בהצלחה</h1>
             <p className="text-muted-foreground text-lg">תודה שהצטרפת למשפחת אופאל</p>
           </div>
-          <p className="text-sm text-muted-foreground">הטופס נקלט בהצלחה.</p>
+          <p className="text-sm text-muted-foreground"></p>
         </CardContent>
       </Card>
     </div>
