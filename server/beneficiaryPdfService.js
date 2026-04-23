@@ -59,37 +59,8 @@ export function buildBeneficiaryPdfModel(input = {}) {
   };
 }
 
-/**
- * תיקון מרכזי: במקום להפוך אותיות בנפרד (שגרם ל"חוקל" במקום "לקוח"),
- * אנו מפרידים את הטקסט לאסימונים (מילים + רווחים) ומהפכים את סדר האסימונים.
- * כך כל מילה עברית נשמרת תקינה, אך הסדר הוויזואלי של השורה נעשה RTL.
- *
- * לוגיקה:
- *  1. פיצול ל-tokens: מילה או רווח/טאב (שמירת מבנה הרווחים).
- *  2. הפיכת סדר ה-tokens.
- *  3. שימוש בפונקציה רק על טקסט עברי — טקסט LTR (מספרים, אנגלית) נשאר כמות שהוא.
- */
-function prepareVisualText(value) {
-  return String(value || '')
-    .split('\n')
-    .map((lineText) => {
-      // אם אין תווים עבריים — אין צורך בטיפול
-      if (!/[֐-׿יִ-ﭏ]/.test(lineText)) return lineText;
-
-      // פיצול ל-tokens: מילה (כל רצף שאינו רווח) או רווחים
-      const tokens = lineText.match(/\S+|\s+/g) || [];
-      // הפיכת סדר ה-tokens — כל מילה נשארת תקינה, רק הסדר מתהפך
-      return tokens.reverse().join('');
-    })
-    .join('\n');
-}
-
-/**
- * מחזיר טקסט כפי שהוא — ללא היפוך — עבור ערכים שהם מספרים / אנגלית / מיקסד
- * שלא אמורים לעבור טיפול bidi ויזואלי (מספר הזמנה, אימייל, טלפון, ת.ז, כתובת URL).
- */
-function asIs(value) {
-  return String(value || '');
+function normalizeText(value) {
+  return String(value ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
 }
 
 async function tryEmbedLogo(pdfDoc) {
@@ -102,10 +73,6 @@ async function tryEmbedLogo(pdfDoc) {
   }
 }
 
-/**
- * Letterhead/footer styling inspired by `server/assets/DOC/אופאל נייר מכתבים.doc`
- * (navy + gold band; Word source is not parsed — visual parity only).
- */
 export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
   const model = buildBeneficiaryPdfModel(modelInput);
   const pdfDoc = await PDFDocument.create();
@@ -124,340 +91,243 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
   const margin = 36;
   const innerW = pageW - margin * 2;
   let page = pdfDoc.addPage([pageW, pageH]);
+  const footerDisclaimer = normalizeText('המנוי כפוף לכתב השרות ולגילוי הנאות. מסמך זה נוצר אוטומטית מהמערכת.');
+  const footerContact = normalizeText('אופאל תקשורת בע״מ · בית ליזמות רפואית · 054-4261369 · opal2000@zahav.net.il');
 
-  // ── Footer texts ────────────────────────────────────────────────────────────
-  const footerText = prepareVisualText(
-    'אופאל תקשורת בע״מ · בית ליזמות רפואית · 054-4261369 · opal2000@zahav.net.il'
-  );
-  const footerDisclaimer = prepareVisualText(
-    'המנוי כפוף לכתב השרות ולגילוי הנאות. מסמך זה נוצר אוטומטית מהמערכת.'
-  );
+  function drawRightText(pg, text, xRight, y, size, color = TEXT) {
+    const value = normalizeText(text) || '—';
+    const w = font.widthOfTextAtSize(value, size);
+    pg.drawText(value, { x: xRight - w, y, size, font, color });
+  }
+
+  function drawCenterText(pg, text, y, size, color = TEXT) {
+    const value = normalizeText(text);
+    const w = font.widthOfTextAtSize(value, size);
+    pg.drawText(value, { x: (pageW - w) / 2, y, size, font, color });
+  }
 
   function drawFooter(pg) {
     pg.drawLine({
-      start: { x: margin, y: 52 },
-      end: { x: pageW - margin, y: 52 },
+      start: { x: margin, y: 58 },
+      end: { x: pageW - margin, y: 58 },
       thickness: 0.8,
-      color: OPAL_GOLD,
+      color: LINE,
     });
-    const fw = font.widthOfTextAtSize(footerText, 8);
-    pg.drawText(footerText, {
-      x: pageW - margin - fw,
-      y: 38,
-      size: 8,
-      font,
-      color: MUTED,
-    });
-    const dw = font.widthOfTextAtSize(footerDisclaimer, 7);
-    pg.drawText(footerDisclaimer, {
-      x: pageW - margin - dw,
-      y: 26,
-      size: 7,
-      font,
-      color: MUTED,
-    });
+    drawCenterText(pg, footerDisclaimer, 40, 7, MUTED);
+    drawCenterText(pg, footerContact, 28, 8, MUTED);
   }
 
-  function drawLetterhead(pg, yTop) {
-    let y = yTop;
+  function drawHeader(pg, yTop) {
+    const headerH = 78;
     pg.drawRectangle({
       x: margin,
-      y: y - 3,
+      y: yTop - headerH,
       width: innerW,
-      height: 3,
-      color: OPAL_GOLD,
-    });
-    y -= 8;
-    pg.drawRectangle({
-      x: margin,
-      y: y - 32,
-      width: innerW,
-      height: 32,
+      height: headerH,
       color: OPAL_BLUE,
     });
-    const title1 = prepareVisualText('אופאל תקשורת בע״מ · בית ליזמות רפואית');
-    const title2 = prepareVisualText('רופא עד הבית');
-    const t1w = font.widthOfTextAtSize(title1, 11);
-    const t2w = font.widthOfTextAtSize(title2, 9);
-    pg.drawText(title1, { x: pageW - margin - t1w, y: y - 14, size: 11, font, color: WHITE });
-    pg.drawText(title2, { x: pageW - margin - t2w, y: y - 28, size: 9, font, color: rgb(0.85, 0.88, 0.92) });
-    if (logoImage) {
-      const lw = 56;
-      const lh = (logoImage.height / logoImage.width) * lw;
-      pg.drawImage(logoImage, { x: margin + 4, y: y - 30, width: lw, height: lh });
-    }
-    return y - 44;
-  }
-
-  /**
-   * drawRtl — מצייר טקסט מיושר-ימין על הדף.
-   *
-   * @param {string}  text          — הטקסט לציור
-   * @param {number}  xRight        — קצה ימין של אזור הציור (x)
-   * @param {number}  yBaseline     — קו הבסיס (y)
-   * @param {number}  size          — גודל הפונט
-   * @param {object}  color         — צבע (rgb object)
-   * @param {boolean} isHebrewLabel — true → prepareVisualText (שמות, כותרות עבריות)
-   *                                  false → asIs (מספרים, אימייל, URL, ת.ז)
-   */
-  function drawRtl(text, xRight, yBaseline, size, color = TEXT, isHebrewLabel = true) {
-    const value = isHebrewLabel ? prepareVisualText(text) : asIs(text);
-    const w = font.widthOfTextAtSize(value, size);
-    page.drawText(value, { x: xRight - w, y: yBaseline, size, font, color });
-  }
-
-  function ensureSpace(need, yRef) {
-    if (yRef.current < need) {
-      drawFooter(page);
-      page = pdfDoc.addPage([pageW, pageH]);
-      yRef.current = drawLetterhead(page, pageH - margin);
-    }
-  }
-
-  const yRef = { current: drawLetterhead(page, pageH - margin) };
-
-  /* ─── Order strip ──────────────────────────────────────────────────────── */
-  ensureSpace(40, yRef);
-  const stripH = 26;
-  const c1 = innerW * 0.18;
-  const c2 = innerW * 0.22;
-  const c3 = innerW * 0.28;
-  const c4 = innerW * 0.32;
-  let sx = pageW - margin;
-
-  // orderNumber ו-orderDate הם LTR — לא עוברים היפוך
-  const cells = [
-    { w: c4, bg: WHITE,        text: model.orderNumber,  size: 12, isHeb: false },
-    { w: c3, bg: WHITE,        text: model.orderDate,    size: 9,  isHeb: false },
-    { w: c2, bg: OPAL_GOLD_30, text: model.numerator,   size: 9,  isHeb: false, sub: 'נומרטור' },
-    { w: c1, bg: OPAL_GOLD,    text: 'מס הזמנה',        size: 10, light: true,  isHeb: true  },
-  ];
-  for (const c of cells) {
-    sx -= c.w;
-    page.drawRectangle({
-      x: sx,
-      y: yRef.current - stripH,
-      width: c.w,
-      height: stripH,
-      color: c.bg,
-      borderColor: LINE,
-      borderWidth: 0.5,
+    pg.drawRectangle({
+      x: margin,
+      y: yTop - headerH,
+      width: innerW,
+      height: 4,
+      color: OPAL_GOLD,
     });
-    if (c.sub) {
-      // 'נומרטור' — כותרת עברית
-      drawRtl(c.sub, sx + c.w - 4, yRef.current - 9, 7, MUTED, true);
+    if (logoImage) {
+      const logoW = 70;
+      const logoH = (logoImage.height / logoImage.width) * logoW;
+      pg.drawImage(logoImage, {
+        x: pageW - margin - logoW - 10,
+        y: yTop - headerH + (headerH - logoH) / 2,
+        width: logoW,
+        height: logoH,
+      });
     }
-    drawRtl(
-      c.text,
-      sx + c.w - 4,
-      yRef.current - (c.sub ? 20 : 14),
-      c.size,
-      c.light ? WHITE : OPAL_BLUE,
-      c.isHeb
-    );
+    drawRightText(pg, 'אישור הזמנה וסיכום מוטבים', pageW - margin - 92, yTop - 30, 16, WHITE);
+    drawRightText(pg, `מספר הזמנה: ${model.orderNumber}`, pageW - margin - 92, yTop - 50, 11, WHITE);
+    drawRightText(pg, `מוצר: ${model.productName}`, pageW - margin - 92, yTop - 66, 10, rgb(0.9, 0.93, 0.97));
+    return yTop - headerH - 16;
   }
-  yRef.current -= stripH + 12;
 
-  /* ─── Customer grid ────────────────────────────────────────────────────── */
-  const L = OPAL_BLUE;
-  const V = WHITE;
+  const yRef = { current: drawHeader(page, pageH - margin) };
 
-  /**
-   * cellGrid: מצייר טבלת תאים.
-   * isHeb=true  → prepareVisualText (כותרות עבריות)
-   * isHeb=false → asIs (מספרים, אימייל, URL, ת.ז, כתובת)
-   */
-  function cellGrid(rows) {
-    for (const r of rows) {
-      ensureSpace(28, yRef);
-      const h = 22;
-      let x = pageW - margin;
-      for (let i = r.length - 1; i >= 0; i -= 1) {
-        const seg = r[i];
-        const w = innerW * seg.w;
-        x -= w;
-        page.drawRectangle({
-          x,
-          y: yRef.current - h,
-          width: w,
-          height: h,
-          color: seg.role === 'l' ? L : V,
-          borderColor: LINE,
-          borderWidth: 0.5,
-        });
-        drawRtl(
-          seg.text,
-          x + w - 4,
-          yRef.current - h + 6,
-          seg.size || 9,
-          seg.role === 'l' ? WHITE : OPAL_BLUE,
-          // labels (role='l') הן תמיד עברית; values (role='v') ייבדקו לפי isHeb
-          seg.role === 'l' ? true : (seg.isHeb !== false)
-        );
-      }
-      yRef.current -= h;
+  function ensureSpace(neededHeight) {
+    if (yRef.current - neededHeight >= 76) return;
+    drawFooter(page);
+    page = pdfDoc.addPage([pageW, pageH]);
+    yRef.current = drawHeader(page, pageH - margin);
+  }
+
+  function drawInfoCard(title, items, options = {}) {
+    const cardWidth = options.width || innerW;
+    const lineGap = 22;
+    const cardH = 20 + items.length * lineGap + 16;
+    ensureSpace(cardH + 10);
+    const x = options.x || margin;
+    const yTop = yRef.current;
+    page.drawRectangle({
+      x,
+      y: yTop - cardH,
+      width: cardWidth,
+      height: cardH,
+      color: WHITE,
+      borderColor: LINE,
+      borderWidth: 1,
+    });
+    page.drawRectangle({
+      x,
+      y: yTop - 30,
+      width: cardWidth,
+      height: 30,
+      color: rgb(0.94, 0.97, 1),
+    });
+    drawRightText(page, title, x + cardWidth - 12, yTop - 20, 11, OPAL_BLUE);
+    let lineY = yTop - 48;
+    for (const item of items) {
+      drawRightText(page, `${item.label}: ${item.value}`, x + cardWidth - 12, lineY, 10, TEXT);
+      lineY -= lineGap;
     }
-    yRef.current -= 6;
+    if (options.advance !== false) yRef.current -= cardH + 12;
+    return { x, yTop, cardWidth, cardH };
   }
 
-  cellGrid([
-    [
-      { w: 0.10, role: 'l', text: 'תאריך תחילת מנוי', size: 8  },
-      { w: 0.12, role: 'v', text: model.subscriptionStartDate, size: 9, isHeb: false },
-      { w: 0.08, role: 'l', text: 'ת.ז',                      size: 8  },
-      { w: 0.14, role: 'v', text: model.customerId,            size: 9, isHeb: false },
-      { w: 0.10, role: 'l', text: 'שם לקוח',                  size: 8  },
-      { w: 0.46, role: 'v', text: model.customerName,          size: 9, isHeb: true  },
-    ],
-    [
-      { w: 0.10, role: 'l', text: 'מייל',         size: 8 },
-      { w: 0.28, role: 'v', text: model.email,    size: 8, isHeb: false },
-      { w: 0.10, role: 'l', text: 'טלפון',        size: 8 },
-      { w: 0.18, role: 'v', text: model.phone,    size: 8, isHeb: false },
-      { w: 0.12, role: 'l', text: 'כתובת הלקוח', size: 8 },
-      { w: 0.22, role: 'v', text: model.address,  size: 8, isHeb: true  },
-    ],
-    [
-      { w: 0.28, role: 'l', text: 'ארבע ספרות אחרונות בכרטיס האשראי', size: 8 },
-      { w: 0.72, role: 'v', text: model.lastFourDigits, size: 10, isHeb: false },
-    ],
-  ]);
+  const cardGap = 12;
+  const halfW = (innerW - cardGap) / 2;
+  const customerItems = [
+    { label: 'שם לקוח', value: model.customerName },
+    { label: 'טלפון', value: model.phone },
+    { label: 'אימייל', value: model.email },
+  ];
+  const subItems = [
+    { label: 'תאריך תחילת מנוי', value: model.subscriptionStartDate },
+    { label: 'אמצעי תשלום', value: `כרטיס אשראי ****${model.lastFourDigits}` },
+    { label: 'סכום חודשי', value: `₪${Number(model.monthlyTotal || 0).toLocaleString('he-IL')}` },
+  ];
 
-  /* ─── Subscription row ─────────────────────────────────────────────────── */
-  const mt = `${model.monthlyTotal.toLocaleString('he-IL')} ₪`;
-  cellGrid([
-    [
-      { w: 0.10, role: 'l', text: 'סה״כ תש׳ חודשי',   size: 8  },
-      { w: 0.11, role: 'v', text: mt,                  size: 11, isHeb: false },
-      { w: 0.13, role: 'l', text: 'מוצר',              size: 8  },
-      { w: 0.16, role: 'v', text: model.productName,   size: 8,  isHeb: true  },
-      { w: 0.12, role: 'l', text: 'שם כתב השרות',     size: 8  },
-      { w: 0.13, role: 'v', text: model.serviceDocumentName, size: 8, isHeb: true },
-      { w: 0.11, role: 'l', text: 'סוג המנוי',         size: 8  },
-      { w: 0.14, role: 'v', text: model.transactionDescription, size: 8, isHeb: true },
-    ],
-  ]);
-
-  /* ─── Section: תאור העסקה ──────────────────────────────────────────────── */
-  ensureSpace(30, yRef);
-  page.drawRectangle({
+  const projectedCardH = 20 + Math.max(customerItems.length, subItems.length) * 22 + 16;
+  ensureSpace(projectedCardH + 16);
+  const rightCard = drawInfoCard('פרטי לקוח', customerItems, {
+    width: halfW,
+    x: margin + halfW + cardGap,
+    advance: false,
+  });
+  const leftCard = drawInfoCard('פרטי מנוי', subItems, {
+    width: halfW,
     x: margin,
-    y: yRef.current - 22,
-    width: innerW,
-    height: 22,
-    color: OPAL_GOLD,
+    advance: false,
   });
-  drawRtl('תאור העסקה', pageW - margin - 4, yRef.current - 15, 12, WHITE, true);
-  yRef.current -= 28;
+  yRef.current -= Math.max(rightCard.cardH, leftCard.cardH) + 14;
 
-  /* ─── Beneficiaries ────────────────────────────────────────────────────── */
-  const filled = [...model.secondaryBeneficiaries];
-  while (filled.length < 5) {
-    filled.push({ fullName: '', idNumber: '' });
-  }
+  const tableRows = [
+    {
+      service: model.serviceDocumentName,
+      id: model.primaryBeneficiary.idNumber,
+      fullName: model.primaryBeneficiary.fullName,
+    },
+    ...model.secondaryBeneficiaries.map((b) => ({
+      service: model.serviceDocumentName,
+      id: b.idNumber,
+      fullName: b.fullName,
+    })),
+  ];
+  const tableHeaderH = 32;
+  const rowH = 28;
+  const tableH = tableHeaderH + tableRows.length * rowH;
+  ensureSpace(tableH + 14);
 
-  function benRow(labelBg, label, name, idLabel, idVal) {
-    ensureSpace(26, yRef);
-    const h  = 22;
-    const wLab  = innerW * 0.22;
-    const wName = innerW * 0.50;
-    const wIdL  = innerW * 0.08;
-    const wId   = innerW * 0.20;
-    let x = pageW - margin;
-
-    // ת.ז — value (LTR)
-    x -= wId;
-    page.drawRectangle({ x, y: yRef.current - h, width: wId, height: h, color: V, borderColor: LINE, borderWidth: 0.5 });
-    drawRtl(idVal, x + wId - 4, yRef.current - h + 6, 9, OPAL_BLUE, false);
-
-    // "ת.ז" — label (עברית)
-    x -= wIdL;
-    page.drawRectangle({ x, y: yRef.current - h, width: wIdL, height: h, color: labelBg, borderColor: LINE, borderWidth: 0.5 });
-    drawRtl(idLabel, x + wIdL - 4, yRef.current - h + 6, 8, WHITE, true);
-
-    // שם המבוטח — value (עברית — שמות אנשים)
-    x -= wName;
-    page.drawRectangle({ x, y: yRef.current - h, width: wName, height: h, color: V, borderColor: LINE, borderWidth: 0.5 });
-    drawRtl(name, x + wName - 4, yRef.current - h + 6, 9, OPAL_BLUE, true);
-
-    // "שם המבוטח..." — label (עברית)
-    x -= wLab;
-    page.drawRectangle({ x, y: yRef.current - h, width: wLab, height: h, color: labelBg, borderColor: LINE, borderWidth: 0.5 });
-    drawRtl(label, x + wLab - 4, yRef.current - h + 6, 8, WHITE, true);
-
-    yRef.current -= h;
-  }
-
-  benRow(
-    OPAL_GOLD,
-    'שם המבוטח העיקרי',
-    model.primaryBeneficiary.fullName,
-    'ת.ז',
-    model.primaryBeneficiary.idNumber
-  );
-  filled.forEach((b) => {
-    benRow(OPAL_BLUE, 'שם המבוטח המשני', b.fullName || '', 'ת.ז', b.idNumber || '');
-  });
-
-  yRef.current -= 8;
-
-  /* ─── נותן שירות ──────────────────────────────────────────────────────── */
-  ensureSpace(80, yRef);
-  page.drawRectangle({
-    x: margin,
-    y: yRef.current - 22,
-    width: innerW,
-    height: 22,
-    color: OPAL_GOLD,
-  });
-  drawRtl('פרטי נותן השרות', pageW - margin - 4, yRef.current - 15, 12, WHITE, true);
-  yRef.current -= 24;
-
-  const svcPhone = process.env.MEDICAL_SERVICES_PHONE || '00-0000000';
-  const claims   = process.env.CLAIMS_ONLINE_URL || 'https://opal-medical.co.il/claims';
+  const colService = innerW * 0.30;
+  const colId = innerW * 0.26;
+  const colName = innerW * 0.44;
+  const tableTop = yRef.current;
+  const tableRight = pageW - margin;
 
   page.drawRectangle({
     x: margin,
-    y: yRef.current - 42,
+    y: tableTop - tableHeaderH,
     width: innerW,
-    height: 42,
-    color: WHITE,
+    height: tableHeaderH,
+    color: rgb(0.88, 0.94, 1),
     borderColor: LINE,
-    borderWidth: 0.5,
+    borderWidth: 1,
   });
 
-  // "לשרות רפואי חייג:" — עברית (תוקן מ"טלפונים להזמנת שירותים רפואיים:")
-  const svcLabel = prepareVisualText('לשרות רפואי חייג:');
-  const wSvc = font.widthOfTextAtSize(svcLabel, 10);
-  page.drawText(svcLabel, { x: pageW - margin - wSvc, y: yRef.current - 16, size: 10, font, color: OPAL_BLUE });
-  // מספר טלפון — LTR, אינו עובר היפוך
-  page.drawText(asIs(svcPhone), { x: margin + 8, y: yRef.current - 16, size: 10, font, color: OPAL_BLUE });
+  const serviceX = tableRight - 10;
+  const idX = tableRight - colService - 10;
+  const nameX = tableRight - colService - colId - 10;
+  drawRightText(page, 'שירות', serviceX, tableTop - 21, 10, OPAL_BLUE);
+  drawRightText(page, 'ת.ז', idX, tableTop - 21, 10, OPAL_BLUE);
+  drawRightText(page, 'שם מלא', nameX, tableTop - 21, 10, OPAL_BLUE);
 
-  // "הגשת מסמכים רפואיים (תביעה און ליין):" — עברית
-  const docLabel = prepareVisualText('הגשת מסמכים רפואיים (תביעה און ליין):');
-  const wDoc = font.widthOfTextAtSize(docLabel, 9);
-  page.drawText(docLabel, { x: pageW - margin - wDoc, y: yRef.current - 32, size: 9, font, color: OPAL_BLUE });
-  // URL — LTR, אינו עובר היפוך
-  page.drawText(asIs(claims), { x: margin + 8, y: yRef.current - 32, size: 8, font, color: OPAL_GOLD });
+  page.drawLine({
+    start: { x: tableRight - colService, y: tableTop },
+    end: { x: tableRight - colService, y: tableTop - tableH },
+    thickness: 1,
+    color: LINE,
+  });
+  page.drawLine({
+    start: { x: tableRight - colService - colId, y: tableTop },
+    end: { x: tableRight - colService - colId, y: tableTop - tableH },
+    thickness: 1,
+    color: LINE,
+  });
 
-  yRef.current -= 50;
+  let rowTop = tableTop - tableHeaderH;
+  for (const row of tableRows) {
+    page.drawRectangle({
+      x: margin,
+      y: rowTop - rowH,
+      width: innerW,
+      height: rowH,
+      color: WHITE,
+      borderColor: LINE,
+      borderWidth: 0.8,
+    });
+    drawRightText(page, row.service, serviceX, rowTop - 18, 9, TEXT);
+    drawRightText(page, row.id, idX, rowTop - 18, 9, TEXT);
+    drawRightText(page, row.fullName, nameX, rowTop - 18, 9, TEXT);
+    rowTop -= rowH;
+  }
+  yRef.current -= tableH + 16;
 
-  /* ─── Notice box ───────────────────────────────────────────────────────── */
-  ensureSpace(56, yRef);
+  const ctaH = 92;
+  ensureSpace(ctaH + 14);
+  const ctaTop = yRef.current;
+  const ctaPhone = normalizeText(process.env.MEDICAL_SERVICES_PHONE || '054-4261369');
+  const claims = normalizeText(process.env.CLAIMS_ONLINE_URL || 'https://opal-medical.co.il/claims');
   page.drawRectangle({
     x: margin,
-    y: yRef.current - 48,
+    y: ctaTop - ctaH,
     width: innerW,
-    height: 48,
+    height: ctaH,
     color: WHITE,
     borderColor: OPAL_GOLD,
     borderWidth: 1.5,
   });
-  drawRtl('שים לב', pageW - margin - 8, yRef.current - 18, 10, OPAL_GOLD, true);
-  drawRtl('חיוב החודשי של המנוי דרך חברת אופאל תקשורת בע״מ.', pageW - margin - 8, yRef.current - 32, 9, TEXT, true);
-  // מספר טלפון ואימייל — LTR
-  drawRtl('054-4261369 · opal2000@zahav.net.il :לפניות', pageW - margin - 8, yRef.current - 44, 8, MUTED, false);
-  yRef.current -= 56;
+  page.drawRectangle({
+    x: margin,
+    y: ctaTop - ctaH,
+    width: innerW,
+    height: 28,
+    color: OPAL_GOLD_30,
+  });
+  drawRightText(page, 'מוקד שירות ותביעות', pageW - margin - 12, ctaTop - 18, 11, OPAL_BLUE);
+  drawRightText(page, `לשירות רפואי חייגו: ${ctaPhone}`, pageW - margin - 12, ctaTop - 46, 10, OPAL_BLUE);
+  drawRightText(page, `קישור להגשת תביעה: ${claims}`, pageW - margin - 12, ctaTop - 68, 9, OPAL_BLUE);
+  yRef.current -= ctaH + 14;
+
+  const noticeH = 46;
+  ensureSpace(noticeH + 10);
+  page.drawRectangle({
+    x: margin,
+    y: yRef.current - noticeH,
+    width: innerW,
+    height: noticeH,
+    color: rgb(0.99, 0.99, 0.99),
+    borderColor: LINE,
+    borderWidth: 1,
+  });
+  drawRightText(page, 'שים לב: החיוב החודשי מתבצע דרך אופאל תקשורת בע״מ.', pageW - margin - 10, yRef.current - 18, 9, TEXT);
+  drawRightText(page, 'לשאלות ותמיכה: 054-4261369 · opal2000@zahav.net.il', pageW - margin - 10, yRef.current - 34, 8, MUTED);
 
   drawFooter(page);
 
