@@ -139,13 +139,6 @@ function buildOrderConfirmationHtml(payload, logoDataUri = '') {
               </div>
             </td>
           </tr>
-          <tr>
-            <td align="center" dir="rtl" style="background-color:#F5F5F5;padding:20px 32px;text-align:center;">
-              <div style="margin-bottom:12px;">${logoBlock}</div>
-              <p style="font-size:12px;color:#666;margin:0 0 4px;text-align:center;direction:rtl;">החיוב החודשי דרך חברת אופאל תקשורת בע״מ</p>
-              <p style="font-size:12px;color:#888;margin:0;text-align:center;" dir="ltr">${salesPhone} | ${contactEmail}</p>
-            </td>
-          </tr>
         </table>
         <p dir="rtl" style="margin:16px 0 0;font-size:13px;color:#64748b;text-align:right;max-width:560px;">
           אם הכפתור לא נפתח, העתיקו את הקישור לדפדפן:<br />
