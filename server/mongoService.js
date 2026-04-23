@@ -2178,9 +2178,30 @@ export async function getControlPanelOverviewData(filters = {}) {
 
   const contactLeadsAll = await db
     .collection('contactLeads')
-    .find({ isActive: { $ne: false }, createdAt: { $gte: from, $lte: to } })
-    .sort({ createdAt: -1 })
-    .limit(500)
+    .aggregate([
+      { $match: { isActive: { $ne: false }, createdAt: { $gte: from, $lte: to } } },
+      { $sort: { createdAt: -1 } },
+      { $limit: 500 },
+      {
+        $lookup: {
+          from: 'landing_pages',
+          let: { ls: { $toLower: { $trim: { input: { $ifNull: ['$landingSlug', ''] } } } } },
+          pipeline: [
+            { $match: { $expr: { $and: [{ $ne: ['$$ls', ''] }, { $eq: [{ $toLower: '$slug' }, '$$ls'] }] } } },
+            { $project: { _id: 0, pageTitle: 1, isActive: 1 } },
+            { $limit: 1 },
+          ],
+          as: '_lp',
+        },
+      },
+      {
+        $set: {
+          landingPageTitle: { $ifNull: [{ $arrayElemAt: ['$_lp.pageTitle', 0] }, ''] },
+          isLandingActive: { $arrayElemAt: ['$_lp.isActive', 0] },
+        },
+      },
+      { $project: { _lp: 0 } },
+    ])
     .toArray();
   const orgLeadsAll = await db
     .collection('organizationLeads')
@@ -2197,7 +2218,15 @@ export async function getControlPanelOverviewData(filters = {}) {
         fullName: d.name || '—',
         phone: d.phone || '—',
         email: d.email || '—',
+        message: d.message || '',
+        source: d.source || '',
+        landingSlug: d.landingSlug || '',
+        landingPageTitle: d.landingPageTitle || '',
+        isLandingActive: d.isLandingActive ?? null,
         createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+        leadStatus: d.leadStatus || 'חדש',
+        adminNotes: d.adminNotes || '',
+        isHandled: !!d.isHandled,
       })),
     ...orgLeadsAll
       .filter((d) => d.isHandled !== true)
@@ -2209,8 +2238,11 @@ export async function getControlPanelOverviewData(filters = {}) {
         organizationId: String(d.organizationId || ''),
         phone: d.phone || '—',
         email: d.email || '—',
-        comments: String(d.notes || d.adminNotes || ''),
+        message: d.notes || '',
         createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+        leadStatus: d.leadStatus || 'חדש',
+        adminNotes: d.adminNotes || '',
+        isHandled: !!d.isHandled,
       })),
   ];
 
@@ -2414,6 +2446,10 @@ export async function getControlPanelOverviewData(filters = {}) {
         phone: d.phone || '—',
         email: d.email || '—',
         productName: d.productName || '—',
+        message: d.message || '',
+        leadStatus: d.leadStatus || 'חדש',
+        adminNotes: d.adminNotes || '',
+        isHandled: !!d.isHandled,
         updatedAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : d.updatedAt,
       })),
       contactTasks: contactTaskRows,

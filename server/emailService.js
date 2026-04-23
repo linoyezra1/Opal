@@ -77,9 +77,6 @@ function buildOrderConfirmationHtml(payload, logoDataUri = '') {
               <h1 style="margin:0 0 10px;color:#ffffff;font-size:20px;font-weight:600;line-height:1.4;text-align:center;direction:rtl;">
                 אישור הזמנה: <span dir="ltr" style="unicode-bidi:embed;">${orderId}</span>
               </h1>
-              <p style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:0.01em;text-align:center;direction:rtl;">
-                ${productTitle}
-              </p>
             </td>
           </tr>
           <tr>
@@ -91,6 +88,10 @@ function buildOrderConfirmationHtml(payload, logoDataUri = '') {
                 <tr>
                   <td align="right" style="padding:10px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;">תאריך הזמנה:</td>
                   <td align="right" style="padding:10px 0;color:${OPAL_BLUE};font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;"><span dir="ltr" style="unicode-bidi:embed;">${orderDate}</span></td>
+                </tr>
+                <tr>
+                <td align="right" style="padding:10px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;">מוצר:</td>
+                <td align="right" style="padding:10px 0;color:${OPAL_BLUE};font-size:14px;font-weight:600;border-bottom:1px solid #eee;text-align:right;direction:rtl;">${productTitle}</td>//////
                 </tr>
                 <tr>
                   <td align="right" style="padding:10px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;">שם הלקוח:</td>

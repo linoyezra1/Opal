@@ -87,6 +87,7 @@ export default function ContactManagement() {
             source: x.source || '',
             landingSlug: x.landingSlug || '',
             landingPageTitle: x.landingPageTitle || '',
+            isLandingActive: x.isLandingActive ?? null,
             createdAt: x.createdAt,
             leadStatus: x.leadStatus || 'חדש',
             adminNotes: x.adminNotes || '',
@@ -117,7 +118,7 @@ export default function ContactManagement() {
             organizationName: x.organizationName || x.company?.companyName || '',
             phone: x.phone,
             email: x.email,
-            message: x.notes || x.message || '',
+            message: x.message || '',
             createdAt: x.createdAt,
             leadStatus: x.leadStatus || 'חדש',
             adminNotes: x.adminNotes || '',
@@ -209,7 +210,10 @@ export default function ContactManagement() {
       if (l.source === 'abandoned_checkout') {
         category = 'abandoned_checkout';
         categoryLabel = 'לא המשיכו לתשלום';
-      } else if (String(l.message || '').includes('פג תוקף')) {
+      } else if (
+        String(l.message || '').includes('פג תוקף') ||
+        (String(l.landingSlug || '').trim() && l.isLandingActive === false)
+      ) {
         category = 'expired_product';
         categoryLabel = 'מוצר שהסתיים';
       } else if (l.source === 'landing_contact' && String(l.landingSlug || '').trim()) {
