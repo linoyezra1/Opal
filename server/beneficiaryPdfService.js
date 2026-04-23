@@ -1,5 +1,6 @@
 import { PDFDocument, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
+import bidiFactory from 'bidi-js';
 import fs from 'fs/promises';
 import path from 'path';
 import {
@@ -16,6 +17,7 @@ const TEXT = rgb(0.12, 0.14, 0.16);
 const MUTED = rgb(0.45, 0.48, 0.52);
 const WHITE = rgb(1, 1, 1);
 const LINE = rgb(0.82, 0.84, 0.88);
+const bidi = bidiFactory();
 
 function line(text, fallback = '—') {
   const t = String(text || '').trim();
@@ -63,6 +65,43 @@ function normalizeText(value) {
   return String(value ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
 }
 
+function formatDateDDMMYYYY(value) {
+  const raw = normalizeText(value);
+  if (!raw) return '—';
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  const dd = String(parsed.getDate()).padStart(2, '0');
+  const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+  const yyyy = String(parsed.getFullYear());
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function reorderVisualBidi(value, baseDirection = 'rtl') {
+  const text = normalizeText(value);
+  if (!text) return '';
+  const embedding = bidi.getEmbeddingLevels(text, baseDirection);
+  const chars = text.split('');
+  const flips = bidi.getReorderSegments(text, embedding);
+  flips.forEach(([start, end]) => {
+    let s = start;
+    let e = end;
+    while (s < e) {
+      const tmp = chars[s];
+      chars[s] = chars[e];
+      chars[e] = tmp;
+      s += 1;
+      e -= 1;
+    }
+  });
+  const mirrored = bidi.getMirroredCharactersMap(text, embedding);
+  mirrored.forEach((ch, idx) => {
+    chars[idx] = ch;
+  });
+  return chars.join('');
+}
+
 async function tryEmbedLogo(pdfDoc) {
   try {
     const candidates = candidateServerAssetPaths('branding', 'opal-logo.jpeg');
@@ -94,8 +133,12 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
   const footerDisclaimer = normalizeText('המנוי כפוף לכתב השרות ולגילוי הנאות. מסמך זה נוצר אוטומטית מהמערכת.');
   const footerContact = normalizeText('אופאל תקשורת בע״מ · בית ליזמות רפואית · 054-4261369 · opal2000@zahav.net.il');
 
-  function drawRightText(pg, text, xRight, y, size, color = TEXT) {
-    const value = normalizeText(text) || '—';
+  function drawRightText(pg, text, xRight, y, size, color = TEXT, dir = 'rtl') {
+    const raw = normalizeText(text) || '—';
+    const value =
+      dir === 'ltr'
+        ? raw
+        : reorderVisualBidi(raw, dir === 'mixed' ? 'rtl' : 'rtl');
     const w = font.widthOfTextAtSize(value, size);
     pg.drawText(value, { x: xRight - w, y, size, font, color });
   }
@@ -143,9 +186,11 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
         height: logoH,
       });
     }
-    drawRightText(pg, 'אישור הזמנה וסיכום מוטבים', pageW - margin - 92, yTop - 30, 16, WHITE);
-    drawRightText(pg, `מספר הזמנה: ${model.orderNumber}`, pageW - margin - 92, yTop - 50, 11, WHITE);
-    drawRightText(pg, `מוצר: ${model.productName}`, pageW - margin - 92, yTop - 66, 10, rgb(0.9, 0.93, 0.97));
+    drawRightText(pg, 'אישור הזמנה וסיכום מוטבים', pageW - margin - 92, yTop - 30, 16, WHITE, 'rtl');
+    drawRightText(pg, 'מספר הזמנה:', pageW - margin - 92, yTop - 50, 11, WHITE, 'rtl');
+    drawRightText(pg, model.orderNumber, pageW - margin - 170, yTop - 50, 11, WHITE, 'ltr');
+    drawRightText(pg, 'מוצר:', pageW - margin - 92, yTop - 66, 10, rgb(0.9, 0.93, 0.97), 'rtl');
+    drawRightText(pg, model.productName, pageW - margin - 128, yTop - 66, 10, rgb(0.9, 0.93, 0.97), 'rtl');
     return yTop - headerH - 16;
   }
 
@@ -182,9 +227,11 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
       color: rgb(0.94, 0.97, 1),
     });
     drawRightText(page, title, x + cardWidth - 12, yTop - 20, 11, OPAL_BLUE);
+    const labelW = 110;
     let lineY = yTop - 48;
     for (const item of items) {
-      drawRightText(page, `${item.label}: ${item.value}`, x + cardWidth - 12, lineY, 10, TEXT);
+      drawRightText(page, `${item.label}:`, x + cardWidth - 12, lineY, 10, TEXT, 'rtl');
+      drawRightText(page, item.value, x + cardWidth - 12 - labelW, lineY, 10, TEXT, item.dir || 'rtl');
       lineY -= lineGap;
     }
     if (options.advance !== false) yRef.current -= cardH + 12;
@@ -194,14 +241,14 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
   const cardGap = 12;
   const halfW = (innerW - cardGap) / 2;
   const customerItems = [
-    { label: 'שם לקוח', value: model.customerName },
-    { label: 'טלפון', value: model.phone },
-    { label: 'אימייל', value: model.email },
+    { label: 'שם לקוח', value: model.customerName, dir: 'rtl' },
+    { label: 'טלפון', value: model.phone, dir: 'ltr' },
+    { label: 'אימייל', value: model.email, dir: 'ltr' },
   ];
   const subItems = [
-    { label: 'תאריך תחילת מנוי', value: model.subscriptionStartDate },
-    { label: 'אמצעי תשלום', value: `כרטיס אשראי ****${model.lastFourDigits}` },
-    { label: 'סכום חודשי', value: `₪${Number(model.monthlyTotal || 0).toLocaleString('he-IL')}` },
+    { label: 'תאריך תחילת מנוי', value: formatDateDDMMYYYY(model.subscriptionStartDate), dir: 'ltr' },
+    { label: 'אמצעי תשלום', value: `****${model.lastFourDigits}`, dir: 'ltr' },
+    { label: 'סכום חודשי', value: `₪${Number(model.monthlyTotal || 0).toLocaleString('he-IL')}`, dir: 'ltr' },
   ];
 
   const projectedCardH = 20 + Math.max(customerItems.length, subItems.length) * 22 + 16;
@@ -254,9 +301,9 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
   const serviceX = tableRight - 10;
   const idX = tableRight - colService - 10;
   const nameX = tableRight - colService - colId - 10;
-  drawRightText(page, 'שירות', serviceX, tableTop - 21, 10, OPAL_BLUE);
-  drawRightText(page, 'ת.ז', idX, tableTop - 21, 10, OPAL_BLUE);
-  drawRightText(page, 'שם מלא', nameX, tableTop - 21, 10, OPAL_BLUE);
+  drawRightText(page, 'שירות', serviceX, tableTop - 21, 10, OPAL_BLUE, 'rtl');
+  drawRightText(page, 'ת.ז', idX, tableTop - 21, 10, OPAL_BLUE, 'rtl');
+  drawRightText(page, 'שם מלא', nameX, tableTop - 21, 10, OPAL_BLUE, 'rtl');
 
   page.drawLine({
     start: { x: tableRight - colService, y: tableTop },
@@ -282,9 +329,9 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
       borderColor: LINE,
       borderWidth: 0.8,
     });
-    drawRightText(page, row.service, serviceX, rowTop - 18, 9, TEXT);
-    drawRightText(page, row.id, idX, rowTop - 18, 9, TEXT);
-    drawRightText(page, row.fullName, nameX, rowTop - 18, 9, TEXT);
+    drawRightText(page, row.service, serviceX, rowTop - 18, 9, TEXT, 'rtl');
+    drawRightText(page, row.id, idX, rowTop - 18, 9, TEXT, 'ltr');
+    drawRightText(page, row.fullName, nameX, rowTop - 18, 9, TEXT, 'rtl');
     rowTop -= rowH;
   }
   yRef.current -= tableH + 16;
@@ -310,9 +357,11 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
     height: 28,
     color: OPAL_GOLD_30,
   });
-  drawRightText(page, 'מוקד שירות ותביעות', pageW - margin - 12, ctaTop - 18, 11, OPAL_BLUE);
-  drawRightText(page, `לשירות רפואי חייגו: ${ctaPhone}`, pageW - margin - 12, ctaTop - 46, 10, OPAL_BLUE);
-  drawRightText(page, `קישור להגשת תביעה: ${claims}`, pageW - margin - 12, ctaTop - 68, 9, OPAL_BLUE);
+  drawRightText(page, 'מוקד שירות ותביעות', pageW - margin - 12, ctaTop - 18, 11, OPAL_BLUE, 'rtl');
+  drawRightText(page, 'לשירות רפואי חייגו:', pageW - margin - 12, ctaTop - 46, 10, OPAL_BLUE, 'rtl');
+  drawRightText(page, ctaPhone, pageW - margin - 140, ctaTop - 46, 10, OPAL_BLUE, 'ltr');
+  drawRightText(page, 'קישור להגשת תביעה:', pageW - margin - 12, ctaTop - 68, 9, OPAL_BLUE, 'rtl');
+  drawRightText(page, claims, pageW - margin - 132, ctaTop - 68, 9, OPAL_BLUE, 'ltr');
   yRef.current -= ctaH + 14;
 
   const noticeH = 46;
@@ -326,8 +375,9 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
     borderColor: LINE,
     borderWidth: 1,
   });
-  drawRightText(page, 'שים לב: החיוב החודשי מתבצע דרך אופאל תקשורת בע״מ.', pageW - margin - 10, yRef.current - 18, 9, TEXT);
-  drawRightText(page, 'לשאלות ותמיכה: 054-4261369 · opal2000@zahav.net.il', pageW - margin - 10, yRef.current - 34, 8, MUTED);
+  drawRightText(page, 'שים לב: החיוב החודשי מתבצע דרך אופאל תקשורת בע״מ.', pageW - margin - 10, yRef.current - 18, 9, TEXT, 'rtl');
+  drawRightText(page, 'לשאלות ותמיכה:', pageW - margin - 10, yRef.current - 34, 8, MUTED, 'rtl');
+  drawRightText(page, '054-4261369 · opal2000@zahav.net.il', pageW - margin - 92, yRef.current - 34, 8, MUTED, 'ltr');
 
   drawFooter(page);
 
