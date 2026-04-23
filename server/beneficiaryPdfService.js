@@ -399,7 +399,7 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
   /* ── service / claims box ────────────────────────────────────────────── */
   const ctaH     = 90;
   const ctaPhone = normalizeText(process.env.MEDICAL_SERVICES_PHONE || '054-4261369');
-  const claims   = normalizeText(process.env.CLAIMS_ONLINE_URL || 'https://opal-medical.co.il/claims');
+  const claims   = normalizeText(process.env.CLAIMS_ONLINE_URL || 'https://medi-care.org.il/online-claim/#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjQzNiIsInRvZ2dsZSI6ZmFsc2V9');
 
   ensureSpace(ctaH + 14);
   const ctaTop = yRef.current;

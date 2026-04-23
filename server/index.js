@@ -1120,6 +1120,7 @@ app.post('/api/organization', async (req, res) => {
       contactName = '',
       phone = '',
       email = '',
+      message = '',
       notes = '',
     } = req.body || {};
     await saveOrganizationLead({
@@ -1127,7 +1128,7 @@ app.post('/api/organization', async (req, res) => {
       contactName: String(contactName).trim(),
       phone: String(phone).trim(),
       email: String(email).trim(),
-      notes: String(notes).trim(),
+      message: String(message || notes).trim(),
     });
     console.log(`[${ts()}] Organization form saved to MongoDB`);
     res.json({ success: true, message: 'נשלח בהצלחה' });
@@ -1147,6 +1148,7 @@ app.post('/api/organization-join-request', async (req, res) => {
     const additionalContact = body.additionalContact && typeof body.additionalContact === 'object' ? body.additionalContact : {};
     const generalData = body.generalData && typeof body.generalData === 'object' ? body.generalData : {};
     const billingMethod = String(body.billingMethod || '').trim();
+    const notes = String(body.notes || '').trim();
 
     if (!String(company.companyName || '').trim()) {
       return res.status(400).json({ success: false, error: 'נדרש שם חברה' });
@@ -1157,6 +1159,17 @@ app.post('/api/organization-join-request', async (req, res) => {
 
     const billingType =
       String(billingMethod || '').toLowerCase() === 'private' ? 'Private' : 'Centralized';
+
+    // Create a contact lead in organizationLeads so this request appears in ContactManagement
+    await saveOrganizationLead({
+      organizationName: String(company.companyName || '').trim(),
+      contactName: String(contactPerson.name || '').trim(),
+      phone: String(contactPerson.phone || contactPerson.mobile || '').trim(),
+      email: String(contactPerson.email || company.companyEmail || '').trim(),
+      message: notes,
+      source: 'organization_join_request',
+    });
+
     await createOrganizationCompany({
       companyName: String(company.companyName || '').trim(),
       companyId: String(company.companyId || '').trim(),
@@ -1170,7 +1183,7 @@ app.post('/api/organization-join-request', async (req, res) => {
       monthlyPricePerMember: 0,
       contactEmail: String(contactPerson.email || company.companyEmail || '').trim(),
       contactPhone: String(contactPerson.phone || '').trim(),
-      notes: '',
+      notes: notes,
       contactPerson: {
         name: String(contactPerson.name || '').trim(),
         role: String(contactPerson.role || '').trim(),

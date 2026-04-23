@@ -341,6 +341,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
   const [expiredLeadName, setExpiredLeadName] = useState('');
   const [expiredLeadPhone, setExpiredLeadPhone] = useState('');
   const [expiredLeadEmail, setExpiredLeadEmail] = useState('');
+  const [expiredLeadMessage, setExpiredLeadMessage] = useState('');
   const [expiredLeadSubmitting, setExpiredLeadSubmitting] = useState(false);
   const [expiredLeadSuccess, setExpiredLeadSuccess] = useState(false);
   const [expiredLeadError, setExpiredLeadError] = useState('');
@@ -596,7 +597,9 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
             name: String(expiredLeadName || '').trim(),
             phone: String(expiredLeadPhone || '').trim(),
             email: String(expiredLeadEmail || '').trim(),
-            message: 'פנייה מדף נחיתה פג תוקף',
+            message: expiredLeadMessage.trim()
+              ? `פג תוקף: ${expiredLeadMessage.trim()}`
+              : 'פנייה מדף נחיתה פג תוקף',
             landingSlug: String(slug || '').trim(),
           }),
         });
@@ -609,7 +612,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
         setExpiredLeadSubmitting(false);
       }
     },
-    [expiredLeadName, expiredLeadPhone, expiredLeadEmail, slug]
+    [expiredLeadName, expiredLeadPhone, expiredLeadEmail, expiredLeadMessage, slug]
   );
 
   if (loading) {
@@ -698,6 +701,16 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                     className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={expiredLeadEmail}
                     onChange={(e) => setExpiredLeadEmail(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-primary">תוכן ההודעה</label>
+                  <textarea
+                    rows={3}
+                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    placeholder="במה נוכל לעזור לך?"
+                    value={expiredLeadMessage}
+                    onChange={(e) => setExpiredLeadMessage(e.target.value)}
                   />
                 </div>
                 {expiredLeadError ? <p className="text-destructive text-sm">{expiredLeadError}</p> : null}

@@ -14,6 +14,7 @@ export default function OrganizationJoinRequest() {
   const [additionalContact, setAdditionalContact] = useState(emptyPerson);
   const [billingMethod, setBillingMethod] = useState('corporate');
   const [generalData, setGeneralData] = useState({ fieldOfActivity: '', employeesCount: '' });
+  const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
@@ -36,6 +37,7 @@ export default function OrganizationJoinRequest() {
           additionalContact,
           billingMethod,
           generalData: { ...generalData, employeesCount: Number(generalData.employeesCount || 0) },
+          notes: notes.trim(),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -110,6 +112,22 @@ export default function OrganizationJoinRequest() {
                 <Field><FieldLabel className="text-[#1A365D]">תחום פעילות</FieldLabel><Input value={generalData.fieldOfActivity} onChange={(e) => setGeneralData((p) => ({ ...p, fieldOfActivity: e.target.value }))} /></Field>
                 <Field><FieldLabel className="text-[#1A365D]">מספר עובדים</FieldLabel><Input type="number" value={generalData.employeesCount} onChange={(e) => setGeneralData((p) => ({ ...p, employeesCount: e.target.value }))} /></Field>
               </FieldGroup>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white border-border shadow-sm">
+            <CardHeader><CardTitle className="text-[#1A365D]">הערות נוספות</CardTitle></CardHeader>
+            <CardContent>
+              <Field>
+                <FieldLabel className="text-[#1A365D]">תוכן ההודעה</FieldLabel>
+                <textarea
+                  rows={4}
+                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  placeholder="פרטו את הצרכים, שאלות או בקשות נוספות..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </Field>
             </CardContent>
           </Card>
 
