@@ -59,16 +59,37 @@ export function buildBeneficiaryPdfModel(input = {}) {
   };
 }
 
+/**
+ * תיקון מרכזי: במקום להפוך אותיות בנפרד (שגרם ל"חוקל" במקום "לקוח"),
+ * אנו מפרידים את הטקסט לאסימונים (מילים + רווחים) ומהפכים את סדר האסימונים.
+ * כך כל מילה עברית נשמרת תקינה, אך הסדר הוויזואלי של השורה נעשה RTL.
+ *
+ * לוגיקה:
+ *  1. פיצול ל-tokens: מילה או רווח/טאב (שמירת מבנה הרווחים).
+ *  2. הפיכת סדר ה-tokens.
+ *  3. שימוש בפונקציה רק על טקסט עברי — טקסט LTR (מספרים, אנגלית) נשאר כמות שהוא.
+ */
 function prepareVisualText(value) {
   return String(value || '')
     .split('\n')
     .map((lineText) => {
-      if (!/[\u0590-\u05FF]/.test(lineText)) return lineText;
-      // pdf-lib אינו תומך bidi מלא; עבור עברית אנו כותבים בסדר ויזואלי
-      // כדי שהמסמך ייראה RTL תקין בקובץ הסופי.
-      return lineText.split('').reverse().join('');
+      // אם אין תווים עבריים — אין צורך בטיפול
+      if (!/[֐-׿יִ-ﭏ]/.test(lineText)) return lineText;
+
+      // פיצול ל-tokens: מילה (כל רצף שאינו רווח) או רווחים
+      const tokens = lineText.match(/\S+|\s+/g) || [];
+      // הפיכת סדר ה-tokens — כל מילה נשארת תקינה, רק הסדר מתהפך
+      return tokens.reverse().join('');
     })
     .join('\n');
+}
+
+/**
+ * מחזיר טקסט כפי שהוא — ללא היפוך — עבור ערכים שהם מספרים / אנגלית / מיקסד
+ * שלא אמורים לעבור טיפול bidi ויזואלי (מספר הזמנה, אימייל, טלפון, ת.ז, כתובת URL).
+ */
+function asIs(value) {
+  return String(value || '');
 }
 
 async function tryEmbedLogo(pdfDoc) {
@@ -104,7 +125,10 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
   const innerW = pageW - margin * 2;
   let page = pdfDoc.addPage([pageW, pageH]);
 
-  const footerText = prepareVisualText('אופאל תקשורת בע״מ · בית ליזמות רפואית · 054-4261369 · opal2000@zahav.net.il');
+  // ── Footer texts ────────────────────────────────────────────────────────────
+  const footerText = prepareVisualText(
+    'אופאל תקשורת בע״מ · בית ליזמות רפואית · 054-4261369 · opal2000@zahav.net.il'
+  );
   const footerDisclaimer = prepareVisualText(
     'המנוי כפוף לכתב השרות ולגילוי הנאות. מסמך זה נוצר אוטומטית מהמערכת.'
   );
@@ -165,8 +189,19 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
     return y - 44;
   }
 
-  function drawRtl(text, xRight, yBaseline, size, color = TEXT, useBold = false) {
-    const value = prepareVisualText(text);
+  /**
+   * drawRtl — מצייר טקסט מיושר-ימין על הדף.
+   *
+   * @param {string}  text          — הטקסט לציור
+   * @param {number}  xRight        — קצה ימין של אזור הציור (x)
+   * @param {number}  yBaseline     — קו הבסיס (y)
+   * @param {number}  size          — גודל הפונט
+   * @param {object}  color         — צבע (rgb object)
+   * @param {boolean} isHebrewLabel — true → prepareVisualText (שמות, כותרות עבריות)
+   *                                  false → asIs (מספרים, אימייל, URL, ת.ז)
+   */
+  function drawRtl(text, xRight, yBaseline, size, color = TEXT, isHebrewLabel = true) {
+    const value = isHebrewLabel ? prepareVisualText(text) : asIs(text);
     const w = font.widthOfTextAtSize(value, size);
     page.drawText(value, { x: xRight - w, y: yBaseline, size, font, color });
   }
@@ -181,7 +216,7 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
 
   const yRef = { current: drawLetterhead(page, pageH - margin) };
 
-  /* --- Order strip (like order-form-pdf header) --- */
+  /* ─── Order strip ──────────────────────────────────────────────────────── */
   ensureSpace(40, yRef);
   const stripH = 26;
   const c1 = innerW * 0.18;
@@ -189,11 +224,13 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
   const c3 = innerW * 0.28;
   const c4 = innerW * 0.32;
   let sx = pageW - margin;
+
+  // orderNumber ו-orderDate הם LTR — לא עוברים היפוך
   const cells = [
-    { w: c4, bg: WHITE, text: model.orderNumber, size: 12 },
-    { w: c3, bg: WHITE, text: model.orderDate, size: 9 },
-    { w: c2, bg: OPAL_GOLD_30, text: model.numerator, size: 9, sub: 'נומרטור' },
-    { w: c1, bg: OPAL_GOLD, text: 'מס הזמנה', size: 10, light: true },
+    { w: c4, bg: WHITE,        text: model.orderNumber,  size: 12, isHeb: false },
+    { w: c3, bg: WHITE,        text: model.orderDate,    size: 9,  isHeb: false },
+    { w: c2, bg: OPAL_GOLD_30, text: model.numerator,   size: 9,  isHeb: false, sub: 'נומרטור' },
+    { w: c1, bg: OPAL_GOLD,    text: 'מס הזמנה',        size: 10, light: true,  isHeb: true  },
   ];
   for (const c of cells) {
     sx -= c.w;
@@ -207,15 +244,29 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
       borderWidth: 0.5,
     });
     if (c.sub) {
-      drawRtl(c.sub, sx + c.w - 4, yRef.current - 9, 7, MUTED, false);
+      // 'נומרטור' — כותרת עברית
+      drawRtl(c.sub, sx + c.w - 4, yRef.current - 9, 7, MUTED, true);
     }
-    drawRtl(c.text, sx + c.w - 4, yRef.current - (c.sub ? 20 : 14), c.size, c.light ? WHITE : OPAL_BLUE, !!c.light);
+    drawRtl(
+      c.text,
+      sx + c.w - 4,
+      yRef.current - (c.sub ? 20 : 14),
+      c.size,
+      c.light ? WHITE : OPAL_BLUE,
+      c.isHeb
+    );
   }
   yRef.current -= stripH + 12;
 
-  /* --- Customer block --- */
+  /* ─── Customer grid ────────────────────────────────────────────────────── */
   const L = OPAL_BLUE;
   const V = WHITE;
+
+  /**
+   * cellGrid: מצייר טבלת תאים.
+   * isHeb=true  → prepareVisualText (כותרות עבריות)
+   * isHeb=false → asIs (מספרים, אימייל, URL, ת.ז, כתובת)
+   */
   function cellGrid(rows) {
     for (const r of rows) {
       ensureSpace(28, yRef);
@@ -240,7 +291,8 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
           yRef.current - h + 6,
           seg.size || 9,
           seg.role === 'l' ? WHITE : OPAL_BLUE,
-          seg.role === 'l'
+          // labels (role='l') הן תמיד עברית; values (role='v') ייבדקו לפי isHeb
+          seg.role === 'l' ? true : (seg.isHeb !== false)
         );
       }
       yRef.current -= h;
@@ -250,43 +302,43 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
 
   cellGrid([
     [
-      { w: 0.1, role: 'l', text: 'תאריך תחילת מנוי', size: 8 },
-      { w: 0.12, role: 'v', text: model.subscriptionStartDate, size: 9 },
-      { w: 0.08, role: 'l', text: 'ת.ז', size: 8 },
-      { w: 0.14, role: 'v', text: model.customerId, size: 9 },
-      { w: 0.1, role: 'l', text: 'שם לקוח', size: 8 },
-      { w: 0.46, role: 'v', text: model.customerName, size: 9 },
+      { w: 0.10, role: 'l', text: 'תאריך תחילת מנוי', size: 8  },
+      { w: 0.12, role: 'v', text: model.subscriptionStartDate, size: 9, isHeb: false },
+      { w: 0.08, role: 'l', text: 'ת.ז',                      size: 8  },
+      { w: 0.14, role: 'v', text: model.customerId,            size: 9, isHeb: false },
+      { w: 0.10, role: 'l', text: 'שם לקוח',                  size: 8  },
+      { w: 0.46, role: 'v', text: model.customerName,          size: 9, isHeb: true  },
     ],
     [
-      { w: 0.1, role: 'l', text: 'מייל', size: 8 },
-      { w: 0.28, role: 'v', text: model.email, size: 8 },
-      { w: 0.1, role: 'l', text: 'טלפון', size: 8 },
-      { w: 0.18, role: 'v', text: model.phone, size: 8 },
+      { w: 0.10, role: 'l', text: 'מייל',         size: 8 },
+      { w: 0.28, role: 'v', text: model.email,    size: 8, isHeb: false },
+      { w: 0.10, role: 'l', text: 'טלפון',        size: 8 },
+      { w: 0.18, role: 'v', text: model.phone,    size: 8, isHeb: false },
       { w: 0.12, role: 'l', text: 'כתובת הלקוח', size: 8 },
-      { w: 0.22, role: 'v', text: model.address, size: 8 },
+      { w: 0.22, role: 'v', text: model.address,  size: 8, isHeb: true  },
     ],
     [
       { w: 0.28, role: 'l', text: 'ארבע ספרות אחרונות בכרטיס האשראי', size: 8 },
-      { w: 0.72, role: 'v', text: model.lastFourDigits, size: 10 },
+      { w: 0.72, role: 'v', text: model.lastFourDigits, size: 10, isHeb: false },
     ],
   ]);
 
-  /* Subscription row */
+  /* ─── Subscription row ─────────────────────────────────────────────────── */
   const mt = `${model.monthlyTotal.toLocaleString('he-IL')} ₪`;
   cellGrid([
     [
-      { w: 0.1, role: 'l', text: 'סה״כ תש׳ חודשי', size: 8 },
-      { w: 0.11, role: 'v', text: mt, size: 11 },
-      { w: 0.13, role: 'l', text: 'מוצר', size: 8 },
-      { w: 0.16, role: 'v', text: model.productName, size: 8 },
-      { w: 0.12, role: 'l', text: 'שם כתב השרות', size: 8 },
-      { w: 0.13, role: 'v', text: model.serviceDocumentName, size: 8 },
-      { w: 0.11, role: 'l', text: 'סוג המנוי', size: 8 },
-      { w: 0.14, role: 'v', text: model.transactionDescription, size: 8 },
+      { w: 0.10, role: 'l', text: 'סה״כ תש׳ חודשי',   size: 8  },
+      { w: 0.11, role: 'v', text: mt,                  size: 11, isHeb: false },
+      { w: 0.13, role: 'l', text: 'מוצר',              size: 8  },
+      { w: 0.16, role: 'v', text: model.productName,   size: 8,  isHeb: true  },
+      { w: 0.12, role: 'l', text: 'שם כתב השרות',     size: 8  },
+      { w: 0.13, role: 'v', text: model.serviceDocumentName, size: 8, isHeb: true },
+      { w: 0.11, role: 'l', text: 'סוג המנוי',         size: 8  },
+      { w: 0.14, role: 'v', text: model.transactionDescription, size: 8, isHeb: true },
     ],
   ]);
 
-  /* Section: תאור העסקה */
+  /* ─── Section: תאור העסקה ──────────────────────────────────────────────── */
   ensureSpace(30, yRef);
   page.drawRectangle({
     x: margin,
@@ -298,7 +350,7 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
   drawRtl('תאור העסקה', pageW - margin - 4, yRef.current - 15, 12, WHITE, true);
   yRef.current -= 28;
 
-  /* Primary + secondary beneficiaries (pad to 5 secondaries like preview) */
+  /* ─── Beneficiaries ────────────────────────────────────────────────────── */
   const filled = [...model.secondaryBeneficiaries];
   while (filled.length < 5) {
     filled.push({ fullName: '', idNumber: '' });
@@ -306,40 +358,33 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
 
   function benRow(labelBg, label, name, idLabel, idVal) {
     ensureSpace(26, yRef);
-    const h = 22;
-    const wLab = innerW * 0.22;
-    const wName = innerW * 0.5;
-    const wIdL = innerW * 0.08;
-    const wId = innerW * 0.2;
+    const h  = 22;
+    const wLab  = innerW * 0.22;
+    const wName = innerW * 0.50;
+    const wIdL  = innerW * 0.08;
+    const wId   = innerW * 0.20;
     let x = pageW - margin;
+
+    // ת.ז — value (LTR)
     x -= wId;
     page.drawRectangle({ x, y: yRef.current - h, width: wId, height: h, color: V, borderColor: LINE, borderWidth: 0.5 });
     drawRtl(idVal, x + wId - 4, yRef.current - h + 6, 9, OPAL_BLUE, false);
+
+    // "ת.ז" — label (עברית)
     x -= wIdL;
-    page.drawRectangle({
-      x,
-      y: yRef.current - h,
-      width: wIdL,
-      height: h,
-      color: labelBg,
-      borderColor: LINE,
-      borderWidth: 0.5,
-    });
+    page.drawRectangle({ x, y: yRef.current - h, width: wIdL, height: h, color: labelBg, borderColor: LINE, borderWidth: 0.5 });
     drawRtl(idLabel, x + wIdL - 4, yRef.current - h + 6, 8, WHITE, true);
+
+    // שם המבוטח — value (עברית — שמות אנשים)
     x -= wName;
     page.drawRectangle({ x, y: yRef.current - h, width: wName, height: h, color: V, borderColor: LINE, borderWidth: 0.5 });
-    drawRtl(name, x + wName - 4, yRef.current - h + 6, 9, OPAL_BLUE, false);
+    drawRtl(name, x + wName - 4, yRef.current - h + 6, 9, OPAL_BLUE, true);
+
+    // "שם המבוטח..." — label (עברית)
     x -= wLab;
-    page.drawRectangle({
-      x,
-      y: yRef.current - h,
-      width: wLab,
-      height: h,
-      color: labelBg,
-      borderColor: LINE,
-      borderWidth: 0.5,
-    });
+    page.drawRectangle({ x, y: yRef.current - h, width: wLab, height: h, color: labelBg, borderColor: LINE, borderWidth: 0.5 });
     drawRtl(label, x + wLab - 4, yRef.current - h + 6, 8, WHITE, true);
+
     yRef.current -= h;
   }
 
@@ -356,7 +401,7 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
 
   yRef.current -= 8;
 
-  /* נותן שירות */
+  /* ─── נותן שירות ──────────────────────────────────────────────────────── */
   ensureSpace(80, yRef);
   page.drawRectangle({
     x: margin,
@@ -367,8 +412,10 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
   });
   drawRtl('פרטי נותן השרות', pageW - margin - 4, yRef.current - 15, 12, WHITE, true);
   yRef.current -= 24;
+
   const svcPhone = process.env.MEDICAL_SERVICES_PHONE || '00-0000000';
-  const claims = process.env.CLAIMS_ONLINE_URL || 'https://opal-medical.co.il/claims';
+  const claims   = process.env.CLAIMS_ONLINE_URL || 'https://opal-medical.co.il/claims';
+
   page.drawRectangle({
     x: margin,
     y: yRef.current - 42,
@@ -378,17 +425,24 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
     borderColor: LINE,
     borderWidth: 0.5,
   });
-  const svcLabel = prepareVisualText('טלפונים להזמנת שירותים רפואיים:');
+
+  // "לשרות רפואי חייג:" — עברית (תוקן מ"טלפונים להזמנת שירותים רפואיים:")
+  const svcLabel = prepareVisualText('לשרות רפואי חייג:');
   const wSvc = font.widthOfTextAtSize(svcLabel, 10);
   page.drawText(svcLabel, { x: pageW - margin - wSvc, y: yRef.current - 16, size: 10, font, color: OPAL_BLUE });
-  page.drawText(String(svcPhone), { x: margin + 8, y: yRef.current - 16, size: 10, font, color: OPAL_BLUE });
+  // מספר טלפון — LTR, אינו עובר היפוך
+  page.drawText(asIs(svcPhone), { x: margin + 8, y: yRef.current - 16, size: 10, font, color: OPAL_BLUE });
+
+  // "הגשת מסמכים רפואיים (תביעה און ליין):" — עברית
   const docLabel = prepareVisualText('הגשת מסמכים רפואיים (תביעה און ליין):');
   const wDoc = font.widthOfTextAtSize(docLabel, 9);
   page.drawText(docLabel, { x: pageW - margin - wDoc, y: yRef.current - 32, size: 9, font, color: OPAL_BLUE });
-  page.drawText(String(claims), { x: margin + 8, y: yRef.current - 32, size: 8, font, color: OPAL_GOLD });
+  // URL — LTR, אינו עובר היפוך
+  page.drawText(asIs(claims), { x: margin + 8, y: yRef.current - 32, size: 8, font, color: OPAL_GOLD });
+
   yRef.current -= 50;
 
-  /* Notice box */
+  /* ─── Notice box ───────────────────────────────────────────────────────── */
   ensureSpace(56, yRef);
   page.drawRectangle({
     x: margin,
@@ -400,8 +454,9 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
     borderWidth: 1.5,
   });
   drawRtl('שים לב', pageW - margin - 8, yRef.current - 18, 10, OPAL_GOLD, true);
-  drawRtl('חיוב החודשי של המנוי דרך חברת אופאל תקשורת בע״מ.', pageW - margin - 8, yRef.current - 32, 9, TEXT, false);
-  drawRtl('לפניות: 054-4261369 · opal2000@zahav.net.il', pageW - margin - 8, yRef.current - 44, 8, MUTED, false);
+  drawRtl('חיוב החודשי של המנוי דרך חברת אופאל תקשורת בע״מ.', pageW - margin - 8, yRef.current - 32, 9, TEXT, true);
+  // מספר טלפון ואימייל — LTR
+  drawRtl('054-4261369 · opal2000@zahav.net.il :לפניות', pageW - margin - 8, yRef.current - 44, 8, MUTED, false);
   yRef.current -= 56;
 
   drawFooter(page);
