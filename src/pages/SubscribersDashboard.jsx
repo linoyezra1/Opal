@@ -209,6 +209,8 @@ export default function SubscribersDashboard() {
     agentNameSearch: '',
     summaryCategories: [],
     customerSegment: 'all',
+    agentFilter: '',
+    organizationFilter: '',
   });
 
   const filteredProviders = useMemo(() => {
@@ -224,6 +226,11 @@ export default function SubscribersDashboard() {
   }, [data.filterOptions.agents, filters.agentSearchEnabled, filters.agentSearch]);
   const organizationOptions = useMemo(
     () => [...new Set((data.rows || []).map((r) => String(r.organizationName || r.organizationBadge || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'he')),
+    [data.rows]
+  );
+
+  const agentOptions = useMemo(
+    () => [...new Set((data.rows || []).map((r) => String(r.agentName || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'he')),
     [data.rows]
   );
 
@@ -248,7 +255,9 @@ export default function SubscribersDashboard() {
       !!filters.productNameSearch.trim() ||
       !!filters.agentNameSearch.trim() ||
       (filters.summaryCategories || []).length > 0 ||
-      (filters.customerSegment && filters.customerSegment !== 'all')
+      (filters.customerSegment && filters.customerSegment !== 'all') ||
+      !!filters.agentFilter ||
+      !!filters.organizationFilter
     );
   }, [filters]);
   const unifiedFilterConfig = useMemo(
@@ -275,8 +284,20 @@ export default function SubscribersDashboard() {
           { value: 'cancelled', label: 'מבוטלים' },
         ],
       },
+      {
+        key: 'agentFilter',
+        label: 'סוכן',
+        type: 'select',
+        options: agentOptions.map((a) => ({ value: a, label: a })),
+      },
+      {
+        key: 'organizationFilter',
+        label: 'ארגון',
+        type: 'select',
+        options: organizationOptions.map((o) => ({ value: o, label: o })),
+      },
     ],
-    []
+    [agentOptions, organizationOptions]
   );
   const unifiedFilterValues = useMemo(
     () => ({
@@ -286,6 +307,8 @@ export default function SubscribersDashboard() {
       fromDate: filters.fromDate || '',
       toDate: filters.toDate || '',
       status: filters.status || 'all',
+      agentFilter: filters.agentFilter || '',
+      organizationFilter: filters.organizationFilter || '',
     }),
     [liveSearch, filters]
   );
@@ -656,6 +679,8 @@ export default function SubscribersDashboard() {
       agentNameSearch: '',
       summaryCategories: [],
       customerSegment: 'all',
+      agentFilter: '',
+      organizationFilter: '',
     }));
   }
 
@@ -678,6 +703,18 @@ export default function SubscribersDashboard() {
       );
     }
 
+    // Agent filter — AND logic, exact match on agent name
+    if (filters.agentFilter) {
+      rows = rows.filter((r) => String(r.agentName || '').trim() === filters.agentFilter);
+    }
+
+    // Organization filter — AND logic, exact match on organization name
+    if (filters.organizationFilter) {
+      rows = rows.filter(
+        (r) => String(r.organizationName || r.organizationBadge || '').trim() === filters.organizationFilter,
+      );
+    }
+
     // Live text search on top of the status-filtered set
     const q = String(liveSearch || '').trim().toLowerCase();
     if (!q) return rows;
@@ -697,7 +734,7 @@ export default function SubscribersDashboard() {
         .join(' | ');
       return hay.includes(q);
     });
-  }, [data.rows, liveSearch, filters.status]);
+  }, [data.rows, liveSearch, filters.status, filters.agentFilter, filters.organizationFilter]);
 
   // Metrics derived entirely from the currently visible (filtered) rows,
   // so summary cards always reflect what the user actually sees in the table.
@@ -1561,6 +1598,8 @@ export default function SubscribersDashboard() {
                     fromDate: String(next.fromDate || ''),
                     toDate: String(next.toDate || ''),
                     status: String(next.status || 'all'),
+                    agentFilter: String(next.agentFilter || ''),
+                    organizationFilter: String(next.organizationFilter || ''),
                   }));
                 }}
                 onClear={clearFilters}
