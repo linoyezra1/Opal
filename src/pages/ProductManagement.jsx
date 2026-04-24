@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Plus, Edit2, Archive, Package, Eye, Check, Copy, ExternalLink, Globe } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
@@ -37,10 +37,12 @@ const EMPTY_FORM = {
 };
 
 // ─── View Product Dialog ────────────────────────────────────────────────────────
-function ViewProductDialog({ product, productSlugMap, onClose, onEdit }) {
+function ViewProductDialog({ product, productSlugMap, productPurchaseCounts, productSlugPurchaseCounts, onClose, onEdit }) {
   const [copiedLink, setCopiedLink] = React.useState('');
 
   if (!product) return null;
+
+  const totalPurchases = productPurchaseCounts.get(product.id) ?? 0;
 
   function copyLink(link) {
     navigator.clipboard.writeText(link).then(() => {
@@ -83,7 +85,7 @@ function ViewProductDialog({ product, productSlugMap, onClose, onEdit }) {
             <p className="text-xs text-muted-foreground">דפי נחיתה פעילים</p>
           </div>
           <div className="text-center space-y-0.5">
-            <p className="text-2xl font-bold text-primary">—</p>
+            <p className="text-2xl font-bold text-primary">{totalPurchases}</p>
             <p className="text-xs text-muted-foreground">כמות רכישות</p>
           </div>
           <div className="text-center space-y-0.5">
@@ -113,7 +115,7 @@ function ViewProductDialog({ product, productSlugMap, onClose, onEdit }) {
             <div className="rounded-xl border-2 border-dashed border-slate-200 p-6 text-center">
               <Globe className="size-8 text-slate-300 mx-auto mb-2" />
               <p className="text-sm text-muted-foreground">המוצר אינו משויך לדפי נחיתה</p>
-              <p className="text-xs text-muted-foreground mt-1">ניתן לשייך דרך ניהול רשימות מחירים</p>
+              <p className="text-xs text-muted-foreground mt-1">ניתן לשייך דרך הקמת דף מוצר</p>
             </div>
           ) : (
             <div className="rounded-xl border overflow-hidden">
@@ -121,6 +123,7 @@ function ViewProductDialog({ product, productSlugMap, onClose, onEdit }) {
                 <thead className="bg-slate-50 border-b">
                   <tr>
                     <th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600">שם דף</th>
+                    <th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600 w-28">כמות רכישות</th>
                     <th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600">קישור</th>
                   </tr>
                 </thead>
@@ -128,10 +131,14 @@ function ViewProductDialog({ product, productSlugMap, onClose, onEdit }) {
                   {slugEntries.map(({ slug, pageTitle }) => {
                     const link = `${window.location.origin}/p/${slug}`;
                     const justCopied = copiedLink === link;
+                    const slugCount = productSlugPurchaseCounts.get(`${product.id}::${slug}`) ?? 0;
                     return (
                       <tr key={slug} className="hover:bg-slate-50 transition-colors">
                         <td className="px-3 py-3 font-medium text-foreground">
                           {pageTitle || slug}
+                        </td>
+                        <td className="px-3 py-3 text-center font-semibold text-primary">
+                          {slugCount}
                         </td>
                         <td className="px-3 py-3">
                           <div className="flex items-center gap-1.5">
@@ -194,12 +201,14 @@ function ViewProductDialog({ product, productSlugMap, onClose, onEdit }) {
 }
 
 export default function ProductManagement() {
+  const [searchParams] = useSearchParams();
   const [token] = React.useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [form, setForm] = React.useState(EMPTY_FORM);
   const [products, setProducts] = React.useState([]);
   const [providers, setProviders] = React.useState([]);
   const [landingPages, setLandingPages] = React.useState([]);
   const [priceLists, setPriceLists] = React.useState([]);
+  const [deals, setDeals] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const [editProduct, setEditProduct] = React.useState(null);
@@ -208,6 +217,18 @@ export default function ProductManagement() {
   const [createOpen, setCreateOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
   const [providerFilter, setProviderFilter] = React.useState('all');
+  // Apply ?providerName= query param once providers are loaded (from vendor dashboard link)
+  const providerParamApplied = React.useRef(false);
+  React.useEffect(() => {
+    if (providerParamApplied.current || providers.length === 0) return;
+    const pname = searchParams.get('providerName');
+    if (!pname) return;
+    const match = providers.find((v) => String(v.vendorName || '').toLowerCase() === pname.toLowerCase());
+    if (match) {
+      setProviderFilter(match.id);
+      providerParamApplied.current = true;
+    }
+  }, [providers, searchParams]);
   const productFilterConfig = React.useMemo(
     () => [
       { key: 'search', label: 'חיפוש', type: 'text', placeholder: 'חיפוש חופשי: מוצר, ספק, מק״ט, תיאור' },
@@ -226,17 +247,19 @@ export default function ProductManagement() {
     setLoading(true);
     setError('');
     try {
-      const [prRes, vnRes, lpRes, plRes] = await Promise.all([
+      const [prRes, vnRes, lpRes, plRes, dlRes] = await Promise.all([
         fetch(`${API_BASE}/api/admin/products`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/vendors`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/landing-pages`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/price-lists`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+        fetch(`${API_BASE}/api/admin/deals`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
       ]);
       if (!prRes.success) throw new Error(prRes.error || 'טעינת מוצרים נכשלה');
       setProducts(Array.isArray(prRes.products) ? prRes.products : []);
       if (vnRes.success) setProviders(Array.isArray(vnRes.vendors) ? vnRes.vendors : []);
       if (lpRes.success) setLandingPages(Array.isArray(lpRes.pages) ? lpRes.pages : []);
       if (plRes.success) setPriceLists(Array.isArray(plRes.lists) ? plRes.lists : []);
+      if (dlRes.success) setDeals(Array.isArray(dlRes.deals) ? dlRes.deals : []);
     } catch (e) {
       setError(e.message || 'שגיאה');
     } finally {
@@ -380,6 +403,32 @@ export default function ProductManagement() {
     return map;
   }, [priceLists, landingPages]);
 
+  // productId → total successful purchase count
+  const productPurchaseCounts = React.useMemo(() => {
+    const map = new Map();
+    for (const d of deals) {
+      const pid = String(d.formState?.productId || '').trim();
+      if (!pid) continue;
+      if (!/success|paid|test_success/i.test(String(d.paymentStatus || ''))) continue;
+      map.set(pid, (map.get(pid) || 0) + 1);
+    }
+    return map;
+  }, [deals]);
+
+  // "productId::slug" → purchase count for that landing page
+  const productSlugPurchaseCounts = React.useMemo(() => {
+    const map = new Map();
+    for (const d of deals) {
+      const pid = String(d.formState?.productId || '').trim();
+      const slug = String(d.landingSlug || d.formState?.landingPageSlug || '').trim().toLowerCase();
+      if (!pid || !slug) continue;
+      if (!/success|paid|test_success/i.test(String(d.paymentStatus || ''))) continue;
+      const key = `${pid}::${slug}`;
+      map.set(key, (map.get(key) || 0) + 1);
+    }
+    return map;
+  }, [deals]);
+
   if (!token) {
     return (
       <div dir="rtl" className="min-h-screen bg-slate-50 p-6">
@@ -397,6 +446,8 @@ export default function ProductManagement() {
       <ViewProductDialog
         product={viewProduct}
         productSlugMap={productSlugMap}
+        productPurchaseCounts={productPurchaseCounts}
+        productSlugPurchaseCounts={productSlugPurchaseCounts}
         onClose={() => setViewProduct(null)}
         onEdit={(p) => { setViewProduct(null); openEdit(p); }}
       />

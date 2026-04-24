@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Plus,
   Edit2,
@@ -158,6 +158,7 @@ function VendorFormFields({ data, setData }) {
 }
 
 export default function VendorDashboard() {
+  const navigate = useNavigate();
   const [token] = React.useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [form, setForm] = React.useState(emptyVendor);
   const [productLinks, setProductLinks] = React.useState([emptyLink()]);
@@ -644,7 +645,7 @@ export default function VendorDashboard() {
                                   </p>
                                 </div>
                               </div>
-                              <div className="mt-3 text-xs space-y-1">
+                              <div className="mt-3 text-xs space-y-2">
                                 <span className="font-medium">מוצרים:</span>
                                 <ul className="list-disc list-inside">
                                   {(v.products || []).map((l, i) => (
@@ -653,6 +654,15 @@ export default function VendorDashboard() {
                                     </li>
                                   ))}
                                 </ul>
+                                {(v.products || []).length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(`/admin/products?providerName=${encodeURIComponent(v.vendorName)}`)}
+                                    className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
+                                  >
+                                    לניהול מלא של מוצרי הספק ←
+                                  </button>
+                                )}
                               </div>
                             </TableCell>
                           </TableRow>
