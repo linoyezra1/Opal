@@ -1,10 +1,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Edit2, Archive, Package } from 'lucide-react';
+import { Plus, Edit2, Archive, Package, Eye, Check, Copy, ExternalLink, Globe } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { Button } from '../components/ui/button.jsx';
+import { Badge } from '../components/ui/badge.jsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
 import {
@@ -35,14 +36,174 @@ const EMPTY_FORM = {
   flowType: PRODUCT_FLOW_TYPE_LABEL,
 };
 
+// ─── View Product Dialog ────────────────────────────────────────────────────────
+function ViewProductDialog({ product, productSlugMap, onClose, onEdit }) {
+  const [copiedLink, setCopiedLink] = React.useState('');
+
+  if (!product) return null;
+
+  function copyLink(link) {
+    navigator.clipboard.writeText(link).then(() => {
+      setCopiedLink(link);
+      setTimeout(() => setCopiedLink(''), 2000);
+    }).catch(() => {});
+  }
+
+  const slugEntries = productSlugMap.get(product.id) || [];
+  const productName = product.productName || product.name || '';
+
+  return (
+    <Dialog open={!!product} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+
+        {/* ── Header ── */}
+        <DialogHeader className="pb-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <DialogTitle className="text-xl font-bold text-foreground">{productName}</DialogTitle>
+              <DialogDescription className="flex flex-wrap gap-3 text-xs">
+                {product.sku ? (
+                  <span dir="ltr" className="font-mono bg-slate-100 rounded px-1.5 py-0.5">{product.sku}</span>
+                ) : null}
+                {product.provider?.vendorName ? (
+                  <span className="text-muted-foreground">ספק: {product.provider.vendorName}</span>
+                ) : null}
+              </DialogDescription>
+            </div>
+            <Badge className="shrink-0 bg-green-100 text-green-800 border-green-200 hover:bg-green-100">
+              פעיל
+            </Badge>
+          </div>
+        </DialogHeader>
+
+        {/* ── KPI Stats ── */}
+        <div className="grid grid-cols-3 gap-3 rounded-xl border bg-gradient-to-l from-[#D9EAF3]/40 to-[#D9EAF3]/10 p-4">
+          <div className="text-center space-y-0.5">
+            <p className="text-2xl font-bold text-primary">{slugEntries.length}</p>
+            <p className="text-xs text-muted-foreground">דפי נחיתה פעילים</p>
+          </div>
+          <div className="text-center space-y-0.5">
+            <p className="text-2xl font-bold text-primary">—</p>
+            <p className="text-xs text-muted-foreground">כמות רכישות</p>
+          </div>
+          <div className="text-center space-y-0.5">
+            <p className="text-2xl font-bold text-[#C9A227]">
+              {Number(product.providerCost || 0) > 0 ? `₪${Number(product.providerCost)}` : '—'}
+            </p>
+            <p className="text-xs text-muted-foreground">עלות ספק</p>
+          </div>
+        </div>
+
+        {/* ── Product Details ── */}
+        {product.baseDescription ? (
+          <div className="rounded-xl border p-4 text-sm">
+            <p className="text-xs font-semibold text-muted-foreground mb-1">תיאור</p>
+            <p className="text-foreground">{product.baseDescription}</p>
+          </div>
+        ) : null}
+
+        {/* ── Landing Pages Table ── */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-800">דפי נחיתה המכילים מוצר זה</h3>
+            <Badge variant="secondary" className="text-xs">{slugEntries.length} דפים</Badge>
+          </div>
+
+          {slugEntries.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-slate-200 p-6 text-center">
+              <Globe className="size-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">המוצר אינו משויך לדפי נחיתה</p>
+              <p className="text-xs text-muted-foreground mt-1">ניתן לשייך דרך ניהול רשימות מחירים</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b">
+                  <tr>
+                    <th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600">שם דף</th>
+                    <th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600">קישור</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {slugEntries.map(({ slug, pageTitle }) => {
+                    const link = `${window.location.origin}/p/${slug}`;
+                    const justCopied = copiedLink === link;
+                    return (
+                      <tr key={slug} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-3 py-3 font-medium text-foreground">
+                          {pageTitle || slug}
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className="flex-1 truncate text-xs font-mono text-slate-500 bg-slate-100 rounded px-2 py-1 max-w-[200px]"
+                              title={link}
+                            >
+                              /p/{slug}
+                            </span>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={() => copyLink(link)}
+                                  className={`inline-flex items-center gap-1 h-7 px-2 rounded border text-xs transition-all shrink-0
+                                    ${justCopied
+                                      ? 'bg-green-100 border-green-300 text-green-700'
+                                      : 'bg-white border-slate-200 text-slate-600 hover:border-primary hover:text-primary'}`}
+                                >
+                                  {justCopied ? <Check className="size-3" /> : <Copy className="size-3" />}
+                                  {justCopied ? 'הועתק' : 'העתק'}
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>{pageTitle || slug}</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <a
+                                  href={link}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center justify-center h-7 w-7 rounded border border-slate-200 bg-white text-slate-500 hover:border-primary hover:text-primary transition-colors shrink-0"
+                                >
+                                  <ExternalLink className="size-3" />
+                                </a>
+                              </TooltipTrigger>
+                              <TooltipContent>פתח קישור</TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse border-t pt-4">
+          <Button type="button" variant="outline" onClick={onClose}>סגור</Button>
+          <Button type="button" onClick={() => { onClose(); onEdit(product); }}>
+            <Edit2 className="size-3.5 me-1.5" />
+            עריכה
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function ProductManagement() {
   const [token] = React.useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [form, setForm] = React.useState(EMPTY_FORM);
   const [products, setProducts] = React.useState([]);
   const [providers, setProviders] = React.useState([]);
+  const [landingPages, setLandingPages] = React.useState([]);
+  const [priceLists, setPriceLists] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const [editProduct, setEditProduct] = React.useState(null);
+  const [viewProduct, setViewProduct] = React.useState(null);
   const [deleteTarget, setDeleteTarget] = React.useState(null);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
@@ -65,12 +226,17 @@ export default function ProductManagement() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${API_BASE}/api/admin/products`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) throw new Error(data.error || 'טעינת מוצרים נכשלה');
-      setProducts(Array.isArray(data.products) ? data.products : []);
+      const [prRes, vnRes, lpRes, plRes] = await Promise.all([
+        fetch(`${API_BASE}/api/admin/products`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+        fetch(`${API_BASE}/api/admin/vendors`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+        fetch(`${API_BASE}/api/admin/landing-pages`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+        fetch(`${API_BASE}/api/admin/price-lists`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+      ]);
+      if (!prRes.success) throw new Error(prRes.error || 'טעינת מוצרים נכשלה');
+      setProducts(Array.isArray(prRes.products) ? prRes.products : []);
+      if (vnRes.success) setProviders(Array.isArray(vnRes.vendors) ? vnRes.vendors : []);
+      if (lpRes.success) setLandingPages(Array.isArray(lpRes.pages) ? lpRes.pages : []);
+      if (plRes.success) setPriceLists(Array.isArray(plRes.lists) ? plRes.lists : []);
     } catch (e) {
       setError(e.message || 'שגיאה');
     } finally {
@@ -80,24 +246,6 @@ export default function ProductManagement() {
 
   React.useEffect(() => {
     loadProducts();
-  }, [token]);
-
-  async function loadProviders() {
-    if (!token) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/vendors`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) throw new Error(data.error || 'טעינת ספקים נכשלה');
-      setProviders(Array.isArray(data.vendors) ? data.vendors : []);
-    } catch {
-      setProviders([]);
-    }
-  }
-
-  React.useEffect(() => {
-    loadProviders();
   }, [token]);
 
   async function submit(e) {
@@ -123,7 +271,7 @@ export default function ProductManagement() {
       if (!res.ok || !data.success) throw new Error(data.error || 'שמירה נכשלה');
       setForm(EMPTY_FORM);
       setCreateOpen(false);
-      await Promise.all([loadProducts(), loadProviders()]);
+      await loadProducts();
     } catch (e2) {
       setError(e2.message || 'שגיאה');
     } finally {
@@ -154,7 +302,7 @@ export default function ProductManagement() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.error || 'עדכון נכשל');
       setEditProduct(null);
-      await Promise.all([loadProducts(), loadProviders()]);
+      await loadProducts();
     } catch (e2) {
       setError(e2.message || 'שגיאה');
     } finally {
@@ -174,7 +322,7 @@ export default function ProductManagement() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.error || 'נטרול נכשל');
       setDeleteTarget(null);
-      await Promise.all([loadProducts(), loadProviders()]);
+      await loadProducts();
     } catch (e2) {
       setError(e2.message || 'שגיאה');
     } finally {
@@ -212,6 +360,26 @@ export default function ProductManagement() {
     });
   }, [products, search, providerFilter]);
 
+  // productId → [{slug, pageTitle}] — mirrors AgentSetup's productSlugMap
+  const productSlugMap = React.useMemo(() => {
+    const map = new Map();
+    const plIndex = new Map(priceLists.map((pl) => [pl.id, pl]));
+    for (const page of landingPages) {
+      if (!page.slug || !page.priceListId) continue;
+      const pl = plIndex.get(page.priceListId);
+      if (!pl) continue;
+      const lines = Array.isArray(pl.lines) ? pl.lines : [];
+      for (const line of lines) {
+        if (!line.productId) continue;
+        const existing = map.get(line.productId) || [];
+        if (!existing.some((e) => e.slug === page.slug)) {
+          map.set(line.productId, [...existing, { slug: page.slug, pageTitle: page.pageTitle || page.slug }]);
+        }
+      }
+    }
+    return map;
+  }, [priceLists, landingPages]);
+
   if (!token) {
     return (
       <div dir="rtl" className="min-h-screen bg-slate-50 p-6">
@@ -226,6 +394,13 @@ export default function ProductManagement() {
   return (
     <TooltipProvider delayDuration={250}>
       <AdminPageShell>
+      <ViewProductDialog
+        product={viewProduct}
+        productSlugMap={productSlugMap}
+        onClose={() => setViewProduct(null)}
+        onEdit={(p) => { setViewProduct(null); openEdit(p); }}
+      />
+
       <ConfirmDialog
         open={!!deleteTarget}
         title="מחיקת מוצר"
@@ -490,6 +665,14 @@ export default function ProductManagement() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" type="button" onClick={() => setViewProduct(p)} aria-label="צפה">
+                                  <Eye className="size-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>צפייה</TooltipContent>
+                            </Tooltip>
                             <Button variant="ghost" size="icon" type="button" onClick={() => openEdit(p)} aria-label="ערוך">
                               <Edit2 className="size-4" />
                             </Button>

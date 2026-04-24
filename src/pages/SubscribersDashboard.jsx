@@ -2035,15 +2035,16 @@ export default function SubscribersDashboard() {
                       <p className="font-semibold">{selected?.completionStatus || '—'}</p>
                     </div>
                     <div className="rounded-lg border p-3">
-                      <p className="text-xs text-muted-foreground mb-1">עלות ספק</p>
+                      <p className="text-xs text-muted-foreground mb-1">
+                        עלות ספק {(selected?.formState?.providerName || selected?.formState?.vendorName) ? `- ${selected.formState.providerName || selected.formState.vendorName}` : ''}
+                      </p>
                       <p className="font-semibold">{formatCurrency(selected?.formState?.resolvedVendorCost ?? 0)}</p>
-                      {(selected?.formState?.providerName || selected?.formState?.vendorName) && (
-                        <p className="text-xs text-muted-foreground mt-0.5">{selected?.formState?.providerName || selected?.formState?.vendorName}</p>
-                      )}
                     </div>
                     <div className="rounded-lg border p-3">
-                      <p className="text-xs text-muted-foreground mb-1">עמלת סוכן</p>
-                      <p className="font-semibold">{formatCurrency(selected?.formState?.resolvedAgentCommission ?? 0)}</p>
+                      <p className="text-xs text-muted-foreground mb-1">
+                        עלות סוכן {(selected?.agentName || selected?.formState?.agentName) ? `- ${selected.agentName || selected.formState.agentName}` : ''}
+                      </p>
+                      <p className="font-semibold">{formatCurrency(selected?.formState?.resolvedAgentCommission ?? selected?.agentCommission ?? 0)}</p>
                     </div>
                     <div className="rounded-lg border p-3">
                       <p className="text-xs text-muted-foreground mb-1">רווח נקי</p>
