@@ -1247,6 +1247,28 @@ export async function getPublicLandingPageBySlug(slug) {
   }
 
   if (!doc.priceListId) return null;
+
+  // Check whether every agent linked in the price list lines is still active.
+  // An archived agent (isActive: false) must not receive new subscriptions —
+  // return pageType 'ended' so the frontend can render "מוצר הסתיים".
+  if (mongoose.isValidObjectId(String(doc.priceListId))) {
+    const rawPl = await PriceList.findById(String(doc.priceListId)).select('lines').lean();
+    if (rawPl) {
+      const agentIds = [
+        ...new Set(
+          (rawPl.lines || []).map((l) => (l.agentId ? String(l.agentId) : '')).filter(Boolean)
+        ),
+      ];
+      for (const aid of agentIds) {
+        if (!mongoose.isValidObjectId(aid)) continue;
+        const agent = await SalesAgent.findById(aid).select('isActive').lean();
+        if (agent && agent.isActive === false) {
+          return { pageType: 'ended' };
+        }
+      }
+    }
+  }
+
   const pl = await getPublicPriceListById(String(doc.priceListId));
   if (!pl) return null;
   return {
@@ -1529,9 +1551,14 @@ export async function deleteSalesAgent(id) {
   await ensureConnection();
   if (!mongoose.isValidObjectId(id)) throw new Error('Invalid agent id');
   const oid = new mongoose.Types.ObjectId(id);
-  const n = await countDealsByAgentId(String(id));
-  if (n > 0) throw new Error(`?? ???? ????? ???? ?? ${n} ?????? ???????`);
-  const r = await SalesAgent.findByIdAndUpdate(oid, { $set: { isActive: false, updatedAt: new Date() } }, { returnDocument: 'after' });
+  // Historical deals are safe: commission + agentName are snapshotted into each
+  // Deal document at creation time.  Blocking archival of agents who have past
+  // deals defeats the purpose of soft-delete — the guard is intentionally removed.
+  const r = await SalesAgent.findByIdAndUpdate(
+    oid,
+    { $set: { isActive: false, updatedAt: new Date() } },
+    { returnDocument: 'after' }
+  );
   if (!r) throw new Error('Agent not found');
   return { ok: true };
 }

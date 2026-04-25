@@ -92,21 +92,39 @@ export async function saveDeal(params) {
   let commissionAmount = Number(fs.resolvedAgentCommission ?? 0);
   let mergedFormState = params.formState && typeof params.formState === 'object' ? { ...params.formState } : {};
   delete mergedFormState.subscriptionStartDate;
-  try {
-    const { resolveCheckoutEconomics } = await import('./adminMongooseService.js');
-    const econ = await resolveCheckoutEconomics(fs);
-    commissionAmount = Number(econ.resolvedAgentCommission ?? commissionAmount);
+
+  // If economics were already resolved during checkout-session creation they are
+  // snapshotted in formState.  Re-fetching from the Agent table would apply any
+  // commission change made after the customer initiated checkout — which must NOT
+  // happen.  Only resolve dynamically when no snapshot exists yet.
+  const alreadySnapshotted =
+    fs.resolvedAgentCommission != null && fs.resolvedVendorCost != null;
+
+  if (alreadySnapshotted) {
+    commissionAmount = Number(fs.resolvedAgentCommission);
     mergedFormState = {
       ...mergedFormState,
-      resolvedVendorCost: econ.resolvedVendorCost,
-      resolvedAgentCommission: econ.resolvedAgentCommission,
-      resolvedNetProfit: econ.resolvedNetProfit,
+      resolvedVendorCost:       fs.resolvedVendorCost,
+      resolvedAgentCommission:  fs.resolvedAgentCommission,
+      resolvedNetProfit:        fs.resolvedNetProfit,
     };
-    if (econ.productName && !String(mergedFormState.productName || '').trim()) {
-      mergedFormState.productName = econ.productName;
+  } else {
+    try {
+      const { resolveCheckoutEconomics } = await import('./adminMongooseService.js');
+      const econ = await resolveCheckoutEconomics(fs);
+      commissionAmount = Number(econ.resolvedAgentCommission ?? commissionAmount);
+      mergedFormState = {
+        ...mergedFormState,
+        resolvedVendorCost:      econ.resolvedVendorCost,
+        resolvedAgentCommission: econ.resolvedAgentCommission,
+        resolvedNetProfit:       econ.resolvedNetProfit,
+      };
+      if (econ.productName && !String(mergedFormState.productName || '').trim()) {
+        mergedFormState.productName = econ.productName;
+      }
+    } catch {
+      /* עסקה ללא מחירון מלא — נשאר מ־formState */
     }
-  } catch {
-    /* עסקה ללא מחירון מלא — נשאר מ־formState */
   }
   const billingMonth = formatBillingMonthFromDate(now);
 
