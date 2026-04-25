@@ -453,11 +453,7 @@ export default function PricingDashboard() {
         </DialogContent>
       </Dialog>
 
-      <div className="space-y-6">
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          מחירון מגדיר מספר מוצרים תחת שם אחד. ניהול דפי נחיתה מבוצע בלשונית <strong>דפי נחיתה</strong>. ודאי ש־
-          <code className="rounded bg-background px-1">VITE_API_URL</code> מצביע על שרת ה-API.
-        </div>
+
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
