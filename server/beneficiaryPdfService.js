@@ -72,19 +72,33 @@ function fmtDate(v) {
 export function buildBeneficiaryPdfModel(input = {}) {
   const p  = input.primaryBeneficiary   || {};
   const ss = Array.isArray(input.secondaryBeneficiaries) ? input.secondaryBeneficiaries : [];
+  const purchaseDate = safe(
+    input.purchaseDate ||
+    input.orderDate ||
+    input.createdAt ||
+    input.dealCreatedAt,
+    ''
+  );
+  const subscriptionStartDate = safe(
+    input.subscriptionStartDate ||
+    input.beneficiarySubmittedAt ||
+    input.beneficiaryCompletionDate ||
+    input.beneficiaryUpdateSubmittedAt,
+    ''
+  );
   return {
     orderNumber:            safe(input.orderNumber, ''),
-    orderDate:              safe(input.orderDate, ''),
+    orderDate:              purchaseDate,
     numerator:              safe(input.numerator, '—'),
     customerName:           safe(input.customerName),
     customerId:             safe(input.customerId),
-    subscriptionStartDate:  safe(input.subscriptionStartDate),
+    subscriptionStartDate:  subscriptionStartDate,
     address:                safe(input.address),
     phone:                  safe(input.phone),
     email:                  safe(input.email),
     lastFourDigits:         safe(input.lastFourDigits, '—'),
     transactionDescription: safe(input.transactionDescription, input.productName),
-    serviceDocumentName:    safe(input.serviceDocumentName, 'רופא עד הבית'),
+    serviceDocumentName:    'רופא עד הבית',
     productName:            safe(input.productName),
     monthlyTotal:           Number(input.monthlyTotal || 0),
     primaryBeneficiary: {
@@ -141,8 +155,7 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
   const CW = W - ML - MR;   // 523 pt
   const PAD = 10;            // inner padding for cards/grids
 
-  let page = pdfDoc.addPage([W, H]);
-  // White background is the PDF default — no fill needed.
+  let page; // assigned by newPage() — do NOT add a page here or the first page will be blank.
 
   /* ── primitives ─────────────────────────────────────────────────────── */
 
@@ -189,7 +202,7 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
 
     // Logo — top-left
     if (logo) {
-      const lw = 50;
+      const lw = 68;
       const lh = (logo.height / logo.width) * lw;
       pg.drawImage(logo, {
         x: ML + PAD,
@@ -229,7 +242,7 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
     // Date  label + value
     const dateLV  = bidiV('תאריך:');
     const dateLW  = font.widthOfTextAtSize(dateLV, 8);
-    const dateVal = norm(model.orderDate) || '—';
+    const dateVal = fmtDate(model.orderDate);
     const dateVW  = font.widthOfTextAtSize(dateVal, 8.5);
     pg.drawText(dateLV,  { x: xR - dateLW,               y: yTop - 62, size: 8,   font, color: MUTED });
     pg.drawText(dateVal, { x: xR - dateLW - 4 - dateVW,  y: yTop - 62, size: 8.5, font, color: BODY  });
@@ -286,7 +299,7 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
 
         const lv = bidiV(f.label);
         pg.drawText(lv, {
-          x: cx + colW - font.widthOfTextAtSize(lv, 7.5),
+          x: cx + colW - PAD - font.widthOfTextAtSize(lv, 7.5),
           y: gy - 7,
           size: 7.5, font, color: MUTED,
         });
@@ -295,7 +308,7 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
         const vRaw = norm(f.value) || '—';
         const vV   = dir === 'rtl' ? bidiV(vRaw) : vRaw;
         pg.drawText(vV, {
-          x: cx + colW - font.widthOfTextAtSize(vV, 9.5),
+          x: cx + colW - PAD - font.widthOfTextAtSize(vV, 9.5),
           y: gy - 19,
           size: 9.5, font, color: BODY,
         });
@@ -336,7 +349,14 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
       hline(pg, ML, ML + CW, ry, BORDER, 0.3);
 
       rtl(pg, row.fullName, xR - 8,  ry - 15, 9, BODY);
-      ltr(pg, row.idNumber, d1 + 6,  ry - 15, 9, BODY);
+      const idV = norm(row.idNumber) || '—';
+      pg.drawText(idV, {
+        x: d1 - 8 - font.widthOfTextAtSize(idV, 9),
+        y: ry - 15,
+        size: 9,
+        font,
+        color: BODY,
+      });
 
       ry -= ROW_H;
     });
@@ -380,10 +400,7 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
 
     hline(pg, ML + 8, ML + CW - 8, y - 40, BORDER, 0.4);
 
-    rtl(pg,
-      'שים לב: החיוב החודשי מתבצע דרך אופאל תקשורת שיווקית בע״מ.',
-      ML + CW - PAD - 4, y - 52, 7.5, MUTED
-    );
+    rtl(pg, 'המנוי כפוף לכתב השרות ולגילוי הנאות.', ML + CW - PAD - 4, y - 52, 7.5, MUTED);
 
     return y - bh - 6;
   }
@@ -398,8 +415,6 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
 
     ctr(pg, '054-4261369  ·  opal2000@zahav.net.il  ·  opal4u.co.il', fy - 5, 7, MUTED);
 
-    const disc = bidiV('המנוי כפוף לכתב השרות ולגילוי הנאות. מסמך זה נוצר אוטומטית.');
-    ctr(pg, disc, fy - 16, 6.5, MUTED);
   }
 
   /* ── PAGE MANAGEMENT ─────────────────────────────────────────────────── */
@@ -441,7 +456,6 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
   yRef.current = infoGrid(page, [
     { label: 'מוצר / שירות',     value: model.productName,                     dir: 'rtl' },
     { label: 'תאריך תחילת מנוי', value: fmtDate(model.subscriptionStartDate),  dir: 'ltr' },
-    { label: 'כרטיס אשראי',      value: `****${model.lastFourDigits}`,         dir: 'ltr' },
     { label: 'כתב שירות',        value: model.serviceDocumentName,             dir: 'rtl' },
   ], yRef.current);
 
@@ -465,16 +479,21 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
   /* 6. PAYMENT DETAILS */
   need(22);
   yRef.current = sectionHead(page, 'פרטי תשלום', yRef.current);
-  need(86);
+  need(102);
   yRef.current = infoGrid(page, [
     { label: 'אמצעי תשלום',       value: 'כרטיס אשראי',                  dir: 'rtl' },
     { label: '4 ספרות אחרונות',   value: `•••• ${model.lastFourDigits}`, dir: 'ltr' },
-    { label: 'תשלומים',           value: '1 תשלום',                      dir: 'rtl' },
+    {
+      label: 'שים לב',
+      value: 'החיוב החודשי מתבצע דרך אופאל תקשורת שיווקית בע״מ',
+      dir: 'rtl',
+      span2: true,
+    },
   ], yRef.current);
 
   /* 7. SERVICE CONTACT */
   need(22);
-  yRef.current = sectionHead(page, 'שירות ותביעות', yRef.current);
+  yRef.current = sectionHead(page, 'פרטי נותן השירות', yRef.current);
   need(66);
   yRef.current = serviceBox(page, yRef.current);
 

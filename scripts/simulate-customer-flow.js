@@ -25,6 +25,18 @@ function firstDefined(...vals) {
 
 function buildBeneficiaryPdfModelFromDeal({ transactionId, deal, primaryMember, additionalMembers, payerAmount }) {
   const fsState = deal?.formState || {};
+  const beneficiaryUpdate = deal?.beneficiaryUpdate && typeof deal.beneficiaryUpdate === 'object'
+    ? deal.beneficiaryUpdate
+    : {};
+  const purchaseDate = deal?.createdAt
+    ? new Date(deal.createdAt).toISOString().slice(0, 10)
+    : '';
+  const subscriptionStartDate = firstDefined(
+    fsState.subscriptionStartDate,
+    beneficiaryUpdate.submittedAt
+      ? new Date(beneficiaryUpdate.submittedAt).toISOString().slice(0, 10)
+      : ''
+  );
   const primary = primaryMember || {};
   const additional = Array.isArray(additionalMembers) ? additionalMembers : [];
   const tid = String(transactionId || '');
@@ -33,11 +45,11 @@ function buildBeneficiaryPdfModelFromDeal({ transactionId, deal, primaryMember, 
     digitsOnly.length >= 6 ? digitsOnly.slice(-6) : tid.replace(/[^0-9A-Za-z]/g, '').slice(0, 8) || '—';
   return {
     orderNumber: tid,
-    orderDate: new Date().toLocaleDateString('he-IL'),
+    orderDate: purchaseDate,
     numerator,
     customerName: firstDefined([primary.firstName, primary.lastName].filter(Boolean).join(' '), fsState.fullName),
     customerId: firstDefined(primary.id, fsState.id),
-    subscriptionStartDate: fsState.subscriptionStartDate || new Date().toISOString().slice(0, 10),
+    subscriptionStartDate,
     address: firstDefined(primary.address, fsState.address),
     phone: firstDefined(primary.phone, fsState.phone),
     email: firstDefined(primary.email, fsState.email),

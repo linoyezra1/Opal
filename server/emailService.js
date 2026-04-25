@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { getOpalLogoDataUriForEmail, OPAL_BLUE, OPAL_GOLD } from './emailBrandAssets.js';
+const FONT_STACK = "'Heebo', 'Segoe UI', Arial, sans-serif";
 
 function escapeHtml(s) {
   return String(s ?? '')
@@ -23,7 +24,7 @@ function telHref(phone) {
 
 function buildInlineLogoHtml(logoDataUri) {
   if (!logoDataUri) {
-    return `<span style="font-size:20px;font-weight:700;color:${OPAL_BLUE};letter-spacing:0.02em;text-align:right;display:block;">אופאל</span>`;
+    return `<span style="font-size:20px;font-weight:700;color:${OPAL_BLUE};letter-spacing:0.02em;text-align:right;display:block;font-family:${FONT_STACK};">אופאל</span>`;
   }
   return `<img src="${escapeAttr(logoDataUri)}" alt="אופאל" width="150" height="auto" border="0" style="display:block;margin:0 auto;width:150px;max-width:150px;height:auto;line-height:0;border:0;outline:none;text-decoration:none;background-color:#ffffff;border-radius:4px;padding:4px 8px;" />`;
 }
@@ -35,7 +36,7 @@ const rtlWrap = (inner) => `
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 </head>
-<body style="margin:0;background:#f5f5f5;font-family:'Heebo','Segoe UI',Arial,sans-serif;color:#333;direction:rtl;text-align:right;">
+<body style="margin:0;background:#f5f5f5;font-family:${FONT_STACK};color:#333;direction:rtl;text-align:right;">
 ${inner}
 </body>
 </html>`;
@@ -73,77 +74,85 @@ function buildOrderConfirmationHtml(payload, logoDataUri = '') {
       <td align="right" dir="rtl">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="right" dir="rtl" style="max-width:560px;background-color:#ffffff;direction:rtl;text-align:right;">
           <tr>
-            <td align="center" dir="rtl" style="background-color:${OPAL_BLUE};padding:20px 32px 24px;text-align:center;">
-              <h1 style="margin:0 0 10px;color:#ffffff;font-size:20px;font-weight:600;line-height:1.4;text-align:center;direction:rtl;">
-                אישור הזמנה: <span dir="ltr" style="unicode-bidi:embed;">${orderId}</span>
+            <td align="center" dir="rtl" style="background-color:${OPAL_BLUE};padding:20px 32px 24px;text-align:center;font-family:${FONT_STACK};">
+              <h1 style="margin:0 0 10px;color:#ffffff;font-size:20px;font-weight:600;line-height:1.4;text-align:center;direction:rtl;font-family:${FONT_STACK};">
+                אישור הזמנה: <span dir="ltr" style="unicode-bidi:embed;font-family:${FONT_STACK};">${orderId}</span>
               </h1>
             </td>
           </tr>
           <tr>
-            <td align="right" dir="rtl" style="padding:28px 32px;direction:rtl;text-align:right;">
-              <p style="font-size:13px;color:#666;margin:0 0 16px;line-height:1.6;text-align:right;direction:rtl;">
+            <td align="right" dir="rtl" style="padding:28px 32px;direction:rtl;text-align:right;font-family:${FONT_STACK};">
+              <p style="font-size:13px;color:#666;margin:0 0 16px;line-height:1.6;text-align:right;direction:rtl;font-family:${FONT_STACK};">
                 כתב השירות וגילוי הנאות מצורפים למייל זה.
               </p>
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="right" dir="rtl" style="border-collapse:collapse;margin-bottom:24px;direction:rtl;text-align:right;">
                 <tr>
-                  <td align="right" style="padding:10px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;">תאריך הזמנה:</td>
-                  <td align="right" style="padding:10px 0;color:${OPAL_BLUE};font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;"><span dir="ltr" style="unicode-bidi:embed;">${orderDate}</span></td>
+                  <td align="right" style="padding:10px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;font-family:${FONT_STACK};">תאריך הזמנה:</td>
+                  <td align="right" style="padding:10px 0;color:${OPAL_BLUE};font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;font-family:${FONT_STACK};"><span dir="ltr" style="unicode-bidi:embed;font-family:${FONT_STACK};">${orderDate}</span></td>
                 </tr>
                 <tr>
-                <td align="right" style="padding:10px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;">מוצר:</td>
-                <td align="right" style="padding:10px 0;color:${OPAL_BLUE};font-size:14px;font-weight:600;border-bottom:1px solid #eee;text-align:right;direction:rtl;">${productTitle}</td>//////
+                <td align="right" style="padding:10px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;font-family:${FONT_STACK};">מוצר:</td>
+                <td align="right" style="padding:10px 0;color:${OPAL_BLUE};font-size:14px;font-weight:600;border-bottom:1px solid #eee;text-align:right;direction:rtl;font-family:${FONT_STACK};">${productTitle}</td>
                 </tr>
                 <tr>
-                  <td align="right" style="padding:10px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;">שם הלקוח:</td>
-                  <td align="right" style="padding:10px 0;color:${OPAL_BLUE};font-size:14px;font-weight:600;border-bottom:1px solid #eee;text-align:right;direction:rtl;">${customerName}</td>
+                  <td align="right" style="padding:10px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;font-family:${FONT_STACK};">שם הלקוח:</td>
+                  <td align="right" style="padding:10px 0;color:${OPAL_BLUE};font-size:14px;font-weight:600;border-bottom:1px solid #eee;text-align:right;direction:rtl;font-family:${FONT_STACK};">${customerName}</td>
                 </tr>
                 <tr>
-                  <td align="right" style="padding:10px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;">טלפון:</td>
-                  <td align="right" style="padding:10px 0;color:${OPAL_BLUE};font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;"><span dir="ltr" style="unicode-bidi:embed;">${customerPhone}</span></td>
+                  <td align="right" style="padding:10px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;font-family:${FONT_STACK};">טלפון:</td>
+                  <td align="right" style="padding:10px 0;color:${OPAL_BLUE};font-size:14px;border-bottom:1px solid #eee;text-align:right;direction:rtl;font-family:${FONT_STACK};"><span dir="ltr" style="unicode-bidi:embed;font-family:${FONT_STACK};">${customerPhone}</span></td>
                 </tr>
                 <tr>
-                  <td align="right" style="padding:12px 0;color:#666;font-size:14px;text-align:right;direction:rtl;">סה״כ תשלום חודשי:</td>
-                  <td align="right" style="padding:12px 0;color:${OPAL_GOLD};font-size:18px;font-weight:700;text-align:right;direction:rtl;"><span dir="ltr" style="unicode-bidi:embed;">${escapeHtml(monthlyDisplay)}</span></td>
+                  <td align="right" style="padding:12px 0;color:#666;font-size:14px;text-align:right;direction:rtl;font-family:${FONT_STACK};">סה״כ תשלום חודשי:</td>
+                  <td align="right" style="padding:12px 0;color:${OPAL_GOLD};font-size:18px;font-weight:700;text-align:right;direction:rtl;font-family:${FONT_STACK};"><span dir="ltr" style="unicode-bidi:embed;font-family:${FONT_STACK};">${escapeHtml(monthlyDisplay)}</span></td>
                 </tr>
               </table>
-              <div dir="rtl" style="border-right:3px solid ${OPAL_GOLD};padding-right:16px;margin-bottom:28px;text-align:right;">
-                <p style="font-size:14px;color:${OPAL_BLUE};margin:0 0 8px;font-weight:600;text-align:right;">להפעלת השירות יש למלא את פרטי המוטבים</p>
-                <p style="font-size:13px;color:#666;margin:0 0 14px;text-align:right;">ללא קבלת פרטי המוטבים לא יהיה ניתן לקבל את השירות</p>
-                <a href="${escapeAttr(link)}" style="display:inline-block;background-color:${OPAL_BLUE};color:#ffffff !important;padding:10px 20px;border-radius:4px;text-decoration:none;font-size:14px;font-weight:500;text-align:center;">
-                  מילוי פרטי מוטבים
-                </a>
-              </div>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" dir="rtl" style="margin-bottom:28px;direction:rtl;text-align:right;border-collapse:collapse;">
+                <tr>
+                  <td style="border-right:3px solid ${OPAL_GOLD};padding-right:16px;text-align:right;direction:rtl;font-family:${FONT_STACK};">
+                    <p style="font-size:14px;color:${OPAL_BLUE};margin:0 0 8px;font-weight:600;text-align:right;font-family:${FONT_STACK};">להפעלת השירות יש למלא את פרטי המוטבים</p>
+                    <p style="font-size:13px;color:#666;margin:0 0 14px;text-align:right;font-family:${FONT_STACK};">ללא קבלת פרטי המוטבים לא יהיה ניתן לקבל את השירות</p>
+                    <a href="${escapeAttr(link)}" style="display:inline-block;background-color:${OPAL_BLUE};color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:4px;font-size:14px;font-weight:500;text-align:center;font-family:${FONT_STACK};">
+                      מילוי פרטי מוטבים
+                    </a>
+                  </td>
+                </tr>
+              </table>
               <div style="border-top:1px solid #eee;margin-bottom:20px;"></div>
               <div dir="rtl" style="margin-bottom:16px;text-align:right;">
-                <p style="margin:0 0 4px;text-align:right;">
-                  <span style="color:${OPAL_BLUE};font-size:18px;font-weight:800;">לשרות רפואי חייג:</span>
+                <p style="margin:0 0 4px;text-align:right;font-family:${FONT_STACK};">
+                  <span style="color:${OPAL_BLUE};font-size:18px;font-weight:800;font-family:${FONT_STACK};">לשרות רפואי חייג:</span>
                 </p>
-                <a href="${tel}" style="color:${OPAL_BLUE};font-size:26px;font-weight:800;text-decoration:none;display:inline-block;text-align:right;">
-                  <span dir="ltr" style="unicode-bidi:embed;">${servicePhone}</span>
+                <a href="${tel}" style="display:inline-block;color:${OPAL_BLUE};text-decoration:none;font-size:26px;font-weight:800;text-align:right;font-family:${FONT_STACK};">
+                  <span dir="ltr" style="unicode-bidi:embed;font-family:${FONT_STACK};">${servicePhone}</span>
                 </a>
               </div>
               <div dir="rtl" style="margin-bottom:20px;text-align:right;">
-                <p style="margin:0 0 10px;color:${OPAL_BLUE};font-size:15px;font-weight:600;text-align:right;">הגשת מסמכים רפואיים — תביעה און ליין:</p>
-                <a href="${escapeAttr(claimsLink)}" style="display:inline-block;background-color:${OPAL_GOLD};color:#ffffff !important;padding:10px 22px;border-radius:4px;text-decoration:none;font-size:15px;font-weight:700;text-align:center;">
+                <p style="margin:0 0 10px;color:${OPAL_BLUE};font-size:15px;font-weight:600;text-align:right;font-family:${FONT_STACK};">הגשת מסמכים רפואיים — תביעה און ליין:</p>
+                <a href="${escapeAttr(claimsLink)}" style="display:inline-block;background-color:${OPAL_GOLD};color:#ffffff;text-decoration:none;padding:10px 22px;border-radius:4px;font-size:15px;font-weight:700;text-align:center;font-family:${FONT_STACK};">
                   להגשת תביעה לחצו כאן
                 </a>
               </div>
               <div dir="rtl" style="font-size:14px;color:#555;line-height:1.8;text-align:right;margin-bottom:20px;">
-                <p style="margin:0;text-align:right;">
-                  <span style="color:${OPAL_BLUE};font-weight:500;">מכירות:</span>
-                  <span dir="ltr" style="unicode-bidi:embed;">${salesPhone}</span>
+                <p style="margin:0;text-align:right;font-family:${FONT_STACK};">
+                  <span style="color:${OPAL_BLUE};font-weight:500;font-family:${FONT_STACK};">מכירות:</span>
+                  <span dir="ltr" style="unicode-bidi:embed;font-family:${FONT_STACK};">${salesPhone}</span>
                 </p>
               </div>
-              <div dir="rtl" style="border-right:3px solid ${OPAL_GOLD};padding-right:12px;font-size:14px;color:#444;line-height:1.8;text-align:right;">
-                <strong style="font-size:15px;font-weight:800;color:${OPAL_BLUE};">שים לב:</strong> החיוב החודשי דרך חברת אופאל תקשורת בע״מ.<br />
-                <span style="font-size:13px;color:#555;">המנוי כפוף לכתב השירות ולגילוי נאות המצורפים למייל זה.</span>
-              </div>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" dir="rtl" style="direction:rtl;text-align:right;border-collapse:collapse;">
+                <tr>
+                  <td style="border-right:3px solid ${OPAL_GOLD};padding-right:12px;font-size:14px;color:#444;line-height:1.8;text-align:right;font-family:${FONT_STACK};">
+                    <span style="font-size:15px;font-weight:800;color:${OPAL_BLUE};font-family:${FONT_STACK};">שים לב:</span> החיוב החודשי דרך חברת אופאל תקשורת בע״מ.<br />
+                    <span style="font-size:13px;color:#555;font-family:${FONT_STACK};">המנוי כפוף לכתב השירות ולגילוי נאות המצורפים למייל זה.</span>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
         </table>
-        <p dir="rtl" style="margin:16px 0 0;font-size:13px;color:#64748b;text-align:right;max-width:560px;">
+        <p dir="rtl" style="margin:16px 0 0;font-size:13px;color:#64748b;text-align:right;max-width:560px;font-family:${FONT_STACK};">
           אם הכפתור לא נפתח, העתיקו את הקישור לדפדפן:<br />
-          <span dir="ltr" style="word-break:break-all;text-align:left;display:inline-block;max-width:100%;">${escapeHtml(link)}</span>
+          <span dir="ltr" style="word-break:break-all;text-align:left;display:inline-block;max-width:100%;font-family:${FONT_STACK};">${escapeHtml(link)}</span>
         </p>
       </td>
     </tr>
@@ -184,9 +193,9 @@ function buildBeneficiaryCompletionHtml(payload, logoDataUri = '') {
     const border = index < secondaries.length - 1 ? 'border-bottom:1px solid #eee;' : 'border-bottom:none;';
     beneficiariesRows += `
       <tr>
-        <td align="right" style="padding:10px 12px 10px 0;color:#333;font-size:14px;text-align:right;direction:rtl;vertical-align:middle;${border}">${name}</td>
-        <td align="right" style="padding:10px 12px;color:#555;font-size:13px;text-align:right;direction:rtl;vertical-align:middle;${border}">${subscriptionType}</td>
-        <td align="right" style="padding:10px 0 10px 0;color:#666;font-size:14px;text-align:right;direction:rtl;vertical-align:middle;white-space:nowrap;${border}"><span dir="ltr" style="unicode-bidi:embed;">${idNum}</span></td>
+        <td align="right" style="padding:10px 12px 10px 0;color:#333;font-size:14px;text-align:right;direction:rtl;vertical-align:middle;font-family:${FONT_STACK};${border}">${name}</td>
+        <td align="right" style="padding:10px 12px;color:#555;font-size:13px;text-align:right;direction:rtl;vertical-align:middle;font-family:${FONT_STACK};${border}">${subscriptionType}</td>
+        <td align="right" style="padding:10px 0 10px 0;color:#666;font-size:14px;text-align:right;direction:rtl;vertical-align:middle;white-space:nowrap;font-family:${FONT_STACK};${border}"><span dir="ltr" style="unicode-bidi:embed;font-family:${FONT_STACK};">${idNum}</span></td>
       </tr>`;
   });
 
@@ -195,15 +204,15 @@ function buildBeneficiaryCompletionHtml(payload, logoDataUri = '') {
     secondaries.length > 0
       ? `
       <div dir="rtl" style="margin-bottom:24px;text-align:right;">
-        <h3 style="margin:0 0 12px;font-size:16px;font-weight:700;color:${OPAL_BLUE};padding-bottom:8px;border-bottom:2px solid ${OPAL_GOLD};text-align:right;direction:rtl;">
+        <h3 style="margin:0 0 12px;font-size:16px;font-weight:700;color:${OPAL_BLUE};padding-bottom:8px;border-bottom:2px solid ${OPAL_GOLD};text-align:right;direction:rtl;font-family:${FONT_STACK};">
           מוטבים משניים
         </h3>
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="right" dir="rtl" style="border-collapse:collapse;direction:rtl;text-align:right;">
           <thead>
             <tr>
-              <th align="right" style="padding-bottom:8px;color:#999;font-size:12px;font-weight:600;text-align:right;direction:rtl;padding-left:12px;">שם</th>
-              <th align="right" style="padding-bottom:8px;color:#999;font-size:12px;font-weight:600;text-align:right;direction:rtl;padding-right:12px;padding-left:12px;">שירות</th>
-              <th align="right" style="padding-bottom:8px;color:#999;font-size:12px;font-weight:600;text-align:right;direction:rtl;">ת.ז</th>
+              <th align="right" style="padding-bottom:8px;color:#999;font-size:12px;font-weight:600;text-align:right;direction:rtl;padding-left:12px;font-family:${FONT_STACK};">שם</th>
+              <th align="right" style="padding-bottom:8px;color:#999;font-size:12px;font-weight:600;text-align:right;direction:rtl;padding-right:12px;padding-left:12px;font-family:${FONT_STACK};">שירות</th>
+              <th align="right" style="padding-bottom:8px;color:#999;font-size:12px;font-weight:600;text-align:right;direction:rtl;font-family:${FONT_STACK};">ת.ז</th>
             </tr>
           </thead>
           <tbody>${beneficiariesRows}</tbody>
@@ -231,68 +240,74 @@ function buildBeneficiaryCompletionHtml(payload, logoDataUri = '') {
 
           <!-- לוגו -->
           <tr>
-            <td align="center" dir="rtl" style="padding:24px 32px 16px;text-align:center;background-color:#ffffff;">
+            <td align="center" dir="rtl" style="padding:24px 32px 16px;text-align:center;background-color:#ffffff;font-family:${FONT_STACK};">
               ${logoBlock}
             </td>
           </tr>
 
           <!-- כותרת כחולה: רק "סיכום הצטרפות והפעלת שירות" — ללא שם המוצר -->
           <tr>
-            <td align="center" dir="rtl" style="background-color:${OPAL_BLUE};padding:20px 32px;text-align:center;">
-              <h1 style="color:#ffffff;font-size:20px;font-weight:600;margin:0;text-align:center;direction:rtl;">סיכום הצטרפות והפעלת שירות</h1>
+            <td align="center" dir="rtl" style="background-color:${OPAL_BLUE};padding:20px 32px;text-align:center;font-family:${FONT_STACK};">
+              <h1 style="color:#ffffff;font-size:20px;font-weight:600;margin:0;text-align:center;direction:rtl;font-family:${FONT_STACK};">סיכום הצטרפות והפעלת שירות</h1>
             </td>
           </tr>
 
           <!-- גוף המייל -->
           <tr>
-            <td align="right" dir="rtl" style="padding:28px 32px;direction:rtl;text-align:right;">
+            <td align="right" dir="rtl" style="padding:28px 32px;direction:rtl;text-align:right;font-family:${FONT_STACK};">
 
               <!-- מספר הזמנה -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="right" dir="rtl" style="border-collapse:collapse;margin-bottom:8px;direction:rtl;text-align:right;">
                 <tr>
-                  <td align="right" style="padding:8px 0;color:#666;font-size:14px;text-align:right;direction:rtl;">מספר הזמנה</td>
-                  <td align="right" style="padding:8px 0;color:${OPAL_BLUE};font-size:14px;font-weight:600;text-align:right;direction:rtl;"><span dir="ltr" style="unicode-bidi:embed;">${orderId}</span></td>
+                  <td align="right" style="padding:8px 0;color:#666;font-size:14px;text-align:right;direction:rtl;font-family:${FONT_STACK};">מספר הזמנה</td>
+                  <td align="right" style="padding:8px 0;color:${OPAL_BLUE};font-size:14px;font-weight:600;text-align:right;direction:rtl;font-family:${FONT_STACK};"><span dir="ltr" style="unicode-bidi:embed;font-family:${FONT_STACK};">${orderId}</span></td>
                 </tr>
               </table>
 
               <!-- שם השירות/מוצר מתחת למס' הזמנה, גדול ובולט -->
-              <p style="margin:0 0 4px;color:${OPAL_BLUE};font-size:26px;font-weight:800;text-align:right;direction:rtl;line-height:1.2;">${subscriptionType}</p>
+              <p style="margin:0 0 4px;color:${OPAL_BLUE};font-size:26px;font-weight:800;text-align:right;direction:rtl;line-height:1.2;font-family:${FONT_STACK};">${subscriptionType}</p>
 
               <!-- תאריך -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="right" dir="rtl" style="border-collapse:collapse;margin-bottom:24px;margin-top:10px;direction:rtl;text-align:right;">
                 <tr>
-                  <td align="right" style="padding:8px 0;color:#666;font-size:14px;text-align:right;direction:rtl;">תאריך</td>
-                  <td align="right" style="padding:8px 0;color:${OPAL_BLUE};font-size:14px;text-align:right;direction:rtl;"><span dir="ltr" style="unicode-bidi:embed;">${orderDate}</span></td>
+                  <td align="right" style="padding:8px 0;color:#666;font-size:14px;text-align:right;direction:rtl;font-family:${FONT_STACK};">תאריך</td>
+                  <td align="right" style="padding:8px 0;color:${OPAL_BLUE};font-size:14px;text-align:right;direction:rtl;font-family:${FONT_STACK};"><span dir="ltr" style="unicode-bidi:embed;font-family:${FONT_STACK};">${orderDate}</span></td>
                 </tr>
               </table>
 
               <!-- מבוטח ראשי -->
-              <div dir="rtl" style="background-color:#F8F9FA;border-right:4px solid ${OPAL_GOLD};padding:16px;margin-bottom:8px;text-align:right;">
-                <div style="font-size:11px;color:${OPAL_GOLD};font-weight:700;margin-bottom:10px;text-align:right;text-transform:uppercase;letter-spacing:0.04em;">מבוטח ראשי</div>
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="right" dir="rtl" style="border-collapse:collapse;direction:rtl;text-align:right;">
-                  <tr>
-                    <td align="right" style="padding:0;text-align:right;direction:rtl;padding-left:12px;">
-                      <span style="color:${OPAL_BLUE};font-size:16px;font-weight:600;">${primaryName}</span>
-                    </td>
-                    <td align="right" style="padding:0;text-align:right;direction:rtl;padding-right:12px;padding-left:12px;">
-                      <span style="color:#555;font-size:13px;">${subscriptionType}</span>
-                    </td>
-                    <td align="right" style="padding:0;text-align:right;direction:rtl;white-space:nowrap;">
-                      <span dir="ltr" style="unicode-bidi:embed;color:#666;font-size:14px;">${primaryId}</span>
-                    </td>
-                  </tr>
-                </table>
-              </div>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" dir="rtl" style="margin-bottom:8px;direction:rtl;text-align:right;border-collapse:collapse;">
+                <tr>
+                  <td style="background-color:#F8F9FA;border-right:4px solid ${OPAL_GOLD};padding:16px;text-align:right;direction:rtl;font-family:${FONT_STACK};">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="right" dir="rtl" style="border-collapse:collapse;direction:rtl;text-align:right;">
+                      <tr>
+                        <td align="right" style="padding:0 0 10px;color:${OPAL_GOLD};font-size:11px;font-weight:700;text-align:right;direction:rtl;text-transform:uppercase;letter-spacing:0.04em;font-family:${FONT_STACK};" colspan="3">מבוטח ראשי</td>
+                      </tr>
+                      <tr>
+                        <td align="right" style="padding:6px 0 6px 12px;text-align:right;direction:rtl;font-family:${FONT_STACK};">
+                          <span style="color:${OPAL_BLUE};font-size:16px;font-weight:600;font-family:${FONT_STACK};">${primaryName}</span>
+                        </td>
+                        <td align="right" style="padding:6px 12px;text-align:right;direction:rtl;font-family:${FONT_STACK};">
+                          <span style="color:#555;font-size:13px;font-family:${FONT_STACK};">${subscriptionType}</span>
+                        </td>
+                        <td align="right" style="padding:6px 0;text-align:right;direction:rtl;white-space:nowrap;font-family:${FONT_STACK};">
+                          <span dir="ltr" style="unicode-bidi:embed;color:#666;font-size:14px;font-family:${FONT_STACK};">${primaryId}</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
 
               <!-- "מוטבים משניים" ככותרת עצמאית + רשימה -->
               ${beneficiariesBlock}
 
               <!-- סוג מנוי + מחיר -->
               <div dir="rtl" style="background-color:#F8F9FA;padding:16px;margin-bottom:24px;text-align:right;">
-                <div style="color:#666;font-size:13px;margin-bottom:4px;text-align:right;">סוג מנוי</div>
-                <div style="color:${OPAL_BLUE};font-size:15px;font-weight:600;margin-bottom:12px;text-align:right;">${subscriptionType}</div>
-                <span style="display:inline-block;background-color:${OPAL_BLUE};color:#ffffff;font-size:18px;font-weight:700;padding:10px 24px;border-radius:4px;text-align:center;direction:rtl;">
-                  <span dir="ltr" style="unicode-bidi:embed;">${escapeHtml(monthlyDisplay)}</span> לחודש
+                <div style="color:#666;font-size:13px;margin-bottom:4px;text-align:right;font-family:${FONT_STACK};">סוג מנוי</div>
+                <div style="color:${OPAL_BLUE};font-size:15px;font-weight:600;margin-bottom:12px;text-align:right;font-family:${FONT_STACK};">${subscriptionType}</div>
+                <span style="display:inline-block;background-color:${OPAL_BLUE};color:#ffffff;font-size:18px;font-weight:700;padding:10px 24px;border-radius:4px;text-align:center;direction:rtl;font-family:${FONT_STACK};">
+                  <span dir="ltr" style="unicode-bidi:embed;font-family:${FONT_STACK};">${escapeHtml(monthlyDisplay)}</span> לחודש
                 </span>
               </div>
 
@@ -300,46 +315,50 @@ function buildBeneficiaryCompletionHtml(payload, logoDataUri = '') {
 
               <!-- "לשרות רפואי חייג" גדול + מספר גדול יותר -->
               <div dir="rtl" style="text-align:right;margin-bottom:20px;">
-                <p style="margin:0 0 6px;text-align:right;">
-                  <span style="color:${OPAL_BLUE};font-size:22px;font-weight:800;letter-spacing:0.01em;">לשרות רפואי חייג:</span>
+                <p style="margin:0 0 6px;text-align:right;font-family:${FONT_STACK};">
+                  <span style="color:${OPAL_BLUE};font-size:22px;font-weight:800;letter-spacing:0.01em;font-family:${FONT_STACK};">לשרות רפואי חייג:</span>
                 </p>
-                <a href="${tel}" style="color:${OPAL_BLUE};font-size:34px;font-weight:800;text-decoration:none;display:inline-block;text-align:right;letter-spacing:0.02em;">
-                  <span dir="ltr" style="unicode-bidi:embed;">${medicalPhoneEsc}</span>
+                <a href="${tel}" style="display:inline-block;color:${OPAL_BLUE};text-decoration:none;font-size:34px;font-weight:800;text-align:right;letter-spacing:0.02em;font-family:${FONT_STACK};">
+                  <span dir="ltr" style="unicode-bidi:embed;font-family:${FONT_STACK};">${medicalPhoneEsc}</span>
                 </a>
               </div>
 
               <!-- כפתור גדול להגשת מסמכים -->
               <div dir="rtl" style="margin-bottom:28px;text-align:right;">
-                <p style="margin:0 0 12px;color:${OPAL_BLUE};font-size:16px;font-weight:700;text-align:right;">הגשת מסמכים רפואיים — תביעה און ליין:</p>
+                <p style="margin:0 0 12px;color:${OPAL_BLUE};font-size:16px;font-weight:700;text-align:right;font-family:${FONT_STACK};">הגשת מסמכים רפואיים — תביעה און ליין:</p>
                 <a href="${escapeAttr(claimsLink)}"
-                   style="display:inline-block;background-color:${OPAL_GOLD};color:#ffffff !important;padding:14px 32px;border-radius:6px;text-decoration:none;font-size:17px;font-weight:800;text-align:center;letter-spacing:0.01em;">
+                   style="display:inline-block;background-color:${OPAL_GOLD};color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:6px;font-size:17px;font-weight:800;text-align:center;letter-spacing:0.01em;font-family:${FONT_STACK};">
                   להגשת תביעה לחצו כאן
                 </a>
               </div>
 
               <!-- "שים לב" מודגש + "המנוי כפוף..." בתוך גוף המייל (לא אפור) -->
-              <div dir="rtl" style="border-right:4px solid ${OPAL_GOLD};padding-right:14px;font-size:14px;color:#333;line-height:1.9;text-align:right;margin-bottom:24px;">
-                <p style="margin:0 0 6px;text-align:right;">
-                  <strong style="font-size:16px;font-weight:800;color:${OPAL_BLUE};">⚠ שים לב:</strong>
-                  <strong style="font-size:14px;font-weight:700;color:#333;"> החיוב החודשי דרך חברת אופאל תקשורת בע״מ.</strong>
-                </p>
-                <p style="margin:0 0 6px;text-align:right;">
-                  <strong style="font-size:14px;font-weight:700;color:#333;">המנוי כפוף לכתב השירות ולגילוי נאות המצורפים למייל זה.</strong>
-                </p>
-                <p style="margin:0;font-size:13px;color:#555;text-align:right;">
-                  לפניות: <span dir="ltr" style="unicode-bidi:embed;">${salesPhone}</span> | <span dir="ltr" style="unicode-bidi:embed;">${contactEmail}</span>
-                </p>
-              </div>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" dir="rtl" style="margin-bottom:24px;direction:rtl;text-align:right;border-collapse:collapse;">
+                <tr>
+                  <td style="border-right:4px solid ${OPAL_GOLD};padding-right:14px;font-size:14px;color:#333;line-height:1.9;text-align:right;font-family:${FONT_STACK};">
+                    <p style="margin:0 0 6px;text-align:right;font-family:${FONT_STACK};">
+                      <span style="font-size:16px;font-weight:800;color:${OPAL_BLUE};font-family:${FONT_STACK};">⚠ שים לב:</span>
+                      <span style="font-size:14px;font-weight:700;color:#333;font-family:${FONT_STACK};"> החיוב החודשי דרך חברת אופאל תקשורת בע״מ.</span>
+                    </p>
+                    <p style="margin:0 0 6px;text-align:right;font-family:${FONT_STACK};">
+                      <span style="font-size:14px;font-weight:700;color:#333;font-family:${FONT_STACK};">המנוי כפוף לכתב השירות ולגילוי נאות המצורפים למייל זה.</span>
+                    </p>
+                    <p style="margin:0;font-size:13px;color:#555;text-align:right;font-family:${FONT_STACK};">
+                      לפניות: <span dir="ltr" style="unicode-bidi:embed;font-family:${FONT_STACK};">${salesPhone}</span> | <span dir="ltr" style="unicode-bidi:embed;font-family:${FONT_STACK};">${contactEmail}</span>
+                    </p>
+                  </td>
+                </tr>
+              </table>
 
             </td>
           </tr>
 
           <!-- פוטר אפור -->
           <tr>
-            <td align="center" dir="rtl" style="background-color:#F5F5F5;padding:20px 32px;text-align:center;">
+            <td align="center" dir="rtl" style="background-color:#F5F5F5;padding:20px 32px;text-align:center;font-family:${FONT_STACK};">
               <div style="margin-bottom:10px;">${logoBlock}</div>
-              <p style="font-size:12px;color:#666;margin:0 0 4px;text-align:center;direction:rtl;">החיוב החודשי דרך חברת אופאל תקשורת בע״מ</p>
-              <p style="font-size:11px;color:#888;margin:0;text-align:center;" dir="ltr">${salesPhone} | ${contactEmail}</p>
+              <p style="font-size:12px;color:#666;margin:0 0 4px;text-align:center;direction:rtl;font-family:${FONT_STACK};">החיוב החודשי דרך חברת אופאל תקשורת בע״מ</p>
+              <p style="font-size:11px;color:#888;margin:0;text-align:center;font-family:${FONT_STACK};" dir="ltr">${salesPhone} | ${contactEmail}</p>
             </td>
           </tr>
 
