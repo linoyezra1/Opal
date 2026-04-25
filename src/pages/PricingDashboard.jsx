@@ -561,7 +561,6 @@ export default function PricingDashboard() {
             {loading && filteredLists.length > 0 ? <p className="text-sm text-muted-foreground mt-2">טוען…</p> : null}
           </CardContent>
         </Card>
-      </div>
     </AdminPageShell>
   );
 }
