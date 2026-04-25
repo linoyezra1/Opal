@@ -2171,10 +2171,10 @@ app.post('/api/admin/agents', requireAdmin, async (req, res) => {
   try {
     const body = req.body || {};
     const b = body.bankDetails || {};
-    if (!String(body.agentName || '').trim()) return res.status(400).json({ success: false, error: 'agentName is required' });
-    if (!String(body.idNum || '').trim()) return res.status(400).json({ success: false, error: 'idNum is required' });
-    if (!String(b.bankName || '').trim()) return res.status(400).json({ success: false, error: 'bankName is required' });
-    if (!String(b.accountHolder || '').trim()) return res.status(400).json({ success: false, error: 'accountHolder is required' });
+    if (!String(body.agentName || '').trim()) return res.status(400).json({ success: false, error: 'שם הסוכן הינו חובה' });
+    if (!String(body.idNum || '').trim()) return res.status(400).json({ success: false, error: 'תז הסוכן הינו חובה' });
+    //if (!String(b.bankName || '').trim()) return res.status(400).json({ success: false, error: 'פרטי בנק חובה' });
+    //if (!String(b.accountHolder || '').trim()) return res.status(400).json({ success: false, error: 'שם בעל החשבון הינו שדה חובה' });
     const result = await createSalesAgent(body);
     res.json({ success: true, id: result.id });
   } catch (e) {
