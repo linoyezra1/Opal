@@ -213,10 +213,6 @@ export default function OrganizationPricing() {
   return (
     <AdminPageShell>
       <div className="space-y-6">
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          פיתוח: הגדירי <code className="rounded bg-background px-1">VITE_API_URL</code> לכתובת שרת ה-API אם הפרונט רץ על פורט אחר.
-        </div>
-
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">

@@ -42,6 +42,8 @@ const emptyVendor = {
   phone: '',
   email: '',
   address: '',
+  contactPerson: { name: '', role: '', phone: '', email: '' },
+  accounting: { name: '', phone: '', email: '' },
   bankName: '',
   bankNum: '',
   accountHolder: '',
@@ -64,6 +66,17 @@ function vendorToEditForm(v) {
     phone: v.phone || '',
     email: v.email || '',
     address: v.address || '',
+    contactPerson: {
+      name: v.contactPerson?.name || '',
+      role: v.contactPerson?.role || '',
+      phone: v.contactPerson?.phone || '',
+      email: v.contactPerson?.email || '',
+    },
+    accounting: {
+      name: v.accounting?.name || '',
+      phone: v.accounting?.phone || '',
+      email: v.accounting?.email || '',
+    },
     bankName: v.bankName || '',
     bankNum: v.bankNum || '',
     accountHolder: v.accountHolder || '',
@@ -122,6 +135,44 @@ function VendorFormFields({ data, setData }) {
               <FieldLabel>כתובת</FieldLabel>
               <Input value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
             </Field>
+            <div className="rounded-md border p-3 space-y-3">
+              <p className="text-sm font-semibold">איש קשר</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel>שם</FieldLabel>
+                  <Input value={form.contactPerson?.name || ''} onChange={(e) => setForm((p) => ({ ...p, contactPerson: { ...(p.contactPerson || {}), name: e.target.value } }))} />
+                </Field>
+                <Field>
+                  <FieldLabel>תפקיד</FieldLabel>
+                  <Input value={form.contactPerson?.role || ''} onChange={(e) => setForm((p) => ({ ...p, contactPerson: { ...(p.contactPerson || {}), role: e.target.value } }))} />
+                </Field>
+                <Field>
+                  <FieldLabel>טלפון</FieldLabel>
+                  <Input dir="ltr" className="text-start" value={form.contactPerson?.phone || ''} onChange={(e) => setForm((p) => ({ ...p, contactPerson: { ...(p.contactPerson || {}), phone: e.target.value } }))} />
+                </Field>
+                <Field>
+                  <FieldLabel>דוא״ל</FieldLabel>
+                  <Input type="email" dir="ltr" className="text-start" value={form.contactPerson?.email || ''} onChange={(e) => setForm((p) => ({ ...p, contactPerson: { ...(p.contactPerson || {}), email: e.target.value } }))} />
+                </Field>
+              </div>
+            </div>
+            <div className="rounded-md border p-3 space-y-3">
+              <p className="text-sm font-semibold">הנהלת חשבונות</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel>שם</FieldLabel>
+                  <Input value={form.accounting?.name || ''} onChange={(e) => setForm((p) => ({ ...p, accounting: { ...(p.accounting || {}), name: e.target.value } }))} />
+                </Field>
+                <Field>
+                  <FieldLabel>טלפון</FieldLabel>
+                  <Input dir="ltr" className="text-start" value={form.accounting?.phone || ''} onChange={(e) => setForm((p) => ({ ...p, accounting: { ...(p.accounting || {}), phone: e.target.value } }))} />
+                </Field>
+                <Field className="sm:col-span-2">
+                  <FieldLabel>דוא״ל</FieldLabel>
+                  <Input type="email" dir="ltr" className="text-start" value={form.accounting?.email || ''} onChange={(e) => setForm((p) => ({ ...p, accounting: { ...(p.accounting || {}), email: e.target.value } }))} />
+                </Field>
+              </div>
+            </div>
           </FieldGroup>
         </TabsContent>
         <TabsContent value="bank" className="space-y-4 mt-4">
@@ -298,6 +349,8 @@ export default function VendorDashboard() {
           phone: editVendor.phone,
           email: editVendor.email,
           address: editVendor.address,
+          contactPerson: editVendor.contactPerson || {},
+          accounting: editVendor.accounting || {},
           bankName: editVendor.bankName,
           bankNum: editVendor.bankNum,
           accountHolder: editVendor.accountHolder,
@@ -588,11 +641,11 @@ export default function VendorDashboard() {
                             </Button>
                           </TableCell>
                           <TableCell className="font-medium">{v.vendorName}</TableCell>
-                          <TableCell dir="ltr" className="text-start font-mono text-sm">
-                            {v.idNum}
+                          <TableCell className="text-right font-mono text-sm">
+                            <span dir="ltr">{v.idNum}</span>
                           </TableCell>
-                          <TableCell dir="ltr" className="text-start">
-                            {v.phone || '—'}
+                          <TableCell className="text-right">
+                            <span dir="ltr">{v.phone || '—'}</span>
                           </TableCell>
                           <TableCell>
                             <Badge variant="secondary">{(v.products || []).length} מוצרים</Badge>
@@ -624,6 +677,25 @@ export default function VendorDashboard() {
                                   </p>
                                   <p>
                                     <span className="text-muted-foreground">כתובת:</span> {v.address || '—'}
+                                  </p>
+                                  <p>
+                                    <span className="text-muted-foreground">איש קשר:</span> {v.contactPerson?.name || '—'}
+                                    {v.contactPerson?.role ? ` (${v.contactPerson.role})` : ''}
+                                  </p>
+                                  <p>
+                                    <span className="text-muted-foreground">טלפון איש קשר:</span> <span dir="ltr">{v.contactPerson?.phone || '—'}</span>
+                                  </p>
+                                  <p>
+                                    <span className="text-muted-foreground">דוא״ל איש קשר:</span> <span dir="ltr">{v.contactPerson?.email || '—'}</span>
+                                  </p>
+                                  <p>
+                                    <span className="text-muted-foreground">הנה״ח:</span> {v.accounting?.name || '—'}
+                                  </p>
+                                  <p>
+                                    <span className="text-muted-foreground">טלפון הנה״ח:</span> <span dir="ltr">{v.accounting?.phone || '—'}</span>
+                                  </p>
+                                  <p>
+                                    <span className="text-muted-foreground">דוא״ל הנה״ח:</span> <span dir="ltr">{v.accounting?.email || '—'}</span>
                                   </p>
                                 </div>
                                 <div className="space-y-1 text-sm">

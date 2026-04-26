@@ -1417,7 +1417,6 @@ app.post('/api/admin/products', requireAdmin, async (req, res) => {
     if (!String(body.productName || body.name || '').trim()) {
       return res.status(400).json({ success: false, error: 'productName is required' });
     }
-    if (!String(body.sku || '').trim()) return res.status(400).json({ success: false, error: 'sku (מק"ט) is required' });
     const result = await createProduct(body);
     res.json({ success: true, id: result.id });
   } catch (e) {

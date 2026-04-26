@@ -2035,8 +2035,14 @@ export default function SubscribersDashboard() {
                       <p className="font-semibold">{selected?.completionStatus || '—'}</p>
                     </div>
                     <div className="rounded-lg border p-3">
+                      <p className="text-xs text-muted-foreground mb-1">מוצר / סוג מנוי</p>
+                      <p className="font-semibold">
+                        {selected?.formState?.productName || selected?.productName || selected?.formState?.selectedPlanId || '—'}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border p-3">
                       <p className="text-xs text-muted-foreground mb-1">
-                        עלות ספק {(selected?.formState?.providerName || selected?.formState?.vendorName) ? `- ${selected.formState.providerName || selected.formState.vendorName}` : ''}
+                        ספק {(selected?.formState?.providerName || selected?.formState?.vendorName) ? `- ${selected.formState.providerName || selected.formState.vendorName}` : ''}
                       </p>
                       <p className="font-semibold">{formatCurrency(selected?.formState?.resolvedVendorCost ?? 0)}</p>
                     </div>

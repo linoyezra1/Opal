@@ -89,6 +89,17 @@ const vendorSchema = new mongoose.Schema(
     accountHolder: { type: String, default: '' },
     branchNum: { type: String, default: '' },
     accountNum: { type: String, default: '' },
+    contactPerson: {
+      name: { type: String, default: '' },
+      role: { type: String, default: '' },
+      phone: { type: String, default: '' },
+      email: { type: String, default: '' },
+    },
+    accounting: {
+      name: { type: String, default: '' },
+      phone: { type: String, default: '' },
+      email: { type: String, default: '' },
+    },
     productLinks: { type: [vendorProductLinkSchema], default: [] },
     isActive: { type: Boolean, default: true, index: true },
     createdAt: { type: Date, default: Date.now },
@@ -377,6 +388,31 @@ const PriceList = mongoose.models.PriceList || mongoose.model('PriceList', price
 
 const LandingPage = mongoose.models.LandingPage || mongoose.model('LandingPage', landingPageSchema, 'landing_pages');
 
+function normalizeSkuSeed(value) {
+  const seed = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return seed || 'PRD';
+}
+
+async function ensureUniqueSku(baseSku, excludeId = null) {
+  const base = normalizeSkuSeed(baseSku);
+  let candidate = base;
+  let suffix = 2;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const query = excludeId
+      ? { sku: candidate, _id: { $ne: excludeId } }
+      : { sku: candidate };
+    // eslint-disable-next-line no-await-in-loop
+    const exists = await Product.exists(query);
+    if (!exists) return candidate;
+    candidate = `${base}-${suffix++}`;
+  }
+}
+
 /** @deprecated ? legacy flat pricing row */
 export async function createOrganizationPricing(payload) {
   await ensureConnection();
@@ -413,10 +449,12 @@ export async function createProduct(payload) {
   if (!mongoose.isValidObjectId(providerId)) throw new Error('providerId is required');
   const providerExists = await Vendor.exists({ _id: new mongoose.Types.ObjectId(providerId) });
   if (!providerExists) throw new Error('Provider not found');
+  const incomingSku = String(payload.sku || '').trim();
+  const sku = await ensureUniqueSku(incomingSku || productName || 'PRD');
   const doc = await Product.create({
     productName,
     name: productName,
-    sku: String(payload.sku || '').trim(),
+    sku,
     baseDescription: String(payload.baseDescription || ''),
     providerId: new mongoose.Types.ObjectId(providerId),
     providerCost: Math.max(0, Number(payload.providerCost || 0)),
@@ -470,17 +508,18 @@ export async function listProducts(options = {}) {
 export async function updateProduct(id, payload) {
   await ensureConnection();
   if (!mongoose.isValidObjectId(id)) throw new Error('Invalid product id');
+  const oid = new mongoose.Types.ObjectId(id);
+  const prev = await Product.findById(oid).select('sku').lean();
+  if (!prev) throw new Error('Product not found');
   const productName = String(payload.productName || payload.name || '').trim();
-  const sku = String(payload.sku || '').trim();
+  const requestedSku = String(payload.sku || '').trim();
   const providerId = String(payload.providerId || '').trim();
-  if (!productName || !sku || !mongoose.isValidObjectId(providerId)) {
-    throw new Error('productName, sku and providerId are required');
+  if (!productName || !mongoose.isValidObjectId(providerId)) {
+    throw new Error('productName and providerId are required');
   }
+  const sku = await ensureUniqueSku(requestedSku || prev.sku || productName || 'PRD', oid);
   const providerExists = await Vendor.exists({ _id: new mongoose.Types.ObjectId(providerId) });
   if (!providerExists) throw new Error('Provider not found');
-  const oid = new mongoose.Types.ObjectId(id);
-  const prevExists = await Product.exists({ _id: oid });
-  if (!prevExists) throw new Error('Product not found');
   const nextProviderOid = new mongoose.Types.ObjectId(providerId);
   const doc = await Product.findByIdAndUpdate(
     oid,
@@ -543,6 +582,8 @@ export async function deleteProduct(id) {
 
 export async function createVendor(payload) {
   await ensureConnection();
+  const contactPerson = payload?.contactPerson && typeof payload.contactPerson === 'object' ? payload.contactPerson : {};
+  const accounting = payload?.accounting && typeof payload.accounting === 'object' ? payload.accounting : {};
   const links = Array.isArray(payload.productLinks) ? payload.productLinks : [];
   const productLinks = await Promise.all(
     links.map(async (l) => {
@@ -568,6 +609,17 @@ export async function createVendor(payload) {
     accountHolder: String(payload.accountHolder || '').trim(),
     branchNum: String(payload.branchNum || '').trim(),
     accountNum: String(payload.accountNum || '').trim(),
+    contactPerson: {
+      name: String(contactPerson.name || '').trim(),
+      role: String(contactPerson.role || '').trim(),
+      phone: String(contactPerson.phone || '').trim(),
+      email: String(contactPerson.email || '').trim(),
+    },
+    accounting: {
+      name: String(accounting.name || '').trim(),
+      phone: String(accounting.phone || '').trim(),
+      email: String(accounting.email || '').trim(),
+    },
     productLinks,
   });
   return { id: String(doc._id) };
@@ -611,6 +663,17 @@ export async function listVendors(options = {}) {
     accountHolder: d.accountHolder,
     branchNum: d.branchNum,
     accountNum: d.accountNum,
+    contactPerson: {
+      name: String(d?.contactPerson?.name || ''),
+      role: String(d?.contactPerson?.role || ''),
+      phone: String(d?.contactPerson?.phone || ''),
+      email: String(d?.contactPerson?.email || ''),
+    },
+    accounting: {
+      name: String(d?.accounting?.name || ''),
+      phone: String(d?.accounting?.phone || ''),
+      email: String(d?.accounting?.email || ''),
+    },
     isActive: d.isActive !== false,
     productLinks: (d.productLinks || []).map((link) => {
       const p = link.productId;
@@ -637,6 +700,8 @@ export async function listVendors(options = {}) {
 export async function updateVendor(id, payload) {
   await ensureConnection();
   if (!mongoose.isValidObjectId(id)) throw new Error('Invalid vendor id');
+  const contactPerson = payload?.contactPerson && typeof payload.contactPerson === 'object' ? payload.contactPerson : {};
+  const accounting = payload?.accounting && typeof payload.accounting === 'object' ? payload.accounting : {};
   const links = Array.isArray(payload.productLinks) ? payload.productLinks : [];
   const productLinks = await Promise.all(
     links.map(async (l) => {
@@ -665,6 +730,17 @@ export async function updateVendor(id, payload) {
         accountHolder: String(payload.accountHolder || '').trim(),
         branchNum: String(payload.branchNum || '').trim(),
         accountNum: String(payload.accountNum || '').trim(),
+        contactPerson: {
+          name: String(contactPerson.name || '').trim(),
+          role: String(contactPerson.role || '').trim(),
+          phone: String(contactPerson.phone || '').trim(),
+          email: String(contactPerson.email || '').trim(),
+        },
+        accounting: {
+          name: String(accounting.name || '').trim(),
+          phone: String(accounting.phone || '').trim(),
+          email: String(accounting.email || '').trim(),
+        },
         productLinks,
         updatedAt: new Date(),
       },
