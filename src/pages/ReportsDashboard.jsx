@@ -113,7 +113,7 @@ export default function ReportsDashboard() {
 
   const loadAgents = useCallback(async () => {
     if (!token) return;
-    const res = await fetch(`${API_BASE}/api/admin/agents`, {
+    const res = await fetch(`${API_BASE}/api/admin/agents?includeInactive=true`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const j = await res.json().catch(() => ({}));
@@ -465,8 +465,12 @@ export default function ReportsDashboard() {
                     >
                       <option value="">— בחרו —</option>
                       {agents.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.agentName}
+                        <option
+                          key={a.id}
+                          value={a.id}
+                          style={a.isActive === false ? { color: '#6b7280' } : undefined}
+                        >
+                          {a.agentName}{a.isActive === false ? ' (לא פעיל)' : ''}
                         </option>
                       ))}
                     </select>
