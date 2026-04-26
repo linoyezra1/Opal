@@ -2042,7 +2042,7 @@ export default function SubscribersDashboard() {
                     </div>
                     <div className="rounded-lg border p-3">
                       <p className="text-xs text-muted-foreground mb-1">
-                        ספק {(selected?.formState?.providerName || selected?.formState?.vendorName) ? `- ${selected.formState.providerName || selected.formState.vendorName}` : ''}
+                        עלות ספק {(selected?.providerName || selected?.formState?.vendorName) ? `- ${selected.providerName || selected.formState.vendorName}` : ''}
                       </p>
                       <p className="font-semibold">{formatCurrency(selected?.formState?.resolvedVendorCost ?? 0)}</p>
                     </div>

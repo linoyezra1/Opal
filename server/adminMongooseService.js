@@ -1617,34 +1617,29 @@ export async function deleteSalesAgent(id) {
   );
   if (!r) throw new Error('Agent not found');
 
-  // Cascade deactivation: close landing pages linked to price lists that are
-  // exclusively bound to this archived agent.
+  // Cascade deactivation (aggressive):
+  // 1) landing pages explicitly linked to this agent (agentId)
+  // 2) landing pages linked to any price list that contains this agentId
   const now = new Date();
   const candidatePriceLists = await PriceList.find({
-    isActive: { $ne: false },
     'lines.agentId': oid,
   })
-    .select('_id lines')
+    .select('_id')
     .lean();
-  const exclusivePriceListIds = candidatePriceLists
-    .filter((pl) => {
-      const linkedAgentIds = [
-        ...new Set(
-          (pl.lines || [])
-            .map((line) => (line?.agentId ? String(line.agentId) : ''))
-            .filter(Boolean)
-        ),
-      ];
-      return linkedAgentIds.length === 1 && linkedAgentIds[0] === String(oid);
-    })
-    .map((pl) => pl._id);
-
-  if (exclusivePriceListIds.length) {
-    await LandingPage.updateMany(
-      { priceListId: { $in: exclusivePriceListIds }, isActive: { $ne: false } },
-      { $set: { isActive: false, updatedAt: now } }
-    );
-  }
+  const linkedPriceListIds = candidatePriceLists.map((pl) => pl._id);
+  const deactivationQuery = {
+    isActive: { $ne: false },
+    $or: [
+      { agentId: oid },
+      { agentId: String(oid) },
+      ...(linkedPriceListIds.length ? [{ priceListId: { $in: linkedPriceListIds } }] : []),
+    ],
+  };
+  const deactivationResult = await LandingPage.updateMany(
+    deactivationQuery,
+    { $set: { isActive: false, updatedAt: now } }
+  );
+  console.log(`[Audit] Agent ${String(oid)} archived. Deactivated ${Number(deactivationResult?.modifiedCount || 0)} associated landing pages.`);
 
   return { ok: true };
 }

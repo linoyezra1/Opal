@@ -74,15 +74,17 @@ function buildPayload(body) {
 }
 
 // ─── Commission Matrix (used in Add/Edit dialogs) ──────────────────────────────
+// ─── Commission Matrix (used in Add/Edit dialogs) ──────────────────────────────
 function CommissionMatrix({ data, setData, products }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" dir="rtl">
       <div className="rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-right">מוצר</TableHead>
+              {/* סדר העמודות הוחלף פיזית */}
               <TableHead className="w-40 text-right">עמלה (₪)</TableHead>
+              <TableHead className="text-right">מוצר</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -90,10 +92,7 @@ function CommissionMatrix({ data, setData, products }) {
               const row = (data.productCommissions || []).find((c) => c.productId === pr.id);
               return (
                 <TableRow key={pr.id}>
-                  <TableCell className="font-medium text-right">
-                    {pr.productName || pr.name}{' '}
-                    <span className="text-muted-foreground text-sm font-mono">({pr.sku})</span>
-                  </TableCell>
+                  {/* תא 1: שדה הקלט של העמלה */}
                   <TableCell className="text-right">
                     <Input
                       type="number" min="0" step="0.01" dir="ltr" className="w-28"
@@ -111,6 +110,11 @@ function CommissionMatrix({ data, setData, products }) {
                       }}
                       placeholder="0"
                     />
+                  </TableCell>
+                  {/* תא 2: שם המוצר */}
+                  <TableCell className="font-medium text-right">
+                    {pr.productName || pr.name}{' '}
+                    <span className="text-muted-foreground text-sm font-mono">({pr.sku})</span>
                   </TableCell>
                 </TableRow>
               );
