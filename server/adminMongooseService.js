@@ -1215,8 +1215,9 @@ export async function getPublicLandingPageBySlug(slug) {
   await ensureConnection();
   const s = String(slug || '').trim().toLowerCase();
   if (!s) return null;
-  const doc = await LandingPage.findOne({ slug: s, isActive: { $ne: false } }).lean();
+  const doc = await LandingPage.findOne({ slug: s }).lean();
   if (!doc) return null;
+  if (doc.isActive === false) return { pageType: 'ended' };
   const pageType = doc.pageType === 'contact' ? 'contact' : 'sales';
   const items = Array.isArray(doc.whatYouGetItems)
     ? doc.whatYouGetItems.map((it) => ({
@@ -1247,27 +1248,6 @@ export async function getPublicLandingPageBySlug(slug) {
   }
 
   if (!doc.priceListId) return null;
-
-  // Check whether every agent linked in the price list lines is still active.
-  // An archived agent (isActive: false) must not receive new subscriptions —
-  // return pageType 'ended' so the frontend can render "מוצר הסתיים".
-  if (mongoose.isValidObjectId(String(doc.priceListId))) {
-    const rawPl = await PriceList.findById(String(doc.priceListId)).select('lines').lean();
-    if (rawPl) {
-      const agentIds = [
-        ...new Set(
-          (rawPl.lines || []).map((l) => (l.agentId ? String(l.agentId) : '')).filter(Boolean)
-        ),
-      ];
-      for (const aid of agentIds) {
-        if (!mongoose.isValidObjectId(aid)) continue;
-        const agent = await SalesAgent.findById(aid).select('isActive').lean();
-        if (agent && agent.isActive === false) {
-          return { pageType: 'ended' };
-        }
-      }
-    }
-  }
 
   const pl = await getPublicPriceListById(String(doc.priceListId));
   if (!pl) return null;
@@ -1560,6 +1540,36 @@ export async function deleteSalesAgent(id) {
     { returnDocument: 'after' }
   );
   if (!r) throw new Error('Agent not found');
+
+  // Cascade deactivation: close landing pages linked to price lists that are
+  // exclusively bound to this archived agent.
+  const now = new Date();
+  const candidatePriceLists = await PriceList.find({
+    isActive: { $ne: false },
+    'lines.agentId': oid,
+  })
+    .select('_id lines')
+    .lean();
+  const exclusivePriceListIds = candidatePriceLists
+    .filter((pl) => {
+      const linkedAgentIds = [
+        ...new Set(
+          (pl.lines || [])
+            .map((line) => (line?.agentId ? String(line.agentId) : ''))
+            .filter(Boolean)
+        ),
+      ];
+      return linkedAgentIds.length === 1 && linkedAgentIds[0] === String(oid);
+    })
+    .map((pl) => pl._id);
+
+  if (exclusivePriceListIds.length) {
+    await LandingPage.updateMany(
+      { priceListId: { $in: exclusivePriceListIds }, isActive: { $ne: false } },
+      { $set: { isActive: false, updatedAt: now } }
+    );
+  }
+
   return { ok: true };
 }
 

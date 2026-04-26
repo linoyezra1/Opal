@@ -402,6 +402,11 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
             setLoading(false);
             return;
           }
+          if (r.pageType === 'ended') {
+            setPageType('deactivated');
+            setLoading(false);
+            return;
+          }
           if (r.isActive === false) {
             setPageType('deactivated');
             setLoading(false);

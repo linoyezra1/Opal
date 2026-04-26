@@ -410,7 +410,8 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
     const fy = 44;
     rect(pg, ML, fy + 18, CW, 1.5, GOLD);
 
-    const l1V = bidiV('אופאל תקשורת שיווקית בע״מ  ·  רחוב פולג 31, אלפ״ש');
+
+    const l1V = bidiV('אופאל תקשורת שיווקית בע"מ רחוב פולג 31, אלפ"ש');
     ctr(pg, l1V, fy + 7, 7.5, NAVY);
 
     ctr(pg, '054-4261369  ·  opal2000@zahav.net.il  ·  opal4u.co.il', fy - 5, 7, MUTED);
