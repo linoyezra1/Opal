@@ -82,9 +82,8 @@ function CommissionMatrix({ data, setData, products }) {
         <Table>
           <TableHeader>
             <TableRow>
-              {/* סדר העמודות הוחלף פיזית */}
-              <TableHead className="w-40 text-right">עמלה (₪)</TableHead>
               <TableHead className="text-right">מוצר</TableHead>
+              <TableHead className="w-40 text-right">עמלה (₪)</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -92,7 +91,12 @@ function CommissionMatrix({ data, setData, products }) {
               const row = (data.productCommissions || []).find((c) => c.productId === pr.id);
               return (
                 <TableRow key={pr.id}>
-                  {/* תא 1: שדה הקלט של העמלה */}
+                  {/* תא 1: שם המוצר */}
+                  <TableCell className="font-medium text-right">
+                    {pr.productName || pr.name}{' '}
+                    <span className="text-muted-foreground text-sm font-mono">({pr.sku})</span>
+                  </TableCell>
+                  {/* תא 2: שדה הקלט של העמלה */}
                   <TableCell className="text-right">
                     <Input
                       type="number" min="0" step="0.01" dir="ltr" className="w-28"
@@ -110,11 +114,6 @@ function CommissionMatrix({ data, setData, products }) {
                       }}
                       placeholder="0"
                     />
-                  </TableCell>
-                  {/* תא 2: שם המוצר */}
-                  <TableCell className="font-medium text-right">
-                    {pr.productName || pr.name}{' '}
-                    <span className="text-muted-foreground text-sm font-mono">({pr.sku})</span>
                   </TableCell>
                 </TableRow>
               );
