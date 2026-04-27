@@ -111,7 +111,13 @@ export default function UnifiedFilterShell(props) {
                     </select>
                   ) : (
                     <Input
-                      type={filter.type === 'date' || filter.type === 'dateRange' ? 'date' : 'text'}
+                      type={
+                        filter.type === 'date' || filter.type === 'dateRange'
+                          ? 'date'
+                          : filter.type === 'month'
+                            ? 'month'
+                            : 'text'
+                      }
                       value={String(values?.[filter.key] || '')}
                       onChange={(e) => updateValue(filter.key, e.target.value)}
                       placeholder={filter.placeholder || ''}

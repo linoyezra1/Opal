@@ -148,6 +148,7 @@ export default function SubscribersDashboard() {
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
   const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('');
+  const [toastMessage, setToastMessage] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -212,6 +213,9 @@ export default function SubscribersDashboard() {
     customerSegment: 'all',
     agentFilter: '',
     organizationFilter: '',
+    productFilter: '',
+    documentStatusFilter: '',
+    customerTypeFilter: '',
   });
 
   const filteredProviders = useMemo(() => {
@@ -232,6 +236,10 @@ export default function SubscribersDashboard() {
 
   const agentOptions = useMemo(
     () => [...new Set((data.rows || []).map((r) => String(r.agentName || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'he')),
+    [data.rows]
+  );
+  const productOptions = useMemo(
+    () => [...new Set((data.rows || []).map((r) => String(r.productName || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'he')),
     [data.rows]
   );
 
@@ -258,7 +266,10 @@ export default function SubscribersDashboard() {
       (filters.summaryCategories || []).length > 0 ||
       (filters.customerSegment && filters.customerSegment !== 'all') ||
       !!filters.agentFilter ||
-      !!filters.organizationFilter
+      !!filters.organizationFilter ||
+      !!filters.productFilter ||
+      !!filters.documentStatusFilter ||
+      !!filters.customerTypeFilter
     );
   }, [filters]);
   const unifiedFilterConfig = useMemo(
@@ -273,7 +284,7 @@ export default function SubscribersDashboard() {
           { value: 'organization', label: 'חברי ארגון' },
         ],
       },
-      { key: 'month', label: 'חודש', type: 'text', placeholder: 'YYYY-MM' },
+      { key: 'month', label: 'חודש', type: 'month', placeholder: 'YYYY-MM' },
       { key: 'fromDate', label: 'מתאריך(תאריך הצטרפות)', type: 'date' },
       { key: 'toDate', label: 'עד תאריך(תאריך הצטרפות)', type: 'date' },
       {
@@ -297,8 +308,33 @@ export default function SubscribersDashboard() {
         type: 'select',
         options: organizationOptions.map((o) => ({ value: o, label: o })),
       },
+      {
+        key: 'productFilter',
+        label: 'שם המוצר',
+        type: 'select',
+        options: productOptions.map((p) => ({ value: p, label: p })),
+      },
+      {
+        key: 'documentStatusFilter',
+        label: 'סטטוס השלמת מסמכים',
+        type: 'select',
+        options: [
+          { value: 'missing', label: 'חסר' },
+          { value: 'completed', label: 'הושלם' },
+        ],
+      },
+      {
+        key: 'customerTypeFilter',
+        label: 'סוג לקוח',
+        type: 'select',
+        options: [
+          { value: 'org_centralized', label: 'חברי ארגון תשלום מרוכז' },
+          { value: 'org_private', label: 'חברי ארגון תשלום פרטי' },
+          { value: 'org_all', label: 'חברי ארגוני-הכל' },
+        ],
+      },
     ],
-    [agentOptions, organizationOptions]
+    [agentOptions, organizationOptions, productOptions]
   );
   const unifiedFilterValues = useMemo(
     () => ({
@@ -310,6 +346,9 @@ export default function SubscribersDashboard() {
       status: filters.status || 'all',
       agentFilter: filters.agentFilter || '',
       organizationFilter: filters.organizationFilter || '',
+      productFilter: filters.productFilter || '',
+      documentStatusFilter: filters.documentStatusFilter || '',
+      customerTypeFilter: filters.customerTypeFilter || '',
     }),
     [liveSearch, filters]
   );
@@ -682,6 +721,9 @@ export default function SubscribersDashboard() {
       customerSegment: 'all',
       agentFilter: '',
       organizationFilter: '',
+      productFilter: '',
+      documentStatusFilter: '',
+      customerTypeFilter: '',
     }));
   }
 
@@ -716,6 +758,27 @@ export default function SubscribersDashboard() {
       );
     }
 
+    if (filters.productFilter) {
+      rows = rows.filter((r) => String(r.productName || '').trim() === filters.productFilter);
+    }
+
+    if (filters.documentStatusFilter === 'missing') {
+      rows = rows.filter((r) => !!r.pendingBeneficiaryCompletion);
+    } else if (filters.documentStatusFilter === 'completed') {
+      rows = rows.filter((r) => !r.pendingBeneficiaryCompletion);
+    }
+
+    if (filters.customerTypeFilter) {
+      rows = rows.filter((r) => {
+        const hasOrg = !!String(r.organizationId || '').trim() || !!String(r.organizationName || r.organizationBadge || '').trim();
+        const isCentralized = !!r.isCentralized || String(r.dealSource || '') === 'org-bulk-import';
+        if (filters.customerTypeFilter === 'org_all') return hasOrg;
+        if (filters.customerTypeFilter === 'org_centralized') return hasOrg && isCentralized;
+        if (filters.customerTypeFilter === 'org_private') return hasOrg && !isCentralized;
+        return true;
+      });
+    }
+
     // Live text search on top of the status-filtered set
     const q = String(liveSearch || '').trim().toLowerCase();
     if (!q) return rows;
@@ -735,7 +798,16 @@ export default function SubscribersDashboard() {
         .join(' | ');
       return hay.includes(q);
     });
-  }, [data.rows, liveSearch, filters.status, filters.agentFilter, filters.organizationFilter]);
+  }, [
+    data.rows,
+    liveSearch,
+    filters.status,
+    filters.agentFilter,
+    filters.organizationFilter,
+    filters.productFilter,
+    filters.documentStatusFilter,
+    filters.customerTypeFilter,
+  ]);
 
   // Metrics derived entirely from the currently visible (filtered) rows,
   // so summary cards always reflect what the user actually sees in the table.
@@ -751,7 +823,35 @@ export default function SubscribersDashboard() {
     return { totalRevenue, canceled, active: visibleRows.length - canceled };
   }, [visibleRows]);
 
-  const s = data.summary || {};
+  const visibleCategorySummary = useMemo(() => {
+    const rows = visibleRows || [];
+    let primary = 0;
+    let active = 0;
+    let canceled = 0;
+    let private_org = 0;
+    let centralized_org = 0;
+    let centralized_canceled = 0;
+    for (const r of rows) {
+      const isCancelled = r.status === 'canceled' || String(r.subscriptionStatus || '').toLowerCase() === 'cancelled';
+      const isCentralized = !!r.isCentralized || String(r.dealSource || '') === 'org-bulk-import';
+      const hasOrg = !!String(r.organizationId || '').trim() || !!String(r.organizationName || r.organizationBadge || '').trim();
+      if (String(r.rowType || '') === 'primary') primary += 1;
+      if (isCancelled) canceled += 1;
+      else active += 1;
+      if (hasOrg && isCentralized) centralized_org += 1;
+      if (hasOrg && !isCentralized) private_org += 1;
+      if (hasOrg && isCentralized && isCancelled) centralized_canceled += 1;
+    }
+    return {
+      all: rows.length,
+      primary,
+      active,
+      canceled,
+      private_org,
+      centralized_org,
+      centralized_canceled,
+    };
+  }, [visibleRows]);
   const statusSummaryTitle = filters.status === 'cancelled' ? 'מבוטלים (סיכום)' : 'מנויים פעילים (סיכום)';
   const statusSummaryValue = filters.status === 'cancelled' ? visibleSummary.canceled : visibleSummary.active;
   const visibleRowIds = useMemo(
@@ -795,6 +895,15 @@ export default function SubscribersDashboard() {
 
   async function confirmBulkDelete() {
     if (!selectedCount || !token || bulkDeleteDisabled) return;
+    const selectedRows = (data.rows || []).filter((r) => selectedSubscriptionIds.includes(String(r.id || '')));
+    const hasNotCancelled = selectedRows.some(
+      (r) => !(r.status === 'canceled' || String(r.subscriptionStatus || '').toLowerCase() === 'cancelled')
+    );
+    if (hasNotCancelled) {
+      setToastMessage('לא ניתן להסיר לקוח קודם לבטל את המנוי');
+      setTimeout(() => setToastMessage(''), 3200);
+      return;
+    }
     setBulkDeleteLoading(true);
     setError('');
     try {
@@ -1601,6 +1710,9 @@ export default function SubscribersDashboard() {
                     status: String(next.status || 'all'),
                     agentFilter: String(next.agentFilter || ''),
                     organizationFilter: String(next.organizationFilter || ''),
+                    productFilter: String(next.productFilter || ''),
+                    documentStatusFilter: String(next.documentStatusFilter || ''),
+                    customerTypeFilter: String(next.customerTypeFilter || ''),
                   }));
                 }}
                 onClear={clearFilters}
@@ -1630,7 +1742,7 @@ export default function SubscribersDashboard() {
                       className="inline-flex items-center gap-1.5 whitespace-nowrap"
                     >
                       <span className="text-muted-foreground">{item.label}</span>
-                      <strong>{s[item.key] ?? 0}</strong>
+                  <strong>{visibleCategorySummary[item.key] ?? 0}</strong>
                       <input
                         type="checkbox"
                         className={checkboxClass}
@@ -1674,9 +1786,9 @@ export default function SubscribersDashboard() {
                 </Empty>
               ) : (
                 <div className="rounded-md border overflow-x-auto -mx-4 md:mx-0">
-                  <Table className="text-right min-w-[900px]">
+                  <Table dir="rtl" className="text-right min-w-[900px]">
                     <TableHeader>
-                      <TableRow className="[&_th]:text-right">
+                        <TableRow className="[&_th]:text-right" dir="rtl">
                         <TableHead dir="rtl" className="w-12 text-right">
                           <input
                             type="checkbox"
@@ -2162,6 +2274,11 @@ export default function SubscribersDashboard() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        {toastMessage ? (
+          <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm font-medium text-destructive shadow-md">
+            {toastMessage}
+          </div>
+        ) : null}
       </AdminPageShell>
     </TooltipProvider>
   );
