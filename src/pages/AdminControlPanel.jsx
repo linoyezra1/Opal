@@ -268,13 +268,25 @@ export default function AdminControlPanel() {
                 return (
                   cardClickable(key) ? (
                     <button key={key} type="button" className="text-right" onClick={() => setModalKey(drilldownKey)}>
-                      <StatsCard title={meta.title} value={meta.money ? formatCurrency(overview[key]) : String(Math.round(Number(overview[key] || 0)))} icon={meta.icon} className={meta.className} loading={loading && !data} />
-                      {key === 'totalRevenue' ? <p className="mt-1 text-sm text-muted-foreground text-right">רווח גולמי: {formatCurrency(grossProfit)}</p> : null}
+                      <StatsCard
+                        title={meta.title}
+                        value={meta.money ? formatCurrency(overview[key]) : String(Math.round(Number(overview[key] || 0)))}
+                        icon={meta.icon}
+                        className={meta.className}
+                        loading={loading && !data}
+                        subText={key === 'totalRevenue' ? `רווח גולמי: ${formatCurrency(grossProfit)}` : ''}
+                      />
                     </button>
                   ) : (
                     <div key={key}>
-                      <StatsCard title={meta.title} value={meta.money ? formatCurrency(overview[key]) : String(Math.round(Number(overview[key] || 0)))} icon={meta.icon} className={meta.className} loading={loading && !data} />
-                      {key === 'totalRevenue' ? <p className="mt-1 text-sm text-muted-foreground text-right">רווח גולמי: {formatCurrency(grossProfit)}</p> : null}
+                      <StatsCard
+                        title={meta.title}
+                        value={meta.money ? formatCurrency(overview[key]) : String(Math.round(Number(overview[key] || 0)))}
+                        icon={meta.icon}
+                        className={meta.className}
+                        loading={loading && !data}
+                        subText={key === 'totalRevenue' ? `רווח גולמי: ${formatCurrency(grossProfit)}` : ''}
+                      />
                     </div>
                   )
                 );

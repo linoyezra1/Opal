@@ -5,7 +5,7 @@ import { cn } from '../../lib/cn.js';
 /**
  * כרטיס סטטיסטיקה — תואם ל־_New_Backup/components/admin/stats-card
  */
-export function StatsCard({ title, value, icon: Icon, trend, className, loading }) {
+export function StatsCard({ title, value, icon: Icon, trend, className, loading, subText }) {
   const isPositive = trend && trend.value >= 0;
 
   return (
@@ -22,6 +22,7 @@ export function StatsCard({ title, value, icon: Icon, trend, className, loading 
         ) : (
           <>
             <div className="text-xl sm:text-2xl font-bold tabular-nums">{value}</div>
+            {subText ? <p className="mt-1 text-sm text-muted-foreground">{subText}</p> : null}
             {trend && (
               <div className="mt-1 flex items-center gap-1 text-xs">
                 {isPositive ? (

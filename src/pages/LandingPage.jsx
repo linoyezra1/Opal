@@ -90,6 +90,12 @@ function popularIndex(total) {
   return 1;
 }
 
+function getCoreProductName(product, priceListName = '') {
+  const fromProduct = String(product?.productName || product?.name || '').trim();
+  if (fromProduct) return fromProduct;
+  return String(priceListName || '').trim();
+}
+
 function mapWhatYouGetItems(items) {
   if (!Array.isArray(items) || items.length === 0) return DEFAULT_WHAT_YOU_GET;
   return items.map((it) => ({
@@ -485,11 +491,16 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
   const registrationSubtitle = content.registrationSubtitle?.trim() || 'מלאו את הפרטים והצטרפו למשפחת Opal';
 
   const effectivePriceListId = ctx?.priceListId ?? priceListId;
+  const priceListDisplayName = String(ctx?.listName || '').trim();
 
   const selectedProduct = useMemo(() => {
     if (!ctx?.products?.length || !productId) return null;
     return ctx.products.find((p) => p.productId === productId) || null;
   }, [ctx, productId]);
+  const selectedProductDisplayName = useMemo(
+    () => getCoreProductName(selectedProduct, priceListDisplayName),
+    [selectedProduct, priceListDisplayName]
+  );
 
   // True when the product uses the "רופא עד הבית" flow — the manager defines the
   // beneficiary count per-product, so the manual +/- counter must be hidden.
@@ -497,9 +508,12 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
 
   // Whenever a doc-to-home product is selected, snap the count to the product's
   // admin-defined default so it flows through to checkout automatically.
+  // The product-level number represents TOTAL beneficiaries (including primary),
+  // while formState.beneficiaryCount stores ADDITIONAL members only.
   useEffect(() => {
     if (isDocToHome && selectedProduct?.defaultBeneficiaryCount != null) {
-      setBeneficiaryCount(Math.max(1, Number(selectedProduct.defaultBeneficiaryCount)));
+      const totalConfigured = Math.max(1, Number(selectedProduct.defaultBeneficiaryCount) || 1);
+      setBeneficiaryCount(Math.max(0, totalConfigured - 1));
     }
   }, [isDocToHome, selectedProduct]);
 
@@ -540,6 +554,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
         selectedPlanId: `pl-${productId}`,
         priceListId: effectivePriceListId,
         productId,
+        productName: selectedProductDisplayName,
         fullName: fullName.trim(),
         phone: phone.trim(),
         email: email.trim(),
@@ -594,6 +609,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
       slug,
       priceListId,
       selectedProduct,
+      selectedProductDisplayName,
     ]
   );
 
@@ -959,7 +975,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                     </Badge>
                   ) : null}
                   <CardHeader className="text-center pb-2">
-                    <CardTitle className="text-xl">{product.productName}</CardTitle>
+                    <CardTitle className="text-xl">{getCoreProductName(product, priceListDisplayName)}</CardTitle>
                     {product.baseDescription ? (
                       <p className="text-sm text-muted-foreground mt-2">{product.baseDescription}</p>
                     ) : null}
@@ -1017,7 +1033,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <div className="text-right">
                         <p className="text-sm text-muted-foreground">תוכנית נבחרת:</p>
-                        <p className="font-semibold text-foreground">{selectedProduct.productName}</p>
+                        <p className="font-semibold text-foreground">{selectedProductDisplayName}</p>
                       </div>
                       <div className="text-start sm:text-end">
                         <p className="text-2xl font-bold text-primary">₪{formatPrice(selectedProduct.retailPrice)}</p>
