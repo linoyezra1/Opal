@@ -269,7 +269,7 @@ export default function BeneficiaryForm() {
             email: prev.email || String(r.email || '').trim(),
           };
         });
-        const n = Math.max(0, Math.min(5, Number(r.beneficiaryCount) || 0));
+        const n = Math.max(0, Number(r.beneficiaryCount) || 0);
         setAdditionalMembers(Array.from({ length: n }, () => emptyMember()));
       } catch {
         /* ignore */

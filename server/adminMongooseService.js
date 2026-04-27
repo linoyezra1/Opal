@@ -38,8 +38,10 @@ const productSchema = new mongoose.Schema(
     providerCost: { type: Number, min: 0, default: 0 },
     /** @deprecated retail is defined by pricing modules */
     retailPrice: { type: Number, min: 0, default: 0 },
-    /** ????? ????? ???? ?????? ?????? ?????? ???? */
+    /** זרימה — נעולה ל"רופא עד הבית" */
     flowType: { type: String, enum: [PRODUCT_FLOW_TYPE], default: PRODUCT_FLOW_TYPE },
+    /** כמות מבוטחים המוגדרת מראש על ידי המנהל (כולל המבוטח הראשי). min:1 */
+    defaultBeneficiaryCount: { type: Number, min: 1, default: 1 },
     isActive: { type: Boolean, default: true, index: true },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
@@ -459,6 +461,7 @@ export async function createProduct(payload) {
     providerId: new mongoose.Types.ObjectId(providerId),
     providerCost: Math.max(0, Number(payload.providerCost || 0)),
     flowType: PRODUCT_FLOW_TYPE,
+    defaultBeneficiaryCount: Math.max(1, Number(payload.defaultBeneficiaryCount || 1)),
   });
   await Vendor.updateOne(
     { _id: new mongoose.Types.ObjectId(providerId), 'productLinks.productId': { $ne: doc._id } },
@@ -499,6 +502,7 @@ export async function listProducts(options = {}) {
       providerCost: Math.max(0, Number(d.providerCost || 0)),
       retailPrice: Math.max(0, Number(d.retailPrice || 0)),
       flowType: String(d.flowType || PRODUCT_FLOW_TYPE),
+      defaultBeneficiaryCount: Math.max(1, Number(d.defaultBeneficiaryCount || 1)),
       isActive: d.isActive !== false,
       createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
     };
@@ -532,6 +536,7 @@ export async function updateProduct(id, payload) {
         providerId: nextProviderOid,
         providerCost: Math.max(0, Number(payload.providerCost || 0)),
         flowType: PRODUCT_FLOW_TYPE,
+        defaultBeneficiaryCount: Math.max(1, Number(payload.defaultBeneficiaryCount || 1)),
         updatedAt: new Date(),
       },
     },
@@ -1356,7 +1361,7 @@ export async function getPublicPriceListById(id) {
   const products = [];
   for (const line of lines) {
     const pid = line.productId;
-    const p = await Product.findById(pid).select('productName name baseDescription sku imageUrl').lean();
+    const p = await Product.findById(pid).select('productName name baseDescription sku imageUrl flowType defaultBeneficiaryCount').lean();
     if (!p) continue;
     products.push({
       productId: String(pid),
@@ -1366,6 +1371,8 @@ export async function getPublicPriceListById(id) {
       imageUrl: p.imageUrl || '',
       retailPrice: Number(line.retailPrice || 0),
       agentId: line.agentId ? String(line.agentId) : '',
+      flowType: String(p.flowType || ''),
+      defaultBeneficiaryCount: Math.max(1, Number(p.defaultBeneficiaryCount || 1)),
     });
   }
   return {

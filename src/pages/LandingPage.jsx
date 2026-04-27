@@ -491,6 +491,18 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
     return ctx.products.find((p) => p.productId === productId) || null;
   }, [ctx, productId]);
 
+  // True when the product uses the "רופא עד הבית" flow — the manager defines the
+  // beneficiary count per-product, so the manual +/- counter must be hidden.
+  const isDocToHome = selectedProduct?.flowType === 'רופא עד הבית';
+
+  // Whenever a doc-to-home product is selected, snap the count to the product's
+  // admin-defined default so it flows through to checkout automatically.
+  useEffect(() => {
+    if (isDocToHome && selectedProduct?.defaultBeneficiaryCount != null) {
+      setBeneficiaryCount(Math.max(1, Number(selectedProduct.defaultBeneficiaryCount)));
+    }
+  }, [isDocToHome, selectedProduct]);
+
   const products = ctx?.products || [];
 
   const heroImageUrl = useMemo(() => {
@@ -534,7 +546,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
         organizationName: ctx?.organizationName || 'לקוח פרטי',
         agentId: urlAgentId || String(selectedProduct?.agentId || ''),
         agentName: '',
-        beneficiaryCount: Math.max(0, Math.min(5, Number(beneficiaryCount) || 0)),
+        beneficiaryCount: Math.max(0, Number(beneficiaryCount) || 0),
         beneficiaries: [],
         landingFlow: true,
         landingPageSlug: String(slug || priceListId || '').trim(),
@@ -1075,38 +1087,40 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">מס' מבוטחים</label>
-                  <div className="flex items-center gap-4 flex-wrap">
-                    <div className="flex items-center rounded-lg border border-input bg-background">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-10 w-10 rounded-l-none"
-                        onClick={() => setBeneficiaryCount((c) => Math.max(0, c - 1))}
-                        disabled={beneficiaryCount === 0}
-                      >
-                        <Minus className="size-4" />
-                      </Button>
-                      <span className="w-12 text-center font-medium">{beneficiaryCount}</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-10 w-10 rounded-r-none"
-                        onClick={() => setBeneficiaryCount((c) => Math.min(5, c + 1))}
-                        disabled={beneficiaryCount >= 5}
-                      >
-                        <Plus className="size-4" />
-                      </Button>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Users className="size-4" />
-                      <span>מילוי פרטי המוטבים לאחר ביצוע ההזמנה</span>
+                {isDocToHome ? null : (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">מס' מבוטחים</label>
+                    <div className="flex items-center gap-4 flex-wrap">
+                      <div className="flex items-center rounded-lg border border-input bg-background">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-10 w-10 rounded-l-none"
+                          onClick={() => setBeneficiaryCount((c) => Math.max(0, c - 1))}
+                          disabled={beneficiaryCount === 0}
+                        >
+                          <Minus className="size-4" />
+                        </Button>
+                        <span className="w-12 text-center font-medium">{beneficiaryCount}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-10 w-10 rounded-r-none"
+                          onClick={() => setBeneficiaryCount((c) => Math.min(5, c + 1))}
+                          disabled={beneficiaryCount >= 5}
+                        >
+                          <Plus className="size-4" />
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Users className="size-4" />
+                        <span>מילוי פרטי המוטבים לאחר ביצוע ההזמנה</span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 <div className="flex items-start gap-3">
                   <input

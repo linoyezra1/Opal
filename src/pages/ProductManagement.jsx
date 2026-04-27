@@ -34,6 +34,7 @@ const EMPTY_FORM = {
   providerId: '',
   providerCost: '',
   flowType: PRODUCT_FLOW_TYPE_LABEL,
+  defaultBeneficiaryCount: 1,
 };
 
 // ─── View Product Dialog ────────────────────────────────────────────────────────
@@ -288,6 +289,7 @@ export default function ProductManagement() {
           baseDescription: form.baseDescription,
           providerId: form.providerId,
           providerCost: Number(form.providerCost || 0),
+          defaultBeneficiaryCount: Math.max(1, Number(form.defaultBeneficiaryCount || 1)),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -320,6 +322,7 @@ export default function ProductManagement() {
           baseDescription: editProduct.baseDescription ?? '',
           providerId: editProduct.providerId,
           providerCost: Number(editProduct.providerCost || 0),
+          defaultBeneficiaryCount: Math.max(1, Number(editProduct.defaultBeneficiaryCount || 1)),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -363,6 +366,7 @@ export default function ProductManagement() {
       providerCost: String(p.providerCost ?? ''),
       provider: p.provider || null,
       flowType: p.flowType || PRODUCT_FLOW_TYPE_LABEL,
+      defaultBeneficiaryCount: p.defaultBeneficiaryCount ?? 1,
     });
   }
 
@@ -534,6 +538,18 @@ export default function ProductManagement() {
                   onChange={(e) => setForm((p) => ({ ...p, providerCost: e.target.value }))}
                 />
               </Field>
+              {(form.flowType || PRODUCT_FLOW_TYPE_LABEL) === PRODUCT_FLOW_TYPE_LABEL ? (
+                <Field>
+                  <FieldLabel>מספר מבוטחים (כולל ראשי)</FieldLabel>
+                  <Input
+                    type="number"
+                    min="1"
+                    dir="ltr"
+                    value={form.defaultBeneficiaryCount ?? 1}
+                    onChange={(e) => setForm((p) => ({ ...p, defaultBeneficiaryCount: Number(e.target.value) }))}
+                  />
+                </Field>
+              ) : null}
             </FieldGroup>
             {error ? <p className="text-destructive text-sm">{error}</p> : null}
             <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
@@ -614,6 +630,19 @@ export default function ProductManagement() {
                     onChange={(e) => setEditProduct((p) => ({ ...p, providerCost: e.target.value }))}
                   />
                 </Field>
+                {(editProduct.flowType || PRODUCT_FLOW_TYPE_LABEL) === PRODUCT_FLOW_TYPE_LABEL ? (
+                  <Field>
+                    <FieldLabel>מספר מבוטחים (כולל ראשי)</FieldLabel>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="6"
+                      dir="ltr"
+                      value={editProduct.defaultBeneficiaryCount ?? 1}
+                      onChange={(e) => setEditProduct((p) => ({ ...p, defaultBeneficiaryCount: Number(e.target.value) }))}
+                    />
+                  </Field>
+                ) : null}
               </FieldGroup>
               {error ? <p className="text-destructive text-sm">{error}</p> : null}
               <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
