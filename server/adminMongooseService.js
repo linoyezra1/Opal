@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-import { countDealsByAgentId } from './mongoService.js';
 
 const MONGO_URL = process.env.MONGODB_URI || process.env.MONGO_URL || '';
 const DB_NAME = process.env.MONGO_DB_NAME || 'opal';
@@ -1545,10 +1544,69 @@ export async function listSalesAgentsWithSales(options = {}) {
   const docs = await SalesAgent.find(activeOnly ? { isActive: { $ne: false } } : {})
     .sort({ createdAt: -1 })
     .lean();
+  const db = mongoose.connection.db;
+  const agentStatsRows = await db
+    .collection('deals')
+    .aggregate([
+      { $match: { isRecurringCycle: { $ne: true } } },
+      {
+        $addFields: {
+          _agentIdString: {
+            $let: {
+              vars: {
+                src: { $ifNull: ['$agentId', '$formState.agentId'] },
+              },
+              in: {
+                $cond: [
+                  { $or: [{ $eq: ['$$src', null] }, { $eq: ['$$src', ''] }] },
+                  '',
+                  { $toString: '$$src' },
+                ],
+              },
+            },
+          },
+          _isPaidActive: {
+            $and: [
+              { $regexMatch: { input: { $toLower: { $ifNull: ['$paymentStatus', ''] } }, regex: '(success|paid|test_success)' } },
+              { $not: [{ $regexMatch: { input: { $toLower: { $ifNull: ['$subscriptionStatus', ''] } }, regex: 'cancel|בוטל' } }] },
+              { $not: [{ $regexMatch: { input: { $toLower: { $ifNull: ['$status', ''] } }, regex: 'cancel|בוטל' } }] },
+              { $ne: ['$isActive', false] },
+            ],
+          },
+          _isCanceled: {
+            $or: [
+              { $regexMatch: { input: { $toLower: { $ifNull: ['$subscriptionStatus', ''] } }, regex: 'cancel|בוטל' } },
+              { $regexMatch: { input: { $toLower: { $ifNull: ['$status', ''] } }, regex: 'cancel|בוטל' } },
+              { $eq: ['$isActive', false] },
+            ],
+          },
+        },
+      },
+      { $match: { _agentIdString: { $ne: '' } } },
+      {
+        $group: {
+          _id: '$_agentIdString',
+          totalDeals: { $sum: 1 },
+          activeSubscribers: { $sum: { $cond: ['$_isPaidActive', 1, 0] } },
+          canceledSubscribers: { $sum: { $cond: ['$_isCanceled', 1, 0] } },
+        },
+      },
+    ])
+    .toArray();
+  const statsByAgentId = new Map(
+    agentStatsRows.map((r) => [
+      String(r._id || ''),
+      {
+        totalDeals: Number(r.totalDeals || 0),
+        activeSubscribers: Number(r.activeSubscribers || 0),
+        canceledSubscribers: Number(r.canceledSubscribers || 0),
+      },
+    ])
+  );
   const rows = await Promise.all(
     docs.map(async (d) => {
       const id = String(d._id);
-      const totalSales = await countDealsByAgentId(id);
+      const stats = statsByAgentId.get(id) || { totalDeals: 0, activeSubscribers: 0, canceledSubscribers: 0 };
       const pc = Array.isArray(d.productCommissions) ? d.productCommissions : [];
       const productCommissions = await Promise.all(
         pc.map(async (row) => {
@@ -1572,7 +1630,10 @@ export async function listSalesAgentsWithSales(options = {}) {
         bankDetails: d.bankDetails || {},
         productCommissions,
         isActive: d.isActive !== false,
-        totalSales,
+        totalSales: stats.activeSubscribers,
+        totalDeals: stats.totalDeals,
+        activeSubscribers: stats.activeSubscribers,
+        canceledSubscribers: stats.canceledSubscribers,
         createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
       };
     })

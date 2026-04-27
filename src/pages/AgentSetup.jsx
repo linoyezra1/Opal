@@ -76,8 +76,67 @@ function buildPayload(body) {
 // ─── Commission Matrix (used in Add/Edit dialogs) ──────────────────────────────
 // ─── Commission Matrix (used in Add/Edit dialogs) ──────────────────────────────
 function CommissionMatrix({ data, setData, products }) {
+  const [vendorFilter, setVendorFilter] = useState('');
+  const [productFilter, setProductFilter] = useState('');
+  const vendors = useMemo(() => {
+    const m = new Map();
+    (products || []).forEach((p) => {
+      const id = String(p.providerId || p.provider?.id || '').trim();
+      const name = String(p.provider?.vendorName || '').trim();
+      if (!id || !name || m.has(id)) return;
+      m.set(id, name);
+    });
+    return Array.from(m.entries()).map(([id, name]) => ({ id, name }));
+  }, [products]);
+  const filteredProducts = useMemo(() => {
+    return (products || []).filter((p) => {
+      const pid = String(p.providerId || p.provider?.id || '').trim();
+      if (vendorFilter && pid !== vendorFilter) return false;
+      if (!productFilter) return true;
+      return String(p.id) === productFilter;
+    });
+  }, [products, vendorFilter, productFilter]);
+
   return (
     <div className="space-y-3" dir="rtl">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <FieldLabel>בחר ספק</FieldLabel>
+          <select
+            className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+            value={vendorFilter}
+            onChange={(e) => {
+              setVendorFilter(e.target.value);
+              setProductFilter('');
+            }}
+          >
+            <option value="">כל הספקים</option>
+            {vendors.map((v) => (
+              <option key={v.id} value={v.id}>{v.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <FieldLabel>בחר מוצר</FieldLabel>
+          <select
+            className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+            value={productFilter}
+            onChange={(e) => setProductFilter(e.target.value)}
+          >
+            <option value="">כל המוצרים</option>
+            {(products || [])
+              .filter((p) => {
+                const pid = String(p.providerId || p.provider?.id || '').trim();
+                return !vendorFilter || pid === vendorFilter;
+              })
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.productName || p.name || p.id}
+                </option>
+              ))}
+          </select>
+        </div>
+      </div>
       <div className="rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
@@ -87,7 +146,7 @@ function CommissionMatrix({ data, setData, products }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {products.map((pr) => {
+            {filteredProducts.map((pr) => {
               const row = (data.productCommissions || []).find((c) => c.productId === pr.id);
               return (
                 <TableRow key={pr.id}>
@@ -123,6 +182,8 @@ function CommissionMatrix({ data, setData, products }) {
       </div>
       {!products.length ? (
         <p className="text-sm text-muted-foreground">אין מוצרים במערכת — הוסיפו מוצרים תחילה.</p>
+      ) : !filteredProducts.length ? (
+        <p className="text-sm text-muted-foreground">אין מוצרים תואמים לסינון שנבחר.</p>
       ) : (
         <p className="text-sm text-muted-foreground">עמלה ייחודית לכל מוצר — משמשת בדוחות רווח.</p>
       )}
@@ -170,20 +231,16 @@ function ViewAgentDialog({ agent, products, productSlugMap, onClose, onEdit }) {
         {/* ── Summary stats ── */}
         <div className="grid grid-cols-3 gap-3 rounded-xl border bg-gradient-to-l from-[#D9EAF3]/40 to-[#D9EAF3]/10 p-4">
           <div className="text-center space-y-0.5">
-            <p className="text-2xl font-bold text-primary">{agent.totalSales ?? 0}</p>
-            <p className="text-xs text-muted-foreground">סה"כ מנויים</p>
+            <p className="text-2xl font-bold text-primary">{agent.totalDeals ?? 0}</p>
+            <p className="text-xs text-muted-foreground">סה״כ עסקאות</p>
           </div>
           <div className="text-center space-y-0.5">
-            <p className="text-2xl font-bold text-primary">{comms.length}</p>
-            <p className="text-xs text-muted-foreground">מוצרים פעילים</p>
+            <p className="text-2xl font-bold text-emerald-700">{agent.activeSubscribers ?? 0}</p>
+            <p className="text-xs text-muted-foreground">מנויים פעילים</p>
           </div>
           <div className="text-center space-y-0.5">
-            <p className="text-2xl font-bold text-[#C9A227]">
-              {comms.reduce((s, c) => s + Number(c.commission || 0), 0) > 0
-                ? `₪${comms.reduce((s, c) => s + Number(c.commission || 0), 0)}`
-                : '—'}
-            </p>
-            <p className="text-xs text-muted-foreground">עמלה כוללת</p>
+            <p className="text-2xl font-bold text-red-700">{agent.canceledSubscribers ?? 0}</p>
+            <p className="text-xs text-muted-foreground">מנויים מבוטלים</p>
           </div>
         </div>
 

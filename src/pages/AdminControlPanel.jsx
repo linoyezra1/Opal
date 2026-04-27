@@ -69,6 +69,14 @@ const HEADER_LABELS = {
   productName: 'שם מוצר',
   agentCommission: 'עמלת סוכן',
   kind: 'סוג פנייה',
+  agentId: 'שם סוכן / מזהה סוכן',
+  message: 'הודעה',
+  source: 'מקור הגעה',
+  landingSlug: 'נתיב דף נחיתה (Slug)',
+  landingPageTitle: 'כותרת דף נחיתה',
+  isLandingActive: 'דף נחיתה פעיל?',
+  leadStatus: 'סטטוס ליד',
+  adminNotes: 'הערות מנהל',
   organizationId: 'מזהה ארגון',
   status: 'סטטוס',
   cardcomStatus: 'סטטוס סליקה',
@@ -147,6 +155,7 @@ export default function AdminControlPanel() {
   }, [token]);
 
   const overview = data?.overview || {};
+  const grossProfit = Number(overview.totalRevenue || 0) - Number(overview.totalExpenses || 0);
   const rows = Array.isArray(data?.drilldowns?.[modalKey]) ? data.drilldowns[modalKey] : [];
   const columns = rows.length
     ? Object.keys(rows[0]).filter((k) => k !== 'id' && k !== 'subscriberDealId')
@@ -260,10 +269,12 @@ export default function AdminControlPanel() {
                   cardClickable(key) ? (
                     <button key={key} type="button" className="text-right" onClick={() => setModalKey(drilldownKey)}>
                       <StatsCard title={meta.title} value={meta.money ? formatCurrency(overview[key]) : String(Math.round(Number(overview[key] || 0)))} icon={meta.icon} className={meta.className} loading={loading && !data} />
+                      {key === 'totalRevenue' ? <p className="mt-1 text-sm text-muted-foreground text-right">רווח גולמי: {formatCurrency(grossProfit)}</p> : null}
                     </button>
                   ) : (
                     <div key={key}>
                       <StatsCard title={meta.title} value={meta.money ? formatCurrency(overview[key]) : String(Math.round(Number(overview[key] || 0)))} icon={meta.icon} className={meta.className} loading={loading && !data} />
+                      {key === 'totalRevenue' ? <p className="mt-1 text-sm text-muted-foreground text-right">רווח גולמי: {formatCurrency(grossProfit)}</p> : null}
                     </div>
                   )
                 );
@@ -383,17 +394,17 @@ export default function AdminControlPanel() {
           </DialogHeader>
           <div className="max-h-[65vh] overflow-auto rounded-md border">
             <Table>
-              <TableHeader><TableRow>{columns.map((c) => <TableHead key={c}>{labelForColumn(c)}</TableHead>)}{modalKey !== 'totalProviderPayments' && modalKey !== 'totalAgentPayments' ? <TableHead>פעולה</TableHead> : null}</TableRow></TableHeader>
+              <TableHeader><TableRow>{columns.map((c) => <TableHead key={c} className="text-right">{labelForColumn(c)}</TableHead>)}{modalKey !== 'totalProviderPayments' && modalKey !== 'totalAgentPayments' ? <TableHead className="text-right">פעולה</TableHead> : null}</TableRow></TableHeader>
               <TableBody>
                 {rows.map((row, idx) => (
                   <TableRow key={`${modalKey}-${idx}`}>
                     {columns.map((c) => {
                       const v = row[c];
                       const isAmount = /amount|cost|commission|profit|debt|revenue|price/i.test(c);
-                      return <TableCell key={`${idx}-${c}`}>{isAmount ? formatCurrency(v) : String(v ?? '')}</TableCell>;
+                      return <TableCell key={`${idx}-${c}`} className="text-right">{isAmount ? formatCurrency(v) : String(v ?? '')}</TableCell>;
                     })}
                     {readOnlyDrilldown ? null : (
-                      <TableCell>
+                      <TableCell className="text-right">
                         {modalKey === 'failedPayments' ? (
                           <div className="flex items-center gap-1 justify-end">
                             <Tooltip>
