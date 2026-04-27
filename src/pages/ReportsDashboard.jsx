@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FileSpreadsheet, Building2, Users, RefreshCw } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
+import { fmtDateTime } from '../utils/dateUtils.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { Button } from '../components/ui/button.jsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
@@ -514,7 +515,7 @@ export default function ReportsDashboard() {
                             <TableRow key={r.dealId}>
                               <TableCell className="font-mono text-xs">{r.transactionId}</TableCell>
                               <TableCell className="text-xs whitespace-nowrap">
-                                {r.createdAt ? new Date(r.createdAt).toLocaleDateString('he-IL') : '—'}
+                                {fmtDateTime(r.createdAt)}
                               </TableCell>
                               <TableCell>{r.productName || '—'}</TableCell>
                               <TableCell>{formatCurrency(r.payerAmount)}</TableCell>

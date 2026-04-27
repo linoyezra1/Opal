@@ -4,6 +4,7 @@ import {
   Phone, RefreshCw, MessageSquare, ShoppingCart, Pencil, Archive,
   Clock, Building2, User, ChevronDown, ChevronUp, ExternalLink,
 } from 'lucide-react';
+import { fmtDateTime } from '../utils/dateUtils.js';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -683,7 +684,7 @@ export default function ContactManagement() {
                             </TableCell>
                             {/* Date */}
                             <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                              {lead.createdAt ? new Date(lead.createdAt).toLocaleString('he-IL') : '—'}
+                              {fmtDateTime(lead.createdAt)}
                             </TableCell>
                           </TableRow>
 

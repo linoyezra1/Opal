@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, RefreshCw, Wallet, Users, CreditCard, UserCheck, AlertCircle, Building2, Pencil, MessageSquareText, Bell } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { API_BASE } from '../apiBase.js';
+import { fmtDateTime } from '../utils/dateUtils.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { StatsCard } from '../components/admin/stats-card.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -96,6 +97,10 @@ const HEADER_LABELS = {
 
 function labelForColumn(key) {
   return HEADER_LABELS[key] || key;
+}
+
+function isDateLikeColumn(key) {
+  return /date|createdat|updatedat|chargedate|cancellationdate/i.test(String(key || ''));
 }
 
 export default function AdminControlPanel() {
@@ -413,7 +418,8 @@ export default function AdminControlPanel() {
                     {columns.map((c) => {
                       const v = row[c];
                       const isAmount = /amount|cost|commission|profit|debt|revenue|price/i.test(c);
-                      return <TableCell key={`${idx}-${c}`} className="text-right">{isAmount ? formatCurrency(v) : String(v ?? '')}</TableCell>;
+                      const isDate = isDateLikeColumn(c);
+                      return <TableCell key={`${idx}-${c}`} className="text-right">{isAmount ? formatCurrency(v) : isDate ? fmtDateTime(v) : String(v ?? '')}</TableCell>;
                     })}
                     {readOnlyDrilldown ? null : (
                       <TableCell className="text-right">

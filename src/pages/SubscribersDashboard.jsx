@@ -21,6 +21,7 @@ import {
   validateIsraeliId,
   shouldShowIsraeliIdChecksumError,
 } from '../utils/israeliId.js';
+import { fmtDateTime } from '../utils/dateUtils.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { StatsCard } from '../components/admin/stats-card.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
@@ -1363,7 +1364,7 @@ export default function SubscribersDashboard() {
                     </div>
                     <Field>
                       <FieldLabel>תאריך יצירה</FieldLabel>
-                      <Input value={editForm.createdAt ? new Date(editForm.createdAt).toLocaleString('he-IL') : ''} readOnly className="bg-muted" />
+                      <Input value={fmtDateTime(editForm.createdAt)} readOnly className="bg-muted" />
                     </Field>
                   </FieldGroup>
                 </TabsContent>
@@ -1717,7 +1718,7 @@ export default function SubscribersDashboard() {
                           const missingRecurringIds =
                             !String(r.cardcomAccountId || '').trim() || !String(r.cardcomRecurringId || '').trim();
                           const cancelledAtText = r.cancellationDate
-                            ? new Date(r.cancellationDate).toLocaleString('he-IL')
+                            ? fmtDateTime(r.cancellationDate)
                             : '';
                           return (
                         <TableRow
@@ -1796,7 +1797,7 @@ export default function SubscribersDashboard() {
                             {formatCurrency(r.amount)}
                           </TableCell>
                           <TableCell dir="rtl" className="whitespace-nowrap text-xs text-right">
-                            {r.createdAt ? new Date(r.createdAt).toLocaleString('he-IL') : '-'}
+                            {fmtDateTime(r.createdAt)}
                           </TableCell>
                           <TableCell dir="rtl" className="text-right">
                             <div className="hidden md:flex items-center justify-end gap-1 flex-wrap">

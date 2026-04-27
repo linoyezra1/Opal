@@ -56,3 +56,20 @@ export function parseLocalEndOfDay(dateString) {
   const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 23, 59, 59, 999);
   return isNaN(d.getTime()) ? null : d;
 }
+
+/**
+ * Format date value as YYYY-MM-DDTHH:mm:ss (no milliseconds/timezone suffix)
+ *
+ * @param {string|Date|null|undefined} dateInput
+ * @returns {string}
+ */
+export function fmtDateTime(dateInput) {
+  if (!dateInput) return '-';
+  const iso = dateInput instanceof Date ? dateInput.toISOString() : String(dateInput).trim();
+  if (!iso) return '-';
+  const match = iso.match(/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2}:\d{2})/);
+  if (match) return `${match[1]}T${match[2]}`;
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return '-';
+  return parsed.toISOString().slice(0, 19);
+}
