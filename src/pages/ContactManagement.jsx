@@ -2,7 +2,7 @@ import React from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Phone, RefreshCw, MessageSquare, ShoppingCart, Pencil, Archive,
-  Clock, Building2, User, ChevronDown, ChevronUp,
+  Clock, Building2, User, ChevronDown, ChevronUp, ExternalLink,
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -100,8 +100,9 @@ export default function ContactManagement() {
           email: x.email,
           message: x.message || '',
           source: 'abandoned_checkout',
-          landingSlug: '',
-          landingPageTitle: '',
+          landingSlug: x.landingSlug || '',
+          landingPageTitle: x.landingPageTitle || '',
+          productName: x.productName || '',
           createdAt: x.updatedAt,
           leadStatus: x.leadStatus || 'חדש',
           adminNotes: x.adminNotes || '',
@@ -229,6 +230,9 @@ export default function ContactManagement() {
         organizationName: '',
         phone: l.phone || '',
         email: l.email || '',
+        productName: l.productName || '',
+        landingSlug: l.landingSlug || '',
+        landingPageTitle: l.landingPageTitle || '',
         createdAt: l.createdAt,
         leadStatus: l.leadStatus || 'חדש',
         adminNotes: l.adminNotes || '',
@@ -536,20 +540,22 @@ export default function ContactManagement() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/40 hover:bg-muted/40">
-                      <TableHead>שם מלא</TableHead>
-                      <TableHead>יצירת קשר</TableHead>
-                      <TableHead>קטגוריה</TableHead>
+                      <TableHead>שם</TableHead>
+                      <TableHead>טלפון</TableHead>
+                      <TableHead>מייל</TableHead>
+                      <TableHead>שם המוצר</TableHead>
+                      <TableHead>שם הדף</TableHead>
+                      <TableHead className="w-16 text-center">קישור</TableHead>
                       <TableHead>הודעה</TableHead>
                       <TableHead>סטטוס</TableHead>
-                      <TableHead>תאריך</TableHead>
                       <TableHead className="w-24 text-center">פעולות</TableHead>
+                      <TableHead>תאריך</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredLeads.map((lead) => {
                       const isExpanded = expandedRows.has(lead.id);
-                      const catCfg = CATEGORY_BADGE[lead.category] || CATEGORY_BADGE.general;
-                      const CatIcon = catCfg.icon;
+                      const landingUrl = lead.landingSlug ? `/p/${lead.landingSlug}` : '';
                       return (
                         <React.Fragment key={`${lead.kind}:${lead.id}`}>
                           <TableRow className="hover:bg-muted/30 transition-colors">
@@ -565,23 +571,37 @@ export default function ContactManagement() {
                               ) : null}
                             </TableCell>
 
-                            {/* Contact */}
-                            <TableCell>
-                              <div className="space-y-0.5">
-                                <div dir="ltr" className="text-sm font-medium">{lead.phone || '—'}</div>
-                                <div dir="ltr" className="text-xs text-muted-foreground">{lead.email || '—'}</div>
-                              </div>
+                            {/* Phone */}
+                            <TableCell dir="ltr" className="text-sm whitespace-nowrap">
+                              {lead.phone || '—'}
                             </TableCell>
-
-                            {/* Category badge */}
-                            <TableCell>
-                              <Badge
-                                variant="outline"
-                                className={cn('gap-1 max-w-[200px] truncate text-xs', catCfg.cls)}
-                              >
-                                <CatIcon className="size-3 shrink-0" />
-                                <span className="truncate">{lead.categoryLabel}</span>
-                              </Badge>
+                            {/* Email */}
+                            <TableCell dir="ltr" className="text-xs text-muted-foreground max-w-[160px] truncate">
+                              {lead.email || '—'}
+                            </TableCell>
+                            {/* Product */}
+                            <TableCell className="text-xs max-w-[140px] truncate">
+                              {lead.productName || '—'}
+                            </TableCell>
+                            {/* Origin page */}
+                            <TableCell className="text-xs max-w-[140px] truncate text-muted-foreground">
+                              {lead.landingPageTitle || (lead.landingSlug ? lead.landingSlug : '—')}
+                            </TableCell>
+                            {/* Link */}
+                            <TableCell className="text-center">
+                              {landingUrl ? (
+                                <a
+                                  href={landingUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center justify-center size-7 rounded border border-slate-200 bg-white text-slate-500 hover:border-primary hover:text-primary transition-colors"
+                                  title={`פתח דף: ${lead.landingSlug}`}
+                                >
+                                  <ExternalLink className="size-3.5" />
+                                </a>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
                             </TableCell>
 
                             {/* Message — expandable */}
@@ -620,11 +640,6 @@ export default function ContactManagement() {
                                 <option value="בטיפול">בטיפול</option>
                                 <option value="טופל">טופל</option>
                               </select>
-                            </TableCell>
-
-                            {/* Date */}
-                            <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                              {lead.createdAt ? new Date(lead.createdAt).toLocaleString('he-IL') : '—'}
                             </TableCell>
 
                             {/* Actions */}
@@ -666,12 +681,16 @@ export default function ContactManagement() {
                                 </Tooltip>
                               </div>
                             </TableCell>
+                            {/* Date */}
+                            <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                              {lead.createdAt ? new Date(lead.createdAt).toLocaleString('he-IL') : '—'}
+                            </TableCell>
                           </TableRow>
 
                           {/* Expanded message row */}
                           {isExpanded && lead.message ? (
                             <TableRow className="bg-muted/20 hover:bg-muted/20">
-                              <TableCell colSpan={7} className="py-2 px-8">
+                              <TableCell colSpan={10} className="py-2 px-8">
                                 <div className="text-sm text-foreground bg-background rounded-md border px-3 py-2 leading-relaxed">
                                   <span className="text-xs font-semibold text-muted-foreground block mb-1">
                                     הודעה מלאה:
@@ -687,7 +706,7 @@ export default function ContactManagement() {
 
                     {!filteredLeads.length ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="h-28 text-center text-muted-foreground">
+                        <TableCell colSpan={10} className="h-28 text-center text-muted-foreground">
                           אין רשומות להצגה
                         </TableCell>
                       </TableRow>
