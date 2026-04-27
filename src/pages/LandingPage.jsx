@@ -512,8 +512,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
   // while formState.beneficiaryCount stores ADDITIONAL members only.
   useEffect(() => {
     if (isDocToHome && selectedProduct?.defaultBeneficiaryCount != null) {
-      const totalConfigured = Math.max(1, Number(selectedProduct.defaultBeneficiaryCount) || 1);
-      setBeneficiaryCount(Math.max(0, totalConfigured - 1));
+      setBeneficiaryCount(Math.max(0, (selectedProduct?.defaultBeneficiaryCount || 1) - 1));
     }
   }, [isDocToHome, selectedProduct]);
 
