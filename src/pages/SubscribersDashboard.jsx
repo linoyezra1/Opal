@@ -762,20 +762,15 @@ export default function SubscribersDashboard() {
 
     if (filters.customerTypeFilter) {
       rows = rows.filter((r) => {
-        const hasOrganizationId = !!String(r.organizationId || '').trim();
-        const isCentralizedPayment = !!r.isCentralized;
-        if (filters.customerTypeFilter === 'private_only') {
-          return !hasOrganizationId;
-        }
-        if (filters.customerTypeFilter === 'org_private') {
-          return hasOrganizationId && !isCentralizedPayment;
-        }
-        if (filters.customerTypeFilter === 'org_centralized') {
-          return hasOrganizationId && isCentralizedPayment;
-        }
-        if (filters.customerTypeFilter === 'org_all') {
-          return hasOrganizationId;
-        }
+        const hasOrg =
+          !!String(r.organizationId || '').trim() ||
+          !!String(r.organizationName || r.organizationBadge || '').trim();
+        const isCentralized =
+          !!r.isCentralized || String(r.dealSource || '') === 'org-bulk-import';
+        if (filters.customerTypeFilter === 'private_only')    return !hasOrg;
+        if (filters.customerTypeFilter === 'org_all')         return hasOrg;
+        if (filters.customerTypeFilter === 'org_centralized') return hasOrg && isCentralized;
+        if (filters.customerTypeFilter === 'org_private')     return hasOrg && !isCentralized;
         return true;
       });
     }
