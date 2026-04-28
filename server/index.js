@@ -600,6 +600,8 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
       webhookQuery?.ResponseDescription
     );
     const webhookLast4 = firstDefined(
+      webhookBody?.CardNum,
+      webhookQuery?.CardNum,
       webhookBody?.Lest4Numbers,
       webhookBody?.Last4Numbers,
       webhookQuery?.Lest4Numbers,
@@ -658,6 +660,7 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
             cardcomAccountId: String(indicator?.cardcomAccountId || '').trim(),
             cardcomRecurringId: String(indicator?.cardcomRecurringId || '').trim(),
             cardcomToken: String(indicator?.cardcomToken || '').trim(),
+            lastFourDigits: webhookLast4 || String(indicator?.Lest4Numbers || '').trim(),
             payerAmount: Number(pending?.payerAmount || 0),
             formState: mergedFailedForm,
             agentId: pending?.agentId || null,
@@ -794,6 +797,7 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
         cardcomAccountId: step2Recurring?.cardcomAccountId || indicator?.cardcomAccountId || '',
         cardcomRecurringId: step2Recurring?.cardcomRecurringId || indicator?.cardcomRecurringId || '',
         cardcomToken: indicator?.cardcomToken || '',
+        lastFourDigits: String(finalForm.lastFourDigits || '').trim(),
         payerAmount,
         formState: finalForm,
         agentId,
@@ -966,6 +970,7 @@ async function handleMasterRecurringWebhook(body = {}, query = {}) {
   ]);
   const internalDealNumber = pickFirstValue(normalizedBody, ['internaldealnumber', 'InternalDealNumber']);
   const last4 = pickFirstValue(normalizedBody, ['Lest4Numbers', 'Last4Numbers']);
+  const cardNum = pickFirstValue(normalizedBody, ['CardNum']);
   const cardBrand = pickFirstValue(normalizedBody, ['MutagName', 'CardBrand', 'CardName']);
   const rawAmount = pickFirstValue(normalizedBody, ['amount', 'Amount', 'sumToBill', 'SumToBill']);
   const payerAmount = Number(rawAmount || 0);
@@ -1010,7 +1015,7 @@ async function handleMasterRecurringWebhook(body = {}, query = {}) {
   const mergedFormState = {
     ...(parent.formState || {}),
     cardcomResponseDescription: responseDescription,
-    lastFourDigits: last4,
+    lastFourDigits: cardNum || last4,
     cardBrand,
     cardcomRecurringId: cardcomRecurringId || parent.cardcomRecurringId || '',
   };
@@ -1020,6 +1025,7 @@ async function handleMasterRecurringWebhook(body = {}, query = {}) {
     cardcomAccountId: cardcomAccountId || parent.cardcomAccountId || '',
     cardcomRecurringId: cardcomRecurringId || parent.cardcomRecurringId || '',
     cardcomToken: cardcomToken || '',
+    lastFourDigits: cardNum || last4,
     payerAmount: Number.isFinite(payerAmount) && payerAmount > 0 ? payerAmount : Number(parent.payerAmount || 0),
     formState: mergedFormState,
     agentId: parent.agentId || null,

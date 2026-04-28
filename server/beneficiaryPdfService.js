@@ -483,7 +483,7 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
   need(102);
   yRef.current = infoGrid(page, [
     { label: 'אמצעי תשלום',       value: 'כרטיס אשראי',                  dir: 'rtl' },
-    { label: '4 ספרות אחרונות',   value: `•••• ${model.lastFourDigits}`, dir: 'ltr' },
+    { label: '4 ספרות אחרונות',   value: `•••• ${model.lastFourDigits || '----'}`, dir: 'ltr' },
     {
       label: 'שים לב',
       value: 'החיוב החודשי מתבצע דרך אופאל תקשורת שיווקית בע״מ',

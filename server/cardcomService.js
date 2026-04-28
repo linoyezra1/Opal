@@ -286,7 +286,8 @@ export function parseLowProfileIndicatorXml(xml) {
     firstTagValue(block, 'Description');
   const last4 =
     firstTagValue(block, 'Lest4Numbers') ||
-    firstTagValue(block, 'Last4Numbers');
+    firstTagValue(block, 'Last4Numbers') ||
+    firstTagValue(block, 'CardNum');
   const cardBrand = firstTagValue(block, 'MutagName') || firstTagValue(block, 'CardName');
 
   return {
@@ -353,7 +354,7 @@ export async function getLowProfileIndicator(terminalNumber, username, lowProfil
   const rootRecurringId = getVal('RecurringId') || getVal('RowID');
   const rootToken = getVal('Token') || getVal('CardToken') || getVal('TokenToSave');
   const rootResponseDescription = getVal('ResponsDescription') || getVal('ResponseDescription') || getVal('Description');
-  const rootLast4 = getVal('Lest4Numbers') || getVal('Last4Numbers');
+  const rootLast4 = getVal('Lest4Numbers') || getVal('Last4Numbers') || getVal('CardNum');
   const rootCardBrand = getVal('MutagName') || getVal('CardName');
 
   return {

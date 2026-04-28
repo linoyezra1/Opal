@@ -75,6 +75,7 @@ export async function saveDeal(params) {
     if (params.cardcomAccountId != null) set.cardcomAccountId = String(params.cardcomAccountId || '').trim();
     if (params.cardcomRecurringId != null) set.cardcomRecurringId = String(params.cardcomRecurringId || '').trim();
     if (params.cardcomToken != null) set.cardcomToken = String(params.cardcomToken || '').trim();
+    if (params.lastFourDigits != null) set.lastFourDigits = String(params.lastFourDigits || '').trim();
     if (params.payerAmount != null) set.payerAmount = Number(params.payerAmount || 0);
     if (params.formState && typeof params.formState === 'object') set.formState = params.formState;
     if (params.indicator && typeof params.indicator === 'object') set.indicator = params.indicator;
@@ -163,6 +164,11 @@ export async function saveDeal(params) {
       params.cardcomToken != null && String(params.cardcomToken).trim() !== ''
         ? String(params.cardcomToken).trim()
         : '',
+    /** 4 ספרות אחרונות מכרטיס (Cardcom CardNum/Lest4Numbers/Last4Numbers) */
+    lastFourDigits:
+      params.lastFourDigits != null && String(params.lastFourDigits).trim() !== ''
+        ? String(params.lastFourDigits).trim()
+        : String(mergedFormState?.lastFourDigits || '').trim(),
     payerAmount: Number(params.payerAmount || 0),
     formState: mergedFormState,
     /** מזהה סוכן (מנוי) — לספירת מכירות לפי סוכן */
