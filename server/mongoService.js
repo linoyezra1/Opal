@@ -3140,6 +3140,18 @@ export async function updateMonthlyInvoice(invoiceId, body = {}) {
 
 /* ─── Provider Applications ─────────────────────────────────────────────── */
 
+export async function saveNotification(params = {}) {
+  const db = await getDb();
+  const now = new Date();
+  await db.collection('notifications').insertOne({
+    title:     String(params.title     || '').trim(),
+    type:      String(params.type      || 'general').trim(),
+    actionUrl: String(params.actionUrl || '').trim(),
+    isRead:    false,
+    createdAt: now,
+  });
+}
+
 export async function saveProviderApplication(params = {}) {
   const db = await getDb();
   const now = new Date();
@@ -3188,6 +3200,29 @@ export async function listProviderApplications() {
   }));
 }
 
+export async function getProviderApplicationById(id) {
+  const db = await getDb();
+  let oid;
+  try {
+    oid = new ObjectId(String(id));
+  } catch {
+    throw new Error('מזהה ספק לא תקין');
+  }
+  const doc = await db.collection('providers').findOne({ _id: oid });
+  if (!doc) return null;
+  return {
+    id:              String(doc._id),
+    companyName:     doc.companyName     || '',
+    companyId:       doc.companyId       || '',
+    officialAddress: doc.officialAddress || '',
+    companyEmail:    doc.companyEmail    || '',
+    contactPerson:   doc.contactPerson   || {},
+    fieldOfActivity: doc.fieldOfActivity || '',
+    message:         doc.message         || '',
+    status:          doc.status          || 'pending',
+  };
+}
+
 export async function approveProviderApplication(id) {
   const db = await getDb();
   let oid;
@@ -3198,7 +3233,7 @@ export async function approveProviderApplication(id) {
   }
   const r = await db.collection('providers').updateOne(
     { _id: oid },
-    { $set: { status: 'active', updatedAt: new Date() } }
+    { $set: { status: 'approved', updatedAt: new Date() } }
   );
   if (!r.matchedCount) throw new Error('ספק לא נמצא');
   return { ok: true };

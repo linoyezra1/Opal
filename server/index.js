@@ -70,7 +70,9 @@ import {
   updateMonthlyInvoice,
   saveProviderApplication,
   listProviderApplications,
+  getProviderApplicationById,
   approveProviderApplication,
+  saveNotification,
 } from './mongoService.js';
 import {
   createLandingPage,
@@ -1256,6 +1258,14 @@ app.post('/api/providers/join-request', async (req, res) => {
       fieldOfActivity: String(body.fieldOfActivity || '').trim(),
       message:         String(body.message         || '').trim(),
     });
+
+    // Fire-and-forget — a failed notification must never block the response.
+    saveNotification({
+      title:     `בקשת הצטרפות חדשה מספק: ${companyName}`,
+      type:      'provider_application',
+      actionUrl: '/admin/vendors?tab=applications',
+    }).catch((e) => console.error(`[${ts()}] saveNotification failed:`, e?.message || e));
+
     res.json({ success: true, id: result.id });
   } catch (err) {
     console.error(`[${ts()}] providers/join-request error:`, err);
@@ -1555,6 +1565,28 @@ app.get('/api/admin/providers', requireAdmin, async (req, res) => {
 
 app.put('/api/admin/providers/:id/approve', requireAdmin, async (req, res) => {
   try {
+    const application = await getProviderApplicationById(req.params.id);
+    if (!application) return res.status(404).json({ success: false, error: 'בקשה לא נמצאה' });
+    if (application.status === 'approved') {
+      return res.status(400).json({ success: false, error: 'בקשה זו כבר אושרה' });
+    }
+
+    const cp = application.contactPerson || {};
+    await createVendor({
+      vendorName:   application.companyName,
+      idNum:        application.companyId,
+      phone:        cp.phone || cp.mobile || '',
+      email:        application.companyEmail || cp.email || '',
+      address:      application.officialAddress,
+      contactPerson: {
+        name:  cp.name  || '',
+        role:  cp.role  || '',
+        phone: cp.phone || cp.mobile || '',
+        email: cp.email || '',
+      },
+      productLinks: [],
+    });
+
     await approveProviderApplication(req.params.id);
     res.json({ success: true });
   } catch (e) {

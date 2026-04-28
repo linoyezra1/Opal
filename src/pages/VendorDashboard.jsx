@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus,
   Edit2,
@@ -210,6 +210,7 @@ function VendorFormFields({ data, setData }) {
 
 export default function VendorDashboard() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [token] = React.useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [form, setForm] = React.useState(emptyVendor);
   const [productLinks, setProductLinks] = React.useState([emptyLink()]);
@@ -223,7 +224,11 @@ export default function VendorDashboard() {
   const [expandedVendor, setExpandedVendor] = React.useState(null);
   const [search, setSearch] = React.useState('');
   const [productFilter, setProductFilter] = React.useState('all');
-  const [activeTab, setActiveTab] = React.useState('vendors');
+  const [activeTab, setActiveTab] = React.useState(
+    () => String(new URLSearchParams(window.location.search).get('tab') || 'vendors') === 'applications'
+      ? 'applications'
+      : 'vendors'
+  );
   const [providerApps, setProviderApps] = React.useState([]);
   const [loadingApps, setLoadingApps] = React.useState(false);
   const [approvingId, setApprovingId] = React.useState('');
@@ -296,7 +301,9 @@ export default function VendorDashboard() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.error || 'אישור נכשל');
-      setProviderApps((prev) => prev.map((p) => p.id === id ? { ...p, status: 'active' } : p));
+      // Remove from applications list immediately, then refresh vendors in the background.
+      setProviderApps((prev) => prev.filter((p) => p.id !== id));
+      loadVendors();
     } catch (e) {
       setError(e.message || 'שגיאה');
     } finally {

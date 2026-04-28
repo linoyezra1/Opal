@@ -133,7 +133,26 @@ export default function OrganizationJoinRequest() {
           </Card>
 
           {error ? <p className="text-destructive text-sm">{error}</p> : null}
-          {done ? <p className="text-primary text-sm font-medium">הבקשה נשלחה בהצלחה.</p> : null}
+
+  if (done) {
+    return (
+      <div
+        dir="rtl"
+        className="min-h-screen flex items-center justify-center p-6"
+        style={{ background: 'linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%)' }}
+      >
+        <div className="w-full max-w-md text-center space-y-4">
+          <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-3xl">✓</div>
+          <h1 className="text-2xl font-bold text-[#1A365D]">הבקשה נשלחה בהצלחה!</h1>
+          <p className="text-muted-foreground">לשאלות נוספות .</p>
+        </div>
+      </div>
+    );
+  }
+
+
+
+
           <Button type="submit" size="lg" className="w-full sm:w-auto bg-[#1A365D] hover:bg-[#152d4e]" disabled={loading}>
             {loading ? 'שולח…' : 'שליחת בקשה'}
           </Button>
