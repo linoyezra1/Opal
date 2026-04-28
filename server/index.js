@@ -238,9 +238,10 @@ async function buildLegalDocAttachments() {
 
 function buildBeneficiarySummaryAttachment({ transactionId, beneficiaryPdfBuffer }) {
   if (!beneficiaryPdfBuffer) return [];
+  const tid = String(transactionId || '').trim() || 'order';
   return [
     {
-      filename: `beneficiary-summary-${String(transactionId || '').trim() || 'order'}.pdf`,
+      filename: `סיכום הזמנה - רופא עד הבית - ${tid}.pdf`,
       content: beneficiaryPdfBuffer,
     },
   ];
@@ -1355,7 +1356,14 @@ app.post('/api/update-beneficiaries', async (req, res) => {
     try {
       const to = firstDefined(primaryEmail, deal?.formState?.email);
       if (to) {
-        const attachments = buildBeneficiarySummaryAttachment({ transactionId, beneficiaryPdfBuffer });
+        const legalDocs = await buildLegalDocAttachments().catch((e) => {
+          console.error(`[${ts()}] legal doc attachments failed for completion email:`, e?.message || e);
+          return [];
+        });
+        const attachments = [
+          ...buildBeneficiarySummaryAttachment({ transactionId, beneficiaryPdfBuffer }),
+          ...legalDocs,
+        ];
         const primaryName = [primaryFirstName, primaryLastName].filter(Boolean).join(' ');
         await sendBeneficiaryCompletionEmail({
           to,
@@ -2040,6 +2048,34 @@ app.get('/api/admin/deals/:id/billing-history', requireAdmin, async (req, res) =
   } catch (e) {
     console.error(`[${ts()}] admin/deals/:id/billing-history error:`, e);
     res.status(400).json({ success: false, error: e.message || 'Failed to load billing history' });
+  }
+});
+
+app.get('/api/deals/:transactionId/summary-pdf', async (req, res) => {
+  try {
+    const transactionId = String(req.params.transactionId || '').trim();
+    if (!transactionId) return res.status(400).json({ success: false, error: 'Missing transactionId' });
+
+    const deal = await getDealByTransactionId(transactionId);
+    if (!deal) return res.status(404).json({ success: false, error: 'Deal not found' });
+
+    const bu = deal.beneficiaryUpdate && typeof deal.beneficiaryUpdate === 'object' ? deal.beneficiaryUpdate : {};
+    const pdfModel = buildBeneficiaryPdfModelFromDeal({
+      transactionId,
+      deal,
+      primaryMember: bu.primaryMember || {},
+      additionalMembers: Array.isArray(bu.additionalMembers) ? bu.additionalMembers : [],
+      payerAmount: deal.payerAmount,
+    });
+
+    const pdfBuffer = await generateBeneficiarySummaryPdfBuffer(pdfModel);
+    const filename = `סיכום הזמנה - רופא עד הבית - ${transactionId}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.send(pdfBuffer);
+  } catch (e) {
+    console.error(`[${ts()}] deals/:transactionId/summary-pdf error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'PDF generation failed' });
   }
 });
 

@@ -121,7 +121,7 @@ function buildOrderConfirmationHtml(payload, logoDataUri = '') {
               <div style="border-top:1px solid #eee;margin-bottom:20px;"></div>
               <div dir="rtl" style="margin-bottom:16px;text-align:right;">
                 <p style="margin:0 0 4px;text-align:right;font-family:${FONT_STACK};">
-                  <span style="color:${OPAL_BLUE};font-size:18px;font-weight:800;font-family:${FONT_STACK};">לשרות רפואי חייג:</span>
+                  <span style="margin:0 0 10px;color:${OPAL_BLUE};font-size:15px;font-weight:600;text-align:right;font-family:${FONT_STACK};">לשרות רפואי חייג:</span>
                 </p>
                 <a href="${tel}" style="display:inline-block;color:${OPAL_BLUE};text-decoration:none;font-size:26px;font-weight:800;text-align:right;font-family:${FONT_STACK};">
                   <span dir="ltr" style="unicode-bidi:embed;font-family:${FONT_STACK};">${servicePhone}</span>

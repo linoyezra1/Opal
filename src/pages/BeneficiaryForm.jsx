@@ -357,7 +357,7 @@ export default function BeneficiaryForm() {
           return;
         }
         setSubmitted(true);
-        navigate('/beneficiary-success', { replace: true });
+        navigate('/beneficiary-success', { replace: true, state: { transactionId: String(transactionId || '').trim() } });
       } catch (err) {
         setSubmitError(err.message || 'שגיאת רשת');
       } finally {

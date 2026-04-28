@@ -132,9 +132,9 @@ export default function Success() {
 
 
         <Card className="mb-6">
-          <CardContent className="pt-6 space-y-3 text-muted-foreground text-sm sm:text-amber-100">
+          <CardContent className="pt-6 space-y-3 text-muted-foreground text-sm">
             <p className="font-bold text-lg text-foreground">
-              טלפונים להזמנת שירותים רפואיים: 00-00000 לינק להגשת מסמכים רפואיים — תביעה און ליין: לינק
+              טלפונים להזמנת שירותים רפואיים: 00-00000
             </p>
             <p>
               לינק להגשת מסמכים רפואיים — תביעה און ליין:{' '}
