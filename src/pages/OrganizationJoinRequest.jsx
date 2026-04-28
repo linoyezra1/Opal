@@ -57,18 +57,19 @@ export default function OrganizationJoinRequest() {
       style={{ background: 'linear-gradient(180deg, #f8fbff 0%, #f3f7fc 48%, #eef4fb 100%)' }}
     >
       <div className="max-w-5xl mx-auto space-y-6">
-        <div className="flex justify-end">
+        <div className="flex flex-row items-center justify-between gap-4">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#1A365D] text-right">
+            בקשת הצטרפות ארגונים
+          </h1>
           <img
-            src="/images/opal-logo.jpeg"
+            src="/branding/opal-logo.jpeg"
             alt="אופאל"
-            className="h-auto w-[130px] sm:w-[160px] object-contain rounded-md bg-white px-2 py-1"
+            className="h-16 sm:h-20 w-auto object-contain rounded-md bg-white px-2 py-1 shadow-sm shrink-0"
           />
         </div>
-
-        <div className="text-center space-y-2">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#1A365D]">בקשת הצטרפות והזמנה</h1>
-          <p className="text-sm sm:text-base text-[#1A365D]">אנא מלאו את הפרטים והצוות שלנו יחזור אליכם בהקדם</p>
-        </div>
+        <p className="text-sm sm:text-base text-[#1A365D]/70 text-right">
+          אנא מלאו את הפרטים והצוות שלנו יחזור אליכם בהקדם
+        </p>
 
         <form onSubmit={submit} className="space-y-6">
           <Card className="bg-white border-border shadow-sm">
