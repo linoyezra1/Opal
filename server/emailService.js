@@ -346,6 +346,98 @@ export async function sendOrderConfirmationEmail(payload) {
   }
 }
 
+export async function sendEmployeeApprovalRequestEmail(payload) {
+  const to = String(payload.to || '').trim();
+  if (!to) return { sent: false, reason: 'missing-recipient' };
+  const apiKey = String(process.env.RESEND_API_KEY || '').trim();
+  if (!apiKey) {
+    console.warn('[email] RESEND_API_KEY not configured; skipping employee approval email');
+    return { sent: false, reason: 'resend-not-configured' };
+  }
+
+  const resend = new Resend(apiKey);
+  const fromAddress = process.env.MAIL_FROM_ADDRESS || 'onboarding@resend.dev';
+  const fromName = process.env.MAIL_FROM_NAME || 'OPAL';
+  const employeeName = escapeHtml(payload.employeeName || '—');
+  const orgName     = escapeHtml(payload.orgName     || '');
+  const productName = escapeHtml(payload.productName || 'רופא עד הבית');
+  const employeeId  = escapeHtml(payload.employeeId  || '—');
+  const employeePhone = escapeHtml(payload.employeePhone || '—');
+  const approveUrl  = escapeAttr(String(payload.approveUrl || '#').trim());
+  const logoDataUri = await getOpalLogoDataUriForEmail();
+  const logoBlock   = buildInlineLogoHtml(logoDataUri);
+
+  const html = rtlWrap(`
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" dir="rtl" style="background-color:#f0faf8;padding:32px 16px;direction:rtl;text-align:right;">
+    <tr>
+      <td align="right" dir="rtl">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="right" dir="rtl" style="max-width:560px;background-color:#ffffff;direction:rtl;text-align:right;">
+          <tr>
+            <td align="center" dir="rtl" style="background-color:#285959;padding:20px 32px 24px;text-align:center;font-family:${FONT_STACK};">
+              ${logoBlock}
+              <h1 style="margin:14px 0 0;color:#dffff9;font-size:20px;font-weight:600;line-height:1.4;text-align:center;font-family:${FONT_STACK};">
+                בקשת אישור עובד חדש
+              </h1>
+            </td>
+          </tr>
+          <tr>
+            <td align="right" dir="rtl" style="padding:28px 32px;direction:rtl;text-align:right;font-family:${FONT_STACK};">
+              <p style="font-size:15px;color:#333;margin:0 0 20px;line-height:1.7;font-family:${FONT_STACK};">
+                שלום,<br/>
+                העובד <strong>${employeeName}</strong> נרשם לשירות <strong>${productName}</strong>${orgName ? ` עבור ארגון <strong>${orgName}</strong>` : ''}.
+              </p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="right" dir="rtl" style="border-collapse:collapse;margin-bottom:28px;direction:rtl;text-align:right;">
+                <tr>
+                  <td style="padding:9px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;font-family:${FONT_STACK};">שם העובד:</td>
+                  <td style="padding:9px 0;color:#285959;font-size:14px;font-weight:600;border-bottom:1px solid #eee;font-family:${FONT_STACK};">${employeeName}</td>
+                </tr>
+                <tr>
+                  <td style="padding:9px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;font-family:${FONT_STACK};">תעודת זהות:</td>
+                  <td style="padding:9px 0;color:#285959;font-size:14px;border-bottom:1px solid #eee;font-family:${FONT_STACK};"><span dir="ltr">${employeeId}</span></td>
+                </tr>
+                <tr>
+                  <td style="padding:9px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;font-family:${FONT_STACK};">טלפון:</td>
+                  <td style="padding:9px 0;color:#285959;font-size:14px;border-bottom:1px solid #eee;font-family:${FONT_STACK};"><span dir="ltr">${employeePhone}</span></td>
+                </tr>
+                <tr>
+                  <td style="padding:9px 0;color:#666;font-size:14px;font-family:${FONT_STACK};">שירות:</td>
+                  <td style="padding:9px 0;color:#285959;font-size:14px;font-weight:600;font-family:${FONT_STACK};">${productName}</td>
+                </tr>
+              </table>
+              <div style="text-align:center;margin-bottom:24px;">
+                <a href="${approveUrl}" style="display:inline-block;background-color:#37e6c4;color:#1a3a3a;text-decoration:none;padding:14px 40px;border-radius:6px;font-size:16px;font-weight:700;font-family:${FONT_STACK};letter-spacing:0.02em;">
+                  ✓ אשר עובד
+                </a>
+              </div>
+              <p style="font-size:12px;color:#999;text-align:center;font-family:${FONT_STACK};">
+                לחיצה על הכפתור תפעיל את המנוי אוטומטית. אם אינך מכיר עובד זה, התעלם מהודעה זו.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>`);
+
+  const subject = `בקשת אישור עובד: ${payload.employeeName || ''}`.trim();
+  try {
+    const result = await resend.emails.send({
+      from: `"${fromName}" <${fromAddress}>`,
+      to: [to],
+      subject,
+      html,
+    });
+    if (result?.error) {
+      console.error('[email] Employee approval email failed', result.error);
+      throw new Error(result.error?.message || 'Resend send failed');
+    }
+    return { sent: true, provider: 'resend', id: result?.data?.id || null };
+  } catch (err) {
+    console.error('[email] Employee approval email exception', { message: err?.message });
+    throw err;
+  }
+}
+
 export async function sendBeneficiaryCompletionEmail(payload) {
   const to = String(payload.to || '').trim();
   if (!to) return { sent: false, reason: 'missing-recipient' };

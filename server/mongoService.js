@@ -794,6 +794,7 @@ export async function createOrganizationCompany(params) {
     customPricing,
     source: params.source || 'admin',
     status: params.status || 'active',
+    employeeApprovalEmail: String(params.employeeApprovalEmail || '').trim(),
     isActive: true,
     createdAt: now,
     updatedAt: now,
@@ -862,6 +863,8 @@ export async function getPublicOrganizationForRegistration(orgId) {
     name: o.companyName || o.name || '',
     billingType: o.billingType,
     monthlyPricePerMember: o.monthlyPricePerMember,
+    subscriptionProductName: o.subscriptionProductName || '',
+    employeeApprovalEmail: o.employeeApprovalEmail || '',
   };
 }
 
@@ -892,6 +895,7 @@ export async function updateOrganizationCompany(id, params) {
   if (params.contactPhone != null) set.contactPhone = String(params.contactPhone || '').trim();
   if (params.notes != null) set.notes = String(params.notes || '').trim();
   if (params.collectionStatus != null) set.collectionStatus = String(params.collectionStatus || 'open').trim();
+  if (params.employeeApprovalEmail != null) set.employeeApprovalEmail = String(params.employeeApprovalEmail || '').trim();
   if (params.contactPerson != null) set.contactPerson = params.contactPerson || null;
   if (params.accounting != null) set.accounting = params.accounting || null;
   if (params.additionalContact != null) set.additionalContact = params.additionalContact || null;
@@ -1146,6 +1150,121 @@ export async function insertOrganizationImportedDeal({
   return { skipped: false, id: String(result.insertedId), transactionId };
 }
 
+export async function insertOrganizationEmployeePendingDeal({
+  organizationId,
+  organizationName,
+  monthlyPrice,
+  subscriptionProductName = '',
+  firstName,
+  lastName,
+  idNum,
+  email,
+  phone,
+  dateOfBirth = '',
+  gender = '',
+  address = '',
+  healthFund = '',
+  supplementalInsurance = '',
+  maritalStatus = '',
+}) {
+  const dup = await findActiveDealByOrgAndNationalId(organizationId, idNum);
+  if (dup) return { skipped: true, reason: 'duplicate_id' };
+
+  const db = await getDb();
+  const transactionId = `ORG-REG-${String(organizationId).replace(/\W/g, '').slice(-10)}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const now = new Date();
+  const idClean = String(idNum || '').replace(/\D/g, '').slice(0, 9);
+  const fullName = [firstName, lastName].filter(Boolean).join(' ');
+  const orgNm = String(organizationName || '').trim();
+  const productLabel = String(subscriptionProductName || '').trim() || (orgNm ? `מנוי ארגוני — ${orgNm}` : 'מנוי ארגוני');
+
+  const fs = {
+    fullName,
+    id: idClean || String(idNum || '').trim(),
+    email: String(email || '').trim(),
+    phone: String(phone || '').trim(),
+    dateOfBirth: String(dateOfBirth || '').trim(),
+    gender: String(gender || '').trim(),
+    maritalStatus: String(maritalStatus || '').trim(),
+    healthFund: String(healthFund || '').trim(),
+    supplementalInsurance: String(supplementalInsurance || '').trim(),
+    address: String(address || '').trim(),
+    organizationName: orgNm,
+    organizationId: String(organizationId),
+    paymentMethod: 'centralized',
+    organizationPaymentMethod: 'centralized',
+    productName: productLabel,
+    beneficiaries: [],
+    beneficiaryCount: 0,
+  };
+
+  const doc = {
+    transactionId,
+    lowProfileCode: '',
+    cardcomAccountId: '',
+    cardcomRecurringId: '',
+    cardcomToken: '',
+    payerAmount: Number(monthlyPrice || 0),
+    formState: fs,
+    agentId: null,
+    terminalNumber: 0,
+    paymentStatus: 'success',
+    source: 'org-self-register',
+    indicator: null,
+    normalizedPayload: null,
+    commissionAmount: 0,
+    billingMonth: formatBillingMonthFromDate(now),
+    organizationId: String(organizationId),
+    isOrganizationDeal: true,
+    isCentralized: true,
+    memberType: 'Primary',
+    isActive: true,
+    status: 'pending_org_approval',
+    subscriptionStatus: 'Pending Org Approval',
+    beneficiaryUpdate: {
+      transactionId,
+      organizationName: orgNm,
+      agentName: '',
+      primaryMember: {
+        firstName: String(firstName || '').trim(),
+        lastName: String(lastName || '').trim(),
+        id: idClean || String(idNum || '').trim(),
+        email: String(email || '').trim(),
+        phone: String(phone || '').trim(),
+        address: String(address || '').trim(),
+        dateOfBirth: String(dateOfBirth || '').trim(),
+        maritalStatus: String(maritalStatus || '').trim(),
+        healthFund: String(healthFund || '').trim(),
+        supplementalInsurance: String(supplementalInsurance || '').trim(),
+        gender: String(gender || '').trim(),
+      },
+      additionalMembers: [],
+      submittedAt: now,
+    },
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const result = await db.collection('deals').insertOne(doc);
+  return { skipped: false, id: String(result.insertedId), transactionId };
+}
+
+export async function approveOrgEmployee(dealId) {
+  const db = await getDb();
+  let oid;
+  try {
+    oid = new ObjectId(String(dealId));
+  } catch {
+    throw new Error('מזהה עסקה לא תקין');
+  }
+  const r = await db.collection('deals').updateOne(
+    { _id: oid, status: 'pending_org_approval' },
+    { $set: { status: 'Completed', subscriptionStatus: 'Active', updatedAt: new Date() } }
+  );
+  if (!r.matchedCount) throw new Error('עסקה לא נמצאה או כבר אושרה');
+  return { ok: true };
+}
+
 export async function updateLeadAdmin(kind, id, params) {
   const db = await getDb();
   let oid;
@@ -1240,6 +1359,7 @@ function serializeOrgDoc(doc, activeMemberCount = undefined) {
       : o.companyEmail || '';
   o.contactPhone = String(doc.contactPhone || '').trim();
   o.notes = String(doc.notes || '').trim();
+  o.employeeApprovalEmail = String(doc.employeeApprovalEmail || '').trim();
   o.priceListId = doc.priceListId ? String(doc.priceListId) : '';
   o.customPricing = Array.isArray(doc.customPricing)
     ? doc.customPricing

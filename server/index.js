@@ -12,7 +12,7 @@ import {
   stopRecurringProfile,
   createRecurringProfileFromLowProfile,
 } from './cardcomService.js';
-import { sendOrderConfirmationEmail, sendBeneficiaryCompletionEmail } from './emailService.js';
+import { sendOrderConfirmationEmail, sendBeneficiaryCompletionEmail, sendEmployeeApprovalRequestEmail } from './emailService.js';
 import { generateBeneficiarySummaryPdfBuffer, saveBeneficiarySummaryPdfToDisk } from './beneficiaryPdfService.js';
 import {
   createOrganizationCompany,
@@ -73,6 +73,8 @@ import {
   getProviderApplicationById,
   approveProviderApplication,
   saveNotification,
+  insertOrganizationEmployeePendingDeal,
+  approveOrgEmployee,
 } from './mongoService.js';
 import {
   createLandingPage,
@@ -2052,6 +2054,102 @@ app.delete('/api/admin/organizations/:id', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(`[${ts()}] admin/organizations delete error:`, e);
     res.status(400).json({ success: false, error: e.message || 'Failed to delete organization' });
+  }
+});
+
+app.post('/api/org/employee-register', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const orgId = String(body.orgId || '').trim();
+    if (!orgId) return res.status(400).json({ success: false, error: 'חסר מזהה ארגון' });
+
+    const org = await getPublicOrganizationForRegistration(orgId);
+    if (!org) return res.status(404).json({ success: false, error: 'ארגון לא נמצא' });
+    if (org.billingType !== 'Centralized')
+      return res.status(400).json({ success: false, error: 'ארגון זה אינו מוגדר לרישום עצמי מרוכז' });
+
+    const firstName = String(body.firstName || '').trim();
+    const lastName  = String(body.lastName  || '').trim();
+    const idNum     = String(body.idNum     || '').replace(/\D/g, '');
+    if (!firstName || !lastName) return res.status(400).json({ success: false, error: 'נא למלא שם פרטי ושם משפחה' });
+    if (!idNum) return res.status(400).json({ success: false, error: 'נא למלא תעודת זהות' });
+
+    const result = await insertOrganizationEmployeePendingDeal({
+      organizationId: org.id,
+      organizationName: org.name,
+      monthlyPrice: Number(org.monthlyPricePerMember || 0),
+      subscriptionProductName: org.subscriptionProductName || '',
+      firstName,
+      lastName,
+      idNum,
+      email:                 String(body.email                || '').trim(),
+      phone:                 String(body.phone                || '').trim(),
+      dateOfBirth:           String(body.dateOfBirth          || '').trim(),
+      gender:                String(body.gender               || '').trim(),
+      address:               String(body.address              || '').trim(),
+      healthFund:            String(body.healthFund           || '').trim(),
+      supplementalInsurance: String(body.supplementalInsurance|| '').trim(),
+      maritalStatus:         String(body.maritalStatus        || '').trim(),
+    });
+
+    if (result.skipped) {
+      return res.status(409).json({ success: false, error: 'עובד עם תעודת זהות זו כבר רשום לארגון' });
+    }
+
+    const approvalEmail = String(org.employeeApprovalEmail || '').trim();
+    if (approvalEmail) {
+      const approveUrl = `${BASE_URL}/api/organizations/approve-employee/${result.id}`;
+      sendEmployeeApprovalRequestEmail({
+        to:            approvalEmail,
+        employeeName:  [firstName, lastName].filter(Boolean).join(' '),
+        employeeId:    idNum,
+        employeePhone: String(body.phone || '').trim(),
+        orgName:       org.name,
+        productName:   org.subscriptionProductName || 'רופא עד הבית',
+        approveUrl,
+      }).catch((e) => console.error(`[${ts()}] employee approval email failed:`, e?.message || e));
+    }
+
+    res.json({ success: true, id: result.id });
+  } catch (err) {
+    console.error(`[${ts()}] org/employee-register error:`, err);
+    res.status(500).json({ success: false, error: err.message || 'שגיאה ברישום' });
+  }
+});
+
+app.get('/api/organizations/approve-employee/:id', async (req, res) => {
+  const successHtml = `<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>אישור עובד — אופאל</title>
+</head>
+<body style="margin:0;background:#f0faf8;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:'Segoe UI',Arial,sans-serif;">
+<div style="text-align:center;padding:50px 30px;background:#ffffff;border-radius:12px;box-shadow:0 4px 24px rgba(40,89,89,0.12);max-width:480px;width:90%;">
+  <div style="width:72px;height:72px;background:#285959;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:36px;color:#dffff9;line-height:1;">✓</div>
+  <h1 style="color:#285959;font-size:26px;margin:0 0 12px;font-weight:700;">הפרטים נשמרו בהצלחה</h1>
+  <p style="color:#3a7a7a;font-size:16px;margin:0;">תודה רבה! המנוי הופעל בהצלחה.</p>
+</div>
+</body>
+</html>`;
+
+  try {
+    await approveOrgEmployee(req.params.id);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(successHtml);
+  } catch (err) {
+    console.error(`[${ts()}] approve-employee error:`, err);
+    res.status(400).setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(`<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head><meta charset="utf-8"/><title>שגיאה</title></head>
+<body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;">
+<div style="text-align:center;padding:50px;color:#c0392b;">
+  <h1>שגיאה</h1><p>${String(err.message || 'לא ניתן לאשר').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>
+</div>
+</body>
+</html>`);
   }
 });
 

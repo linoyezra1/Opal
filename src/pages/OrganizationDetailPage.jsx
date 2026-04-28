@@ -302,7 +302,7 @@ export default function OrganizationDetailPage() {
           <TabsContent value="members" className="mt-4" dir="rtl">
             <Card dir="rtl" className="text-right">
               <CardHeader className="text-right">
-                <CardTitle>חברים מקושרים</CardTitle>
+                <CardTitle>גורמים בארגון</CardTitle>
                 <CardDescription>עסקאות עם organizationId של ארגון זה</CardDescription>
               </CardHeader>
               <CardContent>
@@ -311,8 +311,8 @@ export default function OrganizationDetailPage() {
                     <EmptyMedia variant="icon">
                       <Users className="size-8" />
                     </EmptyMedia>
-                    <EmptyTitle>אין חברים</EmptyTitle>
-                    <EmptyDescription>השתמשו ביבוא או בהרשמה ציבורית לפי קישור הארגון</EmptyDescription>
+                    <EmptyTitle>אין גורמים בארגון</EmptyTitle>
+                    <EmptyDescription>השתמשו ביבוא גורמים בארגון להוספה </EmptyDescription>
                   </Empty>
                 ) : (
                   <div className="rounded-md border overflow-x-auto" dir="rtl">
@@ -604,7 +604,7 @@ export default function OrganizationDetailPage() {
                 <CardTitle>תשלומים חודשיים</CardTitle>
                 <CardDescription>
                   {isCentralizedBilling
-                    ? 'חיוב חודשי לפי חברים פעילים × מחיר לחבר'
+                    ? 'חיוב חודשי לפי גורמים פעילים × מחיר לחבר'
                     : 'ארגון זה מוגדר לתשלום פרטי מול עובדי הארגון'}
                 </CardDescription>
               </CardHeader>
@@ -615,7 +615,7 @@ export default function OrganizationDetailPage() {
                       <TableHeader>
                         <TableRow className="[&_th]:text-right">
                           <TableHead>חודש</TableHead>
-                          <TableHead>סה״כ חברים</TableHead>
+                          <TableHead>גורמים בארגון</TableHead>
                           <TableHead>סה״כ סכום</TableHead>
                           <TableHead>סטטוס</TableHead>
                         </TableRow>

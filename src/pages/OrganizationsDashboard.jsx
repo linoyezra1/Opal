@@ -43,6 +43,7 @@ const emptyForm = () => ({
   status: 'active',
   contactEmail: '',
   contactPhone: '',
+  employeeApprovalEmail: '',
   notes: '',
   contactPerson: { name: '', role: '', phone: '', mobile: '', email: '' },
   accounting: { name: '', role: '', phone: '', mobile: '', email: '' },
@@ -67,6 +68,10 @@ export default function OrganizationsDashboard() {
   const [priceLists, setPriceLists] = useState([]);
   const [search, setSearch] = useState('');
   const [billingFilter, setBillingFilter] = useState('all');
+  const [activeMainTab, setActiveMainTab] = useState(
+    () => String(new URLSearchParams(window.location.search).get('tab') || 'orgs') === 'applications' ? 'applications' : 'orgs'
+  );
+  const [approvingId, setApprovingId] = useState('');
 
   const loadRows = useCallback(async () => {
     if (!token) return;
@@ -252,9 +257,33 @@ export default function OrganizationsDashboard() {
     else setEditOrg((p) => (p ? updater(p) : p));
   }
 
+  async function approveOrg(id) {
+    setApprovingId(id);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/organizations/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status: 'active' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || 'אישור נכשל');
+      setRows((prev) => prev.map((r) => r.id === id ? { ...r, status: 'active' } : r));
+    } catch (e) {
+      setError(e.message || 'שגיאה');
+    } finally {
+      setApprovingId('');
+    }
+  }
+
+  const pendingRows = React.useMemo(
+    () => (rows || []).filter((r) => ['pending', 'Pending'].includes(String(r.status || ''))),
+    [rows]
+  );
+
   const filteredRows = React.useMemo(() => {
     const q = String(search || '').trim().toLowerCase();
     return (rows || []).filter((r) => {
+      if (['pending', 'Pending'].includes(String(r.status || ''))) return false;
       if (billingFilter === 'centralized' && r.billingType !== 'Centralized') return false;
       if (billingFilter === 'private' && r.billingType === 'Centralized') return false;
       if (!q) return true;
@@ -374,6 +403,10 @@ export default function OrganizationsDashboard() {
                   <Field>
                     <FieldLabel>טלפון ליצירת קשר</FieldLabel>
                     <Input dir="ltr" value={addForm.contactPhone} onChange={(e) => setAddForm((p) => ({ ...p, contactPhone: e.target.value }))} />
+                  </Field>
+                  <Field>
+                    <FieldLabel>מייל לאישור עובדים (HR)</FieldLabel>
+                    <Input dir="ltr" type="email" value={addForm.employeeApprovalEmail} onChange={(e) => setAddForm((p) => ({ ...p, employeeApprovalEmail: e.target.value }))} placeholder="לשליחת בקשות אישור עובדים חדשים" />
                   </Field>
                   <Field>
                     <FieldLabel>הערות</FieldLabel>
@@ -560,6 +593,7 @@ export default function OrganizationsDashboard() {
                     <Field><FieldLabel>אימייל חברה</FieldLabel><Input dir="ltr" value={editOrg.companyEmail || ''} onChange={(e) => setEditOrg((p) => ({ ...p, companyEmail: e.target.value }))} /></Field>
                     <Field><FieldLabel>אימייל ליצירת קשר</FieldLabel><Input dir="ltr" value={editOrg.contactEmail || ''} onChange={(e) => setEditOrg((p) => ({ ...p, contactEmail: e.target.value }))} /></Field>
                     <Field><FieldLabel>טלפון ליצירת קשר</FieldLabel><Input dir="ltr" value={editOrg.contactPhone || ''} onChange={(e) => setEditOrg((p) => ({ ...p, contactPhone: e.target.value }))} /></Field>
+                    <Field><FieldLabel>מייל לאישור עובדים (HR)</FieldLabel><Input dir="ltr" type="email" value={editOrg.employeeApprovalEmail || ''} onChange={(e) => setEditOrg((p) => ({ ...p, employeeApprovalEmail: e.target.value }))} placeholder="לשליחת בקשות אישור עובדים חדשים" /></Field>
                     <Field><FieldLabel>הערות</FieldLabel><Input value={editOrg.notes || ''} onChange={(e) => setEditOrg((p) => ({ ...p, notes: e.target.value }))} /></Field>
                     <Field><FieldLabel>תחום פעילות</FieldLabel><Input value={editOrg.fieldOfActivity || ''} onChange={(e) => setEditOrg((p) => ({ ...p, fieldOfActivity: e.target.value }))} /></Field>
                     <Field><FieldLabel>מספר עובדים</FieldLabel><Input type="number" value={editOrg.employeesCount || ''} onChange={(e) => setEditOrg((p) => ({ ...p, employeesCount: e.target.value }))} /></Field>
@@ -737,7 +771,9 @@ export default function OrganizationsDashboard() {
             </h1>
             <p className="text-muted-foreground">אופאל — ארגונים, חברים פעילים, יבוא והרשמה</p>
           </div>
-          <Button onClick={openAdd}><Plus className="size-4 me-2" />הוסף ארגון</Button>
+          {activeMainTab === 'orgs' && (
+            <Button onClick={openAdd}><Plus className="size-4 me-2" />הוסף ארגון</Button>
+          )}
         </div>
 
         {error ? <p className="text-destructive text-sm">{error}</p> : null}
@@ -746,135 +782,226 @@ export default function OrganizationsDashboard() {
           טופס ציבורי להצטרפות ארגון זמין ב־<Link className="text-primary underline" to="/organization-join-request">/organization-join-request</Link>
         </p>
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="חיפוש חופשי: ארגון, ח.פ, אימייל, טלפון, מוצר"
-              />
-              <select
-                className="flex h-10 min-w-56 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={billingFilter}
-                onChange={(e) => setBillingFilter(e.target.value)}
-              >
-                <option value="all">כל סוגי החיוב</option>
-                <option value="centralized">חיוב מרוכז</option>
-                <option value="private">חיוב פרטי</option>
-              </select>
-            </div>
-          </CardContent>
-        </Card>
+        <Tabs value={activeMainTab} onValueChange={setActiveMainTab} dir="rtl">
+          <TabsList>
+            <TabsTrigger value="orgs">ארגונים ({filteredRows.length})</TabsTrigger>
+            <TabsTrigger value="applications">
+              בקשות הצטרפות
+              {pendingRows.length > 0 && (
+                <Badge className="me-1.5 bg-amber-500 text-white text-xs px-1.5 py-0">
+                  {pendingRows.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>רשימת ארגונים</CardTitle>
-            <CardDescription>
-              {filteredRows.length} / {rows.length} ארגונים
-              <Button
-                variant="link"
-                className="px-2 h-auto font-normal text-primary"
-                type="button"
-                onClick={loadRows}
-              >
-                רענון
-              </Button>
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {filteredRows.length === 0 && !loading ? (
-              <Empty>
-                <EmptyMedia variant="icon"><Building2 className="size-8" /></EmptyMedia>
-                <EmptyTitle>אין ארגונים</EmptyTitle>
-                <EmptyDescription>הוסיפו ארגון ראשון כדי להתחיל ניהול מרוכז</EmptyDescription>
-                <Button className="mt-4" type="button" onClick={openAdd}><Plus className="size-4 me-2" />הוסף ארגון חדש</Button>
-              </Empty>
-            ) : (
-              <div className="overflow-x-auto rounded-md border" dir="rtl">
-                <Table className="text-right">
-                  <TableHeader>
-                    <TableRow className="[&_th]:text-right">
-                      <TableHead className="text-right">שם חברה</TableHead>
-                      <TableHead className="text-right">ח.פ</TableHead>
-                      <TableHead className="text-right">סטטוס</TableHead>
-                      <TableHead className="text-right">סוג חיוב</TableHead>
-                      <TableHead className="text-right">חברים פעילים</TableHead>
-                      <TableHead className="text-right">מחיר לחבר</TableHead>
-                      <TableHead className="text-right">אימייל</TableHead>
-                      <TableHead className="w-40 text-right">פעולות</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredRows.map((r) => (
-                      <TableRow key={r.id}>
-                        <TableCell className="font-medium">{r.companyName || '—'}</TableCell>
-                        <TableCell>{r.companyId || '—'}</TableCell>
-                        <TableCell>
-                          {String(r.status || 'active').toLowerCase() === 'pending' ? (
-                            <Badge variant="outline" className="border-amber-600 text-amber-900">
-                              ממתין
-                            </Badge>
-                          ) : String(r.status || '').toLowerCase() === 'lead' ? (
-                            <Badge variant="secondary">ליד</Badge>
-                          ) : (
-                            <Badge variant="default">פעיל</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
-                            {r.billingType === 'Centralized' ? 'מרוכז' : 'פרטי'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{r.activeMemberCount ?? 0}</TableCell>
-                        <TableCell dir="ltr">
-                          {r.monthlyPricePerMember != null && Number(r.monthlyPricePerMember) > 0
-                            ? `₪${Number(r.monthlyPricePerMember)}`
-                            : '—'}
-                        </TableCell>
-                        <TableCell dir="ltr" className="text-start text-sm">
-                          {r.contactEmail || r.companyEmail || '—'}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1 flex-wrap">
-                            <Button variant="outline" size="sm" type="button" asChild>
-                              <Link to={`/admin/organizations/${encodeURIComponent(r.id)}`}>פרופיל</Link>
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              type="button"
-                              onClick={() => {
-                                setEditTab('org');
-                                setEditOrg({
-                                  ...emptyForm(),
-                                  ...r,
-                                  pricingMethod: Array.isArray(r.customPricing) && r.customPricing.length ? 'custom' : 'priceList',
-                                  billingType: r.billingType || (r.billingMethod?.includes('מרוכז') ? 'Centralized' : 'Private'),
-                                });
-                              }}
-                            >
-                              <Edit2 className="size-4" />
-                            </Button>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button variant="ghost" size="icon" type="button" onClick={() => setDeleteOrg(r)} aria-label="הפוך ללא פעיל">
-                                  <Archive className="size-4 text-destructive" />
+          {/* ── Active organizations tab ── */}
+          <TabsContent value="orgs" className="space-y-4 mt-4">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="חיפוש חופשי: ארגון, ח.פ, אימייל, טלפון, מוצר"
+                  />
+                  <select
+                    className="flex h-10 min-w-56 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={billingFilter}
+                    onChange={(e) => setBillingFilter(e.target.value)}
+                  >
+                    <option value="all">כל סוגי החיוב</option>
+                    <option value="centralized">חיוב מרוכז</option>
+                    <option value="private">חיוב פרטי</option>
+                  </select>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>רשימת ארגונים</CardTitle>
+                <CardDescription>
+                  {filteredRows.length} ארגונים פעילים
+                  <Button variant="link" className="px-2 h-auto font-normal text-primary" type="button" onClick={loadRows}>
+                    רענון
+                  </Button>
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {filteredRows.length === 0 && !loading ? (
+                  <Empty>
+                    <EmptyMedia variant="icon"><Building2 className="size-8" /></EmptyMedia>
+                    <EmptyTitle>אין ארגונים</EmptyTitle>
+                    <EmptyDescription>הוסיפו ארגון ראשון כדי להתחיל ניהול מרוכז</EmptyDescription>
+                    <Button className="mt-4" type="button" onClick={openAdd}><Plus className="size-4 me-2" />הוסף ארגון חדש</Button>
+                  </Empty>
+                ) : (
+                  <div className="overflow-x-auto rounded-md border" dir="rtl">
+                    <Table className="text-right">
+                      <TableHeader>
+                        <TableRow className="[&_th]:text-right">
+                          <TableHead>שם חברה</TableHead>
+                          <TableHead>ח.פ</TableHead>
+                          <TableHead>סוג חיוב</TableHead>
+                          <TableHead>חברים</TableHead>
+                          <TableHead>מחיר לחבר</TableHead>
+                          <TableHead>אימייל</TableHead>
+                          <TableHead className="w-40">פעולות</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredRows.map((r) => (
+                          <TableRow key={r.id}>
+                            <TableCell className="font-medium">{r.companyName || '—'}</TableCell>
+                            <TableCell>{r.companyId || '—'}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">
+                                {r.billingType === 'Centralized' ? 'מרוכז' : 'פרטי'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{r.activeMemberCount ?? 0}</TableCell>
+                            <TableCell dir="ltr">
+                              {r.monthlyPricePerMember != null && Number(r.monthlyPricePerMember) > 0
+                                ? `₪${Number(r.monthlyPricePerMember)}`
+                                : '—'}
+                            </TableCell>
+                            <TableCell dir="ltr" className="text-start text-sm">
+                              {r.contactEmail || r.companyEmail || '—'}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <Button variant="outline" size="sm" type="button" asChild>
+                                  <Link to={`/admin/organizations/${encodeURIComponent(r.id)}`}>פרופיל</Link>
                                 </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>הפוך ללא פעיל</TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-            {loading && rows.length > 0 ? <p className="text-sm text-muted-foreground mt-2">טוען…</p> : null}
-          </CardContent>
-        </Card>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  type="button"
+                                  onClick={() => {
+                                    setEditTab('org');
+                                    setEditOrg({
+                                      ...emptyForm(),
+                                      ...r,
+                                      pricingMethod: Array.isArray(r.customPricing) && r.customPricing.length ? 'custom' : 'priceList',
+                                      billingType: r.billingType || (r.billingMethod?.includes('מרוכז') ? 'Centralized' : 'Private'),
+                                    });
+                                  }}
+                                >
+                                  <Edit2 className="size-4" />
+                                </Button>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button variant="ghost" size="icon" type="button" onClick={() => setDeleteOrg(r)} aria-label="הפוך ללא פעיל">
+                                      <Archive className="size-4 text-destructive" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>הפוך ללא פעיל</TooltipContent>
+                                </Tooltip>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+                {loading && rows.length > 0 ? <p className="text-sm text-muted-foreground mt-2">טוען…</p> : null}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── Pending applications tab ── */}
+          <TabsContent value="applications" className="mt-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">בקשות הצטרפות ממתינות לאישור</CardTitle>
+                <CardDescription>{pendingRows.length} בקשות</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {pendingRows.length === 0 ? (
+                  <Empty>
+                    <EmptyMedia variant="icon"><Building2 className="size-8" /></EmptyMedia>
+                    <EmptyTitle>אין בקשות ממתינות</EmptyTitle>
+                    <EmptyDescription>בקשות שנשלחו דרך טופס ההצטרפות יופיעו כאן</EmptyDescription>
+                  </Empty>
+                ) : (
+                  <div className="overflow-x-auto rounded-md border" dir="rtl">
+                    <Table className="text-right">
+                      <TableHeader>
+                        <TableRow className="[&_th]:text-right">
+                          <TableHead>שם חברה</TableHead>
+                          <TableHead>ח.פ</TableHead>
+                          <TableHead>סוג חיוב</TableHead>
+                          <TableHead>אימייל</TableHead>
+                          <TableHead>סטטוס</TableHead>
+                          <TableHead className="w-40">פעולות</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {pendingRows.map((r) => (
+                          <TableRow key={r.id}>
+                            <TableCell className="font-medium">{r.companyName || '—'}</TableCell>
+                            <TableCell>{r.companyId || '—'}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">
+                                {r.billingType === 'Centralized' ? 'מרוכז' : 'פרטי'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell dir="ltr" className="text-start text-sm">
+                              {r.contactEmail || r.companyEmail || '—'}
+                            </TableCell>
+                            <TableCell>
+                              <Badge className="bg-amber-100 text-amber-800 border-amber-300">ממתין לאישור</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                                  disabled={approvingId === r.id}
+                                  onClick={() => approveOrg(r.id)}
+                                >
+                                  {approvingId === r.id ? '…' : 'אשר ארגון'}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  type="button"
+                                  onClick={() => {
+                                    setEditTab('org');
+                                    setEditOrg({
+                                      ...emptyForm(),
+                                      ...r,
+                                      pricingMethod: Array.isArray(r.customPricing) && r.customPricing.length ? 'custom' : 'priceList',
+                                      billingType: r.billingType || 'Private',
+                                    });
+                                  }}
+                                >
+                                  <Edit2 className="size-4" />
+                                </Button>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button variant="ghost" size="icon" type="button" onClick={() => setDeleteOrg(r)} aria-label="דחה">
+                                      <Archive className="size-4 text-destructive" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>דחה / ארכיון</TooltipContent>
+                                </Tooltip>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+        </Tabs>
       </div>
       </AdminPageShell>
     </TooltipProvider>
