@@ -20,6 +20,7 @@ import OrganizationsDashboard from './pages/OrganizationsDashboard.jsx';
 import OrganizationDetailPage from './pages/OrganizationDetailPage.jsx';
 import OrgRegisterPage from './pages/OrgRegisterPage.jsx';
 import OrganizationJoinRequest from './pages/OrganizationJoinRequest.jsx';
+import ProviderJoinRequest from './pages/ProviderJoinRequest.jsx';
 import BeneficiarySuccess from './pages/BeneficiarySuccess.jsx';
 import ArchiveDashboard from './pages/ArchiveDashboard.jsx';
 import AlertsDashboard from './pages/AlertsDashboard.jsx';
@@ -36,6 +37,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/beneficiary-form" element={<BeneficiaryForm />} />
         <Route path="/beneficiary-success" element={<BeneficiarySuccess />} />
         <Route path="/organization-join-request" element={<OrganizationJoinRequest />} />
+        <Route path="/provider-join-request" element={<ProviderJoinRequest />} />
         <Route path="/error" element={<Error />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/admin/subscribers" element={<SubscribersDashboard />} />

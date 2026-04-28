@@ -137,6 +137,7 @@ export default function Success() {
               טלפונים להזמנת שירותים רפואיים: 00-00000
             </p>
             <p>
+                <strong>
               לינק להגשת מסמכים רפואיים — תביעה און ליין:{' '}
               <a
                 href={DOCUMENTS_LINK}
@@ -144,11 +145,15 @@ export default function Success() {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                לינק
+                לחצו כאן
               </a>
+
+           </strong>
             </p>
           </CardContent>
         </Card>
+
+
 
         <Card>
           <CardContent className="pt-6 space-y-3">

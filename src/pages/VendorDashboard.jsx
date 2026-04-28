@@ -223,6 +223,10 @@ export default function VendorDashboard() {
   const [expandedVendor, setExpandedVendor] = React.useState(null);
   const [search, setSearch] = React.useState('');
   const [productFilter, setProductFilter] = React.useState('all');
+  const [activeTab, setActiveTab] = React.useState('vendors');
+  const [providerApps, setProviderApps] = React.useState([]);
+  const [loadingApps, setLoadingApps] = React.useState(false);
+  const [approvingId, setApprovingId] = React.useState('');
   const vendorFilterConfig = React.useMemo(
     () => [
       { key: 'search', label: 'חיפוש', type: 'text', placeholder: 'חיפוש חופשי: ספק, ח.פ, טלפון, אימייל, מוצר' },
@@ -268,10 +272,43 @@ export default function VendorDashboard() {
     }
   }
 
+  async function loadProviderApplications() {
+    if (!token) return;
+    setLoadingApps(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/providers`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || 'טעינה נכשלה');
+      setProviderApps(Array.isArray(data.providers) ? data.providers : []);
+    } catch (e) {
+      setError(e.message || 'שגיאה');
+    } finally {
+      setLoadingApps(false);
+    }
+  }
+
+  async function approveProvider(id) {
+    setApprovingId(id);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/providers/${encodeURIComponent(id)}/approve`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || 'אישור נכשל');
+      setProviderApps((prev) => prev.map((p) => p.id === id ? { ...p, status: 'active' } : p));
+    } catch (e) {
+      setError(e.message || 'שגיאה');
+    } finally {
+      setApprovingId('');
+    }
+  }
+
   React.useEffect(() => {
     if (!token) return;
     loadProducts();
     loadVendors();
+    loadProviderApplications();
   }, [token]);
 
   function onProductSelect(index, productId, isEdit) {
@@ -565,18 +602,35 @@ export default function VendorDashboard() {
             <h1 className="text-2xl font-bold tracking-tight">ספקים</h1>
             <p className="text-muted-foreground">ניהול ספקים, בנק וקישור מוצרים</p>
           </div>
-          <Button
-            onClick={() => {
-              setForm(emptyVendor);
-              setProductLinks([emptyLink()]);
-              setError('');
-              setCreateOpen(true);
-            }}
-          >
-            <Plus className="size-4 me-2" />
-            הוסף ספק
-          </Button>
+          {activeTab === 'vendors' && (
+            <Button
+              onClick={() => {
+                setForm(emptyVendor);
+                setProductLinks([emptyLink()]);
+                setError('');
+                setCreateOpen(true);
+              }}
+            >
+              <Plus className="size-4 me-2" />
+              הוסף ספק
+            </Button>
+          )}
         </div>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} dir="rtl">
+          <TabsList>
+            <TabsTrigger value="vendors">ספקים ({vendors.length})</TabsTrigger>
+            <TabsTrigger value="applications">
+              בקשות הצטרפות
+              {providerApps.filter((p) => p.status === 'pending').length > 0 && (
+                <Badge className="me-1.5 bg-amber-500 text-white text-xs px-1.5 py-0">
+                  {providerApps.filter((p) => p.status === 'pending').length}
+                </Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="vendors" className="space-y-4 mt-4">
 
         <Card>
           <CardContent className="pt-6">
@@ -747,6 +801,92 @@ export default function VendorDashboard() {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
+
+          {/* ── Provider Applications tab ── */}
+          <TabsContent value="applications" className="mt-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center justify-between">
+                  בקשות הצטרפות לספק
+                  <Button variant="outline" size="sm" onClick={loadProviderApplications} disabled={loadingApps}>
+                    {loadingApps ? 'טוען…' : 'רענן'}
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {providerApps.length === 0 && !loadingApps ? (
+                  <Empty>
+                    <EmptyMedia variant="icon"><Building2 className="size-8" /></EmptyMedia>
+                    <EmptyTitle>אין בקשות הצטרפות</EmptyTitle>
+                    <EmptyDescription>בקשות חדשות יופיעו כאן</EmptyDescription>
+                  </Empty>
+                ) : (
+                  <div className="overflow-x-auto rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>שם חברה</TableHead>
+                          <TableHead>ח.פ</TableHead>
+                          <TableHead>איש קשר</TableHead>
+                          <TableHead>טלפון</TableHead>
+                          <TableHead>מייל</TableHead>
+                          <TableHead>תחום פעילות</TableHead>
+                          <TableHead>סטטוס</TableHead>
+                          <TableHead className="w-28">פעולות</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {providerApps.map((p) => (
+                          <React.Fragment key={p.id}>
+                            <TableRow>
+                              <TableCell className="font-medium">{p.companyName || '—'}</TableCell>
+                              <TableCell className="font-mono text-sm"><span dir="ltr">{p.companyId || '—'}</span></TableCell>
+                              <TableCell>{p.contactPerson?.name || '—'}</TableCell>
+                              <TableCell><span dir="ltr">{p.contactPerson?.mobile || p.contactPerson?.phone || '—'}</span></TableCell>
+                              <TableCell className="text-xs"><span dir="ltr">{p.contactPerson?.email || p.companyEmail || '—'}</span></TableCell>
+                              <TableCell className="text-xs text-muted-foreground max-w-[160px] truncate">{p.fieldOfActivity || '—'}</TableCell>
+                              <TableCell>
+                                {p.status === 'pending' ? (
+                                  <Badge className="bg-amber-100 text-amber-800 border-amber-300">ממתין לאישור</Badge>
+                                ) : (
+                                  <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300">פעיל</Badge>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {p.status === 'pending' ? (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                                    disabled={approvingId === p.id}
+                                    onClick={() => approveProvider(p.id)}
+                                  >
+                                    {approvingId === p.id ? '…' : 'אשר ספק'}
+                                  </Button>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">אושר</span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                            {p.message ? (
+                              <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                <TableCell colSpan={8} className="py-2 px-6 text-xs text-muted-foreground italic">
+                                  {p.message}
+                                </TableCell>
+                              </TableRow>
+                            ) : null}
+                          </React.Fragment>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+        </Tabs>
       </div>
       </AdminPageShell>
     </TooltipProvider>

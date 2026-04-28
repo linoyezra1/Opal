@@ -364,23 +364,7 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
     return y - tableH - 6;
   }
 
-  /* ── TOTALS BANNER ───────────────────────────────────────────────────── */
-  function totalsBanner(pg, y) {
-    const bh = 30;
-    rect(pg, ML, y - bh, CW, bh, GOLD_LIGHT, GOLD, 0.5);
 
-    const amtStr = `₪${Number(model.monthlyTotal || 0).toLocaleString('he-IL')}`;
-    ltr(pg, amtStr, ML + PAD, y - 20, 13, NAVY);
-
-    const lbV = bidiV('סה״כ תשלום חודשי');
-    pg.drawText(lbV, {
-      x: ML + CW - font.widthOfTextAtSize(lbV, 10) - PAD,
-      y: y - 20,
-      size: 10, font, color: NAVY,
-    });
-
-    return y - bh - 6;
-  }
 
   /* ── SERVICE BOX ─────────────────────────────────────────────────────── */
   function serviceBox(pg, y) {
@@ -491,6 +475,27 @@ export async function generateBeneficiarySummaryPdfBuffer(modelInput = {}) {
       span2: true,
     },
   ], yRef.current);
+/* ── TOTALS BANNER ───────────────────────────────────────────────────── */
+  function totalsBanner(pg, y) {
+    const bh = 30;
+    rect(pg, ML, y - bh, CW, bh, GOLD_LIGHT, GOLD, 0.5);
+
+    const amtStr = `₪${Number(model.monthlyTotal || 0).toLocaleString('he-IL')}`;
+    ltr(pg, amtStr, ML + PAD, y - 20, 13, NAVY);
+
+    const lbV = bidiV('סה״כ תשלום חודשי');
+    pg.drawText(lbV, {
+      x: ML + CW - font.widthOfTextAtSize(lbV, 10) - PAD,
+      y: y - 20,
+      size: 10, font, color: NAVY,
+    });
+
+    return y - bh - 6;
+  }
+
+
+
+
 
   /* 7. SERVICE CONTACT */
   need(22);

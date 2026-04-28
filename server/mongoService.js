@@ -3137,3 +3137,69 @@ export async function updateMonthlyInvoice(invoiceId, body = {}) {
   if (!r.matchedCount) throw new Error('רשומה לא נמצאה');
   return { ok: true };
 }
+
+/* ─── Provider Applications ─────────────────────────────────────────────── */
+
+export async function saveProviderApplication(params = {}) {
+  const db = await getDb();
+  const now = new Date();
+  const result = await db.collection('providers').insertOne({
+    companyName:     String(params.companyName     || '').trim(),
+    companyId:       String(params.companyId       || '').trim(),
+    officialAddress: String(params.officialAddress || '').trim(),
+    companyEmail:    String(params.companyEmail    || '').trim(),
+    contactPerson: {
+      name:   String(params.contactPerson?.name   || '').trim(),
+      role:   String(params.contactPerson?.role   || '').trim(),
+      phone:  String(params.contactPerson?.phone  || '').trim(),
+      mobile: String(params.contactPerson?.mobile || '').trim(),
+      email:  String(params.contactPerson?.email  || '').trim(),
+    },
+    fieldOfActivity: String(params.fieldOfActivity || '').trim(),
+    message:         String(params.message         || '').trim(),
+    status:    'pending',
+    source:    'provider_join_request',
+    isActive:  true,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return { id: String(result.insertedId) };
+}
+
+export async function listProviderApplications() {
+  const db = await getDb();
+  const docs = await db
+    .collection('providers')
+    .find({ isActive: { $ne: false } })
+    .sort({ createdAt: -1 })
+    .limit(500)
+    .toArray();
+  return docs.map((d) => ({
+    id:              String(d._id),
+    companyName:     d.companyName     || '',
+    companyId:       d.companyId       || '',
+    officialAddress: d.officialAddress || '',
+    companyEmail:    d.companyEmail    || '',
+    contactPerson:   d.contactPerson   || {},
+    fieldOfActivity: d.fieldOfActivity || '',
+    message:         d.message         || '',
+    status:          d.status          || 'pending',
+    createdAt:       d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+  }));
+}
+
+export async function approveProviderApplication(id) {
+  const db = await getDb();
+  let oid;
+  try {
+    oid = new ObjectId(String(id));
+  } catch {
+    throw new Error('מזהה ספק לא תקין');
+  }
+  const r = await db.collection('providers').updateOne(
+    { _id: oid },
+    { $set: { status: 'active', updatedAt: new Date() } }
+  );
+  if (!r.matchedCount) throw new Error('ספק לא נמצא');
+  return { ok: true };
+}

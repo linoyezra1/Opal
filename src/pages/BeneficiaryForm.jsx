@@ -433,7 +433,7 @@ export default function BeneficiaryForm() {
           <Card>
             <CardHeader>
               <CardTitle>מוטבים נוספים</CardTitle>
-              <CardDescription>שורות לפי מספר המוטבים שנרכשו בעסקה — יש למלא רק אם רלוונטי</CardDescription>
+
             </CardHeader>
             <CardContent className="space-y-4">
               {additionalMembers.length === 0 ? (

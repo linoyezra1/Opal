@@ -68,6 +68,9 @@ import {
   listMonthlyInvoices,
   generateMonthlyInvoicesForMonth,
   updateMonthlyInvoice,
+  saveProviderApplication,
+  listProviderApplications,
+  approveProviderApplication,
 } from './mongoService.js';
 import {
   createLandingPage,
@@ -1235,6 +1238,31 @@ app.post('/api/organization-join-request', async (req, res) => {
   }
 });
 
+app.post('/api/providers/join-request', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const companyName = String(body.companyName || '').trim();
+    if (!companyName) {
+      return res.status(400).json({ success: false, error: 'נדרש שם החברה' });
+    }
+    const contactPerson = body.contactPerson && typeof body.contactPerson === 'object'
+      ? body.contactPerson : {};
+    const result = await saveProviderApplication({
+      companyName,
+      companyId:       String(body.companyId       || '').trim(),
+      officialAddress: String(body.officialAddress || '').trim(),
+      companyEmail:    String(body.companyEmail    || '').trim(),
+      contactPerson,
+      fieldOfActivity: String(body.fieldOfActivity || '').trim(),
+      message:         String(body.message         || '').trim(),
+    });
+    res.json({ success: true, id: result.id });
+  } catch (err) {
+    console.error(`[${ts()}] providers/join-request error:`, err);
+    res.status(500).json({ success: false, error: err.message || 'שגיאה בשליחה' });
+  }
+});
+
 /**
  * POST /api/update-beneficiaries
  * Body:
@@ -1512,6 +1540,26 @@ app.delete('/api/admin/vendors/:id', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(`[${ts()}] admin/vendors delete error:`, e);
     res.status(500).json({ success: false, error: e.message || 'Failed to delete vendor' });
+  }
+});
+
+app.get('/api/admin/providers', requireAdmin, async (req, res) => {
+  try {
+    const providers = await listProviderApplications();
+    res.json({ success: true, providers });
+  } catch (e) {
+    console.error(`[${ts()}] admin/providers list error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to list providers' });
+  }
+});
+
+app.put('/api/admin/providers/:id/approve', requireAdmin, async (req, res) => {
+  try {
+    await approveProviderApplication(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    console.error(`[${ts()}] admin/providers approve error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to approve provider' });
   }
 });
 
