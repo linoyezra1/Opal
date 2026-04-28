@@ -601,6 +601,14 @@ export default function VendorDashboard() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">ספקים</h1>
             <p className="text-muted-foreground">ניהול ספקים, בנק וקישור מוצרים</p>
+
+                    <p className="text-sm text-muted-foreground">
+                      טופס ציבורי להצטרפות כספק<Link className="text-primary underline" to="/provider-join-request">/provider-join-request</Link>
+                    </p>
+
+
+
+
           </div>
           {activeTab === 'vendors' && (
             <Button
