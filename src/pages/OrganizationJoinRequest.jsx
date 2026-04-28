@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { API_BASE } from '../apiBase.js';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Button } from '../components/ui/button.jsx';
 import { Input } from '../components/ui/input.jsx';
 import { Field, FieldGroup, FieldLabel } from '../components/ui/field.jsx';
@@ -48,6 +48,22 @@ export default function OrganizationJoinRequest() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (done) {
+    return (
+      <div
+        dir="rtl"
+        className="min-h-screen flex items-center justify-center p-6"
+        style={{ background: 'linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%)' }}
+      >
+        <div className="w-full max-w-md text-center space-y-4">
+          <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-3xl">✓</div>
+          <h1 className="text-2xl font-bold text-[#1A365D]">הבקשה נשלחה בהצלחה!</h1>
+          <p className="text-muted-foreground">הצוות שלנו יחזור אליכם בהקדם.</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -105,7 +121,11 @@ export default function OrganizationJoinRequest() {
               <FieldGroup>
                 <Field>
                   <FieldLabel className="text-[#1A365D]">שיטת חיוב</FieldLabel>
-                  <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-[#1A365D]" value={billingMethod} onChange={(e) => setBillingMethod(e.target.value)}>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-[#1A365D]"
+                    value={billingMethod}
+                    onChange={(e) => setBillingMethod(e.target.value)}
+                  >
                     <option value="private">חיוב לקוח פרטי</option>
                     <option value="corporate">חיוב מרוכז חברה</option>
                   </select>
@@ -133,25 +153,6 @@ export default function OrganizationJoinRequest() {
           </Card>
 
           {error ? <p className="text-destructive text-sm">{error}</p> : null}
-
-  if (done) {
-    return (
-      <div
-        dir="rtl"
-        className="min-h-screen flex items-center justify-center p-6"
-        style={{ background: 'linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%)' }}
-      >
-        <div className="w-full max-w-md text-center space-y-4">
-          <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-3xl">✓</div>
-          <h1 className="text-2xl font-bold text-[#1A365D]">הבקשה נשלחה בהצלחה!</h1>
-          <p className="text-muted-foreground">לשאלות נוספות .</p>
-        </div>
-      </div>
-    );
-  }
-
-
-
 
           <Button type="submit" size="lg" className="w-full sm:w-auto bg-[#1A365D] hover:bg-[#152d4e]" disabled={loading}>
             {loading ? 'שולח…' : 'שליחת בקשה'}
