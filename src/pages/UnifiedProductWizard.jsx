@@ -57,6 +57,7 @@ const INIT_S1 = () => ({
   productName: '', sku: '', baseDescription: '',
   vendorCost: '',
   flowType: LOCKED_FLOW_TYPE,
+  defaultBeneficiaryCount: 1,
   productImages: ['', '', '', ''],
 });
 const INIT_S2 = () => ({ listName: '', retailPrice: '', globalCommission: '', vendorCost: '' });
@@ -361,6 +362,7 @@ export default function UnifiedProductWizard() {
       baseDescription: found.baseDescription || found.description || p.baseDescription,
       vendorCost: String(found.providerCost ?? found.vendorCost ?? p.vendorCost),
       flowType: LOCKED_FLOW_TYPE,
+      defaultBeneficiaryCount: Number(found.defaultBeneficiaryCount || 1),
     }));
   }, [s1.existingProductId, productMode, products, vendors]);
 
@@ -576,6 +578,7 @@ export default function UnifiedProductWizard() {
               providerId: resolvedVendorId,
               providerCost: Number(s1.vendorCost || 0),
               flowType: LOCKED_FLOW_TYPE,
+              defaultBeneficiaryCount: Math.max(1, Number(s1.defaultBeneficiaryCount || 1)),
             }),
           });
           const prData = await prRes.json().catch(() => ({}));
@@ -1159,6 +1162,18 @@ export default function UnifiedProductWizard() {
                 <FieldLabel>סוג זרימה (Flow Type)</FieldLabel>
                 <Input value={LOCKED_FLOW_TYPE} readOnly disabled className="bg-slate-100 text-muted-foreground" />
               </Field>
+              {s1.flowType === LOCKED_FLOW_TYPE ? (
+                <Field>
+                  <FieldLabel>כמות מוטבים (כולל ראשי)</FieldLabel>
+                  <Input
+                    dir="ltr"
+                    type="number"
+                    min="1"
+                    value={s1.defaultBeneficiaryCount ?? 1}
+                    onChange={(e) => setS1((p) => ({ ...p, defaultBeneficiaryCount: Math.max(1, Number(e.target.value || 1)) }))}
+                  />
+                </Field>
+              ) : null}
             </div>
 
             {s1Error ? <p className="text-destructive text-sm">{s1Error}</p> : null}

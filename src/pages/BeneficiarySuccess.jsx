@@ -11,7 +11,7 @@ export default function BeneficiarySuccess() {
             <CheckCircle2 className="size-10" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-2xl font-bold tracking-tight">הפרטים נשמרו בהצלחה</h1>
+            <h1 className="text-2xl font-bold tracking-tight">הפרטים נשמרו בהצלחה, ונשלחו אליכם למייל</h1>
             <p className="text-muted-foreground text-lg">תודה שהצטרפת למשפחת אופאל</p>
           </div>
           <p className="text-sm text-muted-foreground"></p>

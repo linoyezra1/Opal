@@ -65,8 +65,14 @@ export default function Success() {
   return (
     <div dir="rtl" className="min-h-screen flex flex-col bg-gradient-to-b from-primary/5 via-background to-muted/30 font-sans">
       <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="container max-w-3xl mx-auto px-4 py-5 flex justify-center">
-          <img src="/branding/opal-logo.jpeg" alt="אופאל" className="h-11 w-auto object-contain" />
+        <div className="container max-w-3xl mx-auto px-4 py-4 flex flex-row items-center justify-between gap-4">
+          <div className="text-right min-w-0">
+            <p className="text-sm text-muted-foreground">תודה על ההצטרפות</p>
+            <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-foreground truncate">
+              שמחים על הצטרפותך למנוי רופא עד הבית
+            </h1>
+          </div>
+          <img src="/branding/opal-logo.jpeg" alt="אופאל" className="h-16 sm:h-20 w-auto object-contain shrink-0" />
         </div>
       </header>
 
@@ -75,18 +81,35 @@ export default function Success() {
           <div className="flex size-16 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 mb-6">
             <CheckCircle2 className="size-10" strokeWidth={2} />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-balance">
-            שמחים על הצטרפותך למנוי רופא עד הבית
-          </h1>
           <p className="text-muted-foreground max-w-xl leading-relaxed text-pretty">
             הזמנתך בצירוף כתב השירות יישלחו אליך בדקות הקרובות למייל.
           </p>
         </div>
 
+        <Card className="mb-8 border-amber-500/40 shadow-md bg-amber-50/50 dark:bg-amber-950/20">
+          <CardHeader>
+            <CardTitle className="text-lg text-amber-900 dark:text-amber-100">חשוב מאוד</CardTitle>
+            <CardDescription className="text-amber-900/80 dark:text-amber-200/90 text-base leading-relaxed">
+              <strong className="font-bold text-lg">להפעלת הביטוח חובה למלא את עדכון המוטבים</strong>
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Button asChild size="lg" variant="opalGold" className="w-full sm:w-auto min-w-[240px]">
+              <Link to={beneficiaryTo}>
+                עדכון מוטבים
+                <ArrowRight className="size-4 me-2 rotate-180" />
+              </Link>
+            </Button>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+              ללא קבלת פרטי המוטבים לא יהיה ניתן לקבל את השירות
+            </p>
+          </CardContent>
+        </Card>
+
         <Card className="mb-6 border-primary/20">
           <CardHeader>
             <CardTitle className="text-lg">מס׳ הזמנה</CardTitle>
-            <CardDescription>מזהה מהמערכת (עסקה במסד הנתונים)</CardDescription>
+
           </CardHeader>
           <CardContent>
             {loadingOrder ? (
@@ -106,29 +129,13 @@ export default function Success() {
           </CardContent>
         </Card>
 
-        <Card className="mb-8 border-amber-500/40 shadow-md bg-amber-50/50 dark:bg-amber-950/20">
-          <CardHeader>
-            <CardTitle className="text-lg text-amber-900 dark:text-amber-100">חשוב מאוד</CardTitle>
-            <CardDescription className="text-amber-900/80 dark:text-amber-200/90 text-base leading-relaxed">
-              בכדי להפעיל את השירות יש למלא את פרטי המוטבים בלינק המצורף
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button asChild size="lg" variant="opalGold" className="w-full sm:w-auto min-w-[240px]">
-              <Link to={beneficiaryTo}>
-                עדכון מוטבים
-                <ArrowRight className="size-4 me-2 rotate-180" />
-              </Link>
-            </Button>
-            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-              ללא קבלת פרטי המוטבים לא יהיה ניתן לקבל את השירות
-            </p>
-          </CardContent>
-        </Card>
+
 
         <Card className="mb-6">
-          <CardContent className="pt-6 space-y-3 text-muted-foreground text-sm sm:text-base">
-            <p>טלפונים להזמנת שירותים רפואיים: 00-00000</p>
+          <CardContent className="pt-6 space-y-3 text-muted-foreground text-sm sm:text-amber-100">
+            <p className="font-bold text-lg text-foreground">
+              טלפונים להזמנת שירותים רפואיים: 00-00000 לינק להגשת מסמכים רפואיים — תביעה און ליין: לינק
+            </p>
             <p>
               לינק להגשת מסמכים רפואיים — תביעה און ליין:{' '}
               <a
