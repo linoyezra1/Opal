@@ -275,15 +275,6 @@ export default function SubscribersDashboard() {
   const unifiedFilterConfig = useMemo(
     () => [
       { key: 'search', label: 'חיפוש', type: 'text', placeholder: 'חיפוש חי: שם לקוח, ת.ז, מס׳ הזמנה…' },
-      {
-        key: 'customerSegment',
-        label: 'סוג לקוח',
-        type: 'select',
-        options: [
-          { value: 'private', label: 'לקוחות פרטיים' },
-          { value: 'organization', label: 'חברי ארגון' },
-        ],
-      },
       { key: 'month', label: 'חודש', type: 'month', placeholder: 'YYYY-MM' },
       { key: 'fromDate', label: 'מתאריך(תאריך הצטרפות)', type: 'date' },
       { key: 'toDate', label: 'עד תאריך(תאריך הצטרפות)', type: 'date' },
@@ -328,9 +319,10 @@ export default function SubscribersDashboard() {
         label: 'סוג לקוח',
         type: 'select',
         options: [
-          { value: 'org_centralized', label: 'חברי ארגון תשלום מרוכז' },
-          { value: 'org_private', label: 'חברי ארגון תשלום פרטי' },
-          { value: 'org_all', label: 'חברי ארגוני-הכל' },
+          { value: 'private_only',    label: 'לקוח פרטי רגיל' },
+          { value: 'org_private',     label: 'חברי ארגון תשלום פרטי' },
+          { value: 'org_centralized', label: 'חברי ארגון בתשלום מרוכז' },
+          { value: 'org_all',         label: 'חברי ארגון - הכל' },
         ],
       },
     ],
@@ -772,9 +764,10 @@ export default function SubscribersDashboard() {
       rows = rows.filter((r) => {
         const hasOrg = !!String(r.organizationId || '').trim() || !!String(r.organizationName || r.organizationBadge || '').trim();
         const isCentralized = !!r.isCentralized || String(r.dealSource || '') === 'org-bulk-import';
-        if (filters.customerTypeFilter === 'org_all') return hasOrg;
+        if (filters.customerTypeFilter === 'private_only')    return !hasOrg;
+        if (filters.customerTypeFilter === 'org_all')         return hasOrg;
         if (filters.customerTypeFilter === 'org_centralized') return hasOrg && isCentralized;
-        if (filters.customerTypeFilter === 'org_private') return hasOrg && !isCentralized;
+        if (filters.customerTypeFilter === 'org_private')     return hasOrg && !isCentralized;
         return true;
       });
     }
@@ -1631,13 +1624,15 @@ export default function SubscribersDashboard() {
                 <Field>
                   <FieldLabel>סוג לקוח</FieldLabel>
                   <select
-                    value={filters.customerSegment}
-                    onChange={(e) => setFilters((p) => ({ ...p, customerSegment: e.target.value }))}
+                    value={filters.customerTypeFilter}
+                    onChange={(e) => setFilters((p) => ({ ...p, customerTypeFilter: e.target.value }))}
                     className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
                   >
-                    <option value="all">הכל</option>
-                    <option value="private">לקוחות פרטיים</option>
-                    <option value="organization">חברי ארגון</option>
+                    <option value="">הכל</option>
+                    <option value="private_only">לקוח פרטי רגיל</option>
+                    <option value="org_private">חברי ארגון תשלום פרטי</option>
+                    <option value="org_centralized">חברי ארגון בתשלום מרוכז</option>
+                    <option value="org_all">חברי ארגון - הכל</option>
                   </select>
                 </Field>
                 <Field>
