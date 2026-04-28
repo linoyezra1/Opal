@@ -81,7 +81,7 @@ const vendorProductLinkSchema = new mongoose.Schema(
 const vendorSchema = new mongoose.Schema(
   {
     vendorName: { type: String, required: true, trim: true },
-    idNum: { type: String, required: true, trim: true },
+    idNum: { type: String, default: '', trim: true },
     phone: { type: String, default: '' },
     email: { type: String, default: '' },
     address: { type: String, default: '' },

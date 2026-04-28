@@ -567,7 +567,7 @@ export default function VendorDashboard() {
               <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
                 ביטול
               </Button>
-              <Button type="submit" disabled={loading || !form.vendorName.trim() || !form.idNum.trim()}>
+              <Button type="submit" disabled={loading || !form.vendorName.trim()}>
                 {loading && <Spinner className="me-2" />}
                 שמירה
               </Button>
