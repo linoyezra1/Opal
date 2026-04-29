@@ -1041,6 +1041,176 @@ export async function getOrganizationMonthlyPayments(orgId, monthsBack = 12) {
   });
 }
 
+function normalizeYearMonthLabel(monthInput) {
+  const s = String(monthInput || '').trim();
+  const m = /^(\d{4})-(\d{1,2})$/.exec(s);
+  if (!m) return '';
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  if (!y || mo < 1 || mo > 12) return '';
+  return `${String(y).padStart(4, '0')}-${String(mo).padStart(2, '0')}`;
+}
+
+function parseDateAsUtc(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
+  }
+  const s = String(value).trim();
+  if (!s) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (m) {
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+    return new Date(Date.UTC(y, mo - 1, d));
+  }
+  const dt = new Date(s);
+  if (Number.isNaN(dt.getTime())) return null;
+  return new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()));
+}
+
+function roundCurrency(value) {
+  const n = Number(value || 0);
+  return Math.round(n * 100) / 100;
+}
+
+export async function getOrganizationBillingReport(orgId, monthInput = '') {
+  const db = await getDb();
+  let oid;
+  try {
+    oid = new ObjectId(String(orgId));
+  } catch {
+    throw new Error('מזהה ארגון לא תקין');
+  }
+  const org = await db.collection('organizations').findOne({ _id: oid, isActive: { $ne: false } });
+  if (!org) throw new Error('ארגון לא נמצא');
+
+  const now = new Date();
+  const fallbackMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const targetMonth = normalizeYearMonthLabel(monthInput) || fallbackMonth;
+  const mm = /^(\d{4})-(\d{2})$/.exec(targetMonth);
+  const year = Number(mm[1]);
+  const month = Number(mm[2]);
+  const monthStartUtc = new Date(Date.UTC(year, month - 1, 1));
+  const nextMonthStartUtc = new Date(Date.UTC(year, month, 1));
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+  const docs = await db
+    .collection('deals')
+    .find({ organizationId: String(org._id), isActive: { $ne: false } })
+    .project({
+      _id: 1,
+      payerAmount: 1,
+      amount: 1,
+      subscriptionStatus: 1,
+      paymentStatus: 1,
+      status: 1,
+      finalBillingMonth: 1,
+      formState: 1,
+      createdAt: 1,
+      beneficiaryUpdate: 1,
+    })
+    .sort({ createdAt: -1 })
+    .toArray();
+
+  const rows = [];
+  let totalDue = 0;
+  let totalProrated = 0;
+  let totalFinalMonth = 0;
+
+  for (const d of docs) {
+    const fs = d?.formState && typeof d.formState === 'object' ? d.formState : {};
+    const statusNorm = String(d.subscriptionStatus || d.paymentStatus || d.status || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '_');
+    const finalBillingMonth = normalizeYearMonthLabel(d.finalBillingMonth);
+
+    if (statusNorm === 'pending_org_approval') continue;
+
+    const isPendingCancellation =
+      statusNorm === 'pending_cancellation' || statusNorm === 'pendingcancellation';
+    const isCancelled =
+      statusNorm === 'cancelled' ||
+      statusNorm === 'canceled' ||
+      statusNorm === 'cancel' ||
+      statusNorm === 'cancelled_by_admin';
+
+    if (isPendingCancellation) {
+      if (finalBillingMonth !== targetMonth) continue;
+    } else if (isCancelled) {
+      if (finalBillingMonth && finalBillingMonth < targetMonth) continue;
+    }
+
+    const startDateUtc =
+      parseDateAsUtc(fs.subscriptionStartDate) ||
+      parseDateAsUtc(d.createdAt) ||
+      parseDateAsUtc(d?.beneficiaryUpdate?.submittedAt);
+    if (!startDateUtc) continue;
+
+    const basePrice = Number(d.amount ?? d.payerAmount ?? fs.amount ?? 0);
+    if (!Number.isFinite(basePrice) || basePrice <= 0) continue;
+
+    let billingType = 'full';
+    let activeDays = null;
+    let billedAmount = basePrice;
+
+    if (isPendingCancellation && finalBillingMonth === targetMonth) {
+      billingType = 'final_month';
+      totalFinalMonth += 1;
+    } else if (startDateUtc < monthStartUtc) {
+      billingType = 'full';
+    } else if (startDateUtc >= monthStartUtc && startDateUtc < nextMonthStartUtc) {
+      const dayOfMonth = startDateUtc.getUTCDate();
+      activeDays = Math.max(1, daysInMonth - dayOfMonth + 1);
+      billedAmount = (activeDays / daysInMonth) * basePrice;
+      billingType = 'prorata';
+      totalProrated += 1;
+    } else {
+      continue;
+    }
+
+    const billedRounded = roundCurrency(billedAmount);
+    totalDue += billedRounded;
+
+    const rawId = String(
+      fs.id ||
+        d?.beneficiaryUpdate?.primaryMember?.id ||
+        ''
+    ).trim();
+    const employeeName = String(
+      fs.fullName ||
+        `${String(d?.beneficiaryUpdate?.primaryMember?.firstName || '').trim()} ${String(d?.beneficiaryUpdate?.primaryMember?.lastName || '').trim()}`.trim() ||
+        '—'
+    ).trim();
+
+    rows.push({
+      id: String(d._id),
+      employeeName: employeeName || '—',
+      idNumber: rawId || '—',
+      subscriptionStartDate: startDateUtc.toISOString().slice(0, 10),
+      billingType,
+      activeDays,
+      basePrice: roundCurrency(basePrice),
+      billedAmount: billedRounded,
+    });
+  }
+
+  return {
+    month: targetMonth,
+    summary: {
+      totalDue: roundCurrency(totalDue),
+      totalActiveRecords: rows.length,
+      totalProrated,
+      totalFinalMonth,
+    },
+    rows,
+  };
+}
+
 /**
  * ייבוא עובדים — עסקה הושלמה, תשלום מרוכז, פרופיל מוטב מלא (כמו טופס ידני)
  */

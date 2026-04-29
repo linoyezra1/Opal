@@ -23,6 +23,7 @@ import {
   getOrganizationCompanyById,
   findDealsByOrganizationId,
   getOrganizationMonthlyPayments,
+  getOrganizationBillingReport,
   insertOrganizationImportedDeal,
   getPublicOrganizationForRegistration,
   countActiveMembersByOrganizationId,
@@ -1963,6 +1964,26 @@ app.get('/api/admin/organizations/:id/payments', requireAdmin, async (req, res) 
     res.json({ success: true, rows });
   } catch (e) {
     console.error(`[${ts()}] admin/organizations/:id/payments error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed' });
+  }
+});
+
+app.get('/api/admin/organizations/:id/billing-report', requireAdmin, async (req, res) => {
+  try {
+    const report = await getOrganizationBillingReport(req.params.id, req.query.month);
+    res.json({ success: true, summary: report.summary, rows: report.rows, month: report.month });
+  } catch (e) {
+    console.error(`[${ts()}] admin/organizations/:id/billing-report error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed' });
+  }
+});
+
+app.get('/api/organizations/:id/billing-report', requireAdmin, async (req, res) => {
+  try {
+    const report = await getOrganizationBillingReport(req.params.id, req.query.month);
+    res.json({ success: true, summary: report.summary, rows: report.rows, month: report.month });
+  } catch (e) {
+    console.error(`[${ts()}] organizations/:id/billing-report error:`, e);
     res.status(400).json({ success: false, error: e.message || 'Failed' });
   }
 });

@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Building2, Edit2, Upload, Download, ArrowRight, Users, RefreshCw } from 'lucide-react';
+import { Building2, Edit2, Upload, Download, ArrowRight, Users, RefreshCw, Wallet, UserCheck, CalendarClock, FileSpreadsheet } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
+import { StatsCard } from '../components/admin/stats-card.jsx';
 import { Button } from '../components/ui/button.jsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
@@ -15,8 +16,13 @@ import { Spinner } from '../components/ui/spinner.jsx';
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '../components/ui/empty.jsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
+import * as XLSX from 'xlsx';
 
 const TOKEN_KEY = 'opal_admin_token';
+const monthNow = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
 
 function pendingCancelLabel(finalBillingMonth) {
   if (!finalBillingMonth) return 'ממתין לביטול';
@@ -94,6 +100,12 @@ export default function OrganizationDetailPage() {
   const [payments, setPayments] = useState([]);
   const [registrationLinkCopied, setRegistrationLinkCopied] = useState(false);
   const [fileInputKey, setFileInputKey] = useState(0);
+  const [billingReportMonth, setBillingReportMonth] = useState(() => monthNow());
+  const [billingReportLoading, setBillingReportLoading] = useState(false);
+  const [billingReport, setBillingReport] = useState({
+    summary: { totalDue: 0, totalActiveRecords: 0, totalProrated: 0, totalFinalMonth: 0 },
+    rows: [],
+  });
 
   const load = useCallback(async () => {
     if (!token || !id) return;
@@ -126,14 +138,73 @@ export default function OrganizationDetailPage() {
     }
   }, [id, token]);
 
+  const loadBillingReport = useCallback(async () => {
+    if (!token || !id) return;
+    setBillingReportLoading(true);
+    try {
+      const r = await fetch(
+        `${API_BASE}/api/admin/organizations/${encodeURIComponent(id)}/billing-report?month=${encodeURIComponent(
+          billingReportMonth
+        )}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.success) throw new Error(j.error || 'טעינת דוח חיובים נכשלה');
+      setBillingReport({
+        summary: {
+          totalDue: Number(j.summary?.totalDue || 0),
+          totalActiveRecords: Number(j.summary?.totalActiveRecords || 0),
+          totalProrated: Number(j.summary?.totalProrated || 0),
+          totalFinalMonth: Number(j.summary?.totalFinalMonth || 0),
+        },
+        rows: Array.isArray(j.rows) ? j.rows : [],
+      });
+    } catch (e) {
+      setErr(e.message || 'שגיאה');
+    } finally {
+      setBillingReportLoading(false);
+    }
+  }, [billingReportMonth, id, token]);
+
   useEffect(() => {
     const tabParam = String(searchParams.get('tab') || '').trim();
     if (tabParam === 'payments') setTab('payments');
+    if (tabParam === 'billing-report') setTab('billing-report');
   }, [searchParams]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    loadBillingReport();
+  }, [loadBillingReport]);
+
+  function formatCurrency(amount) {
+    return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(Number(amount || 0));
+  }
+
+  function exportBillingReportToXlsx() {
+    const rows = (billingReport.rows || []).map((r) => ({
+      'שם עובד': r.employeeName || '—',
+      'ת"ז': r.idNumber || '—',
+      'תחילת מנוי': r.subscriptionStartDate || '—',
+      'סטטוס חודשי':
+        r.billingType === 'prorata'
+          ? `יחסי (${Number(r.activeDays || 0)} ימים)`
+          : r.billingType === 'final_month'
+            ? 'חודש חיוב אחרון'
+            : 'מלא',
+      'ימים פעילים': r.activeDays ?? '',
+      'מחיר בסיס': Number(r.basePrice || 0),
+      'סכום לחיוב': Number(r.billedAmount || 0),
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!views'] = [{ RTL: true }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'דוח חיובים');
+    XLSX.writeFile(wb, `opal-billing-report-${org?.companyName || 'organization'}-${billingReportMonth}.xlsx`);
+  }
 
   function setContact(section, field, value) {
     setOrg((p) => (p ? { ...p, [section]: { ...(p[section] || {}), [field]: value } } : null));
@@ -332,6 +403,7 @@ export default function OrganizationDetailPage() {
             </TabsTrigger>
             <TabsTrigger value="settings">הגדרות</TabsTrigger>
             <TabsTrigger value="payments">תשלומים</TabsTrigger>
+            <TabsTrigger value="billing-report">דוח חיובים</TabsTrigger>
           </TabsList>
 
           <TabsContent value="members" className="mt-4" dir="rtl">
@@ -813,6 +885,84 @@ export default function OrganizationDetailPage() {
                       </div>
                       </TooltipProvider>
                     </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="billing-report" className="mt-4" dir="rtl">
+            <Card className="text-right" dir="rtl">
+              <CardHeader className="text-right">
+                <CardTitle>דוח חיובים</CardTitle>
+                <CardDescription>חישוב מדויק לחיוב חודשי לפי סטטוס מנוי ותאריך התחלה</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <Field className="max-w-xs">
+                    <FieldLabel>חודש לחיוב</FieldLabel>
+                    <Input
+                      type="month"
+                      value={billingReportMonth}
+                      onChange={(e) => setBillingReportMonth(e.target.value || monthNow())}
+                    />
+                  </Field>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={exportBillingReportToXlsx}
+                    disabled={billingReportLoading || !(billingReport.rows || []).length}
+                  >
+                    <FileSpreadsheet className="size-4 me-2" />
+                    ייצא לאקסל
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <StatsCard title="סה״כ לתשלום לחודש זה" value={formatCurrency(billingReport.summary.totalDue)} icon={Wallet} />
+                  <StatsCard title="סה״כ עובדים לחיוב" value={String(billingReport.summary.totalActiveRecords || 0)} icon={UserCheck} />
+                  <StatsCard title="מצטרפים חדשים (חיוב יחסי)" value={String(billingReport.summary.totalProrated || 0)} icon={CalendarClock} />
+                </div>
+
+                {billingReportLoading ? (
+                  <div className="flex justify-center p-8"><Spinner className="size-8" /></div>
+                ) : (
+                  <div className="rounded-md border overflow-x-auto" dir="rtl">
+                    <Table className="text-right">
+                      <TableHeader>
+                        <TableRow className="[&_th]:text-right">
+                          <TableHead>שם עובד</TableHead>
+                          <TableHead>ת"ז</TableHead>
+                          <TableHead>תחילת מנוי</TableHead>
+                          <TableHead>סטטוס חודשי</TableHead>
+                          <TableHead>סכום לחיוב</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(billingReport.rows || []).map((r) => (
+                          <TableRow key={r.id}>
+                            <TableCell>{r.employeeName || '—'}</TableCell>
+                            <TableCell dir="ltr" className="text-end font-mono text-xs">{r.idNumber || '—'}</TableCell>
+                            <TableCell>{r.subscriptionStartDate || '—'}</TableCell>
+                            <TableCell>
+                              {r.billingType === 'prorata' ? (
+                                <Badge className="bg-cyan-100 text-cyan-800 border-cyan-300">יחסי ({Number(r.activeDays || 0)} ימים)</Badge>
+                              ) : r.billingType === 'final_month' ? (
+                                <Badge className="bg-orange-100 text-orange-800 border-orange-300">חודש חיוב אחרון</Badge>
+                              ) : (
+                                <Badge variant="outline">מלא</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>{formatCurrency(r.billedAmount)}</TableCell>
+                          </TableRow>
+                        ))}
+                        {!(billingReport.rows || []).length ? (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center text-muted-foreground">אין רשומות לחיוב בחודש זה</TableCell>
+                          </TableRow>
+                        ) : null}
+                      </TableBody>
+                    </Table>
                   </div>
                 )}
               </CardContent>

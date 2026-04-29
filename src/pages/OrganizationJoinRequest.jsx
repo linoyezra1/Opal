@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Check } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -18,6 +19,11 @@ export default function OrganizationJoinRequest() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
+  const stepItems = [
+    { id: 1, label: 'פרטי ארגון' },
+    { id: 2, label: 'אנשי קשר' },
+    { id: 3, label: 'סיום' },
+  ];
 
   const setPerson = (setter, key) => (e) => setter((p) => ({ ...p, [key]: e.target.value }));
 
@@ -96,6 +102,33 @@ export default function OrganizationJoinRequest() {
         <p className="text-sm sm:text-base text-[#1A365D]/70 text-right">
           אנא מלאו את הפרטים והצוות שלנו יחזור אליכם בהקדם
         </p>
+
+        <div className="rounded-xl border bg-white/70 p-4 shadow-sm" dir="rtl">
+          <div className="flex items-center justify-between gap-2 sm:gap-4">
+            {stepItems.map((item, idx) => {
+              const isActive = step === item.id;
+              const isCompleted = step > item.id;
+              const toneClass = isActive || isCompleted
+                ? 'bg-[#285959] text-[#dffff9] border-[#285959]'
+                : 'bg-gray-100 text-gray-500 border-gray-300';
+              return (
+                <React.Fragment key={item.id}>
+                  <div className="flex flex-col items-center gap-1 min-w-0">
+                    <div className={`flex h-9 w-9 items-center justify-center rounded-full border text-sm font-bold ${toneClass}`}>
+                      {isCompleted ? <Check className="h-4 w-4" /> : item.id}
+                    </div>
+                    <span className={`text-xs sm:text-sm ${isActive || isCompleted ? 'text-[#285959] font-semibold' : 'text-gray-500'}`}>
+                      {item.label}
+                    </span>
+                  </div>
+                  {idx < stepItems.length - 1 ? (
+                    <div className={`h-0.5 flex-1 ${step > item.id ? 'bg-[#285959]' : 'bg-gray-300'}`} />
+                  ) : null}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
 
         <form onSubmit={submit} className="space-y-6">
           {step === 1 ? (
