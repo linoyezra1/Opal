@@ -219,7 +219,6 @@ export default function SubscribersDashboard() {
     idSearch: '',
     productNameSearch: '',
     agentNameSearch: '',
-    summaryCategories: [],
     customerSegment: 'all',
     agentFilter: '',
     organizationFilter: '',
@@ -273,7 +272,6 @@ export default function SubscribersDashboard() {
       !!filters.idSearch.trim() ||
       !!filters.productNameSearch.trim() ||
       !!filters.agentNameSearch.trim() ||
-      (filters.summaryCategories || []).length > 0 ||
       (filters.customerSegment && filters.customerSegment !== 'all') ||
       !!filters.agentFilter ||
       !!filters.organizationFilter ||
@@ -379,7 +377,6 @@ export default function SubscribersDashboard() {
         productNameSearch: filters.productNameSearch || '',
         agentNameSearch: filters.agentNameSearch || '',
         amountDue: filters.amountDue || '0',
-        summaryCategories: (filters.summaryCategories || []).join(','),
         customerSegment: filters.customerSegment || 'all',
       });
 
@@ -443,16 +440,6 @@ export default function SubscribersDashboard() {
     next.delete('editDealId');
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams, data.rows]);
-
-  function toggleSummaryCategory(key) {
-    setFilters((prev) => {
-      const has = prev.summaryCategories.includes(key);
-      return {
-        ...prev,
-        summaryCategories: has ? prev.summaryCategories.filter((x) => x !== key) : [...prev.summaryCategories, key],
-      };
-    });
-  }
 
   function openEdit(row) {
     const fs = row.raw?.formState || {};
@@ -717,7 +704,6 @@ export default function SubscribersDashboard() {
       idSearch: '',
       productNameSearch: '',
       agentNameSearch: '',
-      summaryCategories: [],
       customerSegment: 'all',
       agentFilter: '',
       organizationFilter: '',
@@ -792,11 +778,17 @@ export default function SubscribersDashboard() {
         r.internalDealNumber,
         r.cardcomRecurringId,
         r.fullName,
+        r.email,
+        r.phone,
         r.idNumber,
         r.organizationName,
         r.organizationBadge,
         r.agentName,
         r.productName,
+        r.formState?.fullName,
+        r.formState?.id,
+        r.formState?.phone,
+        r.formState?.email,
       ]
         .map((x) => String(x || '').toLowerCase())
         .join(' | ');
@@ -827,7 +819,7 @@ export default function SubscribersDashboard() {
     return { totalRevenue, canceled, active: visibleRows.length - canceled };
   }, [visibleRows]);
 
-  const visibleCategorySummary = useMemo(() => {
+  const calculatedCounts = useMemo(() => {
     const rows = visibleRows || [];
     let primary = 0;
     let active = 0;
@@ -1717,26 +1709,24 @@ export default function SubscribersDashboard() {
                 <div className="text-right">
                   <CardTitle>לקוחות</CardTitle>
                 </div>
-                <div className="flex flex-wrap gap-x-3 gap-y-2 items-center justify-end text-xs rounded-lg border bg-muted/30 px-3 py-2 max-w-full xl:max-w-[min(100%,52rem)]">
-                  <span className="font-medium text-foreground shrink-0">כמות / סינון קטגוריות:</span>
-                  {SUMMARY_ITEMS.map((item) => (
-                    <label
-                      key={item.key}
-                      className="inline-flex items-center gap-1.5 whitespace-nowrap"
-                    >
-                      <span className="text-muted-foreground">{item.label}</span>
-                  <strong>{visibleCategorySummary[item.key] ?? 0}</strong>
-                      <input
-                        type="checkbox"
-                        className={checkboxClass}
-                        checked={filters.summaryCategories.includes(item.key)}
-                        onChange={() => toggleSummaryCategory(item.key)}
-                      />
-                    </label>
-                  ))}
-                  <span className="border-s border-border ps-3 ms-1 whitespace-nowrap">
-                    סה״כ: <strong>{formatCurrency(visibleSummary.totalRevenue)}</strong>
-                  </span>
+                <div className="w-full">
+                  {/* כרטיסי סטטיסטיקה — נתונים אמיתיים מהדוח לפי קטגוריות */}
+                  <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 mb-6">
+                    {SUMMARY_ITEMS.map((item) => {
+                      // Get the dynamic count for this specific category based on the active dataset
+                      const itemCount = calculatedCounts[item.key] || 0; 
+                      
+                      return (
+                        <StatsCard 
+                          key={item.key} 
+                          title={item.label} 
+                          value={itemCount} 
+                          icon={Users} // Adjust icon dynamically if needed
+                          loading={loading} 
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </CardHeader>
@@ -1785,7 +1775,7 @@ export default function SubscribersDashboard() {
                           סטטוס השלמה
                         </TableHead>
                         <TableHead dir="rtl" className="text-right">
-                          סטטוס חיוב עתידי (קארדקום)
+                          סטטוס חיוב עתידי (קארדקום/ארגוני)
                         </TableHead>
                         <TableHead dir="rtl" className="text-right">
                           מס&apos; הזמנה
