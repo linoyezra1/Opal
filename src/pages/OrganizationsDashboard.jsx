@@ -380,8 +380,8 @@ export default function OrganizationsDashboard() {
             <DialogDescription>פרטי ארגון, אנשי קשר וצורת חיוב</DialogDescription>
           </DialogHeader>
           <form onSubmit={submitAdd} className="space-y-4">
-            <Tabs value={addTab} onValueChange={setAddTab}>
-              <TabsList className="grid w-full grid-cols-3">
+            <Tabs value={addTab} onValueChange={setAddTab} dir="rtl">
+              <TabsList className="grid w-full grid-cols-3" dir="rtl">
                 <TabsTrigger value="org">פרטי ארגון</TabsTrigger>
                 <TabsTrigger value="contacts">אנשי קשר</TabsTrigger>
                 <TabsTrigger value="billing">צורת חיוב</TabsTrigger>
@@ -390,43 +390,43 @@ export default function OrganizationsDashboard() {
                 <FieldGroup>
                   <Field>
                     <FieldLabel>שם חברה *</FieldLabel>
-                    <Input value={addForm.companyName} onChange={(e) => setAddForm((p) => ({ ...p, companyName: e.target.value }))} required />
+                    <Input dir="rtl" className="text-right" value={addForm.companyName} onChange={(e) => setAddForm((p) => ({ ...p, companyName: e.target.value }))} required />
                   </Field>
                   <Field>
                     <FieldLabel>ח.פ</FieldLabel>
-                    <Input value={addForm.companyId} onChange={(e) => setAddForm((p) => ({ ...p, companyId: e.target.value }))} />
+                    <Input dir="rtl" className="text-right" value={addForm.companyId} onChange={(e) => setAddForm((p) => ({ ...p, companyId: e.target.value }))} />
                   </Field>
                   <Field>
                     <FieldLabel>כתובת רשמית</FieldLabel>
-                    <Input value={addForm.officialAddress} onChange={(e) => setAddForm((p) => ({ ...p, officialAddress: e.target.value }))} />
+                    <Input dir="rtl" className="text-right" value={addForm.officialAddress} onChange={(e) => setAddForm((p) => ({ ...p, officialAddress: e.target.value }))} />
                   </Field>
                   <Field>
                     <FieldLabel>אימייל חברה</FieldLabel>
-                    <Input dir="ltr" value={addForm.companyEmail} onChange={(e) => setAddForm((p) => ({ ...p, companyEmail: e.target.value }))} />
+                    <Input dir="rtl" className="text-right" value={addForm.companyEmail} onChange={(e) => setAddForm((p) => ({ ...p, companyEmail: e.target.value }))} />
                   </Field>
                   <Field>
                     <FieldLabel>אימייל ליצירת קשר</FieldLabel>
-                    <Input dir="ltr" value={addForm.contactEmail} onChange={(e) => setAddForm((p) => ({ ...p, contactEmail: e.target.value }))} />
+                    <Input dir="rtl" className="text-right" value={addForm.contactEmail} onChange={(e) => setAddForm((p) => ({ ...p, contactEmail: e.target.value }))} />
                   </Field>
                   <Field>
                     <FieldLabel>טלפון ליצירת קשר</FieldLabel>
-                    <Input dir="ltr" value={addForm.contactPhone} onChange={(e) => setAddForm((p) => ({ ...p, contactPhone: e.target.value }))} />
+                    <Input dir="rtl" className="text-right" value={addForm.contactPhone} onChange={(e) => setAddForm((p) => ({ ...p, contactPhone: e.target.value }))} />
                   </Field>
                   <Field>
                     <FieldLabel>מייל לאישור עובדים (HR)</FieldLabel>
-                    <Input dir="ltr" type="email" value={addForm.employeeApprovalEmail} onChange={(e) => setAddForm((p) => ({ ...p, employeeApprovalEmail: e.target.value }))} placeholder="לשליחת בקשות אישור עובדים חדשים" />
+                    <Input dir="rtl" className="text-right" type="email" value={addForm.employeeApprovalEmail} onChange={(e) => setAddForm((p) => ({ ...p, employeeApprovalEmail: e.target.value }))} placeholder="לשליחת בקשות אישור עובדים חדשים" />
                   </Field>
                   <Field>
                     <FieldLabel>הערות</FieldLabel>
-                    <Input value={addForm.notes} onChange={(e) => setAddForm((p) => ({ ...p, notes: e.target.value }))} />
+                    <Input dir="rtl" className="text-right" value={addForm.notes} onChange={(e) => setAddForm((p) => ({ ...p, notes: e.target.value }))} />
                   </Field>
                   <Field>
                     <FieldLabel>תחום פעילות</FieldLabel>
-                    <Input value={addForm.fieldOfActivity} onChange={(e) => setAddForm((p) => ({ ...p, fieldOfActivity: e.target.value }))} />
+                    <Input dir="rtl" className="text-right" value={addForm.fieldOfActivity} onChange={(e) => setAddForm((p) => ({ ...p, fieldOfActivity: e.target.value }))} />
                   </Field>
                   <Field>
                     <FieldLabel>מספר עובדים</FieldLabel>
-                    <Input type="number" value={addForm.employeesCount} onChange={(e) => setAddForm((p) => ({ ...p, employeesCount: e.target.value }))} />
+                    <Input dir="rtl" className="text-right" type="number" value={addForm.employeesCount} onChange={(e) => setAddForm((p) => ({ ...p, employeesCount: e.target.value }))} />
                   </Field>
                 </FieldGroup>
               </TabsContent>
@@ -646,24 +646,24 @@ export default function OrganizationsDashboard() {
               </div>
 
               <form onSubmit={saveEdit} className="space-y-4">
-              <Tabs value={editTab} onValueChange={setEditTab}>
-                <TabsList className="grid w-full grid-cols-3">
+              <Tabs value={editTab} onValueChange={setEditTab} dir="rtl">
+                <TabsList className="grid w-full grid-cols-3" dir="rtl">
                   <TabsTrigger value="org">פרטי ארגון</TabsTrigger>
                   <TabsTrigger value="contacts">אנשי קשר</TabsTrigger>
                   <TabsTrigger value="billing">צורת חיוב</TabsTrigger>
                 </TabsList>
                 <TabsContent value="org" className="mt-4">
                   <FieldGroup>
-                    <Field><FieldLabel>שם חברה *</FieldLabel><Input value={editOrg.companyName || ''} onChange={(e) => setEditOrg((p) => ({ ...p, companyName: e.target.value }))} required /></Field>
-                    <Field><FieldLabel>ח.פ</FieldLabel><Input value={editOrg.companyId || ''} onChange={(e) => setEditOrg((p) => ({ ...p, companyId: e.target.value }))} /></Field>
-                    <Field><FieldLabel>כתובת רשמית</FieldLabel><Input value={editOrg.officialAddress || ''} onChange={(e) => setEditOrg((p) => ({ ...p, officialAddress: e.target.value }))} /></Field>
-                    <Field><FieldLabel>אימייל חברה</FieldLabel><Input dir="ltr" value={editOrg.companyEmail || ''} onChange={(e) => setEditOrg((p) => ({ ...p, companyEmail: e.target.value }))} /></Field>
-                    <Field><FieldLabel>אימייל ליצירת קשר</FieldLabel><Input dir="ltr" value={editOrg.contactEmail || ''} onChange={(e) => setEditOrg((p) => ({ ...p, contactEmail: e.target.value }))} /></Field>
-                    <Field><FieldLabel>טלפון ליצירת קשר</FieldLabel><Input dir="ltr" value={editOrg.contactPhone || ''} onChange={(e) => setEditOrg((p) => ({ ...p, contactPhone: e.target.value }))} /></Field>
-                    <Field><FieldLabel>מייל לאישור עובדים (HR)</FieldLabel><Input dir="ltr" type="email" value={editOrg.employeeApprovalEmail || ''} onChange={(e) => setEditOrg((p) => ({ ...p, employeeApprovalEmail: e.target.value }))} placeholder="לשליחת בקשות אישור עובדים חדשים" /></Field>
-                    <Field><FieldLabel>הערות</FieldLabel><Input value={editOrg.notes || ''} onChange={(e) => setEditOrg((p) => ({ ...p, notes: e.target.value }))} /></Field>
-                    <Field><FieldLabel>תחום פעילות</FieldLabel><Input value={editOrg.fieldOfActivity || ''} onChange={(e) => setEditOrg((p) => ({ ...p, fieldOfActivity: e.target.value }))} /></Field>
-                    <Field><FieldLabel>מספר עובדים</FieldLabel><Input type="number" value={editOrg.employeesCount || ''} onChange={(e) => setEditOrg((p) => ({ ...p, employeesCount: e.target.value }))} /></Field>
+                    <Field><FieldLabel>שם חברה *</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.companyName || ''} onChange={(e) => setEditOrg((p) => ({ ...p, companyName: e.target.value }))} required /></Field>
+                    <Field><FieldLabel>ח.פ</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.companyId || ''} onChange={(e) => setEditOrg((p) => ({ ...p, companyId: e.target.value }))} /></Field>
+                    <Field><FieldLabel>כתובת רשמית</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.officialAddress || ''} onChange={(e) => setEditOrg((p) => ({ ...p, officialAddress: e.target.value }))} /></Field>
+                    <Field><FieldLabel>אימייל חברה</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.companyEmail || ''} onChange={(e) => setEditOrg((p) => ({ ...p, companyEmail: e.target.value }))} /></Field>
+                    <Field><FieldLabel>אימייל ליצירת קשר</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.contactEmail || ''} onChange={(e) => setEditOrg((p) => ({ ...p, contactEmail: e.target.value }))} /></Field>
+                    <Field><FieldLabel>טלפון ליצירת קשר</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.contactPhone || ''} onChange={(e) => setEditOrg((p) => ({ ...p, contactPhone: e.target.value }))} /></Field>
+                    <Field><FieldLabel>מייל לאישור עובדים (HR)</FieldLabel><Input dir="rtl" className="text-right" type="email" value={editOrg.employeeApprovalEmail || ''} onChange={(e) => setEditOrg((p) => ({ ...p, employeeApprovalEmail: e.target.value }))} placeholder="לשליחת בקשות אישור עובדים חדשים" /></Field>
+                    <Field><FieldLabel>הערות</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.notes || ''} onChange={(e) => setEditOrg((p) => ({ ...p, notes: e.target.value }))} /></Field>
+                    <Field><FieldLabel>תחום פעילות</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.fieldOfActivity || ''} onChange={(e) => setEditOrg((p) => ({ ...p, fieldOfActivity: e.target.value }))} /></Field>
+                    <Field><FieldLabel>מספר עובדים</FieldLabel><Input dir="rtl" className="text-right" type="number" value={editOrg.employeesCount || ''} onChange={(e) => setEditOrg((p) => ({ ...p, employeesCount: e.target.value }))} /></Field>
                     <Field>
                       <FieldLabel>סטטוס ארגון</FieldLabel>
                       <select
@@ -1081,11 +1081,11 @@ function ContactSection({ title, data, onChange }) {
     <div className="space-y-3 border rounded-lg p-3 text-right" dir="rtl">
       <p className="font-medium text-sm">{title}</p>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field><FieldLabel>שם</FieldLabel><Input value={data?.name || ''} onChange={(e) => onChange('name', e.target.value)} /></Field>
-        <Field><FieldLabel>תפקיד</FieldLabel><Input value={data?.role || ''} onChange={(e) => onChange('role', e.target.value)} /></Field>
-        <Field><FieldLabel>טלפון</FieldLabel><Input dir="ltr" value={data?.phone || ''} onChange={(e) => onChange('phone', e.target.value)} /></Field>
-        <Field><FieldLabel>נייד</FieldLabel><Input dir="ltr" value={data?.mobile || ''} onChange={(e) => onChange('mobile', e.target.value)} /></Field>
-        <Field className="sm:col-span-2"><FieldLabel>אימייל</FieldLabel><Input dir="ltr" value={data?.email || ''} onChange={(e) => onChange('email', e.target.value)} /></Field>
+        <Field><FieldLabel>שם</FieldLabel><Input dir="rtl" className="text-right" value={data?.name || ''} onChange={(e) => onChange('name', e.target.value)} /></Field>
+        <Field><FieldLabel>תפקיד</FieldLabel><Input dir="rtl" className="text-right" value={data?.role || ''} onChange={(e) => onChange('role', e.target.value)} /></Field>
+        <Field><FieldLabel>טלפון</FieldLabel><Input dir="rtl" className="text-right" value={data?.phone || ''} onChange={(e) => onChange('phone', e.target.value)} /></Field>
+        <Field><FieldLabel>נייד</FieldLabel><Input dir="rtl" className="text-right" value={data?.mobile || ''} onChange={(e) => onChange('mobile', e.target.value)} /></Field>
+        <Field className="sm:col-span-2"><FieldLabel>אימייל</FieldLabel><Input dir="rtl" className="text-right" value={data?.email || ''} onChange={(e) => onChange('email', e.target.value)} /></Field>
       </div>
     </div>
   );

@@ -164,7 +164,7 @@ export default function SubscribersDashboard() {
     filterOptions: { providers: [], agents: [] },
     rows: [],
   });
-  const [liveSearch, setLiveSearch] = useState('');
+  const [liveSearch, setLiveSearch] = useState(() => String(searchParams.get('search') || '').trim());
 
   const [filters, setFilters] = useState({
     month: String(searchParams.get('month') || ''),
@@ -374,11 +374,14 @@ export default function SubscribersDashboard() {
   }, [filters, liveSearch]);
 
   useEffect(() => {
-    const search = String(searchParams.get('search') || '').trim();
-    if (search !== liveSearch) {
-      setLiveSearch(search);
-    }
-  }, [searchParams, liveSearch]);
+    const current = String(searchParams.get('search') || '').trim();
+    const next = String(liveSearch || '').trim();
+    if (current === next) return;
+    const params = new URLSearchParams(searchParams);
+    if (next) params.set('search', next);
+    else params.delete('search');
+    setSearchParams(params, { replace: true });
+  }, [liveSearch, searchParams, setSearchParams]);
 
   useEffect(() => {
     const status = String(searchParams.get('status') || '').trim();
@@ -1062,11 +1065,11 @@ export default function SubscribersDashboard() {
                     <div className="grid gap-4 sm:grid-cols-2">
                       <Field>
                         <FieldLabel>שם פרטי</FieldLabel>
-                        <Input value={editForm.firstName} onChange={(e) => setEditForm((p) => ({ ...p, firstName: e.target.value }))} />
+                        <Input dir="rtl" className="text-right" value={editForm.firstName} onChange={(e) => setEditForm((p) => ({ ...p, firstName: e.target.value }))} />
                       </Field>
                       <Field>
                         <FieldLabel>שם משפחה</FieldLabel>
-                        <Input value={editForm.lastName} onChange={(e) => setEditForm((p) => ({ ...p, lastName: e.target.value }))} />
+                        <Input dir="rtl" className="text-right" value={editForm.lastName} onChange={(e) => setEditForm((p) => ({ ...p, lastName: e.target.value }))} />
                       </Field>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -1074,6 +1077,7 @@ export default function SubscribersDashboard() {
                         <FieldLabel>תעודת זהות</FieldLabel>
                         <Input
                           dir="ltr"
+                          className="text-right"
                           inputMode="numeric"
                           maxLength={9}
                           value={editForm.idNum}
@@ -1087,24 +1091,24 @@ export default function SubscribersDashboard() {
                       </Field>
                       <Field>
                         <FieldLabel>טלפון</FieldLabel>
-                        <Input dir="ltr" value={editForm.phone} onChange={(e) => setEditForm((p) => ({ ...p, phone: e.target.value }))} />
+                        <Input dir="ltr" className="text-right" value={editForm.phone} onChange={(e) => setEditForm((p) => ({ ...p, phone: e.target.value }))} />
                       </Field>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <Field>
                         <FieldLabel>אימייל</FieldLabel>
-                        <Input type="email" dir="ltr" value={editForm.email} onChange={(e) => setEditForm((p) => ({ ...p, email: e.target.value }))} />
+                        <Input type="email" dir="ltr" className="text-right" value={editForm.email} onChange={(e) => setEditForm((p) => ({ ...p, email: e.target.value }))} />
                       </Field>
                       <Field>
                         <FieldLabel>תאריך לידה</FieldLabel>
-                        <Input type="date" value={editForm.dateOfBirth} onChange={(e) => setEditForm((p) => ({ ...p, dateOfBirth: e.target.value }))} />
+                        <Input type="date" dir="rtl" className="text-right" value={editForm.dateOfBirth} onChange={(e) => setEditForm((p) => ({ ...p, dateOfBirth: e.target.value }))} />
                       </Field>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <Field>
                         <FieldLabel>מין</FieldLabel>
                         <select
-                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm text-right"
                           value={editForm.gender}
                           onChange={(e) => setEditForm((p) => ({ ...p, gender: e.target.value }))}
                         >
@@ -1118,7 +1122,7 @@ export default function SubscribersDashboard() {
                       <Field>
                         <FieldLabel>מצב משפחתי</FieldLabel>
                         <select
-                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm text-right"
                           value={editForm.maritalStatus}
                           onChange={(e) => setEditForm((p) => ({ ...p, maritalStatus: e.target.value }))}
                         >
@@ -1134,7 +1138,7 @@ export default function SubscribersDashboard() {
                       <Field>
                         <FieldLabel>קופת חולים</FieldLabel>
                         <select
-                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm text-right"
                           value={editForm.healthFund}
                           onChange={(e) => setEditForm((p) => ({ ...p, healthFund: e.target.value }))}
                         >
@@ -1148,7 +1152,7 @@ export default function SubscribersDashboard() {
                       <Field>
                         <FieldLabel>ביטוח משלים</FieldLabel>
                         <select
-                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm text-right"
                           value={editForm.supplementalInsurance}
                           onChange={(e) => setEditForm((p) => ({ ...p, supplementalInsurance: e.target.value }))}
                         >
@@ -1162,7 +1166,7 @@ export default function SubscribersDashboard() {
                     </div>
                     <Field>
                       <FieldLabel>כתובת</FieldLabel>
-                      <Input value={editForm.address} onChange={(e) => setEditForm((p) => ({ ...p, address: e.target.value }))} />
+                      <Input dir="rtl" className="text-right" value={editForm.address} onChange={(e) => setEditForm((p) => ({ ...p, address: e.target.value }))} />
                     </Field>
                   </FieldGroup>
                 </TabsContent>
@@ -1178,6 +1182,8 @@ export default function SubscribersDashboard() {
                             <Field>
                               <FieldLabel>שם פרטי</FieldLabel>
                               <Input
+                                dir="rtl"
+                                className="text-right"
                                 value={b.firstName}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1191,6 +1197,8 @@ export default function SubscribersDashboard() {
                             <Field>
                               <FieldLabel>שם משפחה</FieldLabel>
                               <Input
+                                dir="rtl"
+                                className="text-right"
                                 value={b.lastName}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1207,6 +1215,7 @@ export default function SubscribersDashboard() {
                               <FieldLabel>תעודת זהות</FieldLabel>
                               <Input
                                 dir="ltr"
+                                className="text-right"
                                 inputMode="numeric"
                                 maxLength={9}
                                 value={b.id}
@@ -1229,6 +1238,8 @@ export default function SubscribersDashboard() {
                               <FieldLabel>תאריך לידה</FieldLabel>
                               <Input
                                 type="date"
+                                dir="rtl"
+                                className="text-right"
                                 value={b.dateOfBirth || ''}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1244,7 +1255,7 @@ export default function SubscribersDashboard() {
                             <Field>
                               <FieldLabel>מין</FieldLabel>
                               <select
-                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm text-right"
                                 value={b.gender || ''}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1264,7 +1275,7 @@ export default function SubscribersDashboard() {
                             <Field>
                               <FieldLabel>מצב משפחתי</FieldLabel>
                               <select
-                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm text-right"
                                 value={b.maritalStatus || ''}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1286,7 +1297,7 @@ export default function SubscribersDashboard() {
                             <Field>
                               <FieldLabel>קופת חולים</FieldLabel>
                               <select
-                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm text-right"
                                 value={b.healthFund || ''}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1306,7 +1317,7 @@ export default function SubscribersDashboard() {
                             <Field>
                               <FieldLabel>ביטוח משלים</FieldLabel>
                               <select
-                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm text-right"
                                 value={b.supplementalInsurance || ''}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1328,6 +1339,8 @@ export default function SubscribersDashboard() {
                             <Field>
                               <FieldLabel>קרבה / קשר משפחתי</FieldLabel>
                               <Input
+                                dir="rtl"
+                                className="text-right"
                                 value={b.relation || ''}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1342,6 +1355,7 @@ export default function SubscribersDashboard() {
                               <FieldLabel>טלפון</FieldLabel>
                               <Input
                                 dir="ltr"
+                                className="text-right"
                                 value={b.phone || ''}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1359,6 +1373,7 @@ export default function SubscribersDashboard() {
                               <Input
                                 type="email"
                                 dir="ltr"
+                                className="text-right"
                                 value={b.email || ''}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1372,6 +1387,8 @@ export default function SubscribersDashboard() {
                             <Field>
                               <FieldLabel>כתובת</FieldLabel>
                               <Input
+                                dir="rtl"
+                                className="text-right"
                                 value={b.address || ''}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1763,7 +1780,9 @@ export default function SubscribersDashboard() {
                     <TableBody>
                       {visibleRows.map((r) => {
                           const isCancelled = r.status === 'canceled' || String(r.subscriptionStatus || '').toLowerCase() === 'cancelled';
+                          const statusNorm = String(r.subscriptionStatus || r.paymentStatus || '').trim().toLowerCase();
                           const isPendingCancellation = String(r.subscriptionStatus || '') === 'Pending Cancellation';
+                          const isPendingOrgApproval = statusNorm === 'pending_org_approval' || statusNorm === 'pending';
                           const isCentralized = !!r.isCentralized || String(r.dealSource || '') === 'org-bulk-import';
                           const missingRecurringIds =
                             !String(r.cardcomAccountId || '').trim() || !String(r.cardcomRecurringId || '').trim();
@@ -1837,7 +1856,7 @@ export default function SubscribersDashboard() {
                             {r.transactionId}
                           </TableCell>
                           <TableCell dir="rtl" className="text-right">
-                            <div className="flex flex-col items-end gap-1">
+                            <div className="flex flex-col items-start gap-1 text-right">
                               <span>{r.fullName || '—'}</span>
                               {r.organizationBadge ? (
                                 <Badge variant="outline" className="text-xs font-normal max-w-full whitespace-normal text-right">
@@ -1902,35 +1921,44 @@ export default function SubscribersDashboard() {
                                 </TooltipTrigger>
                                 <TooltipContent>מחיקה</TooltipContent>
                               </Tooltip>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="h-8 px-2 text-xs shrink-0"
-                                disabled={isCancelled || isPendingCancellation || (!isCentralized && missingRecurringIds)}
-                                onClick={() => {
-                                  if (isCentralized) {
-                                    setCancelOrgTarget({ id: r.id, transactionId: r.transactionId });
-                                    setTerminationDate('');
-                                  } else {
-                                    setCancelTarget({ id: r.id, transactionId: r.transactionId });
-                                  }
-                                }}
-                                title={
-                                  isPendingCancellation
-                                    ? `ממתין לביטול — חודש אחרון: ${r.finalBillingMonth}`
-                                    : !isCentralized && missingRecurringIds
-                                      ? 'Subscription was not created as recurring - cancel manually in Cardcom'
-                                      : isCentralized
-                                        ? 'ביטול מנוי עובד ארגוני (חיוב מרוכז)'
-                                        : 'ביטול מנוי (עצירת חיוב עתידי)'
-                                }
-                              >
-                                <Ban className="size-3.5 text-amber-600 sm:me-1" />
-                                <span className="hidden sm:inline">
-                                  {isCentralized ? 'ביטול עובד ארגוני' : 'ביטול מנוי (עצירת חיוב עתידי)'}
-                                </span>
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 px-2 text-xs shrink-0"
+                                      disabled={isCancelled || isPendingCancellation || isPendingOrgApproval || (!isCentralized && missingRecurringIds)}
+                                      onClick={() => {
+                                        if (isCentralized) {
+                                          setCancelOrgTarget({ id: r.id, transactionId: r.transactionId });
+                                          setTerminationDate('');
+                                        } else {
+                                          setCancelTarget({ id: r.id, transactionId: r.transactionId });
+                                        }
+                                      }}
+                                      title={
+                                        isPendingCancellation
+                                          ? `ממתין לביטול — חודש אחרון: ${r.finalBillingMonth}`
+                                          : isPendingOrgApproval
+                                            ? 'לא ניתן לבטל עובד שטרם אושר על ידי מנהל.'
+                                            : !isCentralized && missingRecurringIds
+                                              ? 'Subscription was not created as recurring - cancel manually in Cardcom'
+                                              : isCentralized
+                                                ? 'ביטול מנוי עובד ארגוני (חיוב מרוכז)'
+                                                : 'ביטול מנוי (עצירת חיוב עתידי)'
+                                      }
+                                    >
+                                      <Ban className="size-3.5 text-amber-600 sm:me-1" />
+                                      <span className="hidden sm:inline">
+                                        {isCentralized ? 'ביטול עובד ארגוני' : 'ביטול מנוי (עצירת חיוב עתידי)'}
+                                      </span>
+                                    </Button>
+                                  </span>
+                                </TooltipTrigger>
+                                {isPendingOrgApproval ? <TooltipContent>לא ניתן לבטל עובד שטרם אושר על ידי מנהל.</TooltipContent> : null}
+                              </Tooltip>
                             </div>
                             <details className="relative md:hidden">
                               <summary className="flex h-10 w-10 min-h-10 min-w-10 cursor-pointer list-none items-center justify-center rounded-md border border-input bg-background hover:bg-accent [&::-webkit-details-marker]:hidden">
@@ -1983,7 +2011,7 @@ export default function SubscribersDashboard() {
                                   type="button"
                                   variant="outline"
                                   className="h-auto min-h-10 w-full justify-start gap-2 px-3 py-2 text-xs font-normal"
-                                  disabled={isCancelled || isPendingCancellation || (!isCentralized && missingRecurringIds)}
+                                  disabled={isCancelled || isPendingCancellation || isPendingOrgApproval || (!isCentralized && missingRecurringIds)}
                                   onClick={(e) => {
                                     closeActionDetailsMenu(e);
                                     if (isCentralized) {

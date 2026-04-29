@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { API_BASE } from '../apiBase.js';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -12,14 +12,25 @@ export default function OrganizationJoinRequest() {
   const [contactPerson, setContactPerson] = useState(emptyPerson);
   const [accounting, setAccounting] = useState(emptyPerson);
   const [additionalContact, setAdditionalContact] = useState(emptyPerson);
-  const [billingMethod, setBillingMethod] = useState('corporate');
   const [generalData, setGeneralData] = useState({ fieldOfActivity: '', employeesCount: '' });
   const [notes, setNotes] = useState('');
+  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
 
   const setPerson = (setter, key) => (e) => setter((p) => ({ ...p, [key]: e.target.value }));
+
+  const canGoStep2 = useMemo(
+    () => String(company.companyName || '').trim().length > 0,
+    [company.companyName]
+  );
+  const canGoStep3 = useMemo(
+    () =>
+      String(contactPerson.name || '').trim().length > 0 &&
+      String(contactPerson.phone || '').trim().length > 0,
+    [contactPerson.name, contactPerson.phone]
+  );
 
   async function submit(e) {
     e.preventDefault();
@@ -35,7 +46,6 @@ export default function OrganizationJoinRequest() {
           contactPerson,
           accounting,
           additionalContact,
-          billingMethod,
           generalData: { ...generalData, employeesCount: Number(generalData.employeesCount || 0) },
           notes: notes.trim(),
         }),
@@ -88,75 +98,73 @@ export default function OrganizationJoinRequest() {
         </p>
 
         <form onSubmit={submit} className="space-y-6">
-          <Card className="bg-white border-border shadow-sm">
-            <CardHeader><CardTitle className="text-[#1A365D]">פרטי ארגון</CardTitle></CardHeader>
-            <CardContent>
-              <FieldGroup>
-                <Field><FieldLabel className="text-[#1A365D]">שם חברה *</FieldLabel><Input value={company.companyName} onChange={(e) => setCompany((p) => ({ ...p, companyName: e.target.value }))} required /></Field>
-                <Field><FieldLabel className="text-[#1A365D]">ח.פ</FieldLabel><Input value={company.companyId} onChange={(e) => setCompany((p) => ({ ...p, companyId: e.target.value }))} /></Field>
-                <Field><FieldLabel className="text-[#1A365D]">כתובת רשמית</FieldLabel><Input value={company.officialAddress} onChange={(e) => setCompany((p) => ({ ...p, officialAddress: e.target.value }))} /></Field>
-                <Field><FieldLabel className="text-[#1A365D]">אימייל חברה</FieldLabel><Input dir="ltr" value={company.companyEmail} onChange={(e) => setCompany((p) => ({ ...p, companyEmail: e.target.value }))} /></Field>
-              </FieldGroup>
-            </CardContent>
-          </Card>
+          {step === 1 ? (
+            <Card className="bg-white border-border shadow-sm">
+              <CardHeader><CardTitle className="text-[#1A365D]">פרטי הארגון</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <FieldGroup>
+                  <Field><FieldLabel className="text-[#1A365D]">שם חברה *</FieldLabel><Input dir="rtl" className="text-right" value={company.companyName} onChange={(e) => setCompany((p) => ({ ...p, companyName: e.target.value }))} required /></Field>
+                  <Field><FieldLabel className="text-[#1A365D]">ח.פ</FieldLabel><Input dir="rtl" className="text-right" value={company.companyId} onChange={(e) => setCompany((p) => ({ ...p, companyId: e.target.value }))} /></Field>
+                  <Field><FieldLabel className="text-[#1A365D]">כתובת רשמית</FieldLabel><Input dir="rtl" className="text-right" value={company.officialAddress} onChange={(e) => setCompany((p) => ({ ...p, officialAddress: e.target.value }))} /></Field>
+                  <Field><FieldLabel className="text-[#1A365D]">אימייל חברה</FieldLabel><Input dir="ltr" className="text-right" value={company.companyEmail} onChange={(e) => setCompany((p) => ({ ...p, companyEmail: e.target.value }))} /></Field>
+                  <Field><FieldLabel className="text-[#1A365D]">תחום פעילות</FieldLabel><Input dir="rtl" className="text-right" value={generalData.fieldOfActivity} onChange={(e) => setGeneralData((p) => ({ ...p, fieldOfActivity: e.target.value }))} /></Field>
+                  <Field><FieldLabel className="text-[#1A365D]">מספר עובדים</FieldLabel><Input type="number" dir="rtl" className="text-right" value={generalData.employeesCount} onChange={(e) => setGeneralData((p) => ({ ...p, employeesCount: e.target.value }))} /></Field>
+                </FieldGroup>
+                <div className="flex justify-end">
+                  <Button type="button" onClick={() => setStep(2)} disabled={!canGoStep2}>שמור</Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
 
-          <Card className="bg-white border-border shadow-sm">
-            <CardHeader><CardTitle className="text-[#1A365D]">איש קשר ראשי</CardTitle></CardHeader>
-            <CardContent><PersonFields person={contactPerson} setPerson={setPerson} setter={setContactPerson} requiredName requiredPhone /></CardContent>
-          </Card>
+          {step === 2 ? (
+            <Card className="bg-white border-border shadow-sm">
+              <CardHeader><CardTitle className="text-[#1A365D]">אנשי קשר</CardTitle></CardHeader>
+              <CardContent className="space-y-6">
+                <div>
+                  <p className="font-medium text-[#1A365D] mb-2">איש קשר ראשי</p>
+                  <PersonFields person={contactPerson} setPerson={setPerson} setter={setContactPerson} requiredName requiredPhone />
+                </div>
+                <div>
+                  <p className="font-medium text-[#1A365D] mb-2">איש קשר נוסף</p>
+                  <PersonFields person={additionalContact} setPerson={setPerson} setter={setAdditionalContact} />
+                </div>
+                <div className="flex justify-between">
+                  <Button type="button" variant="outline" onClick={() => setStep(1)}>חזרה</Button>
+                  <Button type="button" onClick={() => setStep(3)} disabled={!canGoStep3}>המשך</Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
 
-          <Card className="bg-white border-border shadow-sm">
-            <CardHeader><CardTitle className="text-[#1A365D]">הנהלת חשבונות</CardTitle></CardHeader>
-            <CardContent><PersonFields person={accounting} setPerson={setPerson} setter={setAccounting} /></CardContent>
-          </Card>
-
-          <Card className="bg-white border-border shadow-sm">
-            <CardHeader><CardTitle className="text-[#1A365D]">איש קשר נוסף</CardTitle></CardHeader>
-            <CardContent><PersonFields person={additionalContact} setPerson={setPerson} setter={setAdditionalContact} /></CardContent>
-          </Card>
-
-          <Card className="bg-white border-border shadow-sm">
-            <CardHeader><CardTitle className="text-[#1A365D]">נתונים כלליים</CardTitle></CardHeader>
-            <CardContent>
-              <FieldGroup>
+          {step === 3 ? (
+            <Card className="bg-white border-border shadow-sm">
+              <CardHeader><CardTitle className="text-[#1A365D]">פרטי חשבון וסיום</CardTitle></CardHeader>
+              <CardContent className="space-y-6">
+                <div>
+                  <p className="font-medium text-[#1A365D] mb-2">הנהלת חשבונות</p>
+                  <PersonFields person={accounting} setPerson={setPerson} setter={setAccounting} />
+                </div>
                 <Field>
-                  <FieldLabel className="text-[#1A365D]">שיטת חיוב</FieldLabel>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-[#1A365D]"
-                    value={billingMethod}
-                    onChange={(e) => setBillingMethod(e.target.value)}
-                  >
-                    <option value="private">חיוב לקוח פרטי</option>
-                    <option value="corporate">חיוב מרוכז חברה</option>
-                  </select>
+                  <FieldLabel className="text-[#1A365D]">הערות נוספות</FieldLabel>
+                  <textarea
+                    rows={4}
+                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-right"
+                    placeholder="פרטו את הצרכים, שאלות או בקשות נוספות..."
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
                 </Field>
-                <Field><FieldLabel className="text-[#1A365D]">תחום פעילות</FieldLabel><Input value={generalData.fieldOfActivity} onChange={(e) => setGeneralData((p) => ({ ...p, fieldOfActivity: e.target.value }))} /></Field>
-                <Field><FieldLabel className="text-[#1A365D]">מספר עובדים</FieldLabel><Input type="number" value={generalData.employeesCount} onChange={(e) => setGeneralData((p) => ({ ...p, employeesCount: e.target.value }))} /></Field>
-              </FieldGroup>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white border-border shadow-sm">
-            <CardHeader><CardTitle className="text-[#1A365D]">הערות נוספות</CardTitle></CardHeader>
-            <CardContent>
-              <Field>
-                <FieldLabel className="text-[#1A365D]">תוכן ההודעה</FieldLabel>
-                <textarea
-                  rows={4}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  placeholder="פרטו את הצרכים, שאלות או בקשות נוספות..."
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                />
-              </Field>
-            </CardContent>
-          </Card>
-
-          {error ? <p className="text-destructive text-sm">{error}</p> : null}
-
-          <Button type="submit" size="lg" className="w-full sm:w-auto bg-[#1A365D] hover:bg-[#152d4e]" disabled={loading}>
-            {loading ? 'שולח…' : 'שליחת בקשה'}
-          </Button>
+                {error ? <p className="text-destructive text-sm">{error}</p> : null}
+                <div className="flex justify-between">
+                  <Button type="button" variant="outline" onClick={() => setStep(2)}>חזרה</Button>
+                  <Button type="submit" size="lg" className="bg-[#1A365D] hover:bg-[#152d4e]" disabled={loading}>
+                    {loading ? 'שולח…' : 'סיום / שמור'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
         </form>
       </div>
     </div>

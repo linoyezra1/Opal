@@ -540,7 +540,7 @@ export default function OrganizationDetailPage() {
                     <TabsList className="grid w-full grid-cols-3">
                       <TabsTrigger value="org">פרטי ארגון</TabsTrigger>
                       <TabsTrigger value="contacts">אנשי קשר</TabsTrigger>
-                      <TabsTrigger value="billing">תמחור וחיוב</TabsTrigger>
+                      <TabsTrigger value="billing">תמחור מוצרים</TabsTrigger>
                     </TabsList>
                     <TabsContent value="org" className="mt-4">
                       <FieldGroup>
