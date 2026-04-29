@@ -1036,7 +1036,7 @@ export default function SubscribersDashboard() {
               {editOrganizationName ? (
                 <Field>
                   <FieldLabel>ארגון (קריאה בלבד)</FieldLabel>
-                  <Input value={editOrganizationName} readOnly className="bg-muted" />
+                  <Input dir="rtl" value={editOrganizationName} readOnly className="bg-muted text-right" />
                 </Field>
               ) : null}
               <Tabs value={editTab} onValueChange={setEditTab} className="mt-0">
@@ -1076,7 +1076,7 @@ export default function SubscribersDashboard() {
                       <Field>
                         <FieldLabel>תעודת זהות</FieldLabel>
                         <Input
-                          dir="ltr"
+                          dir="rtl"
                           className="text-right"
                           inputMode="numeric"
                           maxLength={9}
@@ -1091,13 +1091,13 @@ export default function SubscribersDashboard() {
                       </Field>
                       <Field>
                         <FieldLabel>טלפון</FieldLabel>
-                        <Input dir="ltr" className="text-right" value={editForm.phone} onChange={(e) => setEditForm((p) => ({ ...p, phone: e.target.value }))} />
+                        <Input dir="rtl" className="text-right" value={editForm.phone} onChange={(e) => setEditForm((p) => ({ ...p, phone: e.target.value }))} />
                       </Field>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <Field>
                         <FieldLabel>אימייל</FieldLabel>
-                        <Input type="email" dir="ltr" className="text-right" value={editForm.email} onChange={(e) => setEditForm((p) => ({ ...p, email: e.target.value }))} />
+                        <Input type="email" dir="rtl" className="text-right" value={editForm.email} onChange={(e) => setEditForm((p) => ({ ...p, email: e.target.value }))} />
                       </Field>
                       <Field>
                         <FieldLabel>תאריך לידה</FieldLabel>
@@ -1214,7 +1214,7 @@ export default function SubscribersDashboard() {
                             <Field>
                               <FieldLabel>תעודת זהות</FieldLabel>
                               <Input
-                                dir="ltr"
+                                dir="rtl"
                                 className="text-right"
                                 inputMode="numeric"
                                 maxLength={9}
@@ -1354,7 +1354,7 @@ export default function SubscribersDashboard() {
                             <Field>
                               <FieldLabel>טלפון</FieldLabel>
                               <Input
-                                dir="ltr"
+                                dir="rtl"
                                 className="text-right"
                                 value={b.phone || ''}
                                 onChange={(e) =>
@@ -1372,7 +1372,7 @@ export default function SubscribersDashboard() {
                               <FieldLabel>אימייל</FieldLabel>
                               <Input
                                 type="email"
-                                dir="ltr"
+                                dir="rtl"
                                 className="text-right"
                                 value={b.email || ''}
                                 onChange={(e) =>
@@ -1410,26 +1410,26 @@ export default function SubscribersDashboard() {
                     <div className="grid gap-4 sm:grid-cols-2">
                       <Field>
                         <FieldLabel>סכום עסקה (₪)</FieldLabel>
-                        <Input type="number" dir="ltr" value={editForm.payerAmount} readOnly className="bg-muted" />
+                        <Input type="number" dir="rtl" value={editForm.payerAmount} readOnly className="bg-muted text-right" />
                       </Field>
                       <Field>
                         <FieldLabel>עמלת סוכן (₪)</FieldLabel>
-                        <Input type="number" dir="ltr" value={editForm.agentCommission} readOnly className="bg-muted" />
+                        <Input type="number" dir="rtl" value={editForm.agentCommission} readOnly className="bg-muted text-right" />
                       </Field>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <Field>
                         <FieldLabel>סוכן</FieldLabel>
-                        <Input value={editForm.agentName || '—'} readOnly className="bg-muted" />
+                        <Input dir="rtl" value={editForm.agentName || '—'} readOnly className="bg-muted text-right" />
                       </Field>
                       <Field>
                         <FieldLabel>תחילת מנוי</FieldLabel>
-                        <Input type="date" value={editForm.subscriptionStartDate} readOnly className="bg-muted" />
+                        <Input type="date" dir="rtl" value={editForm.subscriptionStartDate} readOnly className="bg-muted text-right" />
                       </Field>
                     </div>
                     <Field>
                       <FieldLabel>תאריך יצירה</FieldLabel>
-                      <Input value={fmtDateTime(editForm.createdAt)} readOnly className="bg-muted" />
+                      <Input dir="rtl" value={fmtDateTime(editForm.createdAt)} readOnly className="bg-muted text-right" />
                     </Field>
                   </FieldGroup>
                 </TabsContent>
@@ -1856,7 +1856,7 @@ export default function SubscribersDashboard() {
                             {r.transactionId}
                           </TableCell>
                           <TableCell dir="rtl" className="text-right">
-                            <div className="flex flex-col items-start gap-1 text-right">
+                            <div className="flex w-full flex-col items-end gap-1 text-right">
                               <span>{r.fullName || '—'}</span>
                               {r.organizationBadge ? (
                                 <Badge variant="outline" className="text-xs font-normal max-w-full whitespace-normal text-right">
