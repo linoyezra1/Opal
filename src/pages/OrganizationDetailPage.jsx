@@ -82,6 +82,7 @@ export default function OrganizationDetailPage() {
   const [billingChangePending, setBillingChangePending] = useState(null);
   const [products, setProducts] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [registrationLinkCopied, setRegistrationLinkCopied] = useState(false);
 
   const load = useCallback(async () => {
     if (!token || !id) return;
@@ -232,6 +233,7 @@ export default function OrganizationDetailPage() {
   const isCentralizedBilling = billingTypeNorm === 'centralized';
   const privateBillingDeals = deals || [];
   const privateRegistrationUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/register?orgId=${org.id || ''}`;
+  const centralizedRegistrationUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/org-employee-register?orgId=${org.id || ''}`;
 
   return (
     <AdminPageShell>
@@ -396,6 +398,36 @@ export default function OrganizationDetailPage() {
                 <CardDescription>
                   יש לשים לב שכל עובדים בהעלה ידנית יאושרו אוטומטית,בנוסף לכך כפילות לפי ת״ז תידלג.
                 </CardDescription>
+                <div className="mt-3 rounded-lg border border-[#285959]/25 bg-[#eef6f6] p-3">
+                  <p className="text-sm font-semibold text-[#285959]">קישור הרשמה לעובדי הארגון (חיוב מרוכז)</p>
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <a
+                      href={centralizedRegistrationUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      dir="ltr"
+                      className="text-sm underline text-[#285959] break-all flex-1"
+                    >
+                      {centralizedRegistrationUrl}
+                    </a>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-[#285959] text-[#285959] hover:bg-[#285959] hover:text-white"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(centralizedRegistrationUrl);
+                          setRegistrationLinkCopied(true);
+                          setTimeout(() => setRegistrationLinkCopied(false), 1500);
+                        } catch {
+                          setRegistrationLinkCopied(false);
+                        }
+                      }}
+                    >
+                      {registrationLinkCopied ? 'הועתק' : 'העתק קישור'}
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap gap-2">
