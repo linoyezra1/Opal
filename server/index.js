@@ -1999,6 +1999,7 @@ app.post(
       const orgName = org.companyName || org.name || '';
       let created = 0;
       let skippedDuplicates = 0;
+      const skippedDetails = [];
       const validationFailures = [];
       for (const nr of normalizedRows) {
         if (!nr.ok) {
@@ -2012,10 +2013,17 @@ app.post(
           ...nr.profile,
           subscriptionProductName: String(org.subscriptionProductName || '').trim(),
         });
-        if (r.skipped) skippedDuplicates += 1;
-        else created += 1;
+        if (r.skipped) {
+          skippedDuplicates += 1;
+          skippedDetails.push({
+            fullName: String(nr.profile.fullName || '').trim(),
+            idNum: String(nr.profile.idNum || '').trim(),
+          });
+        } else {
+          created += 1;
+        }
       }
-      res.json({ success: true, created, skippedDuplicates, validationFailures });
+      res.json({ success: true, created, skippedDuplicates, skippedDetails, validationFailures });
     } catch (e) {
       console.error(`[${ts()}] org import-members error:`, e);
       res.status(500).json({ success: false, error: e?.message || 'ייבוא נכשל' });

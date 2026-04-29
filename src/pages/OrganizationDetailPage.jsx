@@ -92,6 +92,7 @@ export default function OrganizationDetailPage() {
   const [products, setProducts] = useState([]);
   const [payments, setPayments] = useState([]);
   const [registrationLinkCopied, setRegistrationLinkCopied] = useState(false);
+  const [fileInputKey, setFileInputKey] = useState(0);
 
   const load = useCallback(async () => {
     if (!token || !id) return;
@@ -199,11 +200,12 @@ export default function OrganizationDetailPage() {
       }
       if (!j.success) throw new Error(j.error || 'ייבוא נכשל');
       setImportResult(j);
-      setImportFile(null);
       await load();
     } catch (e) {
       setErr(e.message || 'שגיאה');
     } finally {
+      setImportFile(null);
+      setFileInputKey((k) => k + 1);
       setImportBusy(false);
     }
   }
@@ -452,24 +454,46 @@ export default function OrganizationDetailPage() {
                 <Field>
                   <FieldLabel>קובץ</FieldLabel>
                   <Input
+                    key={fileInputKey}
                     type="file"
                     accept=".xlsx,.xls,.csv"
                     onChange={(e) => setImportFile(e.target.files?.[0] || null)}
                   />
                 </Field>
-                <Button type="button" disabled={!importFile || importBusy} onClick={runImport}>
+                <Button
+                  type="button"
+                  disabled={!importFile || importBusy}
+                  onClick={runImport}
+                  style={{ backgroundColor: '#285959', color: '#fff' }}
+                  className="hover:opacity-90"
+                >
                   {importBusy ? <Spinner className="size-4 me-2" /> : <Upload className="size-4 me-2" />}
                   יבוא
                 </Button>
                 {importResult ? (
-                  <div className="rounded-lg border p-3 text-sm space-y-1">
-                    <p>
-                      נוצרו: <strong>{importResult.created}</strong> · דולגו (כפילות):{' '}
-                      <strong>{importResult.skippedDuplicates}</strong>
+                  <div className="rounded-lg border border-[#285959]/25 bg-[#eef6f6] p-4 text-sm space-y-2">
+                    <p className="font-semibold text-[#285959]">
+                      נוצרו בהצלחה: <strong>{importResult.created}</strong>
+                      {importResult.skippedDuplicates > 0 && (
+                        <span className="font-normal text-orange-700">
+                          {' '}· דולגו (כפילות): <strong>{importResult.skippedDuplicates}</strong>
+                        </span>
+                      )}
                     </p>
-                    {Array.isArray(importResult.validationFailures) &&
-                    importResult.validationFailures.length > 0 ? (
-                      <div className="text-destructive space-y-1 max-h-48 overflow-y-auto">
+                    {Array.isArray(importResult.skippedDetails) && importResult.skippedDetails.length > 0 ? (
+                      <div className="space-y-1 max-h-40 overflow-y-auto">
+                        <p className="font-medium text-orange-700">שורות שדולגו עקב כפילות:</p>
+                        <ul className="list-disc list-inside text-orange-800 space-y-0.5">
+                          {importResult.skippedDetails.map((d, i) => (
+                            <li key={i}>
+                              {d.fullName || '—'}{d.idNum ? ` (ת"ז: ${d.idNum})` : ''}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                    {Array.isArray(importResult.validationFailures) && importResult.validationFailures.length > 0 ? (
+                      <div className="text-destructive space-y-1 max-h-48 overflow-y-auto border-t border-[#285959]/20 pt-2">
                         <p className="font-medium">שגיאות בשורות (לא יובאו):</p>
                         <ul className="list-disc list-inside">
                           {importResult.validationFailures.map((vf, i) => (

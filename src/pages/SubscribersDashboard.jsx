@@ -48,7 +48,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../com
 const TOKEN_KEY = 'opal_admin_token';
 
 const SUMMARY_ITEMS = [
-  { key: 'all', label: 'הכל' },
+
   { key: 'primary', label: 'לקוחות עיקריים' },
   { key: 'active', label: 'לקוחות פעילים (עיקרי + משניים)' },
   { key: 'canceled', label: 'לקוחות מבוטלים' },
