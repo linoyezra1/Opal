@@ -69,9 +69,11 @@ function formatCurrency(value) {
 
 function pendingCancelLabel(finalBillingMonth) {
   if (!finalBillingMonth) return 'ממתין לביטול';
-  const [yr, mo] = String(finalBillingMonth).split('-').map(Number);
-  if (!yr || !mo) return 'ממתין לביטול';
-  // mo is 1-indexed (5=May); Date(yr, mo, 1) = 1st of month index mo = June 1st
+  const m = /^(\d{4})-(\d{1,2})$/.exec(String(finalBillingMonth).trim());
+  if (!m) return 'ממתין לביטול';
+  const yr = Number(m[1]);
+  const mo = Number(m[2]);
+  if (!yr || !mo || mo < 1 || mo > 12) return 'ממתין לביטול';
   const nextMonthDate = new Date(yr, mo, 1);
   const monthName = new Intl.DateTimeFormat('he-IL', { month: 'long' }).format(nextMonthDate);
   return `יבוטל ב-1 ל${monthName}`;
@@ -1654,20 +1656,38 @@ export default function SubscribersDashboard() {
             </div>
           </div>
 
-          {/* כרטיסי סטטיסטיקה — נתונים אמיתיים מהדוח */}
-          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-            <StatsCard title="סה״כ הכנסות" value={formatCurrency(visibleSummary.totalRevenue)} icon={TrendingUp} loading={loading} />
-            <StatsCard title="עסקאות בתוצאות" value={visibleRows.length} icon={Users} loading={loading} />
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="rounded-lg outline-none">
-                  <StatsCard title={statusSummaryTitle} value={statusSummaryValue} icon={Calendar} loading={loading} />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>לפי מסנני הקטגוריות והדוח בשרת</TooltipContent>
-            </Tooltip>
-          </div>
+          <div className="w-full mb-6">
+            {/* כרטיסי סטטיסטיקה מאוחדים — נתונים כלליים + מסנני קטגוריות */}
+            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              
+              {/* 1. קוביות סטטיסטיקה כלליות */}
+              <StatsCard title="סה״כ הכנסות" value={formatCurrency(visibleSummary.totalRevenue)} icon={TrendingUp} loading={loading} />
+              <StatsCard title="עסקאות בתוצאות" value={visibleRows.length} icon={Users} loading={loading} />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="rounded-lg outline-none">
+                    <StatsCard title={statusSummaryTitle} value={statusSummaryValue} icon={Calendar} loading={loading} />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>לפי מסנני הקטגוריות והדוח בשרת</TooltipContent>
+              </Tooltip>
 
+              {/* 2. קוביות הסטטיסטיקה של הקטגוריות */}
+              {SUMMARY_ITEMS.map((item) => {
+                const itemCount = calculatedCounts[item.key] || 0; 
+                return (
+                  <StatsCard 
+                    key={item.key} 
+                    title={item.label} 
+                    value={itemCount} 
+                    icon={Users} 
+                    loading={loading} 
+                  />
+                );
+              })}
+              
+            </div>
+          </div>
           {/* שורת חיפוש + סינון */}
           <Card dir="rtl" className="text-right border-border/60 shadow-sm">
             <CardContent className="pt-6">
@@ -1709,25 +1729,7 @@ export default function SubscribersDashboard() {
                 <div className="text-right">
                   <CardTitle>לקוחות</CardTitle>
                 </div>
-                <div className="w-full">
-                  {/* כרטיסי סטטיסטיקה — נתונים אמיתיים מהדוח לפי קטגוריות */}
-                  <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 mb-6">
-                    {SUMMARY_ITEMS.map((item) => {
-                      // Get the dynamic count for this specific category based on the active dataset
-                      const itemCount = calculatedCounts[item.key] || 0; 
-                      
-                      return (
-                        <StatsCard 
-                          key={item.key} 
-                          title={item.label} 
-                          value={itemCount} 
-                          icon={Users} // Adjust icon dynamically if needed
-                          loading={loading} 
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
+
               </div>
             </CardHeader>
             <CardContent className="pt-2" dir="rtl">

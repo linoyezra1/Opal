@@ -355,6 +355,12 @@ export function buildOrgImportTemplateBuffer() {
     'נשוי/אה',
   ];
   const ws = xlsx.utils.aoa_to_sheet([headers, sample]);
+  ws['!views'] = [{ RTL: true }];
+  // Right align Hebrew headers for better readability in Excel.
+  for (let c = 0; c < headers.length; c += 1) {
+    const cellRef = xlsx.utils.encode_cell({ r: 0, c });
+    if (ws[cellRef]) ws[cellRef].s = { alignment: { horizontal: 'right' } };
+  }
   const wb = xlsx.utils.book_new();
   xlsx.utils.book_append_sheet(wb, ws, 'ייבוא');
   return xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });

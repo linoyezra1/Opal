@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { Building2, Upload, Download, ArrowRight, Users } from 'lucide-react';
+import { Building2, Upload, Download, ArrowRight, Users, RefreshCw } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -20,8 +20,11 @@ const TOKEN_KEY = 'opal_admin_token';
 
 function pendingCancelLabel(finalBillingMonth) {
   if (!finalBillingMonth) return 'ממתין לביטול';
-  const [yr, mo] = String(finalBillingMonth).split('-').map(Number);
-  if (!yr || !mo) return 'ממתין לביטול';
+  const m = /^(\d{4})-(\d{1,2})$/.exec(String(finalBillingMonth).trim());
+  if (!m) return 'ממתין לביטול';
+  const yr = Number(m[1]);
+  const mo = Number(m[2]);
+  if (!yr || !mo || mo < 1 || mo > 12) return 'ממתין לביטול';
   const nextMonthDate = new Date(yr, mo, 1);
   const monthName = new Intl.DateTimeFormat('he-IL', { month: 'long' }).format(nextMonthDate);
   return `יבוטל ב-1 ל${monthName}`;
@@ -306,6 +309,10 @@ export default function OrganizationDetailPage() {
               </div>
             ) : null}
           </div>
+          <Button type="button" variant="outline" onClick={load} disabled={loading}>
+            <RefreshCw className={`size-4 me-2 ${loading ? 'animate-spin' : ''}`} />
+            רענן נתונים
+          </Button>
         </div>
 
         {err ? <p className="text-sm text-destructive">{err}</p> : null}
