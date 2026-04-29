@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Building2, Plus, Edit2, Archive } from 'lucide-react';
+import { Building2, Plus, Edit2, Archive, Copy, Check } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -72,6 +72,14 @@ export default function OrganizationsDashboard() {
     () => String(new URLSearchParams(window.location.search).get('tab') || 'orgs') === 'applications' ? 'applications' : 'orgs'
   );
   const [approvingId, setApprovingId] = useState('');
+  const [copiedLink, setCopiedLink] = useState('');
+
+  function copyLink(url) {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedLink(url);
+      setTimeout(() => setCopiedLink(''), 2000);
+    }).catch(() => {});
+  }
 
   const loadRows = useCallback(async () => {
     if (!token) return;
@@ -578,7 +586,66 @@ export default function OrganizationsDashboard() {
             <DialogDescription>עדכנו פרטים, אנשי קשר וחיוב</DialogDescription>
           </DialogHeader>
           {editOrg ? (
-            <form onSubmit={saveEdit} className="space-y-4">
+            <>
+              {/* ── Registration links panel ── */}
+              <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+                <p className="text-sm font-semibold text-foreground">קישורי הרשמה לעובדים</p>
+                {editOrg.billingType === 'Centralized' ? (
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-muted-foreground">קישור הרשמה עצמית (תשלום מרוכז):</p>
+                    <div className="flex items-start gap-2">
+                      <a
+                        href={`${window.location.origin}/org-employee-register?orgId=${editOrg.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-primary underline break-all leading-relaxed flex-1"
+                      >
+                        {`${window.location.origin}/org-employee-register?orgId=${editOrg.id}`}
+                      </a>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="size-7 shrink-0 mt-0.5"
+                        onClick={() => copyLink(`${window.location.origin}/org-employee-register?orgId=${editOrg.id}`)}
+                        title="העתק קישור"
+                      >
+                        {copiedLink === `${window.location.origin}/org-employee-register?orgId=${editOrg.id}`
+                          ? <Check className="size-3.5 text-emerald-600" />
+                          : <Copy className="size-3.5" />}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-muted-foreground">קישור הרשמה בהנחת ארגון (תשלום פרטי):</p>
+                    <div className="flex items-start gap-2">
+                      <a
+                        href={`${window.location.origin}/register?orgId=${editOrg.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-primary underline break-all leading-relaxed flex-1"
+                      >
+                        {`${window.location.origin}/register?orgId=${editOrg.id}`}
+                      </a>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="size-7 shrink-0 mt-0.5"
+                        onClick={() => copyLink(`${window.location.origin}/register?orgId=${editOrg.id}`)}
+                        title="העתק קישור"
+                      >
+                        {copiedLink === `${window.location.origin}/register?orgId=${editOrg.id}`
+                          ? <Check className="size-3.5 text-emerald-600" />
+                          : <Copy className="size-3.5" />}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <form onSubmit={saveEdit} className="space-y-4">
               <Tabs value={editTab} onValueChange={setEditTab}>
                 <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="org">פרטי ארגון</TabsTrigger>
@@ -758,6 +825,7 @@ export default function OrganizationsDashboard() {
                 <Button type="submit" disabled={loading}>{loading && <Spinner className="me-2" />}שמירה</Button>
               </DialogFooter>
             </form>
+            </>
           ) : null}
         </DialogContent>
       </Dialog>

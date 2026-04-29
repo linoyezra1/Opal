@@ -373,11 +373,19 @@ export async function sendEmployeeApprovalRequestEmail(payload) {
       <td align="right" dir="rtl">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="right" dir="rtl" style="max-width:560px;background-color:#ffffff;direction:rtl;text-align:right;">
           <tr>
-            <td align="center" dir="rtl" style="background-color:#285959;padding:20px 32px 24px;text-align:center;font-family:${FONT_STACK};">
-              ${logoBlock}
-              <h1 style="margin:14px 0 0;color:#dffff9;font-size:20px;font-weight:600;line-height:1.4;text-align:center;font-family:${FONT_STACK};">
-                בקשת אישור עובד חדש
-              </h1>
+            <td dir="rtl" style="background-color:#ffffff;padding:20px 24px 16px;font-family:${FONT_STACK};">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" dir="rtl" style="border-collapse:collapse;direction:rtl;">
+                <tr>
+                  <td align="right" valign="middle" style="text-align:right;">
+                    <h2 style="margin:0;color:#285959;font-size:22px;font-weight:700;line-height:1.4;text-align:right;font-family:${FONT_STACK};">
+                      בקשת אישור עובד חדש
+                    </h2>
+                  </td>
+                  <td align="left" valign="middle" style="text-align:left;width:120px;">
+                    ${logoBlock}
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
           <tr>
@@ -405,7 +413,7 @@ export async function sendEmployeeApprovalRequestEmail(payload) {
                 </tr>
               </table>
               <div style="text-align:center;margin-bottom:24px;">
-                <a href="${approveUrl}" style="display:inline-block;background-color:#37e6c4;color:#1a3a3a;text-decoration:none;padding:14px 40px;border-radius:6px;font-size:16px;font-weight:700;font-family:${FONT_STACK};letter-spacing:0.02em;">
+                <a href="${approveUrl}" style="display:inline-block;background-color:#285959;color:#ffffff;text-decoration:none;padding:14px 40px;border-radius:6px;font-size:16px;font-weight:700;font-family:${FONT_STACK};letter-spacing:0.02em;">
                   ✓ אשר עובד
                 </a>
               </div>

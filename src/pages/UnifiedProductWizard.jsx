@@ -831,7 +831,7 @@ export default function UnifiedProductWizard() {
                     <Input
                       value={hubSearch}
                       onChange={(e) => setHubSearch(e.target.value)}
-                      placeholder="חיפוש: שם דף נחיתה, שם מוצר, כתובת"
+                      placeholder="חיפוש: שם דף נחיתה"
                     />
                     <Input type="date" value={hubFilterFrom} onChange={(e) => setHubFilterFrom(e.target.value)} />
                     <Input type="date" value={hubFilterTo} onChange={(e) => setHubFilterTo(e.target.value)} />

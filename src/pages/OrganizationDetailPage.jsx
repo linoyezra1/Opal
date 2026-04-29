@@ -18,6 +18,23 @@ import ConfirmDialog from '../components/ConfirmDialog.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
+function getEmployeeStatusBadge(statusRaw) {
+  const status = String(statusRaw || '').trim().toLowerCase();
+  if (['active', 'completed', 'approved'].includes(status)) {
+    return {
+      label: 'מאושר',
+      className: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+    };
+  }
+  if (['pending', 'pending_org_approval'].includes(status)) {
+    return {
+      label: 'ממתין לאישור',
+      className: 'bg-amber-100 text-amber-800 border-amber-300',
+    };
+  }
+  return null;
+}
+
 function ContactSection({ title, data, onChange }) {
   return (
     <div className="space-y-3 border rounded-lg p-3 text-right" dir="rtl">
@@ -349,9 +366,17 @@ export default function OrganizationDetailPage() {
                             </TableCell>
                             <TableCell className="text-right">₪{Number(d.payerAmount || 0)}</TableCell>
                             <TableCell className="text-right">
-                              <Badge variant="outline" className="text-xs">
-                                {d.subscriptionStatus || d.paymentStatus || '—'}
-                              </Badge>
+                              {(() => {
+                                const badge = getEmployeeStatusBadge(d.subscriptionStatus || d.paymentStatus);
+                                if (badge) {
+                                  return <Badge className={badge.className}>{badge.label}</Badge>;
+                                }
+                                return (
+                                  <Badge variant="outline" className="text-xs">
+                                    {d.subscriptionStatus || d.paymentStatus || '—'}
+                                  </Badge>
+                                );
+                              })()}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground text-right">{d.source || '—'}</TableCell>
                           </TableRow>
@@ -369,8 +394,7 @@ export default function OrganizationDetailPage() {
               <CardHeader className="text-right">
                 <CardTitle>יבוא עובדים (Excel)</CardTitle>
                 <CardDescription>
-                  עמודות: שם מלא, ת״ז, תאריך לידה (DD/MM/YYYY), מין, אימייל, טלפון, כתובת, קופת חולים
-                  (כללית/מכבי/מאוחדת/לאומית), ביטוח משלים, מצב משפחתי. כפילות לפי ת״ז תידלג.
+                  יש לשים לב שכל עובדים בהעלה ידנית יאושרו אוטומטית,בנוסף לכך כפילות לפי ת״ז תידלג.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
