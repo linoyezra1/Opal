@@ -1797,8 +1797,7 @@ export default function SubscribersDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {visibleRows.map((r) => (
-                        (() => {
+                      {visibleRows.map((r) => {
                           const isCancelled = r.status === 'canceled' || String(r.subscriptionStatus || '').toLowerCase() === 'cancelled';
                           const isPendingCancellation = String(r.subscriptionStatus || '') === 'Pending Cancellation';
                           const isCentralized = !!r.isCentralized || String(r.dealSource || '') === 'org-bulk-import';
@@ -2036,8 +2035,7 @@ export default function SubscribersDashboard() {
                           </TableCell>
                         </TableRow>
                           );
-                        })()
-                      ))}
+                      })}
                     </TableBody>
                   </Table>
                 </div>
