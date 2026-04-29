@@ -47,6 +47,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../com
 
 const TOKEN_KEY = 'opal_admin_token';
 
+const PENDING_ORG_CANCEL_ALERT_HE =
+  'לקוח זה לא אושר על ידי הארגון ולא הופעל לו מנוי, ולכן לא ניתן לבטל את המנוי. ניתן להעביר לארכיון בלבד. פעולה זו תגרור השבתה של יכולת מנהל הארגון לאשר עובד זה בעתיד';
+
 const SUMMARY_ITEMS = [
 
   { key: 'primary', label: 'לקוחות עיקריים' },
@@ -1782,7 +1785,8 @@ export default function SubscribersDashboard() {
                           const isCancelled = r.status === 'canceled' || String(r.subscriptionStatus || '').toLowerCase() === 'cancelled';
                           const statusNorm = String(r.subscriptionStatus || r.paymentStatus || '').trim().toLowerCase();
                           const isPendingCancellation = String(r.subscriptionStatus || '') === 'Pending Cancellation';
-                          const isPendingOrgApproval = statusNorm === 'pending_org_approval' || statusNorm === 'pending';
+                          const workflowStatus = String(r.raw?.status || '').trim().toLowerCase();
+                          const isPendingOrgApproval = workflowStatus === 'pending_org_approval';
                           const isCentralized = !!r.isCentralized || String(r.dealSource || '') === 'org-bulk-import';
                           const missingRecurringIds =
                             !String(r.cardcomAccountId || '').trim() || !String(r.cardcomRecurringId || '').trim();
@@ -1928,9 +1932,18 @@ export default function SubscribersDashboard() {
                                       type="button"
                                       variant="outline"
                                       size="sm"
-                                      className="h-8 px-2 text-xs shrink-0"
-                                      disabled={isCancelled || isPendingCancellation || isPendingOrgApproval || (!isCentralized && missingRecurringIds)}
+                                      className={`h-8 px-2 text-xs shrink-0 ${isPendingOrgApproval ? 'opacity-60 pointer-events-auto' : ''}`}
+                                      disabled={
+                                        isCancelled || isPendingCancellation || (!isCentralized && missingRecurringIds)
+                                      }
                                       onClick={() => {
+                                        if (isPendingOrgApproval) {
+                                          window.alert(PENDING_ORG_CANCEL_ALERT_HE);
+                                          return;
+                                        }
+                                        if (isCancelled || isPendingCancellation || (!isCentralized && missingRecurringIds)) {
+                                          return;
+                                        }
                                         if (isCentralized) {
                                           setCancelOrgTarget({ id: r.id, transactionId: r.transactionId });
                                           setTerminationDate('');
@@ -1942,7 +1955,7 @@ export default function SubscribersDashboard() {
                                         isPendingCancellation
                                           ? `ממתין לביטול — חודש אחרון: ${r.finalBillingMonth}`
                                           : isPendingOrgApproval
-                                            ? 'לא ניתן לבטל עובד שטרם אושר על ידי מנהל.'
+                                            ? PENDING_ORG_CANCEL_ALERT_HE
                                             : !isCentralized && missingRecurringIds
                                               ? 'Subscription was not created as recurring - cancel manually in Cardcom'
                                               : isCentralized
@@ -1957,7 +1970,7 @@ export default function SubscribersDashboard() {
                                     </Button>
                                   </span>
                                 </TooltipTrigger>
-                                {isPendingOrgApproval ? <TooltipContent>לא ניתן לבטל עובד שטרם אושר על ידי מנהל.</TooltipContent> : null}
+                                {isPendingOrgApproval ? <TooltipContent>{PENDING_ORG_CANCEL_ALERT_HE}</TooltipContent> : null}
                               </Tooltip>
                             </div>
                             <details className="relative md:hidden">
@@ -2010,10 +2023,19 @@ export default function SubscribersDashboard() {
                                 <Button
                                   type="button"
                                   variant="outline"
-                                  className="h-auto min-h-10 w-full justify-start gap-2 px-3 py-2 text-xs font-normal"
-                                  disabled={isCancelled || isPendingCancellation || isPendingOrgApproval || (!isCentralized && missingRecurringIds)}
+                                  className={`h-auto min-h-10 w-full justify-start gap-2 px-3 py-2 text-xs font-normal ${isPendingOrgApproval ? 'opacity-60' : ''}`}
+                                  disabled={
+                                    isCancelled || isPendingCancellation || (!isCentralized && missingRecurringIds)
+                                  }
                                   onClick={(e) => {
                                     closeActionDetailsMenu(e);
+                                    if (isPendingOrgApproval) {
+                                      window.alert(PENDING_ORG_CANCEL_ALERT_HE);
+                                      return;
+                                    }
+                                    if (isCancelled || isPendingCancellation || (!isCentralized && missingRecurringIds)) {
+                                      return;
+                                    }
                                     if (isCentralized) {
                                       setCancelOrgTarget({ id: r.id, transactionId: r.transactionId });
                                       setTerminationDate('');

@@ -1,6 +1,20 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Building2, Edit2, Upload, Download, ArrowRight, Users, RefreshCw, Wallet, UserCheck, CalendarClock, FileSpreadsheet } from 'lucide-react';
+import {
+  Building2,
+  Edit2,
+  Upload,
+  Download,
+  ArrowRight,
+  Users,
+  RefreshCw,
+  Wallet,
+  UserCheck,
+  CalendarClock,
+  FileSpreadsheet,
+  Ban,
+  Archive,
+} from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { StatsCard } from '../components/admin/stats-card.jsx';
@@ -16,9 +30,20 @@ import { Spinner } from '../components/ui/spinner.jsx';
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '../components/ui/empty.jsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog.jsx';
 import * as XLSX from 'xlsx';
 
 const TOKEN_KEY = 'opal_admin_token';
+
+const PENDING_ORG_CANCEL_ALERT_HE =
+  'לקוח זה לא אושר על ידי הארגון ולא הופעל לו מנוי, ולכן לא ניתן לבטל את המנוי. ניתן להעביר לארכיון בלבד. פעולה זו תגרור השבתה של יכולת מנהל הארגון לאשר עובד זה בעתיד';
 const monthNow = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -106,6 +131,11 @@ export default function OrganizationDetailPage() {
     summary: { totalDue: 0, totalActiveRecords: 0, totalProrated: 0, totalFinalMonth: 0 },
     rows: [],
   });
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [cancelOrgTarget, setCancelOrgTarget] = useState(null);
+  const [cancelOrgLoading, setCancelOrgLoading] = useState(false);
+  const [cancelOrgErr, setCancelOrgErr] = useState('');
 
   const load = useCallback(async () => {
     if (!token || !id) return;
@@ -234,6 +264,51 @@ export default function OrganizationDetailPage() {
     }
   }
 
+  async function confirmArchiveDeal() {
+    if (!deleteTarget?.id || !token) return;
+    setDeleteLoading(true);
+    setErr('');
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/deals/${encodeURIComponent(deleteTarget.id)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) throw new Error(json.error || 'מחיקה נכשלה');
+      setDeleteTarget(null);
+      await load();
+    } catch (err) {
+      const msg = String(err?.message || '');
+      if (/לא ניתן להעביר לארכיון/.test(msg)) {
+        setErr('לא ניתן להעביר לארכיון. לקוח זה נמצא במצב פעיל. יש לבצע ביטול מנוי לפני העברה לארכיון.');
+      } else {
+        setErr(msg || 'שגיאה');
+      }
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
+
+  async function confirmCancelOrgEmployee() {
+    if (!cancelOrgTarget?.id || !token) return;
+    setCancelOrgLoading(true);
+    setCancelOrgErr('');
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/deals/${encodeURIComponent(cancelOrgTarget.id)}/cancel-org-employee`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) throw new Error(json.error || 'ביטול נכשל');
+      setCancelOrgTarget(null);
+      await load();
+    } catch (err) {
+      setCancelOrgErr(err.message || 'שגיאה');
+    } finally {
+      setCancelOrgLoading(false);
+    }
+  }
+
   async function downloadTemplate() {
     const res = await fetch(`${API_BASE}/api/admin/organizations/import-template-xlsx`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -321,6 +396,57 @@ export default function OrganizationDetailPage() {
   return (
     <AdminPageShell>
       <ConfirmDialog
+        open={!!deleteTarget}
+        title="העברה לארכיון"
+        message={
+          deleteTarget
+            ? `להעביר לארכיון את העסקה ${deleteTarget.transactionId || deleteTarget.id}? פעולה זו תעביר את המידע לארכיון. חשוב לזכור: פעולה זו אינה מבטלת חיובים עתידיים בקארדקום. נא לבטל חיוב עתידי קודם לכן.`
+            : ''
+        }
+        confirmLabel="הפוך ללא פעיל"
+        danger
+        onConfirm={confirmArchiveDeal}
+        onCancel={() => setDeleteTarget(null)}
+        isLoading={deleteLoading}
+      />
+      <Dialog
+        open={!!cancelOrgTarget}
+        onOpenChange={(o) => {
+          if (!o) {
+            setCancelOrgTarget(null);
+            setCancelOrgErr('');
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md text-right" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>ביטול מנוי עובד ארגוני</DialogTitle>
+            <DialogDescription>
+              {cancelOrgTarget?.transactionId ? `עסקה: ${cancelOrgTarget.transactionId}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900 leading-relaxed">
+            <p className="font-semibold mb-1">מנוי ארגוני בחיוב מרוכז</p>
+            <p>המנוי יבוטל בפועל ב-1 לחודש הבא ויחויב באופן מלא על החודש הנוכחי.</p>
+          </div>
+          {cancelOrgErr ? <p className="text-destructive text-sm mt-2">{cancelOrgErr}</p> : null}
+          <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
+            <Button type="button" variant="outline" onClick={() => setCancelOrgTarget(null)}>
+              ביטול
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={cancelOrgLoading}
+              onClick={confirmCancelOrgEmployee}
+            >
+              {cancelOrgLoading && <Spinner className="me-2" />}
+              אישור ביטול
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <ConfirmDialog
         open={billingConfirmOpen}
         title="שינוי סוג חיוב"
         message="שינוי סוג החיוב עלול לשבש את נתוני הלקוחות שכבר משויכים לארגון ושילמו בפועל. אם נדרש תמחור או מודל שונה, מומלץ להקים ארגון חדש במערכת."
@@ -407,6 +533,7 @@ export default function OrganizationDetailPage() {
           </TabsList>
 
           <TabsContent value="members" className="mt-4" dir="rtl">
+            <TooltipProvider delayDuration={300}>
             <Card dir="rtl" className="text-right">
               <CardHeader className="text-right">
                 <CardTitle>גורמים בארגון</CardTitle>
@@ -440,7 +567,18 @@ export default function OrganizationDetailPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {deals.map((d) => (
+                        {deals.map((d) => {
+                          const workflowStatus = String(d.status || '').trim().toLowerCase();
+                          const isPendingOrgApproval = workflowStatus === 'pending_org_approval';
+                          const isCancelled =
+                            d.status === 'canceled' || String(d.subscriptionStatus || '').toLowerCase() === 'cancelled';
+                          const isPendingCancellation = String(d.subscriptionStatus || '') === 'Pending Cancellation';
+                          const centralized = !!d.isCentralized;
+                          const badgeRaw =
+                            workflowStatus === 'pending_org_approval'
+                              ? 'pending_org_approval'
+                              : d.subscriptionStatus || d.paymentStatus || '';
+                          return (
                           <TableRow key={d.id}>
                             <TableCell className="font-medium text-right">{d.fullName || '—'}</TableCell>
                             <TableCell dir="ltr" className="font-mono text-xs text-end">
@@ -458,7 +596,7 @@ export default function OrganizationDetailPage() {
                             <TableCell className="text-right">₪{Number(d.payerAmount || 0)}</TableCell>
                             <TableCell className="text-right">
                               {(() => {
-                                const badge = getEmployeeStatusBadge(d.subscriptionStatus || d.paymentStatus, d.finalBillingMonth);
+                                const badge = getEmployeeStatusBadge(badgeRaw, d.finalBillingMonth);
                                 if (badge) {
                                   return <Badge className={badge.className}>{badge.label}</Badge>;
                                 }
@@ -471,29 +609,91 @@ export default function OrganizationDetailPage() {
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground text-right">{d.source || '—'}</TableCell>
                             <TableCell className="text-right">
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-7 w-7"
-                                title="ערוך עסקה"
-                                onClick={() => {
-                                  const params = new URLSearchParams();
-                                  if (d.fullName) params.set('search', d.fullName);
-                                  if (d.id) params.set('editId', String(d.id));
-                                  navigate(`/admin/subscribers?${params.toString()}`);
-                                }}
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
+                              <div className="flex flex-wrap items-center justify-end gap-1">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-8 w-8 shrink-0"
+                                      title="ערוך עסקה"
+                                      type="button"
+                                      onClick={() => {
+                                        const params = new URLSearchParams();
+                                        if (d.fullName) params.set('search', d.fullName);
+                                        if (d.id) params.set('editId', String(d.id));
+                                        navigate(`/admin/subscribers?${params.toString()}`);
+                                      }}
+                                    >
+                                      <Edit2 className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>עריכה במסך מנויים</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-8 w-8 shrink-0 text-destructive"
+                                      type="button"
+                                      title="העברה לארכיון"
+                                      onClick={() => setDeleteTarget({ id: d.id, transactionId: d.transactionId })}
+                                    >
+                                      <Archive className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>מחק / ארכיון</TooltipContent>
+                                </Tooltip>
+                                {centralized ? (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className={`h-8 px-2 text-xs ${isPendingOrgApproval ? 'opacity-60' : ''}`}
+                                        disabled={isCancelled || isPendingCancellation}
+                                        title={
+                                          isPendingOrgApproval
+                                            ? PENDING_ORG_CANCEL_ALERT_HE
+                                            : isPendingCancellation
+                                              ? `ממתין לביטול — חודש אחרון: ${d.finalBillingMonth}`
+                                              : 'ביטול עובד ארגוני (חיוב מרוכז)'
+                                        }
+                                        onClick={() => {
+                                          if (isPendingOrgApproval) {
+                                            window.alert(PENDING_ORG_CANCEL_ALERT_HE);
+                                            return;
+                                          }
+                                          if (isCancelled || isPendingCancellation) {
+                                            return;
+                                          }
+                                          setCancelOrgErr('');
+                                          setCancelOrgTarget({ id: d.id, transactionId: d.transactionId });
+                                        }}
+                                      >
+                                        <Ban className="size-3.5 text-amber-600 sm:me-1" />
+                                        <span className="hidden sm:inline">ביטול עובד ארגוני</span>
+                                      </Button>
+                                    </TooltipTrigger>
+                                    {isPendingOrgApproval ? (
+                                      <TooltipContent className="max-w-sm">{PENDING_ORG_CANCEL_ALERT_HE}</TooltipContent>
+                                    ) : null}
+                                  </Tooltip>
+                                ) : null}
+                              </div>
                             </TableCell>
                           </TableRow>
-                        ))}
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>
                 )}
               </CardContent>
             </Card>
+            </TooltipProvider>
           </TabsContent>
 
           <TabsContent value="import" className="mt-4" dir="rtl">

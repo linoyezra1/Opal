@@ -978,6 +978,8 @@ export async function findDealsByOrganizationId(organizationId, limit = 500) {
     paymentStatus: d.paymentStatus,
     subscriptionStatus: d.subscriptionStatus,
     status: d.status,
+    isCentralized: isCentralizedOrgPayment(d),
+    finalBillingMonth: String(d.finalBillingMonth || '').trim(),
     memberType: d.memberType || 'Primary',
     isOrganizationDeal: !!d.isOrganizationDeal,
     fullName: d.formState?.fullName,
@@ -1108,6 +1110,7 @@ export async function getOrganizationBillingReport(orgId, monthInput = '') {
       subscriptionStatus: 1,
       paymentStatus: 1,
       status: 1,
+      isActive: 1,
       finalBillingMonth: 1,
       formState: 1,
       createdAt: 1,
@@ -1122,7 +1125,12 @@ export async function getOrganizationBillingReport(orgId, monthInput = '') {
   let totalFinalMonth = 0;
 
   for (const d of docs) {
+    if (d.isActive === false) continue;
     const fs = d?.formState && typeof d.formState === 'object' ? d.formState : {};
+    const workflowStatus = String(d.status || '').trim().toLowerCase();
+    if (workflowStatus === 'pending_org_approval') continue;
+    if (/ממתין לאישור הארגון/.test(String(d.subscriptionStatus || ''))) continue;
+
     const statusNorm = String(d.subscriptionStatus || d.paymentStatus || d.status || '')
       .trim()
       .toLowerCase()
@@ -1427,6 +1435,16 @@ export async function approveOrgEmployee(dealId) {
     oid = new ObjectId(String(dealId));
   } catch {
     throw new Error('מזהה עסקה לא תקין');
+  }
+  const existing = await db.collection('deals').findOne(
+    { _id: oid },
+    { projection: { status: 1, isActive: 1 } }
+  );
+  if (!existing) throw new Error('עסקה לא נמצאה');
+  if (existing.isActive === false) {
+    const err = new Error('ARCHIVED');
+    err.code = 'ARCHIVED';
+    throw err;
   }
   const startDate = new Date().toISOString().slice(0, 10);
   const r = await db.collection('deals').updateOne(
@@ -1772,6 +1790,10 @@ function isManualFutureCancellation(deal = {}) {
   const recurringId = String(deal?.cardcomRecurringId || '').trim();
   if (sub === 'pending cancellation') return false;
   return /cancel|בוטל/.test(sub) || /cancel|בוטל/.test(st) || (deal?.isActive === false && recurringId !== '');
+}
+
+function isPendingOrgApprovalDeal(deal = {}) {
+  return String(deal?.status || '').trim().toLowerCase() === 'pending_org_approval';
 }
 
 function isCancelledByBusinessRule(deal = {}) {
@@ -3041,9 +3063,12 @@ export async function markDealPendingCancellation(dealId) {
 
   const existing = await deals.findOne(
     { _id: oid },
-    { projection: { isCentralized: 1, source: 1, formState: 1 } }
+    { projection: { isCentralized: 1, source: 1, formState: 1, status: 1, subscriptionStatus: 1, isActive: 1 } }
   );
   if (!existing) throw new Error('עסקה לא נמצאה');
+  if (existing.isActive === false) {
+    throw new Error('לא ניתן לבטל מנוי לעסקה בארכיון');
+  }
 
   const isCentralized =
     existing.isCentralized === true ||
@@ -3054,6 +3079,18 @@ export async function markDealPendingCancellation(dealId) {
 
   if (!isCentralized) {
     throw new Error('ביטול מדורג שייך לעובדים ארגוניים בתשלום מרוכז בלבד');
+  }
+
+  const workflowStatus = String(existing.status || '').trim().toLowerCase();
+  const subscriptionNorm = String(existing.subscriptionStatus || '').trim().toLowerCase();
+  const allowedWorkflow = new Set(['active', 'completed']);
+  const okForCancellation =
+    allowedWorkflow.has(workflowStatus) ||
+    allowedWorkflow.has(subscriptionNorm);
+  if (!okForCancellation) {
+    throw new Error(
+      'לא ניתן לבטל — המנוי אינו במצב פעיל/הושלם (למשל ממתין לאישור ארגון). ניתן להעביר לארכיון במקום.'
+    );
   }
 
   const now = new Date();
@@ -3197,7 +3234,9 @@ export async function deleteDealAdmin(dealId) {
   }
   const deal = await deals.findOne({ _id: oid }, { projection: { _id: 1, subscriptionStatus: 1, status: 1, isActive: 1, cardcomRecurringId: 1, paymentStatus: 1, indicator: 1, formState: 1 } });
   if (!deal) throw new Error('עסקה לא נמצאה');
-  if (!isCancelledByBusinessRule(deal)) {
+  const canArchive =
+    isCancelledByBusinessRule(deal) || isPendingOrgApprovalDeal(deal);
+  if (!canArchive) {
     throw new Error('לא ניתן להעביר לארכיון. לקוח זה נמצא במצב פעיל. יש לבצע ביטול מנוי לפני העברה לארכיון.');
   }
   const r = await deals.updateOne({ _id: oid }, { $set: { isActive: false, updatedAt: new Date() } });
@@ -3225,7 +3264,9 @@ export async function bulkDeleteDealsAdmin(dealIds = []) {
       { projection: { _id: 1, subscriptionStatus: 1, status: 1, isActive: 1, cardcomRecurringId: 1, paymentStatus: 1, indicator: 1, formState: 1 } }
     )
     .toArray();
-  const allowedIds = cancellableDeals.filter((d) => isCancelledByBusinessRule(d)).map((d) => d._id);
+  const allowedIds = cancellableDeals
+    .filter((d) => isCancelledByBusinessRule(d) || isPendingOrgApprovalDeal(d))
+    .map((d) => d._id);
   const r = await db.collection('deals').updateMany(
     { _id: { $in: allowedIds } },
     { $set: { isActive: false, updatedAt: new Date() } }

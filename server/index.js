@@ -2147,6 +2147,13 @@ app.post('/api/org/employee-register', async (req, res) => {
 });
 
 app.get('/api/organizations/approve-employee/:id', async (req, res) => {
+  const officePhone = String(
+    process.env.OPAL_OFFICE_PHONE ||
+      process.env.MEDICAL_SERVICES_PHONE ||
+      process.env.OPAL_SALES_PHONE ||
+      '054-4261369'
+  ).trim();
+
   const successHtml = `<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
@@ -2163,12 +2170,31 @@ app.get('/api/organizations/approve-employee/:id', async (req, res) => {
 </body>
 </html>`;
 
+  const tooLateHtml = `<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>לא ניתן לאשר — אופאל</title>
+</head>
+<body style="margin:0;background:#f7f7f7;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:'Segoe UI',Arial,sans-serif;">
+<div style="text-align:center;padding:48px 28px;background:#ffffff;border-radius:12px;box-shadow:0 2px 16px rgba(0,0,0,0.08);max-width:520px;width:90%;line-height:1.6;">
+  <p style="color:#333;font-size:17px;margin:0;">לא ניתן לאשר עובד זה - עבר יותר מדי זמן או שהבקשה בוטלה. ליצירת קשר: <span dir="ltr" style="unicode-bidi:embed;">${officePhone.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>.</p>
+</div>
+</body>
+</html>`;
+
   try {
     await approveOrgEmployee(req.params.id);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(successHtml);
   } catch (err) {
     console.error(`[${ts()}] approve-employee error:`, err);
+    if (err && err.code === 'ARCHIVED') {
+      res.status(410).setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(tooLateHtml);
+      return;
+    }
     res.status(400).setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(`<!DOCTYPE html>
 <html lang="he" dir="rtl">
