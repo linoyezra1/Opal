@@ -139,9 +139,6 @@ export default function SubscribersDashboard() {
   const [error, setError] = useState('');
   const [selected, setSelected] = useState(null);
   const [selectedDetailsTab, setSelectedDetailsTab] = useState('transaction');
-  const [billingHistory, setBillingHistory] = useState([]);
-  const [billingHistoryRecurringId, setBillingHistoryRecurringId] = useState('');
-  const [billingHistoryLoading, setBillingHistoryLoading] = useState(false);
   const [filterDialogOpen, setFilterDialogOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editDealId, setEditDealId] = useState(null);
@@ -161,39 +158,6 @@ export default function SubscribersDashboard() {
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
   const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('');
   const [toastMessage, setToastMessage] = useState('');
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadBillingHistory() {
-      if (!selected?.id || !token) {
-        setBillingHistory([]);
-        setBillingHistoryRecurringId('');
-        return;
-      }
-      setBillingHistoryLoading(true);
-      try {
-        const res = await fetch(`${API_BASE}/api/admin/deals/${encodeURIComponent(selected.id)}/billing-history`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const j = await res.json().catch(() => ({}));
-        if (!res.ok || !j.success) throw new Error(j.error || 'טעינת היסטוריית חיובים נכשלה');
-        if (cancelled) return;
-        setBillingHistory(Array.isArray(j.rows) ? j.rows : []);
-        setBillingHistoryRecurringId(String(j.cardcomRecurringId || ''));
-      } catch {
-        if (!cancelled) {
-          setBillingHistory([]);
-          setBillingHistoryRecurringId('');
-        }
-      } finally {
-        if (!cancelled) setBillingHistoryLoading(false);
-      }
-    }
-    loadBillingHistory();
-    return () => {
-      cancelled = true;
-    };
-  }, [selected, token]);
 
   const [data, setData] = useState({
     summary: {},
@@ -1826,12 +1790,15 @@ export default function SubscribersDashboard() {
                           </TableCell>
                           <TableCell dir="rtl" className="text-right align-top">
                             {r.pendingBeneficiaryCompletion ? (
-                              <Badge className="bg-orange-500 hover:bg-orange-500 text-white border-0">
+                              <Badge
+                                className="bg-orange-500 hover:bg-orange-600 text-white border-0 cursor-pointer"
+                                onClick={() => openEdit(r)}
+                              >
                                 ממתין להשלמת מסמכים
                               </Badge>
                             ) : (
-                              <Badge className={isCancelled ? '' : 'bg-emerald-600 hover:bg-emerald-600 text-white border-0'} variant={isCancelled ? 'destructive' : 'default'}>
-                                {isCancelled ? 'בוטל' : 'הושלם'}
+                              <Badge className={isCancelled ? 'bg-gray-500 hover:bg-gray-600 text-white border-0' : 'bg-emerald-600 hover:bg-emerald-600 text-white border-0'}>
+                                הושלם
                               </Badge>
                             )}
                           </TableCell>
@@ -2075,12 +2042,6 @@ export default function SubscribersDashboard() {
                 >
                   פרטי מוטב
                 </TabsTrigger>
-                <TabsTrigger
-                  value="billingHistory"
-                  className="text-[11px] sm:text-sm whitespace-normal leading-tight"
-                >
-                  היסטוריית חיובים
-                </TabsTrigger>
               </TabsList>
               <TabsContent value="transaction" className="overflow-auto max-h-[68vh] space-y-4 mt-3">
                 {(() => {
@@ -2150,6 +2111,16 @@ export default function SubscribersDashboard() {
                     </div>
                   </CardContent>
                 </Card>
+                {selected?.cardcomRecurringId ? (
+                  <div
+                    role="note"
+                    className="rounded-lg border border-amber-300/80 bg-amber-50 px-4 py-3 text-right text-sm leading-snug text-foreground shadow-sm dark:border-amber-700/60 dark:bg-amber-950/40"
+                    dir="rtl"
+                  >
+                    <span className="font-semibold">מספר הוראת קבע בקארדקום לבדיקת היסטוריית חיובים:</span>{' '}
+                    <span dir="ltr" className="font-mono font-bold">{selected.cardcomRecurringId}</span>
+                  </div>
+                ) : null}
               </TabsContent>
               <TabsContent value="beneficiary" className="overflow-auto max-h-[68vh] space-y-4 mt-3">
                 <Card>
@@ -2192,50 +2163,6 @@ export default function SubscribersDashboard() {
                         </div>
                       ))
                     )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-              <TabsContent value="billingHistory" className="overflow-auto max-h-[68vh] space-y-3 mt-3">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">היסטוריית חיובים</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="rounded-md border overflow-x-auto -mx-4 md:mx-0">
-                      <Table dir="rtl" className="text-right min-w-[900px]">
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-right">חודש חיוב</TableHead>
-                            <TableHead className="text-right">סטטוס (הצלחה/כישלון)</TableHead>
-                            <TableHead className="text-right">סיבת השגיאה (מתוך responsdescription)</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {billingHistory.map((row) => (
-                            <TableRow key={row.id}>
-                              <TableCell className="text-right">{billingMonthLabel(row.billingMonth)}</TableCell>
-                              <TableCell className={`text-right ${row.status === 'כישלון' ? 'text-destructive font-medium' : ''}`}>
-                                {row.status}
-                              </TableCell>
-                              <TableCell className="text-right">{row.errorReason || '—'}</TableCell>
-                            </TableRow>
-                          ))}
-                          {!billingHistory.length ? (
-                            <TableRow>
-                              <TableCell colSpan={3} className="text-center text-muted-foreground">
-                                {billingHistoryLoading ? 'טוען…' : 'אין רשומות להצגה'}
-                              </TableCell>
-                            </TableRow>
-                          ) : null}
-                        </TableBody>
-                      </Table>
-                    </div>
-                    <div
-                      role="note"
-                      className="rounded-lg border border-amber-300/80 bg-amber-50 px-4 py-3 text-right text-base font-bold leading-snug text-foreground shadow-sm dark:border-amber-700/60 dark:bg-amber-950/40"
-                    >
-                      {`לבדיקה מעמיקה וניהול אמצעי תשלום, יש להיכנס לממשק קארדקום עם מספר הוראת קבע: ${billingHistoryRecurringId || selected?.cardcomRecurringId || '—'}`}
-                    </div>
                   </CardContent>
                 </Card>
               </TabsContent>

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { Building2, Upload, Download, ArrowRight, Users, RefreshCw } from 'lucide-react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Building2, Edit2, Upload, Download, ArrowRight, Users, RefreshCw } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -77,6 +77,7 @@ function ContactSection({ title, data, onChange }) {
 export default function OrganizationDetailPage() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const token = localStorage.getItem(TOKEN_KEY) || '';
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
@@ -363,6 +364,7 @@ export default function OrganizationDetailPage() {
                           <TableHead className="text-right">סכום</TableHead>
                           <TableHead className="text-right">סטטוס</TableHead>
                           <TableHead className="text-right">מקור</TableHead>
+                          <TableHead className="text-right">פעולות</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -396,6 +398,22 @@ export default function OrganizationDetailPage() {
                               })()}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground text-right">{d.source || '—'}</TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7"
+                                title="ערוך עסקה"
+                                onClick={() => {
+                                  const params = new URLSearchParams();
+                                  if (d.fullName) params.set('search', d.fullName);
+                                  if (d.id) params.set('editId', String(d.id));
+                                  navigate(`/admin/subscribers?${params.toString()}`);
+                                }}
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
