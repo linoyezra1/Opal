@@ -1115,6 +1115,8 @@ export async function getOrganizationBillingReport(orgId, monthInput = '') {
       formState: 1,
       createdAt: 1,
       beneficiaryUpdate: 1,
+      cancellationDate: 1,
+      cancelAt: 1,
     })
     .sort({ createdAt: -1 })
     .toArray();
@@ -1184,6 +1186,35 @@ export async function getOrganizationBillingReport(orgId, monthInput = '') {
     const billedRounded = roundCurrency(billedAmount);
     totalDue += billedRounded;
 
+    let monthlyStatusPct = 100;
+    let monthlyStatusSubtext = 'מלא';
+    if (billingType === 'prorata' && activeDays != null && daysInMonth > 0) {
+      monthlyStatusPct = Math.max(1, Math.min(100, Math.round((activeDays / daysInMonth) * 100)));
+      monthlyStatusSubtext = `${activeDays} ימים`;
+    } else if (billingType === 'final_month') {
+      monthlyStatusPct = 100;
+      monthlyStatusSubtext = 'חודש חיוב אחרון';
+    }
+
+    const parseDealDate = (v) => {
+      if (v == null) return null;
+      const dt = v instanceof Date ? v : new Date(v);
+      return Number.isNaN(dt.getTime()) ? null : dt;
+    };
+    let cancellationDt =
+      parseDealDate(d.cancellationDate) || parseDealDate(d.cancelAt);
+    if (!cancellationDt && finalBillingMonth && (isCancelled || isPendingCancellation)) {
+      const fm = /^(\d{4})-(\d{2})$/.exec(finalBillingMonth);
+      if (fm) {
+        const y = Number(fm[1]);
+        const mo = Number(fm[2]);
+        if (y && mo >= 1 && mo <= 12) {
+          cancellationDt = new Date(Date.UTC(y, mo, 1));
+        }
+      }
+    }
+    const cancellationDateStr = cancellationDt ? cancellationDt.toISOString().slice(0, 10) : '';
+
     const rawId = String(
       fs.id ||
         d?.beneficiaryUpdate?.primaryMember?.id ||
@@ -1204,6 +1235,9 @@ export async function getOrganizationBillingReport(orgId, monthInput = '') {
       activeDays,
       basePrice: roundCurrency(basePrice),
       billedAmount: billedRounded,
+      monthlyStatusPct,
+      monthlyStatusSubtext,
+      cancellationDate: cancellationDateStr,
     });
   }
 
@@ -1794,6 +1828,22 @@ function isManualFutureCancellation(deal = {}) {
 
 function isPendingOrgApprovalDeal(deal = {}) {
   return String(deal?.status || '').trim().toLowerCase() === 'pending_org_approval';
+}
+
+function isPendingCancellationDeal(deal = {}) {
+  return String(deal?.subscriptionStatus || '').trim().toLowerCase() === 'pending cancellation';
+}
+
+/** מבוטל סופית — subscriptionStatus בדיוק Cancelled/Canceled (אנגלית) */
+function isSubscriptionCancelledForArchive(deal = {}) {
+  const s = String(deal?.subscriptionStatus || '').trim().toLowerCase();
+  return s === 'cancelled' || s === 'canceled';
+}
+
+function canArchiveDealAdmin(deal = {}) {
+  if (isPendingCancellationDeal(deal)) return false;
+  if (isPendingOrgApprovalDeal(deal)) return true;
+  return isSubscriptionCancelledForArchive(deal);
 }
 
 function isCancelledByBusinessRule(deal = {}) {
@@ -3234,10 +3284,10 @@ export async function deleteDealAdmin(dealId) {
   }
   const deal = await deals.findOne({ _id: oid }, { projection: { _id: 1, subscriptionStatus: 1, status: 1, isActive: 1, cardcomRecurringId: 1, paymentStatus: 1, indicator: 1, formState: 1 } });
   if (!deal) throw new Error('עסקה לא נמצאה');
-  const canArchive =
-    isCancelledByBusinessRule(deal) || isPendingOrgApprovalDeal(deal);
-  if (!canArchive) {
-    throw new Error('לא ניתן להעביר לארכיון. לקוח זה נמצא במצב פעיל. יש לבצע ביטול מנוי לפני העברה לארכיון.');
+  if (!canArchiveDealAdmin(deal)) {
+    throw new Error(
+      "לא ניתן להעביר לארכיון עובד שנמצא בתהליך ביטול (יבוטל ב-1 לחודש). רק לאחר שהסטטוס ישתנה ל-'מבוטל' ניתן יהיה להעבירו לארכיון."
+    );
   }
   const r = await deals.updateOne({ _id: oid }, { $set: { isActive: false, updatedAt: new Date() } });
   if (r.matchedCount === 0) throw new Error('עסקה לא נמצאה');
@@ -3264,9 +3314,7 @@ export async function bulkDeleteDealsAdmin(dealIds = []) {
       { projection: { _id: 1, subscriptionStatus: 1, status: 1, isActive: 1, cardcomRecurringId: 1, paymentStatus: 1, indicator: 1, formState: 1 } }
     )
     .toArray();
-  const allowedIds = cancellableDeals
-    .filter((d) => isCancelledByBusinessRule(d) || isPendingOrgApprovalDeal(d))
-    .map((d) => d._id);
+  const allowedIds = cancellableDeals.filter((d) => canArchiveDealAdmin(d)).map((d) => d._id);
   const r = await db.collection('deals').updateMany(
     { _id: { $in: allowedIds } },
     { $set: { isActive: false, updatedAt: new Date() } }

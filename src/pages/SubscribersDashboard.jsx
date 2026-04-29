@@ -43,6 +43,7 @@ import { Badge } from '../components/ui/badge.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '../components/ui/empty.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
+import { canArchiveDealUi, FORBIDDEN_ARCHIVE_ALERT_HE } from '../utils/archiveEligibility.js';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
@@ -64,6 +65,9 @@ const MARITAL_OPTIONS = ['', 'רווק/ה', 'נשוי/אה', 'גרוש/ה', 'א�
 const HEALTH_FUNDS = ['', 'כללית', 'מכבי', 'מאוחדת', 'לאומית'];
 const SUPPLEMENTAL_OPTIONS = ['', 'אין', 'כסף', 'זהב', 'פלטינום', 'אחר'];
 const GENDER_OPTIONS = ['', 'זכר', 'נקבה', 'אחר'];
+
+const EDIT_DRAWER_SELECT_CLASS =
+  'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm text-start';
 
 function formatCurrency(value) {
   const n = Number(value || 0);
@@ -590,6 +594,20 @@ export default function SubscribersDashboard() {
     }
   }
 
+  function requestArchiveForRow(r) {
+    if (
+      !canArchiveDealUi({
+        workflowStatus: r.raw?.status,
+        subscriptionStatus: r.subscriptionStatus,
+        isActive: r.raw?.isActive,
+      })
+    ) {
+      window.alert(FORBIDDEN_ARCHIVE_ALERT_HE);
+      return;
+    }
+    setDeleteTarget({ id: r.id, transactionId: r.transactionId });
+  }
+
   async function confirmDelete() {
     if (!deleteTarget?.id || !token) return;
     setDeleteLoading(true);
@@ -864,12 +882,16 @@ export default function SubscribersDashboard() {
   async function confirmBulkDelete() {
     if (!selectedCount || !token || bulkDeleteDisabled) return;
     const selectedRows = (data.rows || []).filter((r) => selectedSubscriptionIds.includes(String(r.id || '')));
-    const hasNotCancelled = selectedRows.some(
-      (r) => !(r.status === 'canceled' || String(r.subscriptionStatus || '').toLowerCase() === 'cancelled')
+    const blocked = selectedRows.some(
+      (r) =>
+        !canArchiveDealUi({
+          workflowStatus: r.raw?.status,
+          subscriptionStatus: r.subscriptionStatus,
+          isActive: r.raw?.isActive,
+        })
     );
-    if (hasNotCancelled) {
-      setToastMessage('לא ניתן להסיר לקוח קודם לבטל את המנוי');
-      setTimeout(() => setToastMessage(''), 3200);
+    if (blocked) {
+      window.alert(FORBIDDEN_ARCHIVE_ALERT_HE);
       return;
     }
     setBulkDeleteLoading(true);
@@ -1035,14 +1057,14 @@ export default function SubscribersDashboard() {
               <DialogTitle>עריכת עסקה / מנוי</DialogTitle>
               <DialogDescription>עדכון פרטי העסקה</DialogDescription>
             </DialogHeader>
-            <form onSubmit={saveEdit} className="space-y-4" dir="rtl">
+            <form onSubmit={saveEdit} className="space-y-4 text-right" dir="rtl">
               {editOrganizationName ? (
                 <Field>
                   <FieldLabel>ארגון (קריאה בלבד)</FieldLabel>
-                  <Input dir="rtl" value={editOrganizationName} readOnly className="bg-muted text-right" />
+                  <Input value={editOrganizationName} readOnly className="bg-muted" />
                 </Field>
               ) : null}
-              <Tabs value={editTab} onValueChange={setEditTab} className="mt-0">
+              <Tabs value={editTab} onValueChange={setEditTab} className="mt-0 w-full text-right" dir="rtl">
                 <TabsList className="grid w-full grid-cols-3 h-auto">
                   <TabsTrigger
                     value="primary"
@@ -1063,24 +1085,24 @@ export default function SubscribersDashboard() {
                     פרטי עסקה
                   </TabsTrigger>
                 </TabsList>
-                <TabsContent value="primary" className="space-y-4 mt-4">
+                <TabsContent value="primary" className="mt-4 space-y-4 text-right" dir="rtl">
                   <FieldGroup>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <Field>
                         <FieldLabel>שם פרטי</FieldLabel>
-                        <Input dir="rtl" className="text-right" value={editForm.firstName} onChange={(e) => setEditForm((p) => ({ ...p, firstName: e.target.value }))} />
+                        <Input value={editForm.firstName} onChange={(e) => setEditForm((p) => ({ ...p, firstName: e.target.value }))} />
                       </Field>
                       <Field>
                         <FieldLabel>שם משפחה</FieldLabel>
-                        <Input dir="rtl" className="text-right" value={editForm.lastName} onChange={(e) => setEditForm((p) => ({ ...p, lastName: e.target.value }))} />
+                        <Input value={editForm.lastName} onChange={(e) => setEditForm((p) => ({ ...p, lastName: e.target.value }))} />
                       </Field>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <Field>
                         <FieldLabel>תעודת זהות</FieldLabel>
                         <Input
-                          dir="rtl"
-                          className="text-right"
+                          dir="ltr"
+                          className="font-mono text-end"
                           inputMode="numeric"
                           maxLength={9}
                           value={editForm.idNum}
@@ -1089,29 +1111,30 @@ export default function SubscribersDashboard() {
                           }
                         />
                         {shouldShowIsraeliIdChecksumError(editForm.idNum) ? (
-                          <p className="text-destructive text-xs">{ISRAELI_ID_INVALID_MSG}</p>
+                          <p className="text-destructive text-xs text-start">{ISRAELI_ID_INVALID_MSG}</p>
                         ) : null}
                       </Field>
                       <Field>
                         <FieldLabel>טלפון</FieldLabel>
-                        <Input dir="rtl" className="text-right" value={editForm.phone} onChange={(e) => setEditForm((p) => ({ ...p, phone: e.target.value }))} />
+                        <Input dir="ltr" className="font-mono text-end" value={editForm.phone} onChange={(e) => setEditForm((p) => ({ ...p, phone: e.target.value }))} />
                       </Field>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <Field>
                         <FieldLabel>אימייל</FieldLabel>
-                        <Input type="email" dir="rtl" className="text-right" value={editForm.email} onChange={(e) => setEditForm((p) => ({ ...p, email: e.target.value }))} />
+                        <Input type="email" dir="ltr" className="text-end" value={editForm.email} onChange={(e) => setEditForm((p) => ({ ...p, email: e.target.value }))} />
                       </Field>
                       <Field>
                         <FieldLabel>תאריך לידה</FieldLabel>
-                        <Input type="date" dir="rtl" className="text-right" value={editForm.dateOfBirth} onChange={(e) => setEditForm((p) => ({ ...p, dateOfBirth: e.target.value }))} />
+                        <Input type="date" dir="ltr" className="text-end" value={editForm.dateOfBirth} onChange={(e) => setEditForm((p) => ({ ...p, dateOfBirth: e.target.value }))} />
                       </Field>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <Field>
                         <FieldLabel>מין</FieldLabel>
                         <select
-                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm text-right"
+                          dir="rtl"
+                          className={EDIT_DRAWER_SELECT_CLASS}
                           value={editForm.gender}
                           onChange={(e) => setEditForm((p) => ({ ...p, gender: e.target.value }))}
                         >
@@ -1125,7 +1148,8 @@ export default function SubscribersDashboard() {
                       <Field>
                         <FieldLabel>מצב משפחתי</FieldLabel>
                         <select
-                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm text-right"
+                          dir="rtl"
+                          className={EDIT_DRAWER_SELECT_CLASS}
                           value={editForm.maritalStatus}
                           onChange={(e) => setEditForm((p) => ({ ...p, maritalStatus: e.target.value }))}
                         >
@@ -1141,7 +1165,8 @@ export default function SubscribersDashboard() {
                       <Field>
                         <FieldLabel>קופת חולים</FieldLabel>
                         <select
-                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm text-right"
+                          dir="rtl"
+                          className={EDIT_DRAWER_SELECT_CLASS}
                           value={editForm.healthFund}
                           onChange={(e) => setEditForm((p) => ({ ...p, healthFund: e.target.value }))}
                         >
@@ -1155,7 +1180,8 @@ export default function SubscribersDashboard() {
                       <Field>
                         <FieldLabel>ביטוח משלים</FieldLabel>
                         <select
-                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm text-right"
+                          dir="rtl"
+                          className={EDIT_DRAWER_SELECT_CLASS}
                           value={editForm.supplementalInsurance}
                           onChange={(e) => setEditForm((p) => ({ ...p, supplementalInsurance: e.target.value }))}
                         >
@@ -1169,24 +1195,22 @@ export default function SubscribersDashboard() {
                     </div>
                     <Field>
                       <FieldLabel>כתובת</FieldLabel>
-                      <Input dir="rtl" className="text-right" value={editForm.address} onChange={(e) => setEditForm((p) => ({ ...p, address: e.target.value }))} />
+                      <Input value={editForm.address} onChange={(e) => setEditForm((p) => ({ ...p, address: e.target.value }))} />
                     </Field>
                   </FieldGroup>
                 </TabsContent>
-                <TabsContent value="secondary" className="space-y-4 mt-4">
+                <TabsContent value="secondary" className="mt-4 space-y-4 text-right" dir="rtl">
                   {(editForm.beneficiaries || []).length === 0 ? (
-                    <p className="text-sm text-muted-foreground">אין מוטבים משניים בעסקה זו.</p>
+                    <p className="text-sm text-muted-foreground text-right">אין מוטבים משניים בעסקה זו.</p>
                   ) : (
                     (editForm.beneficiaries || []).map((b, idx) => (
-                      <div key={`ben-edit-${idx}`} className="rounded-lg border p-4 space-y-4">
+                      <div key={`ben-edit-${idx}`} className="rounded-lg border p-4 space-y-4 text-right">
                         <p className="text-sm font-medium text-muted-foreground">מוטב משני {idx + 1}</p>
                         <FieldGroup>
                           <div className="grid gap-4 sm:grid-cols-2">
                             <Field>
                               <FieldLabel>שם פרטי</FieldLabel>
                               <Input
-                                dir="rtl"
-                                className="text-right"
                                 value={b.firstName}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1200,8 +1224,6 @@ export default function SubscribersDashboard() {
                             <Field>
                               <FieldLabel>שם משפחה</FieldLabel>
                               <Input
-                                dir="rtl"
-                                className="text-right"
                                 value={b.lastName}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1217,8 +1239,8 @@ export default function SubscribersDashboard() {
                             <Field>
                               <FieldLabel>תעודת זהות</FieldLabel>
                               <Input
-                                dir="rtl"
-                                className="text-right"
+                                dir="ltr"
+                                className="font-mono text-end"
                                 inputMode="numeric"
                                 maxLength={9}
                                 value={b.id}
@@ -1234,15 +1256,15 @@ export default function SubscribersDashboard() {
                                 }
                               />
                               {shouldShowIsraeliIdChecksumError(b.id) ? (
-                                <p className="text-destructive text-xs">{ISRAELI_ID_INVALID_MSG}</p>
+                                <p className="text-destructive text-xs text-start">{ISRAELI_ID_INVALID_MSG}</p>
                               ) : null}
                             </Field>
                             <Field>
                               <FieldLabel>תאריך לידה</FieldLabel>
                               <Input
                                 type="date"
-                                dir="rtl"
-                                className="text-right"
+                                dir="ltr"
+                                className="text-end"
                                 value={b.dateOfBirth || ''}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1258,7 +1280,8 @@ export default function SubscribersDashboard() {
                             <Field>
                               <FieldLabel>מין</FieldLabel>
                               <select
-                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm text-right"
+                                dir="rtl"
+                                className={EDIT_DRAWER_SELECT_CLASS}
                                 value={b.gender || ''}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1278,7 +1301,8 @@ export default function SubscribersDashboard() {
                             <Field>
                               <FieldLabel>מצב משפחתי</FieldLabel>
                               <select
-                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm text-right"
+                                dir="rtl"
+                                className={EDIT_DRAWER_SELECT_CLASS}
                                 value={b.maritalStatus || ''}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1300,7 +1324,8 @@ export default function SubscribersDashboard() {
                             <Field>
                               <FieldLabel>קופת חולים</FieldLabel>
                               <select
-                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm text-right"
+                                dir="rtl"
+                                className={EDIT_DRAWER_SELECT_CLASS}
                                 value={b.healthFund || ''}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1320,7 +1345,8 @@ export default function SubscribersDashboard() {
                             <Field>
                               <FieldLabel>ביטוח משלים</FieldLabel>
                               <select
-                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm text-right"
+                                dir="rtl"
+                                className={EDIT_DRAWER_SELECT_CLASS}
                                 value={b.supplementalInsurance || ''}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1342,8 +1368,6 @@ export default function SubscribersDashboard() {
                             <Field>
                               <FieldLabel>קרבה / קשר משפחתי</FieldLabel>
                               <Input
-                                dir="rtl"
-                                className="text-right"
                                 value={b.relation || ''}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1357,8 +1381,8 @@ export default function SubscribersDashboard() {
                             <Field>
                               <FieldLabel>טלפון</FieldLabel>
                               <Input
-                                dir="rtl"
-                                className="text-right"
+                                dir="ltr"
+                                className="font-mono text-end"
                                 value={b.phone || ''}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1375,8 +1399,8 @@ export default function SubscribersDashboard() {
                               <FieldLabel>אימייל</FieldLabel>
                               <Input
                                 type="email"
-                                dir="rtl"
-                                className="text-right"
+                                dir="ltr"
+                                className="text-end"
                                 value={b.email || ''}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1390,8 +1414,6 @@ export default function SubscribersDashboard() {
                             <Field>
                               <FieldLabel>כתובת</FieldLabel>
                               <Input
-                                dir="rtl"
-                                className="text-right"
                                 value={b.address || ''}
                                 onChange={(e) =>
                                   setEditForm((p) => {
@@ -1408,31 +1430,31 @@ export default function SubscribersDashboard() {
                     ))
                   )}
                 </TabsContent>
-                <TabsContent value="transaction" className="space-y-4 mt-4">
+                <TabsContent value="transaction" className="mt-4 space-y-4 text-right" dir="rtl">
                   <FieldGroup>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <Field>
                         <FieldLabel>סכום עסקה (₪)</FieldLabel>
-                        <Input type="number" dir="rtl" value={editForm.payerAmount} readOnly className="bg-muted text-right" />
+                        <Input type="number" dir="ltr" value={editForm.payerAmount} readOnly className="bg-muted text-end font-mono" />
                       </Field>
                       <Field>
                         <FieldLabel>עמלת סוכן (₪)</FieldLabel>
-                        <Input type="number" dir="rtl" value={editForm.agentCommission} readOnly className="bg-muted text-right" />
+                        <Input type="number" dir="ltr" value={editForm.agentCommission} readOnly className="bg-muted text-end font-mono" />
                       </Field>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <Field>
                         <FieldLabel>סוכן</FieldLabel>
-                        <Input dir="rtl" value={editForm.agentName || '—'} readOnly className="bg-muted text-right" />
+                        <Input value={editForm.agentName || '—'} readOnly className="bg-muted" />
                       </Field>
                       <Field>
                         <FieldLabel>תחילת מנוי</FieldLabel>
-                        <Input type="date" dir="rtl" value={editForm.subscriptionStartDate} readOnly className="bg-muted text-right" />
+                        <Input type="date" dir="ltr" value={editForm.subscriptionStartDate} readOnly className="bg-muted text-end" />
                       </Field>
                     </div>
                     <Field>
                       <FieldLabel>תאריך יצירה</FieldLabel>
-                      <Input dir="rtl" value={fmtDateTime(editForm.createdAt)} readOnly className="bg-muted text-right" />
+                      <Input dir="ltr" value={fmtDateTime(editForm.createdAt)} readOnly className="bg-muted text-end font-mono text-xs" />
                     </Field>
                   </FieldGroup>
                 </TabsContent>
@@ -1917,7 +1939,7 @@ export default function SubscribersDashboard() {
                                     size="icon"
                                     type="button"
                                     className="min-h-9 min-w-9 shrink-0"
-                                    onClick={() => setDeleteTarget({ id: r.id, transactionId: r.transactionId })}
+                                    onClick={() => requestArchiveForRow(r)}
                                     aria-label="מחק"
                                   >
                                     <Archive className="size-4 text-destructive" />
@@ -2014,7 +2036,7 @@ export default function SubscribersDashboard() {
                                   className="h-auto min-h-10 w-full justify-start gap-2 px-3 py-2 font-normal text-destructive hover:text-destructive"
                                   onClick={(e) => {
                                     closeActionDetailsMenu(e);
-                                    setDeleteTarget({ id: r.id, transactionId: r.transactionId });
+                                    requestArchiveForRow(r);
                                   }}
                                 >
                                   <Archive className="size-4 shrink-0" />

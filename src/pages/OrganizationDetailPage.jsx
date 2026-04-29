@@ -39,6 +39,7 @@ import {
   DialogTitle,
 } from '../components/ui/dialog.jsx';
 import * as XLSX from 'xlsx';
+import { canArchiveDealUi, FORBIDDEN_ARCHIVE_ALERT_HE } from '../utils/archiveEligibility.js';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -214,19 +215,36 @@ export default function OrganizationDetailPage() {
     return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(Number(amount || 0));
   }
 
+  function formatBillingCancellationDate(iso) {
+    if (!iso || typeof iso !== 'string') return '—';
+    const d = new Date(`${iso}T12:00:00`);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('he-IL');
+  }
+
+  function requestArchiveForDeal(d) {
+    if (
+      !canArchiveDealUi({
+        workflowStatus: d.status,
+        subscriptionStatus: d.subscriptionStatus,
+        isActive: d.isActive !== false,
+      })
+    ) {
+      window.alert(FORBIDDEN_ARCHIVE_ALERT_HE);
+      return;
+    }
+    setDeleteTarget({ id: d.id, transactionId: d.transactionId });
+  }
+
   function exportBillingReportToXlsx() {
     const rows = (billingReport.rows || []).map((r) => ({
       'שם עובד': r.employeeName || '—',
       'ת"ז': r.idNumber || '—',
       'תחילת מנוי': r.subscriptionStartDate || '—',
-      'סטטוס חודשי':
-        r.billingType === 'prorata'
-          ? `יחסי (${Number(r.activeDays || 0)} ימים)`
-          : r.billingType === 'final_month'
-            ? 'חודש חיוב אחרון'
-            : 'מלא',
+      'מחיר מנוי מקור': Number(r.basePrice || 0),
+      'תאריך ביטול': r.cancellationDate ? formatBillingCancellationDate(r.cancellationDate) : '—',
+      'סטטוס חודשי': `${Number(r.monthlyStatusPct ?? 100)}% (${r.monthlyStatusSubtext || 'מלא'})`,
       'ימים פעילים': r.activeDays ?? '',
-      'מחיר בסיס': Number(r.basePrice || 0),
       'סכום לחיוב': Number(r.billedAmount || 0),
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -280,7 +298,7 @@ export default function OrganizationDetailPage() {
     } catch (err) {
       const msg = String(err?.message || '');
       if (/לא ניתן להעביר לארכיון/.test(msg)) {
-        setErr('לא ניתן להעביר לארכיון. לקוח זה נמצא במצב פעיל. יש לבצע ביטול מנוי לפני העברה לארכיון.');
+        setErr(msg);
       } else {
         setErr(msg || 'שגיאה');
       }
@@ -638,7 +656,7 @@ export default function OrganizationDetailPage() {
                                       className="h-8 w-8 shrink-0 text-destructive"
                                       type="button"
                                       title="העברה לארכיון"
-                                      onClick={() => setDeleteTarget({ id: d.id, transactionId: d.transactionId })}
+                                      onClick={() => requestArchiveForDeal(d)}
                                     >
                                       <Archive className="h-4 w-4" />
                                     </Button>
@@ -1134,6 +1152,8 @@ export default function OrganizationDetailPage() {
                           <TableHead>שם עובד</TableHead>
                           <TableHead>ת"ז</TableHead>
                           <TableHead>תחילת מנוי</TableHead>
+                          <TableHead>מחיר מנוי מקור</TableHead>
+                          <TableHead>תאריך ביטול</TableHead>
                           <TableHead>סטטוס חודשי</TableHead>
                           <TableHead>סכום לחיוב</TableHead>
                         </TableRow>
@@ -1144,21 +1164,23 @@ export default function OrganizationDetailPage() {
                             <TableCell>{r.employeeName || '—'}</TableCell>
                             <TableCell dir="ltr" className="text-end font-mono text-xs">{r.idNumber || '—'}</TableCell>
                             <TableCell>{r.subscriptionStartDate || '—'}</TableCell>
+                            <TableCell>{formatCurrency(r.basePrice)}</TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {formatBillingCancellationDate(r.cancellationDate)}
+                            </TableCell>
                             <TableCell>
-                              {r.billingType === 'prorata' ? (
-                                <Badge className="bg-cyan-100 text-cyan-800 border-cyan-300">יחסי ({Number(r.activeDays || 0)} ימים)</Badge>
-                              ) : r.billingType === 'final_month' ? (
-                                <Badge className="bg-orange-100 text-orange-800 border-orange-300">חודש חיוב אחרון</Badge>
-                              ) : (
-                                <Badge variant="outline">מלא</Badge>
-                              )}
+                              <span className="font-semibold tabular-nums">{Number(r.monthlyStatusPct ?? 100)}%</span>
+                              <span className="text-muted-foreground text-sm">
+                                {' '}
+                                ({r.monthlyStatusSubtext || 'מלא'})
+                              </span>
                             </TableCell>
                             <TableCell>{formatCurrency(r.billedAmount)}</TableCell>
                           </TableRow>
                         ))}
                         {!(billingReport.rows || []).length ? (
                           <TableRow>
-                            <TableCell colSpan={5} className="text-center text-muted-foreground">אין רשומות לחיוב בחודש זה</TableCell>
+                            <TableCell colSpan={7} className="text-center text-muted-foreground">אין רשומות לחיוב בחודש זה</TableCell>
                           </TableRow>
                         ) : null}
                       </TableBody>
