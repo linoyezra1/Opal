@@ -18,19 +18,25 @@ import ConfirmDialog from '../components/ConfirmDialog.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
-function getEmployeeStatusBadge(statusRaw) {
+function pendingCancelLabel(finalBillingMonth) {
+  if (!finalBillingMonth) return 'ממתין לביטול';
+  const [yr, mo] = String(finalBillingMonth).split('-').map(Number);
+  if (!yr || !mo) return 'ממתין לביטול';
+  const nextMonthDate = new Date(yr, mo, 1);
+  const monthName = new Intl.DateTimeFormat('he-IL', { month: 'long' }).format(nextMonthDate);
+  return `יבוטל ב-1 ל${monthName}`;
+}
+
+function getEmployeeStatusBadge(statusRaw, finalBillingMonth = '') {
   const status = String(statusRaw || '').trim().toLowerCase();
   if (['active', 'completed', 'approved'].includes(status)) {
-    return {
-      label: 'מאושר',
-      className: 'bg-emerald-100 text-emerald-800 border-emerald-300',
-    };
+    return { label: 'מאושר', className: 'bg-emerald-100 text-emerald-800 border-emerald-300' };
   }
   if (['pending', 'pending_org_approval'].includes(status)) {
-    return {
-      label: 'ממתין לאישור',
-      className: 'bg-amber-100 text-amber-800 border-amber-300',
-    };
+    return { label: 'ממתין לאישור', className: 'bg-amber-100 text-amber-800 border-amber-300' };
+  }
+  if (status === 'pending cancellation' || status === 'pending_cancellation') {
+    return { label: pendingCancelLabel(finalBillingMonth), className: 'bg-orange-100 text-orange-800 border-orange-300' };
   }
   return null;
 }
@@ -369,7 +375,7 @@ export default function OrganizationDetailPage() {
                             <TableCell className="text-right">₪{Number(d.payerAmount || 0)}</TableCell>
                             <TableCell className="text-right">
                               {(() => {
-                                const badge = getEmployeeStatusBadge(d.subscriptionStatus || d.paymentStatus);
+                                const badge = getEmployeeStatusBadge(d.subscriptionStatus || d.paymentStatus, d.finalBillingMonth);
                                 if (badge) {
                                   return <Badge className={badge.className}>{badge.label}</Badge>;
                                 }

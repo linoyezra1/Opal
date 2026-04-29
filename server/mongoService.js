@@ -1097,6 +1097,7 @@ export async function insertOrganizationImportedDeal({
     organizationPaymentMethod: 'centralized',
     subscriptionProductName: String(subscriptionProductName || '').trim() || productLabel,
     productName: productLabel,
+    subscriptionStartDate: now.toISOString().slice(0, 10),
     beneficiaries: [],
     beneficiaryCount: 0,
   };
@@ -1257,9 +1258,17 @@ export async function approveOrgEmployee(dealId) {
   } catch {
     throw new Error('מזהה עסקה לא תקין');
   }
+  const startDate = new Date().toISOString().slice(0, 10);
   const r = await db.collection('deals').updateOne(
     { _id: oid, status: 'pending_org_approval' },
-    { $set: { status: 'Completed', subscriptionStatus: 'Active', updatedAt: new Date() } }
+    {
+      $set: {
+        status: 'Completed',
+        subscriptionStatus: 'Active',
+        'formState.subscriptionStartDate': startDate,
+        updatedAt: new Date(),
+      },
+    }
   );
   if (!r.matchedCount) throw new Error('עסקה לא נמצאה או כבר אושרה');
   return { ok: true };
@@ -2851,21 +2860,36 @@ export async function markDealCancelledByAdmin(dealId) {
 }
 
 /**
- * ביטול מרוכז לעובד ארגוני — Pending Cancellation עם finalBillingMonth
- * terminationDate: "YYYY-MM-DD" — החודש הקלנדרי שלו הוא finalBillingMonth.
- * העובד נספר בחיוב עד סוף אותו חודש; ה-Snapshot של ה-1 לחודש הבא מוציא אותו.
+ * ביטול מדורג לעובד ארגוני בתשלום מרוכז — Pending Cancellation.
+ * מחושב אוטומטית: finalBillingMonth = החודש הנוכחי, cancelAt = ה-1 לחודש הבא.
  */
-export async function markDealPendingCancellation(dealId, terminationDate) {
+export async function markDealPendingCancellation(dealId) {
   const db = await getDb();
   const deals = db.collection('deals');
   let oid;
   try { oid = new ObjectId(String(dealId)); } catch { throw new Error('מזהה עסקה לא תקין'); }
 
-  const dateObj = new Date(terminationDate);
-  if (Number.isNaN(dateObj.getTime())) throw new Error('תאריך ביטול לא תקין');
+  const existing = await deals.findOne(
+    { _id: oid },
+    { projection: { isCentralized: 1, source: 1, formState: 1 } }
+  );
+  if (!existing) throw new Error('עסקה לא נמצאה');
 
-  const finalBillingMonth = formatBillingMonthFromDate(dateObj); // "YYYY-MM"
+  const isCentralized =
+    existing.isCentralized === true ||
+    String(existing.source || '') === 'org-bulk-import' ||
+    String(existing.source || '') === 'org-self-register' ||
+    String(existing.formState?.paymentMethod || '') === 'centralized' ||
+    String(existing.formState?.organizationPaymentMethod || '') === 'centralized';
+
+  if (!isCentralized) {
+    throw new Error('ביטול מדורג שייך לעובדים ארגוניים בתשלום מרוכז בלבד');
+  }
+
   const now = new Date();
+  const finalBillingMonth = formatBillingMonthFromDate(now);
+  // 1st of next calendar month — the date the employee is no longer counted in billing
+  const cancelAt = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
   const r = await deals.updateOne(
     { _id: oid },
@@ -2873,13 +2897,14 @@ export async function markDealPendingCancellation(dealId, terminationDate) {
       $set: {
         subscriptionStatus: 'Pending Cancellation',
         finalBillingMonth,
-        cancellationDate: dateObj,
+        cancelAt,
+        cancellationDate: now,
         updatedAt: now,
       },
     }
   );
   if (!r.matchedCount) throw new Error('עסקה לא נמצאה');
-  return { success: true, finalBillingMonth, cancellationDate: dateObj.toISOString(), status: 'Pending Cancellation' };
+  return { success: true, finalBillingMonth, cancelAt: cancelAt.toISOString(), status: 'Pending Cancellation' };
 }
 
 /**

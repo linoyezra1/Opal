@@ -67,6 +67,16 @@ function formatCurrency(value) {
   return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n);
 }
 
+function pendingCancelLabel(finalBillingMonth) {
+  if (!finalBillingMonth) return 'ממתין לביטול';
+  const [yr, mo] = String(finalBillingMonth).split('-').map(Number);
+  if (!yr || !mo) return 'ממתין לביטול';
+  // mo is 1-indexed (5=May); Date(yr, mo, 1) = 1st of month index mo = June 1st
+  const nextMonthDate = new Date(yr, mo, 1);
+  const monthName = new Intl.DateTimeFormat('he-IL', { month: 'long' }).format(nextMonthDate);
+  return `יבוטל ב-1 ל${monthName}`;
+}
+
 /** סגירת תפריט הפעולות במובייל (אלמנט details) אחרי בחירה */
 function closeActionDetailsMenu(ev) {
   const root = ev?.currentTarget?.closest?.('details');
@@ -667,19 +677,17 @@ export default function SubscribersDashboard() {
   }
 
   async function confirmCancelOrgEmployee() {
-    if (!cancelOrgTarget?.id || !terminationDate || !token) return;
+    if (!cancelOrgTarget?.id || !token) return;
     setCancelOrgLoading(true);
     setError('');
     try {
       const res = await fetch(`${API_BASE}/api/admin/deals/${encodeURIComponent(cancelOrgTarget.id)}/cancel-org-employee`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ terminationDate }),
+        headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success) throw new Error(json.error || 'ביטול נכשל');
       setCancelOrgTarget(null);
-      setTerminationDate('');
       await loadDashboard();
     } catch (err) {
       setError(err.message || 'שגיאה');
@@ -976,7 +984,7 @@ export default function SubscribersDashboard() {
           isLoading={cancelLoading}
         />
         {/* ── Cancel org employee (centralized billing) ── */}
-        <Dialog open={!!cancelOrgTarget} onOpenChange={(o) => { if (!o) { setCancelOrgTarget(null); setTerminationDate(''); } }}>
+        <Dialog open={!!cancelOrgTarget} onOpenChange={(o) => { if (!o) setCancelOrgTarget(null); }}>
           <DialogContent className="sm:max-w-md text-right" dir="rtl">
             <DialogHeader>
               <DialogTitle>ביטול מנוי עובד ארגוני</DialogTitle>
@@ -984,42 +992,19 @@ export default function SubscribersDashboard() {
                 {cancelOrgTarget?.transactionId ? `עסקה: ${cancelOrgTarget.transactionId}` : ''}
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-2">
-              <Field>
-                <FieldLabel>תאריך סיום התקשרות *</FieldLabel>
-                <Input
-                  type="date"
-                  value={terminationDate}
-                  onChange={(e) => setTerminationDate(e.target.value)}
-                  dir="ltr"
-                />
-              </Field>
-              {terminationDate ? (
-                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 space-y-1">
-                  <p className="font-medium">לתשומת לבך:</p>
-                  <p>
-                    השירות יופסק והחיוב יחדל החל מהחודש הקלנדרי הבא לאחר{' '}
-                    <strong>{new Date(terminationDate).toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })}</strong>.
-                  </p>
-                  <p>
-                    חודש חיוב אחרון:{' '}
-                    <strong>{terminationDate.slice(0, 7).split('-').reverse().join('/')}</strong>.
-                    עובד זה ייספר כפעיל ב-Snapshot של ה-1/{terminationDate.slice(5, 7)} וייצא מהחיוב החל מה-1/{
-                      String(Number(terminationDate.slice(5, 7)) === 12 ? 1 : Number(terminationDate.slice(5, 7)) + 1).padStart(2, '0')
-                    }.
-                  </p>
-                </div>
-              ) : null}
+            <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900 leading-relaxed">
+              <p className="font-semibold mb-1">מנוי ארגוני בחיוב מרוכז</p>
+              <p>המנוי יבוטל בפועל ב-1 לחודש הבא ויחויב באופן מלא על החודש הנוכחי.</p>
             </div>
-            {error ? <p className="text-destructive text-sm">{error}</p> : null}
+            {error ? <p className="text-destructive text-sm mt-2">{error}</p> : null}
             <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
-              <Button type="button" variant="outline" onClick={() => { setCancelOrgTarget(null); setTerminationDate(''); }}>
+              <Button type="button" variant="outline" onClick={() => setCancelOrgTarget(null)}>
                 ביטול
               </Button>
               <Button
                 type="button"
                 variant="destructive"
-                disabled={!terminationDate || cancelOrgLoading}
+                disabled={cancelOrgLoading}
                 onClick={confirmCancelOrgEmployee}
               >
                 {cancelOrgLoading && <Spinner className="me-2" />}
@@ -1869,8 +1854,8 @@ export default function SubscribersDashboard() {
                             ) : isPendingCancellation ? (
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Badge className="bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100 font-normal cursor-help">
-                                    ממתין לביטול · {r.finalBillingMonth || ''}
+                                  <Badge className="bg-orange-100 text-orange-800 border-orange-300 hover:bg-orange-100 font-normal cursor-help">
+                                    {pendingCancelLabel(r.finalBillingMonth)}
                                   </Badge>
                                 </TooltipTrigger>
                                 <TooltipContent>חודש חיוב אחרון: {r.finalBillingMonth}. החל מה-1 לחודש הבא לא ייספר בחיוב.</TooltipContent>

@@ -2317,12 +2317,10 @@ app.post('/api/admin/deals/:id/cancel-future-charges', requireAdmin, async (req,
   }
 });
 
-/** ביטול מדורג לעובד ארגוני (חיוב מרוכז) — Pending Cancellation */
+/** ביטול מדורג לעובד ארגוני (חיוב מרוכז) — Pending Cancellation, ה-1 לחודש הבא */
 app.post('/api/admin/deals/:id/cancel-org-employee', requireAdmin, async (req, res) => {
   try {
-    const { terminationDate } = req.body || {};
-    if (!terminationDate) return res.status(400).json({ success: false, error: 'terminationDate is required' });
-    const result = await markDealPendingCancellation(req.params.id, terminationDate);
+    const result = await markDealPendingCancellation(req.params.id);
     res.json(result);
   } catch (e) {
     console.error(`[${ts()}] cancel-org-employee error:`, e);
