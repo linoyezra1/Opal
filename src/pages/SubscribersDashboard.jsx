@@ -52,13 +52,9 @@ const PENDING_ORG_CANCEL_ALERT_HE =
   'לקוח זה לא אושר על ידי הארגון ולא הופעל לו מנוי, ולכן לא ניתן לבטל את המנוי. ניתן להעביר לארכיון בלבד. פעולה זו תגרור השבתה של יכולת מנהל הארגון לאשר עובד זה בעתיד';
 
 const SUMMARY_ITEMS = [
-
-  { key: 'primary', label: 'לקוחות עיקריים' },
-  { key: 'active', label: 'לקוחות פעילים (עיקרי + משניים)' },
-  { key: 'canceled', label: 'לקוחות מבוטלים' },
-  { key: 'private_org', label: 'ארגונים ששילמו באופן פרטי' },
-  { key: 'centralized_org', label: 'ארגונים בתשלום מרוכז' },
-  { key: 'centralized_canceled', label: 'ביטולים בתשלום מרוכז' },
+  { key: 'primary',   label: 'לקוחות עיקריים' },
+  { key: 'secondary', label: 'לקוחות משניים' },
+  { key: 'total',     label: 'סה"כ (ראשי + משני)' },
 ];
 
 const MARITAL_OPTIONS = ['', 'רווק/ה', 'נשוי/אה', 'גרוש/ה', 'אלמן/ה', 'ידוע/ה בציבור'];
@@ -197,7 +193,8 @@ export default function SubscribersDashboard() {
     organizationFilter: '',
     productFilter: '',
     documentStatusFilter: '',
-    customerTypeFilter: '',
+    paymentTypeFilter: '',
+    customerSegmentFilter: '',
   });
 
   const filteredProviders = useMemo(() => {
@@ -250,7 +247,8 @@ export default function SubscribersDashboard() {
       !!filters.organizationFilter ||
       !!filters.productFilter ||
       !!filters.documentStatusFilter ||
-      !!filters.customerTypeFilter
+      !!filters.paymentTypeFilter ||
+      !!filters.customerSegmentFilter
     );
   }, [filters]);
   const unifiedFilterConfig = useMemo(
@@ -296,14 +294,21 @@ export default function SubscribersDashboard() {
         ],
       },
       {
-        key: 'customerTypeFilter',
+        key: 'paymentTypeFilter',
+        label: 'סוג תשלום',
+        type: 'select',
+        options: [
+          { value: 'centralized', label: 'מרוכז (ארגון משלם)' },
+          { value: 'private',     label: 'פרטי (כרטיס אשראי)' },
+        ],
+      },
+      {
+        key: 'customerSegmentFilter',
         label: 'סוג לקוח',
         type: 'select',
         options: [
-          { value: 'private_only',    label: 'לקוח פרטי רגיל' },
-          { value: 'org_private',     label: 'חברי ארגון תשלום פרטי' },
-          { value: 'org_centralized', label: 'חברי ארגון בתשלום מרוכז' },
-          { value: 'org_all',         label: 'חברי ארגון - הכל' },
+          { value: 'org', label: 'ארגוני (עובד ארגון)' },
+          { value: 'b2c', label: 'פרטי (B2C)' },
         ],
       },
     ],
@@ -321,7 +326,8 @@ export default function SubscribersDashboard() {
       organizationFilter: filters.organizationFilter || '',
       productFilter: filters.productFilter || '',
       documentStatusFilter: filters.documentStatusFilter || '',
-      customerTypeFilter: filters.customerTypeFilter || '',
+      paymentTypeFilter: filters.paymentTypeFilter || '',
+      customerSegmentFilter: filters.customerSegmentFilter || '',
     }),
     [liveSearch, filters]
   );
@@ -699,7 +705,8 @@ export default function SubscribersDashboard() {
       organizationFilter: '',
       productFilter: '',
       documentStatusFilter: '',
-      customerTypeFilter: '',
+      paymentTypeFilter: '',
+      customerSegmentFilter: '',
     }));
   }
 
@@ -744,17 +751,17 @@ export default function SubscribersDashboard() {
       rows = rows.filter((r) => !r.pendingBeneficiaryCompletion);
     }
 
-    if (filters.customerTypeFilter) {
+    if (filters.paymentTypeFilter || filters.customerSegmentFilter) {
       rows = rows.filter((r) => {
         const hasOrg =
           !!String(r.organizationId || '').trim() ||
           !!String(r.organizationName || r.organizationBadge || '').trim();
         const isCentralized =
           !!r.isCentralized || String(r.dealSource || '') === 'org-bulk-import';
-        if (filters.customerTypeFilter === 'private_only')    return !hasOrg;
-        if (filters.customerTypeFilter === 'org_all')         return hasOrg;
-        if (filters.customerTypeFilter === 'org_centralized') return hasOrg && isCentralized;
-        if (filters.customerTypeFilter === 'org_private')     return hasOrg && !isCentralized;
+        if (filters.paymentTypeFilter === 'centralized' && !isCentralized) return false;
+        if (filters.paymentTypeFilter === 'private'     && isCentralized)  return false;
+        if (filters.customerSegmentFilter === 'org' && !hasOrg) return false;
+        if (filters.customerSegmentFilter === 'b2c' &&  hasOrg) return false;
         return true;
       });
     }
@@ -792,7 +799,8 @@ export default function SubscribersDashboard() {
     filters.organizationFilter,
     filters.productFilter,
     filters.documentStatusFilter,
-    filters.customerTypeFilter,
+    filters.paymentTypeFilter,
+    filters.customerSegmentFilter,
   ]);
 
   // Metrics derived entirely from the currently visible (filtered) rows,
@@ -811,31 +819,13 @@ export default function SubscribersDashboard() {
 
   const calculatedCounts = useMemo(() => {
     const rows = visibleRows || [];
-    let primary = 0;
-    let active = 0;
-    let canceled = 0;
-    let private_org = 0;
-    let centralized_org = 0;
-    let centralized_canceled = 0;
-    for (const r of rows) {
-      const isCancelled = r.status === 'canceled' || String(r.subscriptionStatus || '').toLowerCase() === 'cancelled';
-      const isCentralized = !!r.isCentralized || String(r.dealSource || '') === 'org-bulk-import';
-      const hasOrg = !!String(r.organizationId || '').trim() || !!String(r.organizationName || r.organizationBadge || '').trim();
-      if (String(r.rowType || '') === 'primary') primary += 1;
-      if (isCancelled) canceled += 1;
-      else active += 1;
-      if (hasOrg && isCentralized) centralized_org += 1;
-      if (hasOrg && !isCentralized) private_org += 1;
-      if (hasOrg && isCentralized && isCancelled) centralized_canceled += 1;
-    }
+    const primary = rows.length;
+    const secondary = rows.reduce((sum, r) => sum + Number(r.secondaryCount || 0), 0);
     return {
       all: rows.length,
       primary,
-      active,
-      canceled,
-      private_org,
-      centralized_org,
-      centralized_canceled,
+      secondary,
+      total: primary + secondary,
     };
   }, [visibleRows]);
   const statusSummaryTitle = filters.status === 'cancelled' ? 'מבוטלים (סיכום)' : 'מנויים פעילים (סיכום)';
@@ -1610,17 +1600,27 @@ export default function SubscribersDashboard() {
                   </select>
                 </Field>
                 <Field>
-                  <FieldLabel>סוג לקוח</FieldLabel>
+                  <FieldLabel>סוג תשלום</FieldLabel>
                   <select
-                    value={filters.customerTypeFilter}
-                    onChange={(e) => setFilters((p) => ({ ...p, customerTypeFilter: e.target.value }))}
+                    value={filters.paymentTypeFilter}
+                    onChange={(e) => setFilters((p) => ({ ...p, paymentTypeFilter: e.target.value }))}
                     className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
                   >
                     <option value="">הכל</option>
-                    <option value="private_only">לקוח פרטי רגיל</option>
-                    <option value="org_private">חברי ארגון תשלום פרטי</option>
-                    <option value="org_centralized">חברי ארגון בתשלום מרוכז</option>
-                    <option value="org_all">חברי ארגון - הכל</option>
+                    <option value="centralized">מרוכז (ארגון משלם)</option>
+                    <option value="private">פרטי (כרטיס אשראי)</option>
+                  </select>
+                </Field>
+                <Field>
+                  <FieldLabel>סוג לקוח</FieldLabel>
+                  <select
+                    value={filters.customerSegmentFilter}
+                    onChange={(e) => setFilters((p) => ({ ...p, customerSegmentFilter: e.target.value }))}
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                  >
+                    <option value="">הכל</option>
+                    <option value="org">ארגוני (עובד ארגון)</option>
+                    <option value="b2c">פרטי (B2C)</option>
                   </select>
                 </Field>
                 <Field>
@@ -1713,7 +1713,8 @@ export default function SubscribersDashboard() {
                     organizationFilter: String(next.organizationFilter || ''),
                     productFilter: String(next.productFilter || ''),
                     documentStatusFilter: String(next.documentStatusFilter || ''),
-                    customerTypeFilter: String(next.customerTypeFilter || ''),
+                    paymentTypeFilter: String(next.paymentTypeFilter || ''),
+                    customerSegmentFilter: String(next.customerSegmentFilter || ''),
                   }));
                 }}
                 onClear={clearFilters}
