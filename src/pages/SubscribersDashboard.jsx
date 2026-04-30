@@ -753,15 +753,17 @@ export default function SubscribersDashboard() {
 
     if (filters.paymentTypeFilter || filters.customerSegmentFilter) {
       rows = rows.filter((r) => {
-        const hasOrg =
-          !!String(r.organizationId || '').trim() ||
-          !!String(r.organizationName || r.organizationBadge || '').trim();
-        const isCentralized =
-          !!r.isCentralized || String(r.dealSource || '') === 'org-bulk-import';
+        // Payment Type — authoritative fields first, with fallbacks
+        const isCentralized = r.isCentralized === true || r.paymentMethod === 'centralized';
+        const isPrivate = r.paymentMethod === 'private' || !!String(r.cardcomToken || '').trim();
+
+        // Customer Segment — uses authoritative boolean + organizationId
+        const isOrgDeal = r.isOrganizationDeal === true && !!String(r.organizationId || '').trim();
+
         if (filters.paymentTypeFilter === 'centralized' && !isCentralized) return false;
-        if (filters.paymentTypeFilter === 'private'     && isCentralized)  return false;
-        if (filters.customerSegmentFilter === 'org' && !hasOrg) return false;
-        if (filters.customerSegmentFilter === 'b2c' &&  hasOrg) return false;
+        if (filters.paymentTypeFilter === 'private' && !isPrivate) return false;
+        if (filters.customerSegmentFilter === 'org' && !isOrgDeal) return false;
+        if (filters.customerSegmentFilter === 'b2c' && isOrgDeal) return false;
         return true;
       });
     }

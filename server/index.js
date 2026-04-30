@@ -76,6 +76,10 @@ import {
   saveNotification,
   insertOrganizationEmployeePendingDeal,
   approveOrgEmployee,
+  lockBillingSnapshot,
+  getBillingSnapshots,
+  updateBillingSnapshot,
+  listAllBillingSnapshots,
 } from './mongoService.js';
 import {
   createLandingPage,
@@ -1987,6 +1991,48 @@ app.get('/api/organizations/:id/billing-report', requireAdmin, async (req, res) 
     res.status(400).json({ success: false, error: e.message || 'Failed' });
   }
 });
+
+// ── Billing Snapshots (גבייה) ──────────────────────────────────────────────────
+app.post('/api/admin/organizations/:id/billing-snapshots', requireAdmin, async (req, res) => {
+  try {
+    const snapshot = await lockBillingSnapshot({ orgId: req.params.id, ...req.body });
+    res.json({ success: true, snapshot });
+  } catch (e) {
+    console.error(`[${ts()}] billing-snapshots POST error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to lock snapshot' });
+  }
+});
+
+app.get('/api/admin/organizations/:id/billing-snapshots', requireAdmin, async (req, res) => {
+  try {
+    const snapshots = await getBillingSnapshots(req.params.id);
+    res.json({ success: true, snapshots });
+  } catch (e) {
+    console.error(`[${ts()}] billing-snapshots GET error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed' });
+  }
+});
+
+app.patch('/api/admin/organizations/:id/billing-snapshots/:snapshotId', requireAdmin, async (req, res) => {
+  try {
+    const snapshot = await updateBillingSnapshot(req.params.snapshotId, req.body);
+    res.json({ success: true, snapshot });
+  } catch (e) {
+    console.error(`[${ts()}] billing-snapshots PATCH error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to update snapshot' });
+  }
+});
+
+app.get('/api/admin/billing-snapshots', requireAdmin, async (req, res) => {
+  try {
+    const snapshots = await listAllBillingSnapshots();
+    res.json({ success: true, snapshots });
+  } catch (e) {
+    console.error(`[${ts()}] billing-snapshots global GET error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed' });
+  }
+});
+// ── end Billing Snapshots ──────────────────────────────────────────────────────
 
 app.post(
   '/api/admin/organizations/:id/import-members',

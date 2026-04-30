@@ -14,6 +14,7 @@ import {
   FileSpreadsheet,
   Ban,
   Archive,
+  Lock,
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -138,6 +139,32 @@ export default function OrganizationDetailPage() {
   const [cancelOrgLoading, setCancelOrgLoading] = useState(false);
   const [cancelOrgErr, setCancelOrgErr] = useState('');
 
+  // ── Billing Snapshots (גבייה) ──
+  const [snapshots, setSnapshots] = useState([]);
+  const [snapshotsLoading, setSnapshotsLoading] = useState(false);
+  const [lockLoading, setLockLoading] = useState(false);
+  const [lockErr, setLockErr] = useState('');
+  const [snapEditOpen, setSnapEditOpen] = useState(false);
+  const [snapEditTarget, setSnapEditTarget] = useState(null);
+  const [snapEditForm, setSnapEditForm] = useState({ status: 'Pending', invoiceNum: '', receiptNum: '', notes: '' });
+  const [saveSnapBusy, setSaveSnapBusy] = useState(false);
+
+  const loadSnapshots = useCallback(async () => {
+    if (!token || !id) return;
+    setSnapshotsLoading(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/admin/organizations/${encodeURIComponent(id)}/billing-snapshots`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.success) setSnapshots(Array.isArray(j.snapshots) ? j.snapshots : []);
+    } catch {
+      // non-fatal
+    } finally {
+      setSnapshotsLoading(false);
+    }
+  }, [id, token]);
+
   const load = useCallback(async () => {
     if (!token || !id) return;
     setLoading(true);
@@ -210,6 +237,77 @@ export default function OrganizationDetailPage() {
   useEffect(() => {
     loadBillingReport();
   }, [loadBillingReport]);
+
+  useEffect(() => {
+    loadSnapshots();
+  }, [loadSnapshots]);
+
+  async function lockSnapshot() {
+    if (!id || !token) return;
+    setLockLoading(true);
+    setLockErr('');
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/organizations/${encodeURIComponent(id)}/billing-snapshots`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          month: billingReportMonth,
+          totalAmount: billingReport.summary.totalDue,
+          totalEmployees: billingReport.summary.totalActiveRecords,
+          rows: billingReport.rows,
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.success) throw new Error(j.error || 'נעילת דוח נכשלה');
+      await loadSnapshots();
+      setTab('payments');
+    } catch (e) {
+      setLockErr(e.message || 'שגיאה');
+    } finally {
+      setLockLoading(false);
+    }
+  }
+
+  function downloadSnapshotXlsx(snap) {
+    const rows = (snap.reportData || []).map((r) => ({
+      'שם עובד': r.employeeName || '—',
+      'ת"ז': r.idNumber || '—',
+      'תחילת מנוי': r.subscriptionStartDate || '—',
+      'מחיר מנוי מקור': Number(r.basePrice || 0),
+      'תאריך ביטול': r.cancellationDate ? (r.cancellationDate.slice ? r.cancellationDate.slice(0, 10) : r.cancellationDate) : '—',
+      'סטטוס חודשי': `${Number(r.monthlyStatusPct ?? 100)}% (${r.monthlyStatusSubtext || 'מלא'})`,
+      'ימים פעילים': r.activeDays ?? '',
+      'סכום לחיוב': Number(r.billedAmount || 0),
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!views'] = [{ RTL: true }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'דוח חיובים');
+    XLSX.writeFile(wb, `opal-billing-snapshot-${snap.orgName || 'org'}-${snap.month}.xlsx`);
+  }
+
+  async function saveSnapEdit() {
+    if (!snapEditTarget?.id || !token) return;
+    setSaveSnapBusy(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/admin/organizations/${encodeURIComponent(id)}/billing-snapshots/${encodeURIComponent(snapEditTarget.id)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(snapEditForm),
+        }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.success) throw new Error(j.error || 'שמירה נכשלה');
+      setSnapEditOpen(false);
+      await loadSnapshots();
+    } catch (e) {
+      setLockErr(e.message || 'שגיאה');
+    } finally {
+      setSaveSnapBusy(false);
+    }
+  }
 
   function formatCurrency(amount) {
     return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(Number(amount || 0));
@@ -464,6 +562,50 @@ export default function OrganizationDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* ── Snapshot Edit Dialog ── */}
+      <Dialog open={snapEditOpen} onOpenChange={(o) => { if (!o) setSnapEditOpen(false); }}>
+        <DialogContent className="sm:max-w-md text-right" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>עריכת דרישת תשלום</DialogTitle>
+            <DialogDescription>
+              {snapEditTarget ? `${snapEditTarget.orgName} · ${snapEditTarget.month}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <FieldGroup className="gap-3">
+            <Field>
+              <FieldLabel>סטטוס</FieldLabel>
+              <select
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                value={snapEditForm.status}
+                onChange={(e) => setSnapEditForm((p) => ({ ...p, status: e.target.value }))}
+              >
+                <option value="Pending">ממתין לתשלום</option>
+                <option value="Paid">שולם</option>
+              </select>
+            </Field>
+            <Field>
+              <FieldLabel>מספר חשבונית</FieldLabel>
+              <Input value={snapEditForm.invoiceNum} onChange={(e) => setSnapEditForm((p) => ({ ...p, invoiceNum: e.target.value }))} />
+            </Field>
+            <Field>
+              <FieldLabel>מספר קבלה</FieldLabel>
+              <Input value={snapEditForm.receiptNum} onChange={(e) => setSnapEditForm((p) => ({ ...p, receiptNum: e.target.value }))} />
+            </Field>
+            <Field>
+              <FieldLabel>הערות</FieldLabel>
+              <Textarea rows={2} value={snapEditForm.notes} onChange={(e) => setSnapEditForm((p) => ({ ...p, notes: e.target.value }))} />
+            </Field>
+          </FieldGroup>
+          <DialogFooter className="flex-row-reverse gap-2">
+            <Button type="button" variant="outline" onClick={() => setSnapEditOpen(false)}>ביטול</Button>
+            <Button type="button" disabled={saveSnapBusy} onClick={saveSnapEdit}>
+              {saveSnapBusy && <Spinner className="me-2" />}
+              שמור
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <ConfirmDialog
         open={billingConfirmOpen}
         title="שינוי סוג חיוב"
@@ -546,7 +688,10 @@ export default function OrganizationDetailPage() {
               יבוא עובדים
             </TabsTrigger>
             <TabsTrigger value="settings">הגדרות</TabsTrigger>
-            <TabsTrigger value="payments">תשלומים</TabsTrigger>
+            <TabsTrigger value="payments" className="gap-1">
+              <Lock className="size-4" />
+              גבייה
+            </TabsTrigger>
             <TabsTrigger value="billing-report">דוח חיובים</TabsTrigger>
           </TabsList>
 
@@ -1002,107 +1147,93 @@ export default function OrganizationDetailPage() {
           <TabsContent value="payments" className="mt-4" dir="rtl">
             <Card className="text-right" dir="rtl">
               <CardHeader className="text-right">
-                <CardTitle>תשלומים חודשיים</CardTitle>
+                <CardTitle>גבייה — דרישות תשלום נעולות</CardTitle>
                 <CardDescription>
-                  {isCentralizedBilling
-                    ? 'חיוב חודשי לפי גורמים פעילים × מחיר לחבר'
-                    : 'ארגון זה מוגדר לתשלום פרטי מול עובדי הארגון'}
+                  דוחות חיובים שנסגרו ונעולו. ניתן להוריד כל דוח לפי הנתונים שנשמרו בעת הנעילה.
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {isCentralizedBilling ? (
-                  <div className="rounded-md border overflow-x-auto">
-                    <Table>
+                {snapshotsLoading ? (
+                  <div className="flex justify-center py-8"><Spinner className="size-8" /></div>
+                ) : (
+                  <div className="rounded-md border overflow-x-auto" dir="rtl">
+                    <Table className="text-right">
                       <TableHeader>
                         <TableRow className="[&_th]:text-right">
-                          <TableHead>חודש</TableHead>
-                          <TableHead>גורמים בארגון</TableHead>
-                          <TableHead>סה״כ סכום</TableHead>
+                          <TableHead>חודש שירות</TableHead>
+                          <TableHead>סכום לתשלום</TableHead>
+                          <TableHead>כמות עובדים</TableHead>
                           <TableHead>סטטוס</TableHead>
+                          <TableHead>מספר חשבונית</TableHead>
+                          <TableHead>מספר קבלה</TableHead>
+                          <TableHead>הערות</TableHead>
+                          <TableHead>פעולות</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {payments.map((p) => (
-                          <TableRow key={p.month}>
-                            <TableCell>{p.month}</TableCell>
-                            <TableCell>{Number(p.totalMembers || 0)}</TableCell>
-                            <TableCell>₪{Number(p.totalAmount || 0)}</TableCell>
+                        {snapshots.map((snap) => (
+                          <TableRow key={snap.id}>
+                            <TableCell className="font-medium">{snap.month}</TableCell>
+                            <TableCell>{formatCurrency(snap.totalAmount)}</TableCell>
+                            <TableCell className="tabular-nums">{Number(snap.totalEmployees)}</TableCell>
                             <TableCell>
-                              <Badge variant={String(p.status || '').toLowerCase() === 'paid' ? 'default' : 'outline'}>
-                                {String(p.status || '').toLowerCase() === 'paid' ? 'שולם' : 'לא שולם'}
+                              <Badge variant={snap.status === 'Paid' ? 'default' : 'secondary'}>
+                                {snap.status === 'Paid' ? 'שולם' : 'ממתין לתשלום'}
                               </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{snap.invoiceNum || '—'}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{snap.receiptNum || '—'}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate">{snap.notes || '—'}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <TooltipProvider delayDuration={200}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-8 w-8"
+                                        type="button"
+                                        onClick={() => {
+                                          setSnapEditTarget(snap);
+                                          setSnapEditForm({ status: snap.status, invoiceNum: snap.invoiceNum, receiptNum: snap.receiptNum, notes: snap.notes });
+                                          setSnapEditOpen(true);
+                                        }}
+                                      >
+                                        <Edit2 className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>עריכת פרטי גבייה</TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-8 w-8"
+                                        type="button"
+                                        onClick={() => downloadSnapshotXlsx(snap)}
+                                        disabled={!(snap.reportData || []).length}
+                                      >
+                                        <Download className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>הורדת דוח דרישה (נתונים נעולים)</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
-                        {!payments.length ? (
+                        {!snapshots.length ? (
                           <TableRow>
-                            <TableCell colSpan={4} className="text-center text-muted-foreground">אין חיובים להצגה</TableCell>
+                            <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                              אין דרישות תשלום נעולות. לחצו על "סגור דוח והפק דרישת תשלום" בלשונית "דוח חיובים".
+                            </TableCell>
                           </TableRow>
                         ) : null}
                       </TableBody>
                     </Table>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
-                      ארגון זה מוגדר כתשלום באופן פרטי, ולכן התשלום הינו מול עובדי הארגון באופן פרטני.
-                    </div>
-                    <div>
-                      <h3 className="font-semibold mb-2">היסטוריית חיובים מול קארדקום</h3>
-                      <TooltipProvider delayDuration={300}>
-                      <div className="rounded-md border overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="[&_th]:text-right">
-                              <TableHead>תאריך</TableHead>
-                              <TableHead>שם עובד</TableHead>
-                              <TableHead>מוצר</TableHead>
-                              <TableHead>סכום</TableHead>
-                              <TableHead>סטטוס סליקה</TableHead>
-                              <TableHead>אסמכתא קארדקום</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {privateBillingDeals.map((d) => {
-                              const statusText = String(d.cardcomResponseDescription || d.paymentStatus || '—').trim();
-                              const isFailed = /fail|declin|error|denied|נכשל|סירוב/i.test(String(d.paymentStatus || ''));
-                              const ref = d.cardcomRecurringId || '—';
-                              return (
-                                <TableRow key={d.id}>
-                                  <TableCell className="text-xs whitespace-nowrap">
-                                    {d.createdAt ? new Date(d.createdAt).toLocaleDateString('he-IL') : '—'}
-                                  </TableCell>
-                                  <TableCell>{d.fullName || '—'}</TableCell>
-                                  <TableCell>{d.productName || '—'}</TableCell>
-                                  <TableCell>₪{Number(d.payerAmount || 0)}</TableCell>
-                                  <TableCell className={isFailed ? 'text-destructive font-medium' : ''}>
-                                    {String(d.cardcomRecurringId || '').trim() ? (
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <span className="cursor-help">{statusText || '—'}</span>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                          {`למידע נוסף, ניתן לבדוק בממשק קארדקום תחת מזהה הוראת קבע: ${d.cardcomRecurringId}`}
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    ) : (
-                                      statusText || '—'
-                                    )}
-                                  </TableCell>
-                                  <TableCell className="font-mono text-xs">{ref}</TableCell>
-                                </TableRow>
-                              );
-                            })}
-                            {!privateBillingDeals.length ? (
-                              <TableRow>
-                                <TableCell colSpan={6} className="text-center text-muted-foreground">אין חיובים להצגה</TableCell>
-                              </TableRow>
-                            ) : null}
-                          </TableBody>
-                        </Table>
-                      </div>
-                      </TooltipProvider>
-                    </div>
                   </div>
                 )}
               </CardContent>
@@ -1125,16 +1256,29 @@ export default function OrganizationDetailPage() {
                       onChange={(e) => setBillingReportMonth(e.target.value || monthNow())}
                     />
                   </Field>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={exportBillingReportToXlsx}
-                    disabled={billingReportLoading || !(billingReport.rows || []).length}
-                  >
-                    <FileSpreadsheet className="size-4 me-2" />
-                    ייצא לאקסל
-                  </Button>
+                  <div className="flex flex-wrap gap-2 items-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={exportBillingReportToXlsx}
+                      disabled={billingReportLoading || !(billingReport.rows || []).length}
+                    >
+                      <FileSpreadsheet className="size-4 me-2" />
+                      ייצא לאקסל (טיוטה)
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={billingReportLoading || !(billingReport.rows || []).length || lockLoading}
+                      onClick={lockSnapshot}
+                      style={{ backgroundColor: '#285959', color: '#fff' }}
+                      className="hover:opacity-90"
+                    >
+                      {lockLoading ? <Spinner className="size-4 me-2" /> : <Lock className="size-4 me-2" />}
+                      סגור דוח והפק דרישת תשלום
+                    </Button>
+                  </div>
                 </div>
+                {lockErr ? <p className="text-destructive text-sm">{lockErr}</p> : null}
 
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                   <StatsCard title="סה״כ לתשלום לחודש זה" value={formatCurrency(billingReport.summary.totalDue)} icon={Wallet} />

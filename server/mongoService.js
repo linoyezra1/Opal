@@ -1275,6 +1275,85 @@ export async function getOrganizationBillingReport(orgId, monthInput = '') {
   };
 }
 
+// ─── BillingSnapshot ─────────────────────────────────────────────────────────
+
+function serializeBillingSnapshot(doc) {
+  return {
+    id: String(doc._id),
+    orgId: String(doc.orgId || ''),
+    orgName: String(doc.orgName || ''),
+    month: String(doc.month || ''),
+    totalAmount: Number(doc.totalAmount || 0),
+    totalEmployees: Number(doc.totalEmployees || 0),
+    status: String(doc.status || 'Pending'),
+    invoiceNum: String(doc.invoiceNum || ''),
+    receiptNum: String(doc.receiptNum || ''),
+    notes: String(doc.notes || ''),
+    lockedAt: doc.lockedAt instanceof Date ? doc.lockedAt.toISOString() : (doc.lockedAt ? String(doc.lockedAt) : null),
+    reportData: Array.isArray(doc.reportData) ? doc.reportData : [],
+  };
+}
+
+export async function lockBillingSnapshot({ orgId, month, totalAmount, totalEmployees, rows }) {
+  const db = await getDb();
+  let oid;
+  try { oid = new ObjectId(String(orgId)); } catch { throw new Error('מזהה ארגון לא תקין'); }
+  const org = await db.collection('organizations').findOne({ _id: oid });
+  if (!org) throw new Error('ארגון לא נמצא');
+  const existing = await db.collection('billing_snapshots').findOne({ orgId: String(orgId), month: String(month) });
+  if (existing) throw new Error(`דוח חודש ${month} כבר נעול לארגון זה`);
+  const doc = {
+    orgId: String(orgId),
+    orgName: String(org.companyName || ''),
+    month: String(month),
+    totalAmount: Number(totalAmount),
+    totalEmployees: Number(totalEmployees),
+    status: 'Pending',
+    invoiceNum: '',
+    receiptNum: '',
+    notes: '',
+    lockedAt: new Date(),
+    reportData: Array.isArray(rows) ? rows : [],
+  };
+  const result = await db.collection('billing_snapshots').insertOne(doc);
+  return serializeBillingSnapshot({ _id: result.insertedId, ...doc });
+}
+
+export async function getBillingSnapshots(orgId) {
+  const db = await getDb();
+  const docs = await db.collection('billing_snapshots')
+    .find({ orgId: String(orgId) })
+    .sort({ month: -1 })
+    .toArray();
+  return docs.map(serializeBillingSnapshot);
+}
+
+export async function updateBillingSnapshot(snapshotId, { status, invoiceNum, receiptNum, notes }) {
+  const db = await getDb();
+  let sid;
+  try { sid = new ObjectId(String(snapshotId)); } catch { throw new Error('מזהה snapshot לא תקין'); }
+  const update = { updatedAt: new Date() };
+  if (status !== undefined) update.status = String(status);
+  if (invoiceNum !== undefined) update.invoiceNum = String(invoiceNum);
+  if (receiptNum !== undefined) update.receiptNum = String(receiptNum);
+  if (notes !== undefined) update.notes = String(notes);
+  await db.collection('billing_snapshots').updateOne({ _id: sid }, { $set: update });
+  const updated = await db.collection('billing_snapshots').findOne({ _id: sid });
+  if (!updated) throw new Error('Snapshot לא נמצא');
+  return serializeBillingSnapshot(updated);
+}
+
+export async function listAllBillingSnapshots() {
+  const db = await getDb();
+  const docs = await db.collection('billing_snapshots')
+    .find({})
+    .sort({ month: -1, lockedAt: -1 })
+    .toArray();
+  return docs.map(serializeBillingSnapshot);
+}
+
+// ─── end BillingSnapshot ──────────────────────────────────────────────────────
+
 /**
  * ייבוא עובדים — עסקה הושלמה, תשלום מרוכז, פרופיל מוטב מלא (כמו טופס ידני)
  */
@@ -1819,8 +1898,9 @@ function isOrganizationLinkedDeal(d) {
 }
 
 function isCentralizedOrgPayment(d) {
+  // d.paymentMethod is already resolved by enrichDeal; fall back to formState fields
   const fs = d?.formState && typeof d.formState === 'object' ? d.formState : {};
-  const pm = String(fs.paymentMethod || fs.organizationPaymentMethod || '').toLowerCase();
+  const pm = String(d.paymentMethod || fs.paymentMethod || fs.organizationPaymentMethod || '').toLowerCase();
   return pm === 'centralized' || String(d.source || '') === 'org-bulk-import';
 }
 
@@ -2241,6 +2321,9 @@ export async function getSalesDashboardData(filters = {}) {
         /** תוצאת חיוב חוזר אחרונה מקארדקום (responsdescription מהשרת) */
         futureBillingStatus: String(d.futureBillingStatus ?? '').trim(),
         isCentralized: centralized,
+        isOrganizationDeal: !!d.isOrganizationDeal,
+        organizationId: String(d.organizationId || d.formState?.organizationId || '').trim(),
+        paymentMethod: String(d.paymentMethod || ''),
         finalBillingMonth: String(d.finalBillingMonth || '').trim(),
         raw: d,
       };
