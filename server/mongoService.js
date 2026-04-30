@@ -1164,13 +1164,32 @@ export async function getOrganizationBillingReport(orgId, monthInput = '') {
     const basePrice = Number(d.amount ?? d.payerAmount ?? fs.amount ?? 0);
     if (!Number.isFinite(basePrice) || basePrice <= 0) continue;
 
+    const joinMonthRaw = `${startDateUtc.getUTCFullYear()}-${String(startDateUtc.getUTCMonth() + 1).padStart(2, '0')}`;
+    const joinMonth = normalizeYearMonthLabel(joinMonthRaw) || joinMonthRaw;
+
     let billingType = 'full';
     let activeDays = null;
     let billedAmount = basePrice;
+    /** Pending cancel + final month in report month, but joined same month → pro-rata (avoid 100% overriding joiner rule). */
+    let sameMonthPendingCancelProrata = false;
 
     if (isPendingCancellation && finalBillingMonth === targetMonth) {
-      billingType = 'final_month';
-      totalFinalMonth += 1;
+      if (joinMonth === targetMonth) {
+        if (startDateUtc >= monthStartUtc && startDateUtc < nextMonthStartUtc) {
+          const dayOfMonth = startDateUtc.getUTCDate();
+          activeDays = Math.max(1, daysInMonth - dayOfMonth + 1);
+          billedAmount = (activeDays / daysInMonth) * basePrice;
+          billingType = 'prorata';
+          sameMonthPendingCancelProrata = true;
+          totalProrated += 1;
+        } else {
+          billingType = 'final_month';
+          totalFinalMonth += 1;
+        }
+      } else {
+        billingType = 'final_month';
+        totalFinalMonth += 1;
+      }
     } else if (startDateUtc < monthStartUtc) {
       billingType = 'full';
     } else if (startDateUtc >= monthStartUtc && startDateUtc < nextMonthStartUtc) {
@@ -1188,7 +1207,10 @@ export async function getOrganizationBillingReport(orgId, monthInput = '') {
 
     let monthlyStatusPct = 100;
     let monthlyStatusSubtext = 'מלא';
-    if (billingType === 'prorata' && activeDays != null && daysInMonth > 0) {
+    if (sameMonthPendingCancelProrata && activeDays != null && daysInMonth > 0) {
+      monthlyStatusPct = Math.max(1, Math.min(100, Math.round((activeDays / daysInMonth) * 100)));
+      monthlyStatusSubtext = `חודש חיוב אחרון — יחסי (${activeDays} ימים)`;
+    } else if (billingType === 'prorata' && activeDays != null && daysInMonth > 0) {
       monthlyStatusPct = Math.max(1, Math.min(100, Math.round((activeDays / daysInMonth) * 100)));
       monthlyStatusSubtext = `${activeDays} ימים`;
     } else if (billingType === 'final_month') {
