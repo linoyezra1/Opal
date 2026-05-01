@@ -753,17 +753,28 @@ export default function SubscribersDashboard() {
 
     if (filters.paymentTypeFilter || filters.customerSegmentFilter) {
       rows = rows.filter((r) => {
-        // Payment Type — authoritative fields first, with fallbacks
-        const isCentralized = r.isCentralized === true || r.paymentMethod === 'centralized';
-        const isPrivate = r.paymentMethod === 'private' || !!String(r.cardcomToken || '').trim();
-
-        // Customer Segment — uses authoritative boolean + organizationId
+        // Segment (ground truth) — isOrganizationDeal is the authoritative boolean
         const isOrgDeal = r.isOrganizationDeal === true && !!String(r.organizationId || '').trim();
 
-        if (filters.paymentTypeFilter === 'centralized' && !isCentralized) return false;
-        if (filters.paymentTypeFilter === 'private' && !isPrivate) return false;
+        // Payment context — derived only from authoritative fields, never from dealSource
+        const isCentralized = r.isCentralized === true || r.paymentMethod === 'centralized';
+
+        // ── Segment filter (enforced first — establishes mutual exclusion) ──
         if (filters.customerSegmentFilter === 'org' && !isOrgDeal) return false;
         if (filters.customerSegmentFilter === 'b2c' && isOrgDeal) return false;
+
+        // ── Payment type filter ──
+        // Centralized billing is structurally impossible for B2C customers.
+        // Combining paymentType=centralized + segment=b2c always yields an empty set.
+        if (filters.paymentTypeFilter === 'centralized') {
+          if (!isOrgDeal) return false;    // B2C can never be centralized
+          if (!isCentralized) return false; // Org deal but pays via private credit card
+        }
+        // Private = not centralized (B2C is always private; org is private only when !isCentralized)
+        if (filters.paymentTypeFilter === 'private') {
+          if (isOrgDeal && isCentralized) return false; // Org centralized ≠ private
+        }
+
         return true;
       });
     }
@@ -1812,7 +1823,11 @@ export default function SubscribersDashboard() {
                           const isPendingCancellation = String(r.subscriptionStatus || '') === 'Pending Cancellation';
                           const workflowStatus = String(r.raw?.status || '').trim().toLowerCase();
                           const isPendingOrgApproval = workflowStatus === 'pending_org_approval';
-                          const isCentralized = !!r.isCentralized || String(r.dealSource || '') === 'org-bulk-import';
+                          // A customer is centralized only when the server says so AND there is no
+                          // cardcomToken — an org employee who pays privately has a token and must
+                          // go through the Cardcom cancel flow, not the org-employee cancel flow.
+                          const hasCardcomToken = !!String(r.cardcomToken || '').trim();
+                          const isCentralized = r.isCentralized === true && !hasCardcomToken;
                           const missingRecurringIds =
                             !String(r.cardcomAccountId || '').trim() || !String(r.cardcomRecurringId || '').trim();
                           const cancelledAtText = r.cancellationDate
