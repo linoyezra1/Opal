@@ -84,23 +84,23 @@ function ContactSection({ title, data, onChange }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <Field>
           <FieldLabel>שם</FieldLabel>
-          <Input value={data?.name || ''} onChange={(e) => onChange('name', e.target.value)} />
+          <Input dir="rtl" className="text-right" value={data?.name || ''} onChange={(e) => onChange('name', e.target.value)} />
         </Field>
         <Field>
           <FieldLabel>תפקיד</FieldLabel>
-          <Input value={data?.role || ''} onChange={(e) => onChange('role', e.target.value)} />
+          <Input dir="rtl" className="text-right" value={data?.role || ''} onChange={(e) => onChange('role', e.target.value)} />
         </Field>
         <Field>
           <FieldLabel>טלפון</FieldLabel>
-          <Input dir="ltr" value={data?.phone || ''} onChange={(e) => onChange('phone', e.target.value)} />
+          <Input dir="rtl" className="text-right" value={data?.phone || ''} onChange={(e) => onChange('phone', e.target.value)} />
         </Field>
         <Field>
           <FieldLabel>נייד</FieldLabel>
-          <Input dir="ltr" value={data?.mobile || ''} onChange={(e) => onChange('mobile', e.target.value)} />
+          <Input dir="rtl" className="text-right" value={data?.mobile || ''} onChange={(e) => onChange('mobile', e.target.value)} />
         </Field>
         <Field className="sm:col-span-2">
           <FieldLabel>אימייל</FieldLabel>
-          <Input dir="ltr" value={data?.email || ''} onChange={(e) => onChange('email', e.target.value)} />
+          <Input dir="rtl" className="text-right" value={data?.email || ''} onChange={(e) => onChange('email', e.target.value)} />
         </Field>
       </div>
     </div>
@@ -272,9 +272,9 @@ export default function OrganizationDetailPage() {
     const rows = (snap.reportData || []).map((r) => ({
       'שם עובד': r.employeeName || '—',
       'ת"ז': r.idNumber || '—',
-      'תחילת מנוי': r.subscriptionStartDate || '—',
+      'תחילת מנוי': formatDateDdMmYyyy(r.subscriptionStartDate),
       'מחיר מנוי מקור': Number(r.basePrice || 0),
-      'תאריך ביטול': r.cancellationDate ? (r.cancellationDate.slice ? r.cancellationDate.slice(0, 10) : r.cancellationDate) : '—',
+      'תאריך ביטול': formatDateDdMmYyyy(r.cancellationDate),
       'סטטוס חודשי': `${Number(r.monthlyStatusPct ?? 100)}% (${r.monthlyStatusSubtext || 'מלא'})`,
       'ימים פעילים': r.activeDays ?? '',
       'סכום לחיוב': Number(r.billedAmount || 0),
@@ -310,14 +310,22 @@ export default function OrganizationDetailPage() {
   }
 
   function formatCurrency(amount) {
-    return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(Number(amount || 0));
+    return new Intl.NumberFormat('he-IL', {
+      style: 'currency',
+      currency: 'ILS',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(Number(amount || 0));
   }
 
-  function formatBillingCancellationDate(iso) {
-    if (!iso || typeof iso !== 'string') return '—';
-    const d = new Date(`${iso}T12:00:00`);
-    if (Number.isNaN(d.getTime())) return '—';
-    return d.toLocaleDateString('he-IL');
+  function formatDateDdMmYyyy(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '—';
+    const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[3]}.${m[2]}.${m[1]}`;
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return '—';
+    return parsed.toLocaleDateString('he-IL');
   }
 
   function requestArchiveForDeal(d) {
@@ -338,9 +346,9 @@ export default function OrganizationDetailPage() {
     const rows = (billingReport.rows || []).map((r) => ({
       'שם עובד': r.employeeName || '—',
       'ת"ז': r.idNumber || '—',
-      'תחילת מנוי': r.subscriptionStartDate || '—',
+      'תחילת מנוי': formatDateDdMmYyyy(r.subscriptionStartDate),
       'מחיר מנוי מקור': Number(r.basePrice || 0),
-      'תאריך ביטול': r.cancellationDate ? formatBillingCancellationDate(r.cancellationDate) : '—',
+      'תאריך ביטול': formatDateDdMmYyyy(r.cancellationDate),
       'סטטוס חודשי': `${Number(r.monthlyStatusPct ?? 100)}% (${r.monthlyStatusSubtext || 'מלא'})`,
       'ימים פעילים': r.activeDays ?? '',
       'סכום לחיוב': Number(r.billedAmount || 0),
@@ -972,16 +980,18 @@ export default function OrganizationDetailPage() {
               <CardContent>
                 <form onSubmit={saveOrg} className="space-y-6 text-right">
                   <Tabs defaultValue="org">
-                    <TabsList className="grid w-full grid-cols-3">
-                      <TabsTrigger value="org">פרטי ארגון</TabsTrigger>
+                  <TabsList className="grid w-full grid-cols-3 [direction:ltr]">
+                    <TabsTrigger value="billing">צורת חיוב</TabsTrigger>
                       <TabsTrigger value="contacts">אנשי קשר</TabsTrigger>
-                      <TabsTrigger value="billing">תמחור מוצרים</TabsTrigger>
+                    <TabsTrigger value="org">פרטי ארגון</TabsTrigger>
                     </TabsList>
                     <TabsContent value="org" className="mt-4">
                       <FieldGroup>
                         <Field>
                           <FieldLabel>שם חברה *</FieldLabel>
                           <Input
+                            dir="rtl"
+                            className="text-right"
                             required
                             value={org.companyName || ''}
                             onChange={(e) => setOrg((p) => ({ ...p, companyName: e.target.value }))}
@@ -990,6 +1000,8 @@ export default function OrganizationDetailPage() {
                         <Field>
                           <FieldLabel>ח.פ</FieldLabel>
                           <Input
+                            dir="rtl"
+                            className="text-right"
                             value={org.companyId || ''}
                             onChange={(e) => setOrg((p) => ({ ...p, companyId: e.target.value }))}
                           />
@@ -997,6 +1009,8 @@ export default function OrganizationDetailPage() {
                         <Field>
                           <FieldLabel>כתובת רשמית</FieldLabel>
                           <Input
+                            dir="rtl"
+                            className="text-right"
                             value={org.officialAddress || ''}
                             onChange={(e) => setOrg((p) => ({ ...p, officialAddress: e.target.value }))}
                           />
@@ -1004,7 +1018,8 @@ export default function OrganizationDetailPage() {
                         <Field>
                           <FieldLabel>אימייל חברה</FieldLabel>
                           <Input
-                            dir="ltr"
+                            dir="rtl"
+                            className="text-right"
                             value={org.companyEmail || ''}
                             onChange={(e) => setOrg((p) => ({ ...p, companyEmail: e.target.value }))}
                           />
@@ -1012,7 +1027,8 @@ export default function OrganizationDetailPage() {
                         <Field>
                           <FieldLabel>אימייל ליצירת קשר</FieldLabel>
                           <Input
-                            dir="ltr"
+                            dir="rtl"
+                            className="text-right"
                             value={org.contactEmail || ''}
                             onChange={(e) => setOrg((p) => ({ ...p, contactEmail: e.target.value }))}
                           />
@@ -1020,7 +1036,8 @@ export default function OrganizationDetailPage() {
                         <Field>
                           <FieldLabel>טלפון ליצירת קשר</FieldLabel>
                           <Input
-                            dir="ltr"
+                            dir="rtl"
+                            className="text-right"
                             value={org.contactPhone || ''}
                             onChange={(e) => setOrg((p) => ({ ...p, contactPhone: e.target.value }))}
                           />
@@ -1028,6 +1045,8 @@ export default function OrganizationDetailPage() {
                         <Field>
                           <FieldLabel>הערות</FieldLabel>
                           <Textarea
+                            dir="rtl"
+                            className="text-right"
                             rows={3}
                             value={org.notes || ''}
                             onChange={(e) => setOrg((p) => ({ ...p, notes: e.target.value }))}
@@ -1036,6 +1055,8 @@ export default function OrganizationDetailPage() {
                         <Field>
                           <FieldLabel>תחום פעילות</FieldLabel>
                           <Input
+                            dir="rtl"
+                            className="text-right"
                             value={org.fieldOfActivity || ''}
                             onChange={(e) => setOrg((p) => ({ ...p, fieldOfActivity: e.target.value }))}
                           />
@@ -1044,6 +1065,8 @@ export default function OrganizationDetailPage() {
                           <FieldLabel>מספר עובדים (הערכה)</FieldLabel>
                           <Input
                             type="number"
+                            dir="rtl"
+                            className="text-right"
                             value={org.employeesCount ?? ''}
                             onChange={(e) => setOrg((p) => ({ ...p, employeesCount: e.target.value }))}
                           />
@@ -1092,7 +1115,8 @@ export default function OrganizationDetailPage() {
                             type="number"
                             min="0"
                             step="0.01"
-                            dir="ltr"
+                            dir="rtl"
+                            className="text-right"
                             value={org.monthlyPricePerMember ?? ''}
                             onChange={(e) =>
                               setOrg((p) => ({ ...p, monthlyPricePerMember: e.target.value }))
@@ -1307,10 +1331,10 @@ export default function OrganizationDetailPage() {
                           <TableRow key={r.id}>
                             <TableCell>{r.employeeName || '—'}</TableCell>
                             <TableCell dir="ltr" className="text-end font-mono text-xs">{r.idNumber || '—'}</TableCell>
-                            <TableCell>{r.subscriptionStartDate || '—'}</TableCell>
+                            <TableCell>{formatDateDdMmYyyy(r.subscriptionStartDate)}</TableCell>
                             <TableCell>{formatCurrency(r.basePrice)}</TableCell>
                             <TableCell className="whitespace-nowrap">
-                              {formatBillingCancellationDate(r.cancellationDate)}
+                              {formatDateDdMmYyyy(r.cancellationDate)}
                             </TableCell>
                             <TableCell>
                               <span className="font-semibold tabular-nums">{Number(r.monthlyStatusPct ?? 100)}%</span>

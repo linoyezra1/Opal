@@ -368,7 +368,7 @@ export async function sendEmployeeApprovalRequestEmail(payload) {
   const logoBlock   = buildInlineLogoHtml(logoDataUri);
 
   const html = rtlWrap(`
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" dir="rtl" style="background-color:#f0faf8;padding:32px 16px;direction:rtl;text-align:right;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" dir="rtl" style="background-color:#f5f7fb;padding:32px 16px;direction:rtl;text-align:right;">
     <tr>
       <td align="right" dir="rtl">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="right" dir="rtl" style="max-width:560px;background-color:#ffffff;direction:rtl;text-align:right;">
@@ -377,7 +377,7 @@ export async function sendEmployeeApprovalRequestEmail(payload) {
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" dir="rtl" style="border-collapse:collapse;direction:rtl;">
                 <tr>
                   <td align="right" valign="middle" style="text-align:right;">
-                    <h2 style="margin:0;color:#285959;font-size:22px;font-weight:700;line-height:1.4;text-align:right;font-family:${FONT_STACK};">
+                    <h2 style="margin:0;color:${OPAL_BLUE};font-size:22px;font-weight:700;line-height:1.4;text-align:right;font-family:${FONT_STACK};">
                       בקשת אישור עובד חדש
                     </h2>
                   </td>
@@ -397,23 +397,23 @@ export async function sendEmployeeApprovalRequestEmail(payload) {
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="right" dir="rtl" style="border-collapse:collapse;margin-bottom:28px;direction:rtl;text-align:right;">
                 <tr>
                   <td style="padding:9px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;font-family:${FONT_STACK};">שם העובד:</td>
-                  <td style="padding:9px 0;color:#285959;font-size:14px;font-weight:600;border-bottom:1px solid #eee;font-family:${FONT_STACK};">${employeeName}</td>
+                  <td style="padding:9px 0;color:${OPAL_BLUE};font-size:14px;font-weight:600;border-bottom:1px solid #eee;font-family:${FONT_STACK};">${employeeName}</td>
                 </tr>
                 <tr>
                   <td style="padding:9px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;font-family:${FONT_STACK};">תעודת זהות:</td>
-                  <td style="padding:9px 0;color:#285959;font-size:14px;border-bottom:1px solid #eee;font-family:${FONT_STACK};"><span dir="ltr">${employeeId}</span></td>
+                  <td style="padding:9px 0;color:${OPAL_BLUE};font-size:14px;border-bottom:1px solid #eee;font-family:${FONT_STACK};"><span dir="ltr">${employeeId}</span></td>
                 </tr>
                 <tr>
                   <td style="padding:9px 0;color:#666;font-size:14px;border-bottom:1px solid #eee;font-family:${FONT_STACK};">טלפון:</td>
-                  <td style="padding:9px 0;color:#285959;font-size:14px;border-bottom:1px solid #eee;font-family:${FONT_STACK};"><span dir="ltr">${employeePhone}</span></td>
+                  <td style="padding:9px 0;color:${OPAL_BLUE};font-size:14px;border-bottom:1px solid #eee;font-family:${FONT_STACK};"><span dir="ltr">${employeePhone}</span></td>
                 </tr>
                 <tr>
                   <td style="padding:9px 0;color:#666;font-size:14px;font-family:${FONT_STACK};">שירות:</td>
-                  <td style="padding:9px 0;color:#285959;font-size:14px;font-weight:600;font-family:${FONT_STACK};">${productName}</td>
+                  <td style="padding:9px 0;color:${OPAL_BLUE};font-size:14px;font-weight:600;font-family:${FONT_STACK};">${productName}</td>
                 </tr>
               </table>
               <div style="text-align:center;margin-bottom:24px;">
-                <a href="${approveUrl}" style="display:inline-block;background-color:#285959;color:#ffffff;text-decoration:none;padding:14px 40px;border-radius:6px;font-size:16px;font-weight:700;font-family:${FONT_STACK};letter-spacing:0.02em;">
+                <a href="${approveUrl}" style="display:inline-block;background-color:${OPAL_BLUE};color:${OPAL_GOLD};text-decoration:none;padding:14px 40px;border-radius:6px;font-size:16px;font-weight:700;font-family:${FONT_STACK};letter-spacing:0.02em;">
                   ✓ אשר עובד
                 </a>
               </div>

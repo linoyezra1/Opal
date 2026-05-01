@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FileSpreadsheet, Building2, Users, RefreshCw, Lock, Edit2, Download } from 'lucide-react';
+import { FileSpreadsheet, Users, RefreshCw, Lock, Edit2, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { API_BASE } from '../apiBase.js';
 import { fmtDateTime } from '../utils/dateUtils.js';
@@ -44,7 +44,12 @@ function monthStartEndIso() {
 
 function formatCurrency(value) {
   const n = Number(value || 0);
-  return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat('he-IL', {
+    style: 'currency',
+    currency: 'ILS',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
 }
 
 async function downloadCsv(url, token, fallbackName) {
@@ -88,25 +93,14 @@ export default function ReportsDashboard() {
   const [agents, setAgents] = useState([]);
   const [agentId, setAgentId] = useState('');
   const [agentMonth, setAgentMonth] = useState(currentMonthStr());
+  const [agentProviderFilter, setAgentProviderFilter] = useState('');
+  const [agentProductFilter, setAgentProductFilter] = useState('');
+  const [agentBillingTypeFilter, setAgentBillingTypeFilter] = useState('');
+  const [agentPaymentStatusFilter, setAgentPaymentStatusFilter] = useState('all');
   const [agentLoading, setAgentLoading] = useState(false);
   const [agentErr, setAgentErr] = useState('');
   const [agentData, setAgentData] = useState(null);
 
-  const [invoices, setInvoices] = useState([]);
-  const [invLoading, setInvLoading] = useState(false);
-  const [invErr, setInvErr] = useState('');
-  const [billingMonth, setBillingMonth] = useState(currentMonthStr());
-  const [genBusy, setGenBusy] = useState(false);
-
-  const [editOpen, setEditOpen] = useState(false);
-  const [editRow, setEditRow] = useState(null);
-  const [editForm, setEditForm] = useState({
-    invoiceNumber: '',
-    receiptNumber: '',
-    notes: '',
-    status: 'Pending',
-  });
-  const [saveInvBusy, setSaveInvBusy] = useState(false);
   const [tab, setTab] = useState(() => String(searchParams.get('tab') || 'provider'));
   useEffect(() => {
     const t = String(searchParams.get('tab') || 'provider');
@@ -214,30 +208,6 @@ export default function ReportsDashboard() {
     }
   }, [token, fromDate, toDate, providerFilter]);
 
-  const loadInvoices = useCallback(
-    async (monthOverride) => {
-      if (!token) return;
-      setInvLoading(true);
-      setInvErr('');
-      try {
-        const m = String(monthOverride ?? billingMonth ?? '').trim();
-        const q = new URLSearchParams();
-        if (m) q.set('month', m);
-        const res = await fetch(`${API_BASE}/api/admin/monthly-invoices?${q.toString()}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const j = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(j.error || 'טעינה נכשלה');
-        setInvoices(Array.isArray(j.invoices) ? j.invoices : []);
-      } catch (e) {
-        setInvErr(e?.message || 'שגיאה');
-      } finally {
-        setInvLoading(false);
-      }
-    },
-    [token, billingMonth]
-  );
-
   useEffect(() => {
     loadAgents();
   }, [loadAgents]);
@@ -254,12 +224,6 @@ export default function ReportsDashboard() {
     loadAgentCommissions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, agentId, agentMonth]);
-  useEffect(() => {
-    if (tab !== 'orgs') return;
-    loadInvoices(billingMonth);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, billingMonth]);
-
   useEffect(() => {
     if (tab !== 'snapshots') return;
     loadAllSnapshots();
@@ -324,66 +288,52 @@ export default function ReportsDashboard() {
     }
   };
 
-  const runGenerateInvoices = async () => {
-    setInvErr('');
-    setGenBusy(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/monthly-invoices/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ month: billingMonth }),
-      });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j.error || 'שגיאה');
-      await loadInvoices(billingMonth);
-    } catch (e) {
-      setInvErr(e?.message || 'שגיאה');
-    } finally {
-      setGenBusy(false);
-    }
-  };
+  const agentProviderOptions = useMemo(() => {
+    const set = new Set(
+      (agentData?.rows || [])
+        .map((r) => String(r.provider || '').trim())
+        .filter(Boolean)
+    );
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'he'));
+  }, [agentData]);
 
-  const openEdit = (row) => {
-    setEditRow(row);
-    setEditForm({
-      invoiceNumber: row.invoiceNumber || '',
-      receiptNumber: row.receiptNumber || '',
-      notes: row.notes || '',
-      status: row.status === 'Paid' ? 'Paid' : 'Pending',
+  const agentProductOptions = useMemo(() => {
+    const set = new Set(
+      (agentData?.rows || [])
+        .map((r) => String(r.productName || '').trim())
+        .filter(Boolean)
+    );
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'he'));
+  }, [agentData]);
+
+  const filteredAgentRows = useMemo(() => {
+    return (agentData?.rows || []).filter((r) => {
+      const provider = String(r.provider || '').trim();
+      const productName = String(r.productName || '').trim();
+      const billingType = String(r.billingType || '').trim();
+      const paymentStatus = String(r.paymentStatus || '').toLowerCase();
+      const isPaid = /paid|success|approved|succeeded|completed/.test(paymentStatus);
+
+      if (agentProviderFilter && provider !== agentProviderFilter) return false;
+      if (agentProductFilter && productName !== agentProductFilter) return false;
+      if (agentBillingTypeFilter && billingType !== agentBillingTypeFilter) return false;
+      if (agentPaymentStatusFilter === 'paid' && !isPaid) return false;
+      if (agentPaymentStatusFilter === 'unpaid' && isPaid) return false;
+      return true;
     });
-    setEditOpen(true);
-  };
+  }, [agentData, agentProviderFilter, agentProductFilter, agentBillingTypeFilter, agentPaymentStatusFilter]);
 
-  const saveInvoice = async () => {
-    if (!editRow?.id) return;
-    setSaveInvBusy(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/monthly-invoices/${encodeURIComponent(editRow.id)}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          invoiceNumber: editForm.invoiceNumber,
-          receiptNumber: editForm.receiptNumber,
-          notes: editForm.notes,
-          status: editForm.status,
-        }),
-      });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j.error || 'שמירה נכשלה');
-      setEditOpen(false);
-      await loadInvoices();
-    } catch (e) {
-      setInvErr(e?.message || 'שגיאה');
-    } finally {
-      setSaveInvBusy(false);
-    }
-  };
+  const filteredAgentTotals = useMemo(() => {
+    return filteredAgentRows.reduce(
+      (acc, row) => {
+        acc.totalSales += Number(row.payerAmount || 0);
+        acc.totalCommission += Number(row.commissionAmount || 0);
+        acc.dealCount += 1;
+        return acc;
+      },
+      { totalSales: 0, totalCommission: 0, dealCount: 0 }
+    );
+  }, [filteredAgentRows]);
 
   return (
     <AdminPageShell>
@@ -391,7 +341,7 @@ export default function ReportsDashboard() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">דוחות ובילינג אופאל</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            מרכז הדוחות והבילינג של אופאל — ייצוא לספק, עמלות סוכנים וגבייה מארגונים
+            מרכז הדוחות והבילינג של אופאל — ייצוא לספק ועמלות סוכנים
           </p>
         </div>
 
@@ -402,7 +352,6 @@ export default function ReportsDashboard() {
             const next = new URLSearchParams(searchParams);
             next.set('tab', v);
             setSearchParams(next, { replace: true });
-            if (v === 'orgs') loadInvoices();
             if (v === 'snapshots') loadAllSnapshots();
           }}
           className="w-full"
@@ -415,10 +364,6 @@ export default function ReportsDashboard() {
             <TabsTrigger value="agents" className="gap-1">
               <Users className="size-4" />
               עמלות סוכנים
-            </TabsTrigger>
-            <TabsTrigger value="orgs" className="gap-1">
-              <Building2 className="size-4" />
-              גבייה מארגונים
             </TabsTrigger>
             <TabsTrigger value="snapshots" className="gap-1">
               <Lock className="size-4" />
@@ -546,18 +491,76 @@ export default function ReportsDashboard() {
                     />
                   </Field>
                 </FieldGroup>
+                <div className="rounded-xl border p-3 md:p-4">
+                  <UnifiedFilterShell
+                    filters={[
+                      {
+                        key: 'provider',
+                        label: 'ספק',
+                        type: 'select',
+                        options: agentProviderOptions.map((p) => ({ value: p, label: p })),
+                      },
+                      {
+                        key: 'product',
+                        label: 'מוצר',
+                        type: 'select',
+                        options: agentProductOptions.map((p) => ({ value: p, label: p })),
+                      },
+                      {
+                        key: 'billingType',
+                        label: 'סוג חיוב',
+                        type: 'select',
+                        options: [
+                          { value: 'Centralized', label: 'מרוכז' },
+                          { value: 'Private', label: 'פרטי' },
+                        ],
+                      },
+                      {
+                        key: 'status',
+                        label: 'סטטוס',
+                        type: 'select',
+                        options: [
+                          { value: 'all', label: 'הכל' },
+                          { value: 'paid', label: 'שולם' },
+                          { value: 'unpaid', label: 'לא שולם' },
+                        ],
+                      },
+                    ]}
+                    values={{
+                      provider: agentProviderFilter,
+                      product: agentProductFilter,
+                      billingType: agentBillingTypeFilter,
+                      status: agentPaymentStatusFilter,
+                    }}
+                    onChange={(next) => {
+                      setAgentProviderFilter(String(next.provider || ''));
+                      setAgentProductFilter(String(next.product || ''));
+                      setAgentBillingTypeFilter(String(next.billingType || ''));
+                      setAgentPaymentStatusFilter(String(next.status || 'all'));
+                    }}
+                    onClear={() => {
+                      setAgentProviderFilter('');
+                      setAgentProductFilter('');
+                      setAgentBillingTypeFilter('');
+                      setAgentPaymentStatusFilter('all');
+                    }}
+                    resultsCount={filteredAgentRows.length}
+                    totalCount={(agentData?.rows || []).length}
+                    isLoading={agentLoading}
+                  />
+                </div>
                 {agentErr ? <p className="text-sm text-destructive">{agentErr}</p> : null}
                 {agentData && (
                   <div className="space-y-3">
                     <div className="flex flex-wrap gap-4 text-sm">
                       <span>
-                        סה״כ מכירות: <strong>{formatCurrency(agentData.totalSales)}</strong>
+                        סה״כ מכירות: <strong>{formatCurrency(filteredAgentTotals.totalSales)}</strong>
                       </span>
                       <span>
-                        סה״כ עמלות: <strong>{formatCurrency(agentData.totalCommission)}</strong>
+                        סה״כ עמלות: <strong>{formatCurrency(filteredAgentTotals.totalCommission)}</strong>
                       </span>
                       <span>
-                        מספר עסקאות: <strong>{agentData.dealCount}</strong>
+                        מספר עסקאות: <strong>{filteredAgentTotals.dealCount}</strong>
                       </span>
                     </div>
                     <div className="rounded-md border overflow-x-auto" dir="rtl">
@@ -572,7 +575,7 @@ export default function ReportsDashboard() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {(agentData.rows || []).map((r) => (
+                          {filteredAgentRows.map((r) => (
                             <TableRow key={r.dealId}>
                               <TableCell className="font-mono text-xs">{r.transactionId}</TableCell>
                               <TableCell className="text-xs whitespace-nowrap">
@@ -583,92 +586,16 @@ export default function ReportsDashboard() {
                               <TableCell>{formatCurrency(r.commissionAmount)}</TableCell>
                             </TableRow>
                           ))}
+                          {!filteredAgentRows.length ? (
+                            <TableRow>
+                              <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
+                                אין רשומות לפי הסינון שנבחר
+                              </TableCell>
+                            </TableRow>
+                          ) : null}
                         </TableBody>
                       </Table>
                     </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="orgs" className="mt-4" dir="rtl">
-            <Card className="text-right" dir="rtl">
-              <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between text-right">
-                <div>
-                  <CardTitle>גבייה מארגונים (תשלום מרוכז)</CardTitle>
-                  <CardDescription>
-                    חשבוניות חודשיות מקובצות לפי ארגון — עדכנו מספרי מסמכים וסטטוס תשלום. בחירת חודש מעדכנת את הטבלה אוטומטית.
-                  </CardDescription>
-                </div>
-                <div className="flex flex-wrap items-end justify-end gap-2">
-                  <Field>
-                    <FieldLabel className="text-xs">חודש לחיוב</FieldLabel>
-                    <Input
-                      type="month"
-                      value={billingMonth}
-                      onChange={(e) => setBillingMonth(e.target.value)}
-                    />
-                  </Field>
-                  <Button type="button" variant="outline" onClick={() => loadInvoices()} disabled={invLoading}>
-                    רענן טבלה
-                  </Button>
-                  <Button type="button" variant="secondary" disabled={genBusy} onClick={runGenerateInvoices}>
-                    {genBusy ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
-                    צור / עדכן לפי חודש
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {invErr ? <p className="text-sm text-destructive mb-2">{invErr}</p> : null}
-                {invLoading ? (
-                  <div className="flex justify-center py-8">
-                    <Spinner className="size-8" />
-                  </div>
-                ) : (
-                  <div className="rounded-md border overflow-x-auto" dir="rtl">
-                    <Table className="text-right">
-                      <TableHeader>
-                        <TableRow className="[&_th]:text-right">
-                          <TableHead className="text-right">ארגון</TableHead>
-                          <TableHead className="text-right">חודש</TableHead>
-                          <TableHead className="text-right">סכום</TableHead>
-                          <TableHead className="text-right">סטטוס</TableHead>
-                          <TableHead className="text-right">חשבונית</TableHead>
-                          <TableHead className="text-right">קבלה</TableHead>
-                          <TableHead className="w-[100px] text-right" />
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {invoices.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                              אין רשומות. הריצו &quot;צור / עדכן לפי חודש&quot; לאחר סגירת חודש.
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          invoices.map((inv) => (
-                            <TableRow key={inv.id}>
-                              <TableCell className="font-medium">{inv.organizationName}</TableCell>
-                              <TableCell>{inv.month}</TableCell>
-                              <TableCell>{formatCurrency(inv.totalAmount)}</TableCell>
-                              <TableCell>
-                                <Badge variant={inv.status === 'Paid' ? 'default' : 'secondary'}>
-                                  {inv.status === 'Paid' ? 'שולם' : 'ממתין'}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-xs">{inv.invoiceNumber || '—'}</TableCell>
-                              <TableCell className="text-xs">{inv.receiptNumber || '—'}</TableCell>
-                              <TableCell>
-                                <Button type="button" variant="ghost" size="sm" onClick={() => openEdit(inv)}>
-                                  עריכה
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
                   </div>
                 )}
               </CardContent>
@@ -859,60 +786,6 @@ export default function ReportsDashboard() {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={editOpen} onOpenChange={setEditOpen}>
-          <DialogContent className="max-w-md text-right" dir="rtl">
-            <DialogHeader>
-              <DialogTitle>עריכת חשבונית ארגון</DialogTitle>
-              <DialogDescription>
-                {editRow ? `${editRow.organizationName} · ${editRow.month}` : ''}
-              </DialogDescription>
-            </DialogHeader>
-            <FieldGroup className="gap-3">
-              <Field>
-                <FieldLabel>מספר חשבונית</FieldLabel>
-                <Input
-                  value={editForm.invoiceNumber}
-                  onChange={(e) => setEditForm((f) => ({ ...f, invoiceNumber: e.target.value }))}
-                />
-              </Field>
-              <Field>
-                <FieldLabel>מספר קבלה</FieldLabel>
-                <Input
-                  value={editForm.receiptNumber}
-                  onChange={(e) => setEditForm((f) => ({ ...f, receiptNumber: e.target.value }))}
-                />
-              </Field>
-              <Field>
-                <FieldLabel>סטטוס</FieldLabel>
-                <select
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={editForm.status}
-                  onChange={(e) => setEditForm((f) => ({ ...f, status: e.target.value }))}
-                >
-                  <option value="Pending">ממתין לתשלום</option>
-                  <option value="Paid">שולם</option>
-                </select>
-              </Field>
-              <Field>
-                <FieldLabel>הערות</FieldLabel>
-                <Textarea
-                  rows={3}
-                  value={editForm.notes}
-                  onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
-                />
-              </Field>
-            </FieldGroup>
-            <DialogFooter>
-              <Button type="button" variant="secondary" onClick={() => setEditOpen(false)}>
-                ביטול
-              </Button>
-              <Button type="button" onClick={saveInvoice} disabled={saveInvBusy}>
-                {saveInvBusy ? <Spinner className="size-4" /> : null}
-                שמור
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </AdminPageShell>
   );

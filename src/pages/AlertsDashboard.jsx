@@ -188,19 +188,6 @@ export default function AlertsDashboard() {
               </div>
             </CardContent>
           </Card>
-          <Card className="bg-amber-50 border-amber-200">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="size-14 rounded-xl bg-amber-100 flex items-center justify-center">
-                  <AlertTriangle className="size-7 text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-3xl font-bold text-amber-700">{openDebt.toLocaleString('he-IL')} ₪</p>
-                  <p className="text-amber-700/80">סה״כ חוב פתוח</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
 
         <UnifiedFilterShell

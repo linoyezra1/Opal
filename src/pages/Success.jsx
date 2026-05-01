@@ -77,13 +77,13 @@ export default function Success() {
       </header>
 
       <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-10 md:py-14 text-right">
-        <div className="flex flex-col items-center text-center mb-10">
-          <div className="flex size-16 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 mb-6">
-            <CheckCircle2 className="size-10" strokeWidth={2} />
+        <div className="mb-10">
+          <div className="mx-auto flex max-w-xl items-center justify-center gap-3 text-center">
+            <CheckCircle2 className="size-7 shrink-0 text-emerald-600" strokeWidth={2} />
+            <p className="text-muted-foreground leading-relaxed text-pretty">
+              הזמנתך בצירוף כתב השירות יישלחו אליך בדקות הקרובות למייל.
+            </p>
           </div>
-          <p className="text-muted-foreground max-w-xl leading-relaxed text-pretty">
-            הזמנתך בצירוף כתב השירות יישלחו אליך בדקות הקרובות למייל.
-          </p>
         </div>
 
         <Card className="mb-8 border-amber-500/40 shadow-md bg-amber-50/50 dark:bg-amber-950/20">
@@ -136,20 +136,17 @@ export default function Success() {
             <p className="font-bold text-lg text-foreground">
               טלפונים להזמנת שירותים רפואיים: 00-00000
             </p>
-            <p>
-                <strong>
-              לינק להגשת מסמכים רפואיים — תביעה און ליין:{' '}
-              <a
-                href={DOCUMENTS_LINK}
-                className="text-primary hover:underline font-medium"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                לחצו כאן
-              </a>
-
-           </strong>
+            <p className="font-semibold text-foreground">
+              הגשת מסמכים רפואיים — תביעה און ליין:
             </p>
+            <a
+              href={DOCUMENTS_LINK}
+              className="inline-flex items-center rounded-md border border-primary/35 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/20"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              לחצו כאן
+            </a>
           </CardContent>
         </Card>
 

@@ -28,7 +28,7 @@ function formatCurrency(v) {
 }
 
 const SECTIONS = [
-  { title: 'הכנסות', keys: ['totalRevenue', 'activeSubscribers', 'totalTransactions', 'organizationCollectionsDebt'] },
+  { title: 'הכנסות', keys: ['totalRevenue', 'activeSubscribers', 'totalTransactions'] },
   { title: 'הוצאות', keys: ['totalExpenses', 'totalProviderPayments', 'totalAgentPayments'] },
   { title: 'משימות לטיפול', keys: ['failedPayments', 'cancellationsCount', 'abandonedCarts', 'pendingBeneficiaries', 'contactTasks'] },
 ];
@@ -37,7 +37,6 @@ const CARD_META = {
   totalRevenue: { title: 'סה״כ הכנסות', icon: Wallet, money: true, className: 'border-emerald-300 bg-emerald-50/60' },
   activeSubscribers: { title: 'מנויים פעילים', icon: Users },
   totalTransactions: { title: 'סה״כ עסקאות', icon: CreditCard },
-  organizationCollectionsDebt: { title: 'גבייה מארגונים', icon: Building2, money: true },
   totalExpenses: { title: 'סה״כ הוצאות', icon: AlertCircle, money: true, className: 'border-red-300 bg-red-50/60' },
   totalProviderPayments: { title: 'סה״כ תשלום לספק', icon: Building2, money: true },
   totalAgentPayments: { title: 'סה״כ תשלום לסוכן', icon: UserCheck, money: true },
@@ -200,9 +199,6 @@ export default function AdminControlPanel() {
       navigate(`/admin/subscribers?search=${encodeURIComponent(search)}&editId=${encodeURIComponent(row.id)}`);
     }
     if (key === 'totalAgentPayments' && row.agentId) navigate('/admin/agents');
-    if (key === 'organizationCollectionsDebt' && row.organizationId) {
-      navigate(`/admin/organizations/${encodeURIComponent(row.organizationId)}?tab=payments`);
-    }
   }
 
   if (!token) return <div dir="rtl" className="p-6">יש להתחבר דרך מסך המנהל.</div>;
@@ -405,7 +401,6 @@ export default function AdminControlPanel() {
               {modalKey === 'cancelledCustomers' ? <Button asChild size="sm" variant="outline"><Link to="/admin/subscribers?status=cancelled">ניהול מלא</Link></Button> : null}
               {modalKey === 'totalProviderPayments' ? <Button asChild size="sm" variant="outline"><Link to="/admin/reports?tab=provider">ניהול מלא</Link></Button> : null}
               {modalKey === 'totalAgentPayments' ? <Button asChild size="sm" variant="outline"><Link to="/admin/reports?tab=agents">ניהול מלא</Link></Button> : null}
-              {modalKey === 'organizationCollectionsDebt' ? <Button asChild size="sm" variant="outline"><Link to="/admin/reports?tab=orgs">ניהול מלא</Link></Button> : null}
               {modalKey === 'abandonedCarts' || modalKey === 'contactTasks' ? <Button asChild size="sm" variant="outline"><Link to="/admin/contacts">ניהול מלא</Link></Button> : null}
             </div>
           </DialogHeader>

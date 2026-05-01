@@ -376,6 +376,10 @@ export async function buildAgentCommissionPayload(deals) {
     if (!Number.isFinite(commissionAmount) || commissionAmount < 0) commissionAmount = 0;
     const createdAt =
       d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt || '';
+    const billingType =
+      d.isCentralized === true || String(fs.billingType || '').trim().toLowerCase() === 'centralized'
+        ? 'Centralized'
+        : 'Private';
     return {
       dealId: String(d._id || ''),
       transactionId: String(d.transactionId || ''),
@@ -383,6 +387,8 @@ export async function buildAgentCommissionPayload(deals) {
       payerAmount,
       commissionAmount,
       productName: String(fs.productName || ''),
+      provider: normalizeProviderName(d),
+      billingType,
       paymentStatus: String(d.paymentStatus || ''),
     };
   });

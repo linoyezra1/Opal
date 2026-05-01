@@ -268,23 +268,6 @@ export default function ContactManagement() {
     });
   }, [privateLeads, corporateLeads]);
 
-  // Derive month options from actual data
-  const availableMonths = React.useMemo(() => {
-    const seen = new Set();
-    const months = [];
-    allLeads.forEach((l) => {
-      if (!l.createdAt) return;
-      const d = new Date(l.createdAt);
-      if (isNaN(d.getTime())) return;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        months.push({ value: key, label: d.toLocaleDateString('he-IL', { month: 'long', year: 'numeric' }) });
-      }
-    });
-    return months.sort((a, b) => b.value.localeCompare(a.value));
-  }, [allLeads]);
-
   const filteredLeads = React.useMemo(() => {
     return allLeads.filter((lead) => {
       const q = searchQuery.trim().toLowerCase();
@@ -506,10 +489,7 @@ export default function ContactManagement() {
                         { value: 'טופל',   label: 'טופל' },
                       ],
                     },
-                    {
-                      key: 'month', label: 'חודש', type: 'select',
-                      options: availableMonths,
-                    },
+                    { key: 'month', label: 'חודש', type: 'month' },
                     { key: 'dateFrom', label: 'מתאריך', type: 'date' },
                     { key: 'dateTo',   label: 'עד תאריך', type: 'date' },
                   ]}
