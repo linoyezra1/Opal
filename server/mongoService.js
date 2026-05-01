@@ -2670,7 +2670,7 @@ export async function getControlPanelOverviewData(filters = {}) {
 
   const abandonedCartRowsAll = await db
     .collection('pending_checkout_leads')
-    .find({ status: 'awaiting_payment', isActive: { $ne: false }, updatedAt: { $gte: from, $lte: to } })
+    .find({ status: 'awaiting_payment', isActive: { $ne: false } })
     .sort({ updatedAt: -1 })
     .limit(500)
     .toArray();
@@ -2679,7 +2679,7 @@ export async function getControlPanelOverviewData(filters = {}) {
   const contactLeadsAll = await db
     .collection('contactLeads')
     .aggregate([
-      { $match: { isActive: { $ne: false }, createdAt: { $gte: from, $lte: to } } },
+      { $match: { isActive: { $ne: false } } },
       { $sort: { createdAt: -1 } },
       { $limit: 500 },
       {
@@ -2705,7 +2705,7 @@ export async function getControlPanelOverviewData(filters = {}) {
     .toArray();
   const orgLeadsAll = await db
     .collection('organizationLeads')
-    .find({ isActive: { $ne: false }, createdAt: { $gte: from, $lte: to } })
+    .find({ isActive: { $ne: false } })
     .sort({ createdAt: -1 })
     .limit(500)
     .toArray();
