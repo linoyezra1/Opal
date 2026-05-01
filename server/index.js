@@ -337,28 +337,6 @@ function cleanupPending() {
 }
 setInterval(cleanupPending, 10 * 60 * 1000);
 
-/** Snapshot חודשי ב-1 לחודש בשעה 00:01 */
-(function scheduleMonthlySnapshot() {
-  function monthLabelUtc(d) {
-    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-  }
-  function msUntilNextFirst() {
-    const now = new Date();
-    const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 1, 0, 0));
-    return next.getTime() - now.getTime();
-  }
-  function fireAndReschedule() {
-    const now = new Date();
-    const monthUtc = monthLabelUtc(now);
-    runMonthlyOrgSnapshot(`${monthUtc}-01`).then((r) => {
-      console.log(`[monthly-snapshot] done:`, r);
-    }).catch((e) => {
-      console.error(`[monthly-snapshot] error:`, e?.message || e);
-    });
-    setTimeout(fireAndReschedule, msUntilNextFirst());
-  }
-  setTimeout(fireAndReschedule, msUntilNextFirst());
-})();
 
 /** Build payload with safe fallbacks so missing metadata never crashes. */
 function buildDealPayloadFromFormState(formState) {
