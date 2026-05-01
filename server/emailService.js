@@ -413,7 +413,7 @@ export async function sendEmployeeApprovalRequestEmail(payload) {
                 </tr>
               </table>
               <div style="text-align:center;margin-bottom:24px;">
-                <a href="${approveUrl}" style="display:inline-block;background-color:${OPAL_BLUE};color:${OPAL_GOLD};text-decoration:none;padding:14px 40px;border-radius:6px;font-size:16px;font-weight:700;font-family:${FONT_STACK};letter-spacing:0.02em;">
+                <a href="${approveUrl}" style="display:inline-block;background-color:${OPAL_BLUE};color:white;text-decoration:none;padding:14px 40px;border-radius:6px;font-size:16px;font-weight:700;font-family:${FONT_STACK};letter-spacing:0.02em;">
                   ✓ אשר עובד
                 </a>
               </div>

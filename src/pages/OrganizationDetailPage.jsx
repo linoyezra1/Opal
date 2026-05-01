@@ -83,23 +83,23 @@ function ContactSection({ title, data, onChange }) {
       <p className="font-medium text-sm">{title}</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field>
-          <FieldLabel>שם</FieldLabel>
+          <FieldLabel className="text-right w-full">שם</FieldLabel>
           <Input dir="rtl" className="text-right" value={data?.name || ''} onChange={(e) => onChange('name', e.target.value)} />
         </Field>
         <Field>
-          <FieldLabel>תפקיד</FieldLabel>
+          <FieldLabel className="text-right w-full">תפקיד</FieldLabel>
           <Input dir="rtl" className="text-right" value={data?.role || ''} onChange={(e) => onChange('role', e.target.value)} />
         </Field>
         <Field>
-          <FieldLabel>טלפון</FieldLabel>
+          <FieldLabel className="text-right w-full">טלפון</FieldLabel>
           <Input dir="rtl" className="text-right" value={data?.phone || ''} onChange={(e) => onChange('phone', e.target.value)} />
         </Field>
         <Field>
-          <FieldLabel>נייד</FieldLabel>
+          <FieldLabel className="text-right w-full">נייד</FieldLabel>
           <Input dir="rtl" className="text-right" value={data?.mobile || ''} onChange={(e) => onChange('mobile', e.target.value)} />
         </Field>
         <Field className="sm:col-span-2">
-          <FieldLabel>אימייל</FieldLabel>
+          <FieldLabel className="text-right w-full">אימייל</FieldLabel>
           <Input dir="rtl" className="text-right" value={data?.email || ''} onChange={(e) => onChange('email', e.target.value)} />
         </Field>
       </div>
@@ -974,21 +974,21 @@ export default function OrganizationDetailPage() {
           <TabsContent value="settings" className="mt-4" dir="rtl">
             <Card className="text-right" dir="rtl">
               <CardHeader className="text-right">
-                <CardTitle>הגדרות ארגון</CardTitle>
-                <CardDescription>עדכון פרטים — מרכז ניהול ארגונים אופאל</CardDescription>
+                <CardTitle className="text-right w-full">הגדרות ארגון</CardTitle>
+                <CardDescription className="text-right w-full">עדכון פרטים — מרכז ניהול ארגונים אופאל</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={saveOrg} className="space-y-6 text-right">
-                  <Tabs defaultValue="org">
-                  <TabsList className="grid w-full grid-cols-3 [direction:ltr]">
+                  <Tabs defaultValue="org" dir="rtl">
+                  <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="billing">צורת חיוב</TabsTrigger>
                       <TabsTrigger value="contacts">אנשי קשר</TabsTrigger>
                     <TabsTrigger value="org">פרטי ארגון</TabsTrigger>
                     </TabsList>
-                    <TabsContent value="org" className="mt-4">
+                    <TabsContent value="org" className="mt-4 text-right w-full" dir="rtl">
                       <FieldGroup>
                         <Field>
-                          <FieldLabel>שם חברה *</FieldLabel>
+                          <FieldLabel className="text-right w-full">שם חברה *</FieldLabel>
                           <Input
                             dir="rtl"
                             className="text-right"
@@ -998,7 +998,7 @@ export default function OrganizationDetailPage() {
                           />
                         </Field>
                         <Field>
-                          <FieldLabel>ח.פ</FieldLabel>
+                          <FieldLabel className="text-right w-full">ח.פ</FieldLabel>
                           <Input
                             dir="rtl"
                             className="text-right"
@@ -1007,7 +1007,7 @@ export default function OrganizationDetailPage() {
                           />
                         </Field>
                         <Field>
-                          <FieldLabel>כתובת רשמית</FieldLabel>
+                          <FieldLabel className="text-right w-full">כתובת רשמית</FieldLabel>
                           <Input
                             dir="rtl"
                             className="text-right"
@@ -1016,7 +1016,7 @@ export default function OrganizationDetailPage() {
                           />
                         </Field>
                         <Field>
-                          <FieldLabel>אימייל חברה</FieldLabel>
+                          <FieldLabel className="text-right w-full">אימייל חברה</FieldLabel>
                           <Input
                             dir="rtl"
                             className="text-right"
@@ -1025,7 +1025,7 @@ export default function OrganizationDetailPage() {
                           />
                         </Field>
                         <Field>
-                          <FieldLabel>אימייל ליצירת קשר</FieldLabel>
+                          <FieldLabel className="text-right w-full">אימייל ליצירת קשר</FieldLabel>
                           <Input
                             dir="rtl"
                             className="text-right"
@@ -1034,7 +1034,7 @@ export default function OrganizationDetailPage() {
                           />
                         </Field>
                         <Field>
-                          <FieldLabel>טלפון ליצירת קשר</FieldLabel>
+                          <FieldLabel className="text-right w-full">טלפון ליצירת קשר</FieldLabel>
                           <Input
                             dir="rtl"
                             className="text-right"
@@ -1043,7 +1043,7 @@ export default function OrganizationDetailPage() {
                           />
                         </Field>
                         <Field>
-                          <FieldLabel>הערות</FieldLabel>
+                          <FieldLabel className="text-right w-full">הערות</FieldLabel>
                           <Textarea
                             dir="rtl"
                             className="text-right"
@@ -1053,7 +1053,7 @@ export default function OrganizationDetailPage() {
                           />
                         </Field>
                         <Field>
-                          <FieldLabel>תחום פעילות</FieldLabel>
+                          <FieldLabel className="text-right w-full">תחום פעילות</FieldLabel>
                           <Input
                             dir="rtl"
                             className="text-right"
@@ -1062,7 +1062,7 @@ export default function OrganizationDetailPage() {
                           />
                         </Field>
                         <Field>
-                          <FieldLabel>מספר עובדים (הערכה)</FieldLabel>
+                          <FieldLabel className="text-right w-full">מספר עובדים (הערכה)</FieldLabel>
                           <Input
                             type="number"
                             dir="rtl"
@@ -1090,10 +1090,10 @@ export default function OrganizationDetailPage() {
                         onChange={(f, v) => setContact('additionalContact', f, v)}
                       />
                     </TabsContent>
-                    <TabsContent value="billing" className="mt-4">
+                    <TabsContent value="billing" className="mt-4 text-right w-full" dir="rtl">
                       <FieldGroup>
                         <Field>
-                          <FieldLabel>סוג חיוב</FieldLabel>
+                          <FieldLabel className="text-right w-full">סוג חיוב</FieldLabel>
                           <select
                             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                             value={org.billingType === 'Centralized' ? 'Centralized' : 'Private'}
@@ -1110,7 +1110,7 @@ export default function OrganizationDetailPage() {
                           </select>
                         </Field>
                         <Field>
-                          <FieldLabel>מחיר חודשי לחבר (₪)</FieldLabel>
+                          <FieldLabel className="text-right w-full">מחיר חודשי לחבר (₪)</FieldLabel>
                           <Input
                             type="number"
                             min="0"
@@ -1124,7 +1124,7 @@ export default function OrganizationDetailPage() {
                           />
                         </Field>
                         <Field>
-                          <FieldLabel>שם מוצר לחברים (דוחות / ייצוא לספק)</FieldLabel>
+                          <FieldLabel className="text-right w-full">שם מוצר לחברים (דוחות / ייצוא לספק)</FieldLabel>
                           <select
                             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                             value={org.subscriptionProductName || ''}
@@ -1145,7 +1145,7 @@ export default function OrganizationDetailPage() {
                           </select>
                         </Field>
                         <Field>
-                          <FieldLabel>סטטוס ארגון</FieldLabel>
+                          <FieldLabel className="text-right w-full">סטטוס ארגון</FieldLabel>
                           <select
                             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                             value={org.status || 'active'}

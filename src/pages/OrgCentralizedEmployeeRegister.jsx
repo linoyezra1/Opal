@@ -4,6 +4,7 @@ import { Building2 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import {
   normalizeIsraeliIdDigitsInput,
+  validateIsraeliId,
   shouldShowIsraeliIdChecksumError,
   ISRAELI_ID_INVALID_MSG,
 } from '../utils/israeliId.js';
@@ -78,6 +79,7 @@ export default function OrgCentralizedEmployeeRegister() {
     if (!form.firstName.trim() || !form.lastName.trim()) { setFormError('נא למלא שם פרטי ושם משפחה'); return; }
     const idDigits = normalizeIsraeliIdDigitsInput(form.idNum);
     if (!idDigits) { setFormError('נא למלא תעודת זהות'); return; }
+    if (!validateIsraeliId(idDigits)) { setFormError(ISRAELI_ID_INVALID_MSG); return; }
     if (!form.dateOfBirth) { setFormError('נא למלא תאריך לידה'); return; }
 
     setSubmitting(true);
@@ -119,7 +121,7 @@ export default function OrgCentralizedEmployeeRegister() {
           <img
             src="/branding/opal-logo.jpeg"
             alt="אופאל"
-            className="mx-auto h-14 w-auto object-contain rounded-md bg-white px-2 py-1 border"
+            className="mx-auto h-16 w-auto rounded-md bg-white shadow-sm"
           />
         </div>
 

@@ -376,8 +376,8 @@ export default function OrganizationsDashboard() {
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto text-right" dir="rtl">
           <DialogHeader>
-            <DialogTitle>ארגון חדש</DialogTitle>
-            <DialogDescription>פרטי ארגון, אנשי קשר וצורת חיוב</DialogDescription>
+            <DialogTitle className="text-right w-full">ארגון חדש</DialogTitle>
+            <DialogDescription className="text-right w-full">פרטי ארגון, אנשי קשר וצורת חיוב</DialogDescription>
           </DialogHeader>
           <form onSubmit={submitAdd} className="space-y-4">
             <Tabs value={addTab} onValueChange={setAddTab} dir="rtl">
@@ -386,46 +386,46 @@ export default function OrganizationsDashboard() {
                 <TabsTrigger value="contacts">אנשי קשר</TabsTrigger>
                 <TabsTrigger value="billing">צורת חיוב</TabsTrigger>
               </TabsList>
-              <TabsContent value="org" className="mt-4">
+              <TabsContent value="org" className="mt-4 text-right w-full" dir="rtl">
                 <FieldGroup>
                   <Field>
-                    <FieldLabel>שם חברה *</FieldLabel>
+                    <FieldLabel className="text-right w-full">שם חברה *</FieldLabel>
                     <Input dir="rtl" className="text-right" value={addForm.companyName} onChange={(e) => setAddForm((p) => ({ ...p, companyName: e.target.value }))} required />
                   </Field>
                   <Field>
-                    <FieldLabel>ח.פ</FieldLabel>
+                    <FieldLabel className="text-right w-full">ח.פ</FieldLabel>
                     <Input dir="rtl" className="text-right" value={addForm.companyId} onChange={(e) => setAddForm((p) => ({ ...p, companyId: e.target.value }))} />
                   </Field>
                   <Field>
-                    <FieldLabel>כתובת רשמית</FieldLabel>
+                    <FieldLabel className="text-right w-full">כתובת רשמית</FieldLabel>
                     <Input dir="rtl" className="text-right" value={addForm.officialAddress} onChange={(e) => setAddForm((p) => ({ ...p, officialAddress: e.target.value }))} />
                   </Field>
                   <Field>
-                    <FieldLabel>אימייל חברה</FieldLabel>
+                    <FieldLabel className="text-right w-full">אימייל חברה</FieldLabel>
                     <Input dir="rtl" className="text-right" value={addForm.companyEmail} onChange={(e) => setAddForm((p) => ({ ...p, companyEmail: e.target.value }))} />
                   </Field>
                   <Field>
-                    <FieldLabel>אימייל ליצירת קשר</FieldLabel>
+                    <FieldLabel className="text-right w-full">אימייל ליצירת קשר</FieldLabel>
                     <Input dir="rtl" className="text-right" value={addForm.contactEmail} onChange={(e) => setAddForm((p) => ({ ...p, contactEmail: e.target.value }))} />
                   </Field>
                   <Field>
-                    <FieldLabel>טלפון ליצירת קשר</FieldLabel>
+                    <FieldLabel className="text-right w-full">טלפון ליצירת קשר</FieldLabel>
                     <Input dir="rtl" className="text-right" value={addForm.contactPhone} onChange={(e) => setAddForm((p) => ({ ...p, contactPhone: e.target.value }))} />
                   </Field>
                   <Field>
-                    <FieldLabel>מייל לאישור עובדים (HR)</FieldLabel>
+                    <FieldLabel className="text-right w-full">מייל לאישור עובדים (HR)</FieldLabel>
                     <Input dir="rtl" className="text-right" type="email" value={addForm.employeeApprovalEmail} onChange={(e) => setAddForm((p) => ({ ...p, employeeApprovalEmail: e.target.value }))} placeholder="לשליחת בקשות אישור עובדים חדשים" />
                   </Field>
                   <Field>
-                    <FieldLabel>הערות</FieldLabel>
+                    <FieldLabel className="text-right w-full">הערות</FieldLabel>
                     <Input dir="rtl" className="text-right" value={addForm.notes} onChange={(e) => setAddForm((p) => ({ ...p, notes: e.target.value }))} />
                   </Field>
                   <Field>
-                    <FieldLabel>תחום פעילות</FieldLabel>
+                    <FieldLabel className="text-right w-full">תחום פעילות</FieldLabel>
                     <Input dir="rtl" className="text-right" value={addForm.fieldOfActivity} onChange={(e) => setAddForm((p) => ({ ...p, fieldOfActivity: e.target.value }))} />
                   </Field>
                   <Field>
-                    <FieldLabel>מספר עובדים</FieldLabel>
+                    <FieldLabel className="text-right w-full">מספר עובדים</FieldLabel>
                     <Input dir="rtl" className="text-right" type="number" value={addForm.employeesCount} onChange={(e) => setAddForm((p) => ({ ...p, employeesCount: e.target.value }))} />
                   </Field>
                 </FieldGroup>
@@ -435,10 +435,10 @@ export default function OrganizationsDashboard() {
                 <ContactSection title="הנהלת חשבונות" data={addForm.accounting} onChange={(f, v) => setContact('add', 'accounting', f, v)} />
                 <ContactSection title="איש קשר נוסף" data={addForm.additionalContact} onChange={(f, v) => setContact('add', 'additionalContact', f, v)} />
               </TabsContent>
-              <TabsContent value="billing" className="mt-4">
+              <TabsContent value="billing" className="mt-4 text-right w-full" dir="rtl">
                 <FieldGroup>
                   <Field>
-                    <FieldLabel>סוג חיוב</FieldLabel>
+                    <FieldLabel className="text-right w-full">סוג חיוב</FieldLabel>
                     <select
                       className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                       value={addForm.billingType}
@@ -456,7 +456,7 @@ export default function OrganizationsDashboard() {
                     </select>
                   </Field>
                   <Field>
-                    <FieldLabel>מחיר חודשי לחבר (₪)</FieldLabel>
+                    <FieldLabel className="text-right w-full">מחיר חודשי לחבר (₪)</FieldLabel>
                     <Input
                       type="number"
                       min="0"
@@ -467,7 +467,7 @@ export default function OrganizationsDashboard() {
                     />
                   </Field>
                   <Field>
-                    <FieldLabel>שם מוצר לחברים (דוחות)</FieldLabel>
+                    <FieldLabel className="text-right w-full">שם מוצר לחברים (דוחות)</FieldLabel>
                     <select
                       className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                       value={addForm.subscriptionProductName}
@@ -486,7 +486,7 @@ export default function OrganizationsDashboard() {
                     </select>
                   </Field>
                   <Field>
-                    <FieldLabel>שיטת תמחור לארגון</FieldLabel>
+                    <FieldLabel className="text-right w-full">שיטת תמחור לארגון</FieldLabel>
                     <select
                       className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                       value={addForm.pricingMethod}
@@ -501,7 +501,7 @@ export default function OrganizationsDashboard() {
                   </Field>
                   {addForm.pricingMethod === 'priceList' ? (
                     <Field>
-                      <FieldLabel>בחר מחירון קיים</FieldLabel>
+                      <FieldLabel className="text-right w-full">בחר מחירון קיים</FieldLabel>
                       <select
                         className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                         value={addForm.priceListId || ''}
@@ -517,7 +517,7 @@ export default function OrganizationsDashboard() {
                     </Field>
                   ) : addForm.pricingMethod === 'singleProduct' ? (
                     <Field>
-                      <FieldLabel>בחר מוצר בודד</FieldLabel>
+                      <FieldLabel className="text-right w-full">בחר מוצר בודד</FieldLabel>
                       <select
                         className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                         value={addForm.singleProductId || ''}
@@ -532,7 +532,7 @@ export default function OrganizationsDashboard() {
                   ) : (
                     <div className="col-span-full space-y-2">
                       <div className="flex items-center justify-between">
-                        <FieldLabel>מחיר מותאם למוצר</FieldLabel>
+                        <FieldLabel className="text-right w-full">מחיר מותאם למוצר</FieldLabel>
                         <Button type="button" variant="link" className="h-auto p-0" onClick={() => addCustomPricingRow('add')}>
                           + הוסף מוצר
                         </Button>
@@ -582,8 +582,8 @@ export default function OrganizationsDashboard() {
       <Dialog open={!!editOrg} onOpenChange={(o) => !o && setEditOrg(null)}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto text-right" dir="rtl">
           <DialogHeader>
-            <DialogTitle>עריכת ארגון</DialogTitle>
-            <DialogDescription>עדכנו פרטים, אנשי קשר וחיוב</DialogDescription>
+            <DialogTitle className="text-right w-full">עריכת ארגון</DialogTitle>
+            <DialogDescription className="text-right w-full">עדכנו פרטים, אנשי קשר וחיוב</DialogDescription>
           </DialogHeader>
           {editOrg ? (
             <>
@@ -652,20 +652,20 @@ export default function OrganizationsDashboard() {
                   <TabsTrigger value="contacts">אנשי קשר</TabsTrigger>
                   <TabsTrigger value="billing">צורת חיוב</TabsTrigger>
                 </TabsList>
-                <TabsContent value="org" className="mt-4">
+                <TabsContent value="org" className="mt-4 text-right w-full" dir="rtl">
                   <FieldGroup>
-                    <Field><FieldLabel>שם חברה *</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.companyName || ''} onChange={(e) => setEditOrg((p) => ({ ...p, companyName: e.target.value }))} required /></Field>
-                    <Field><FieldLabel>ח.פ</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.companyId || ''} onChange={(e) => setEditOrg((p) => ({ ...p, companyId: e.target.value }))} /></Field>
-                    <Field><FieldLabel>כתובת רשמית</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.officialAddress || ''} onChange={(e) => setEditOrg((p) => ({ ...p, officialAddress: e.target.value }))} /></Field>
-                    <Field><FieldLabel>אימייל חברה</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.companyEmail || ''} onChange={(e) => setEditOrg((p) => ({ ...p, companyEmail: e.target.value }))} /></Field>
-                    <Field><FieldLabel>אימייל ליצירת קשר</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.contactEmail || ''} onChange={(e) => setEditOrg((p) => ({ ...p, contactEmail: e.target.value }))} /></Field>
-                    <Field><FieldLabel>טלפון ליצירת קשר</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.contactPhone || ''} onChange={(e) => setEditOrg((p) => ({ ...p, contactPhone: e.target.value }))} /></Field>
-                    <Field><FieldLabel>מייל לאישור עובדים (HR)</FieldLabel><Input dir="rtl" className="text-right" type="email" value={editOrg.employeeApprovalEmail || ''} onChange={(e) => setEditOrg((p) => ({ ...p, employeeApprovalEmail: e.target.value }))} placeholder="לשליחת בקשות אישור עובדים חדשים" /></Field>
-                    <Field><FieldLabel>הערות</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.notes || ''} onChange={(e) => setEditOrg((p) => ({ ...p, notes: e.target.value }))} /></Field>
-                    <Field><FieldLabel>תחום פעילות</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.fieldOfActivity || ''} onChange={(e) => setEditOrg((p) => ({ ...p, fieldOfActivity: e.target.value }))} /></Field>
-                    <Field><FieldLabel>מספר עובדים</FieldLabel><Input dir="rtl" className="text-right" type="number" value={editOrg.employeesCount || ''} onChange={(e) => setEditOrg((p) => ({ ...p, employeesCount: e.target.value }))} /></Field>
+                    <Field><FieldLabel className="text-right w-full">שם חברה *</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.companyName || ''} onChange={(e) => setEditOrg((p) => ({ ...p, companyName: e.target.value }))} required /></Field>
+                    <Field><FieldLabel className="text-right w-full">ח.פ</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.companyId || ''} onChange={(e) => setEditOrg((p) => ({ ...p, companyId: e.target.value }))} /></Field>
+                    <Field><FieldLabel className="text-right w-full">כתובת רשמית</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.officialAddress || ''} onChange={(e) => setEditOrg((p) => ({ ...p, officialAddress: e.target.value }))} /></Field>
+                    <Field><FieldLabel className="text-right w-full">אימייל חברה</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.companyEmail || ''} onChange={(e) => setEditOrg((p) => ({ ...p, companyEmail: e.target.value }))} /></Field>
+                    <Field><FieldLabel className="text-right w-full">אימייל ליצירת קשר</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.contactEmail || ''} onChange={(e) => setEditOrg((p) => ({ ...p, contactEmail: e.target.value }))} /></Field>
+                    <Field><FieldLabel className="text-right w-full">טלפון ליצירת קשר</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.contactPhone || ''} onChange={(e) => setEditOrg((p) => ({ ...p, contactPhone: e.target.value }))} /></Field>
+                    <Field><FieldLabel className="text-right w-full">מייל לאישור עובדים (HR)</FieldLabel><Input dir="rtl" className="text-right" type="email" value={editOrg.employeeApprovalEmail || ''} onChange={(e) => setEditOrg((p) => ({ ...p, employeeApprovalEmail: e.target.value }))} placeholder="לשליחת בקשות אישור עובדים חדשים" /></Field>
+                    <Field><FieldLabel className="text-right w-full">הערות</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.notes || ''} onChange={(e) => setEditOrg((p) => ({ ...p, notes: e.target.value }))} /></Field>
+                    <Field><FieldLabel className="text-right w-full">תחום פעילות</FieldLabel><Input dir="rtl" className="text-right" value={editOrg.fieldOfActivity || ''} onChange={(e) => setEditOrg((p) => ({ ...p, fieldOfActivity: e.target.value }))} /></Field>
+                    <Field><FieldLabel className="text-right w-full">מספר עובדים</FieldLabel><Input dir="rtl" className="text-right" type="number" value={editOrg.employeesCount || ''} onChange={(e) => setEditOrg((p) => ({ ...p, employeesCount: e.target.value }))} /></Field>
                     <Field>
-                      <FieldLabel>סטטוס ארגון</FieldLabel>
+                      <FieldLabel className="text-right w-full">סטטוס ארגון</FieldLabel>
                       <select
                         className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                         value={editOrg.status || 'active'}
@@ -683,10 +683,10 @@ export default function OrganizationsDashboard() {
                   <ContactSection title="הנהלת חשבונות" data={editOrg.accounting || {}} onChange={(f, v) => setContact('edit', 'accounting', f, v)} />
                   <ContactSection title="איש קשר נוסף" data={editOrg.additionalContact || {}} onChange={(f, v) => setContact('edit', 'additionalContact', f, v)} />
                 </TabsContent>
-                <TabsContent value="billing" className="mt-4">
+                <TabsContent value="billing" className="mt-4 text-right w-full" dir="rtl">
                   <FieldGroup>
                     <Field>
-                      <FieldLabel>סוג חיוב</FieldLabel>
+                      <FieldLabel className="text-right w-full">סוג חיוב</FieldLabel>
                       <select
                         className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                         value={editOrg.billingType === 'Centralized' ? 'Centralized' : 'Private'}
@@ -703,7 +703,7 @@ export default function OrganizationsDashboard() {
                       </select>
                     </Field>
                     <Field>
-                      <FieldLabel>מחיר חודשי לחבר (₪)</FieldLabel>
+                      <FieldLabel className="text-right w-full">מחיר חודשי לחבר (₪)</FieldLabel>
                       <Input
                         type="number"
                         min="0"
@@ -714,7 +714,7 @@ export default function OrganizationsDashboard() {
                       />
                     </Field>
                     <Field>
-                      <FieldLabel>שם מוצר לחברים (דוחות)</FieldLabel>
+                      <FieldLabel className="text-right w-full">שם מוצר לחברים (דוחות)</FieldLabel>
                       <select
                         className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                         value={editOrg.subscriptionProductName || ''}
@@ -733,7 +733,7 @@ export default function OrganizationsDashboard() {
                       </select>
                     </Field>
                     <Field>
-                      <FieldLabel>שיטת תמחור לארגון</FieldLabel>
+                      <FieldLabel className="text-right w-full">שיטת תמחור לארגון</FieldLabel>
                       <select
                         className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                         value={editOrg.pricingMethod || 'priceList'}
@@ -750,7 +750,7 @@ export default function OrganizationsDashboard() {
                     </Field>
                     {(editOrg.pricingMethod || 'priceList') === 'priceList' ? (
                       <Field>
-                        <FieldLabel>בחר מחירון קיים</FieldLabel>
+                        <FieldLabel className="text-right w-full">בחר מחירון קיים</FieldLabel>
                         <select
                           className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                           value={editOrg.priceListId || ''}
@@ -766,7 +766,7 @@ export default function OrganizationsDashboard() {
                       </Field>
                     ) : editOrg.pricingMethod === 'singleProduct' ? (
                       <Field>
-                        <FieldLabel>בחר מוצר בודד</FieldLabel>
+                        <FieldLabel className="text-right w-full">בחר מוצר בודד</FieldLabel>
                         <select
                           className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                           value={editOrg.singleProductId || ''}
@@ -781,7 +781,7 @@ export default function OrganizationsDashboard() {
                     ) : (
                       <div className="col-span-full space-y-2">
                         <div className="flex items-center justify-between">
-                          <FieldLabel>מחיר מותאם למוצר</FieldLabel>
+                          <FieldLabel className="text-right w-full">מחיר מותאם למוצר</FieldLabel>
                           <Button type="button" variant="link" className="h-auto p-0" onClick={() => addCustomPricingRow('edit')}>
                             + הוסף מוצר
                           </Button>

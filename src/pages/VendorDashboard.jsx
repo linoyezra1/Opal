@@ -91,16 +91,18 @@ function VendorFormFields({ data, setData }) {
   const form = data;
   return (
     <>
-      <Tabs defaultValue="details" className="mt-2">
+      <Tabs defaultValue="details" className="mt-2" dir="rtl">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="details">פרטים כלליים</TabsTrigger>
           <TabsTrigger value="bank">פרטי בנק</TabsTrigger>
         </TabsList>
-        <TabsContent value="details" className="space-y-4 mt-4">
+        <TabsContent value="details" className="space-y-4 mt-4 text-right w-full" dir="rtl">
           <FieldGroup>
             <Field>
-              <FieldLabel>שם ספק *</FieldLabel>
+              <FieldLabel className="text-right w-full">שם ספק *</FieldLabel>
               <Input
+                dir="rtl"
+                className="text-right"
                 value={form.vendorName}
                 onChange={(e) => setForm((p) => ({ ...p, vendorName: e.target.value }))}
                 placeholder="שם החברה"
@@ -109,97 +111,99 @@ function VendorFormFields({ data, setData }) {
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
-                <FieldLabel>ח.פ / מספר זיהוי *</FieldLabel>
+                <FieldLabel className="text-right w-full">ח.פ / מספר זיהוי *</FieldLabel>
                 <Input
+                  dir="rtl"
+                  className="text-right"
                   value={form.idNum}
                   onChange={(e) => setForm((p) => ({ ...p, idNum: e.target.value }))}
                   required
                 />
               </Field>
               <Field>
-                <FieldLabel>טלפון</FieldLabel>
-                <Input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} dir="ltr" className="text-start" />
+                <FieldLabel className="text-right w-full">טלפון</FieldLabel>
+                <Input dir="rtl" className="text-right" value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
               </Field>
             </div>
             <Field>
-              <FieldLabel>אימייל</FieldLabel>
+              <FieldLabel className="text-right w-full">אימייל</FieldLabel>
               <Input
                 type="email"
+                dir="rtl"
+                className="text-right"
                 value={form.email}
                 onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-                dir="ltr"
-                className="text-start"
               />
             </Field>
             <Field>
-              <FieldLabel>כתובת</FieldLabel>
-              <Input value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
+              <FieldLabel className="text-right w-full">כתובת</FieldLabel>
+              <Input dir="rtl" className="text-right" value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
             </Field>
             <div className="rounded-md border p-3 space-y-3">
-              <p className="text-sm font-semibold">איש קשר</p>
+              <p className="text-sm font-semibold text-right w-full">איש קשר</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field>
-                  <FieldLabel>שם</FieldLabel>
-                  <Input value={form.contactPerson?.name || ''} onChange={(e) => setForm((p) => ({ ...p, contactPerson: { ...(p.contactPerson || {}), name: e.target.value } }))} />
+                  <FieldLabel className="text-right w-full">שם</FieldLabel>
+                  <Input dir="rtl" className="text-right" value={form.contactPerson?.name || ''} onChange={(e) => setForm((p) => ({ ...p, contactPerson: { ...(p.contactPerson || {}), name: e.target.value } }))} />
                 </Field>
                 <Field>
-                  <FieldLabel>תפקיד</FieldLabel>
-                  <Input value={form.contactPerson?.role || ''} onChange={(e) => setForm((p) => ({ ...p, contactPerson: { ...(p.contactPerson || {}), role: e.target.value } }))} />
+                  <FieldLabel className="text-right w-full">תפקיד</FieldLabel>
+                  <Input dir="rtl" className="text-right" value={form.contactPerson?.role || ''} onChange={(e) => setForm((p) => ({ ...p, contactPerson: { ...(p.contactPerson || {}), role: e.target.value } }))} />
                 </Field>
                 <Field>
-                  <FieldLabel>טלפון</FieldLabel>
-                  <Input dir="ltr" className="text-start" value={form.contactPerson?.phone || ''} onChange={(e) => setForm((p) => ({ ...p, contactPerson: { ...(p.contactPerson || {}), phone: e.target.value } }))} />
+                  <FieldLabel className="text-right w-full">טלפון</FieldLabel>
+                  <Input dir="rtl" className="text-right" value={form.contactPerson?.phone || ''} onChange={(e) => setForm((p) => ({ ...p, contactPerson: { ...(p.contactPerson || {}), phone: e.target.value } }))} />
                 </Field>
                 <Field>
-                  <FieldLabel>דוא״ל</FieldLabel>
-                  <Input type="email" dir="ltr" className="text-start" value={form.contactPerson?.email || ''} onChange={(e) => setForm((p) => ({ ...p, contactPerson: { ...(p.contactPerson || {}), email: e.target.value } }))} />
+                  <FieldLabel className="text-right w-full">דוא״ל</FieldLabel>
+                  <Input type="email" dir="rtl" className="text-right" value={form.contactPerson?.email || ''} onChange={(e) => setForm((p) => ({ ...p, contactPerson: { ...(p.contactPerson || {}), email: e.target.value } }))} />
                 </Field>
               </div>
             </div>
             <div className="rounded-md border p-3 space-y-3">
-              <p className="text-sm font-semibold">הנהלת חשבונות</p>
+              <p className="text-sm font-semibold text-right w-full">הנהלת חשבונות</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field>
-                  <FieldLabel>שם</FieldLabel>
-                  <Input value={form.accounting?.name || ''} onChange={(e) => setForm((p) => ({ ...p, accounting: { ...(p.accounting || {}), name: e.target.value } }))} />
+                  <FieldLabel className="text-right w-full">שם</FieldLabel>
+                  <Input dir="rtl" className="text-right" value={form.accounting?.name || ''} onChange={(e) => setForm((p) => ({ ...p, accounting: { ...(p.accounting || {}), name: e.target.value } }))} />
                 </Field>
                 <Field>
-                  <FieldLabel>טלפון</FieldLabel>
-                  <Input dir="ltr" className="text-start" value={form.accounting?.phone || ''} onChange={(e) => setForm((p) => ({ ...p, accounting: { ...(p.accounting || {}), phone: e.target.value } }))} />
+                  <FieldLabel className="text-right w-full">טלפון</FieldLabel>
+                  <Input dir="rtl" className="text-right" value={form.accounting?.phone || ''} onChange={(e) => setForm((p) => ({ ...p, accounting: { ...(p.accounting || {}), phone: e.target.value } }))} />
                 </Field>
                 <Field className="sm:col-span-2">
-                  <FieldLabel>דוא״ל</FieldLabel>
-                  <Input type="email" dir="ltr" className="text-start" value={form.accounting?.email || ''} onChange={(e) => setForm((p) => ({ ...p, accounting: { ...(p.accounting || {}), email: e.target.value } }))} />
+                  <FieldLabel className="text-right w-full">דוא״ל</FieldLabel>
+                  <Input type="email" dir="rtl" className="text-right" value={form.accounting?.email || ''} onChange={(e) => setForm((p) => ({ ...p, accounting: { ...(p.accounting || {}), email: e.target.value } }))} />
                 </Field>
               </div>
             </div>
           </FieldGroup>
         </TabsContent>
-        <TabsContent value="bank" className="space-y-4 mt-4">
+        <TabsContent value="bank" className="space-y-4 mt-4 text-right w-full" dir="rtl">
           <FieldGroup>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
-                <FieldLabel>שם בנק</FieldLabel>
-                <Input value={form.bankName} onChange={(e) => setForm((p) => ({ ...p, bankName: e.target.value }))} />
+                <FieldLabel className="text-right w-full">שם בנק</FieldLabel>
+                <Input dir="rtl" className="text-right" value={form.bankName} onChange={(e) => setForm((p) => ({ ...p, bankName: e.target.value }))} />
               </Field>
               <Field>
-                <FieldLabel>מספר בנק</FieldLabel>
-                <Input value={form.bankNum} onChange={(e) => setForm((p) => ({ ...p, bankNum: e.target.value }))} dir="ltr" />
+                <FieldLabel className="text-right w-full">מספר בנק</FieldLabel>
+                <Input dir="rtl" className="text-right" value={form.bankNum} onChange={(e) => setForm((p) => ({ ...p, bankNum: e.target.value }))} />
               </Field>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
-                <FieldLabel>מספר סניף</FieldLabel>
-                <Input value={form.branchNum} onChange={(e) => setForm((p) => ({ ...p, branchNum: e.target.value }))} dir="ltr" />
+                <FieldLabel className="text-right w-full">מספר סניף</FieldLabel>
+                <Input dir="rtl" className="text-right" value={form.branchNum} onChange={(e) => setForm((p) => ({ ...p, branchNum: e.target.value }))} />
               </Field>
               <Field>
-                <FieldLabel>מספר חשבון</FieldLabel>
-                <Input value={form.accountNum} onChange={(e) => setForm((p) => ({ ...p, accountNum: e.target.value }))} dir="ltr" />
+                <FieldLabel className="text-right w-full">מספר חשבון</FieldLabel>
+                <Input dir="rtl" className="text-right" value={form.accountNum} onChange={(e) => setForm((p) => ({ ...p, accountNum: e.target.value }))} />
               </Field>
             </div>
             <Field>
-              <FieldLabel>שם בעל החשבון</FieldLabel>
-              <Input value={form.accountHolder} onChange={(e) => setForm((p) => ({ ...p, accountHolder: e.target.value }))} />
+              <FieldLabel className="text-right w-full">שם בעל החשבון</FieldLabel>
+              <Input dir="rtl" className="text-right" value={form.accountHolder} onChange={(e) => setForm((p) => ({ ...p, accountHolder: e.target.value }))} />
             </Field>
           </FieldGroup>
         </TabsContent>

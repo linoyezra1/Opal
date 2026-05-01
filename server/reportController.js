@@ -390,6 +390,8 @@ export async function buildAgentCommissionPayload(deals) {
       provider: normalizeProviderName(d),
       billingType,
       paymentStatus: String(d.paymentStatus || ''),
+      status: String(d.status || ''),
+      subscriptionStatus: String(d.subscriptionStatus || ''),
     };
   });
   const totalCommission = rows.reduce((s, r) => s + r.commissionAmount, 0);

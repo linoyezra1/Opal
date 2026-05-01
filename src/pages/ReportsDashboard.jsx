@@ -96,7 +96,7 @@ export default function ReportsDashboard() {
   const [agentProviderFilter, setAgentProviderFilter] = useState('');
   const [agentProductFilter, setAgentProductFilter] = useState('');
   const [agentBillingTypeFilter, setAgentBillingTypeFilter] = useState('');
-  const [agentPaymentStatusFilter, setAgentPaymentStatusFilter] = useState('all');
+  const [agentStatusFilter, setAgentStatusFilter] = useState('all');
   const [agentLoading, setAgentLoading] = useState(false);
   const [agentErr, setAgentErr] = useState('');
   const [agentData, setAgentData] = useState(null);
@@ -311,17 +311,18 @@ export default function ReportsDashboard() {
       const provider = String(r.provider || '').trim();
       const productName = String(r.productName || '').trim();
       const billingType = String(r.billingType || '').trim();
-      const paymentStatus = String(r.paymentStatus || '').toLowerCase();
-      const isPaid = /paid|success|approved|succeeded|completed/.test(paymentStatus);
+      const isCancelled =
+        r.status === 'canceled' ||
+        String(r.subscriptionStatus || '').toLowerCase() === 'cancelled';
 
       if (agentProviderFilter && provider !== agentProviderFilter) return false;
       if (agentProductFilter && productName !== agentProductFilter) return false;
       if (agentBillingTypeFilter && billingType !== agentBillingTypeFilter) return false;
-      if (agentPaymentStatusFilter === 'paid' && !isPaid) return false;
-      if (agentPaymentStatusFilter === 'unpaid' && isPaid) return false;
+      if (agentStatusFilter === 'cancelled' && !isCancelled) return false;
+      if (agentStatusFilter === 'active' && isCancelled) return false;
       return true;
     });
-  }, [agentData, agentProviderFilter, agentProductFilter, agentBillingTypeFilter, agentPaymentStatusFilter]);
+  }, [agentData, agentProviderFilter, agentProductFilter, agentBillingTypeFilter, agentStatusFilter]);
 
   const filteredAgentTotals = useMemo(() => {
     return filteredAgentRows.reduce(
@@ -521,8 +522,8 @@ export default function ReportsDashboard() {
                         type: 'select',
                         options: [
                           { value: 'all', label: 'הכל' },
-                          { value: 'paid', label: 'שולם' },
-                          { value: 'unpaid', label: 'לא שולם' },
+                          { value: 'active', label: 'פעילים' },
+                          { value: 'cancelled', label: 'מבוטלים' },
                         ],
                       },
                     ]}
@@ -530,19 +531,19 @@ export default function ReportsDashboard() {
                       provider: agentProviderFilter,
                       product: agentProductFilter,
                       billingType: agentBillingTypeFilter,
-                      status: agentPaymentStatusFilter,
+                      status: agentStatusFilter,
                     }}
                     onChange={(next) => {
                       setAgentProviderFilter(String(next.provider || ''));
                       setAgentProductFilter(String(next.product || ''));
                       setAgentBillingTypeFilter(String(next.billingType || ''));
-                      setAgentPaymentStatusFilter(String(next.status || 'all'));
+                      setAgentStatusFilter(String(next.status || 'all'));
                     }}
                     onClear={() => {
                       setAgentProviderFilter('');
                       setAgentProductFilter('');
                       setAgentBillingTypeFilter('');
-                      setAgentPaymentStatusFilter('all');
+                      setAgentStatusFilter('all');
                     }}
                     resultsCount={filteredAgentRows.length}
                     totalCount={(agentData?.rows || []).length}
