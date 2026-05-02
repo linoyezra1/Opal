@@ -139,6 +139,8 @@ export default function OrganizationDetailPage() {
   const [cancelOrgLoading, setCancelOrgLoading] = useState(false);
   const [cancelOrgErr, setCancelOrgErr] = useState('');
 
+  const [priceLists, setPriceLists] = useState([]);
+
   // ── Billing Snapshots (גבייה) ──
   const [snapshots, setSnapshots] = useState([]);
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
@@ -170,7 +172,7 @@ export default function OrganizationDetailPage() {
     setLoading(true);
     setErr('');
     try {
-      const [oRes, dRes, prRes, payRes] = await Promise.all([
+      const [oRes, dRes, prRes, payRes, plRes] = await Promise.all([
         fetch(`${API_BASE}/api/admin/organizations/${encodeURIComponent(id)}`, {
           headers: { Authorization: `Bearer ${token}` },
         }).then((r) => r.json()),
@@ -183,12 +185,16 @@ export default function OrganizationDetailPage() {
         fetch(`${API_BASE}/api/admin/organizations/${encodeURIComponent(id)}/payments`, {
           headers: { Authorization: `Bearer ${token}` },
         }).then((r) => r.json()),
+        fetch(`${API_BASE}/api/admin/price-lists`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then((r) => r.json()),
       ]);
       if (!oRes.success) throw new Error(oRes.error || 'טעינת ארגון נכשלה');
       setOrg(oRes.organization);
       setDeals(Array.isArray(dRes.deals) ? dRes.deals : []);
       setProducts(Array.isArray(prRes?.products) ? prRes.products : []);
       setPayments(Array.isArray(payRes?.rows) ? payRes.rows : []);
+      if (plRes?.success) setPriceLists(Array.isArray(plRes.lists) ? plRes.lists : []);
     } catch (e) {
       setErr(e.message || 'שגיאה');
     } finally {
@@ -316,6 +322,31 @@ export default function OrganizationDetailPage() {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(Number(amount || 0));
+  }
+
+  function handlePriceListSelect(plId) {
+    if (!plId) {
+      setOrg((p) => ({ ...p, priceListId: '' }));
+      return;
+    }
+    const pl = priceLists.find((l) => l.id === plId);
+    if (!pl) {
+      setOrg((p) => ({ ...p, priceListId: plId }));
+      return;
+    }
+    const firstLine = (pl.lines || [])[0];
+    if (!firstLine) {
+      setOrg((p) => ({ ...p, priceListId: plId }));
+      return;
+    }
+    const prod = (products || []).find((p) => String(p.id) === String(firstLine.productId));
+    const productName = String(prod?.productName || prod?.name || '').trim();
+    setOrg((p) => ({
+      ...p,
+      priceListId: plId,
+      monthlyPricePerMember: firstLine.retailPrice,
+      ...(productName && { subscriptionProductName: productName }),
+    }));
   }
 
   function formatDateDdMmYyyy(value) {
@@ -1092,6 +1123,7 @@ export default function OrganizationDetailPage() {
                     </TabsContent>
                     <TabsContent value="billing" className="mt-4 text-right w-full" dir="rtl">
                       <FieldGroup>
+                        {/* 1. סוג חיוב */}
                         <Field>
                           <FieldLabel className="text-right w-full">סוג חיוב</FieldLabel>
                           <select
@@ -1109,28 +1141,63 @@ export default function OrganizationDetailPage() {
                             <option value="Centralized">תשלום מרוכז</option>
                           </select>
                         </Field>
+
+                        {/* 2. מחירון — Option B: inherits product + price automatically */}
                         <Field>
-                          <FieldLabel className="text-right w-full">מחיר חודשי לחבר (₪)</FieldLabel>
+                          <FieldLabel className="text-right w-full">מחירון מקושר (אופציונלי)</FieldLabel>
+                          <select
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            value={org.priceListId || ''}
+                            onChange={(e) => handlePriceListSelect(e.target.value)}
+                          >
+                            <option value="">— ללא מחירון —</option>
+                            {priceLists.map((pl) => (
+                              <option key={pl.id} value={pl.id}>
+                                {pl.listName}{pl.orgName ? ` (${pl.orgName})` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+
+                        {/* 3. שם ספק — auto-filled from selected product, read-only */}
+                        <Field>
+                          <FieldLabel className="text-right w-full">שם ספק (אוטומטי מהמוצר)</FieldLabel>
                           <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
                             dir="rtl"
-                            className="text-right"
-                            value={org.monthlyPricePerMember ?? ''}
-                            onChange={(e) =>
-                              setOrg((p) => ({ ...p, monthlyPricePerMember: e.target.value }))
-                            }
+                            className="text-right bg-muted"
+                            readOnly
+                            value={(() => {
+                              const prod = (products || []).find(
+                                (p) => String(p.productName || p.name || '').trim() === (org.subscriptionProductName || '')
+                              );
+                              return String(prod?.provider?.vendorName || '');
+                            })()}
+                            placeholder="ייבחר אוטומטית לפי המוצר"
                           />
                         </Field>
+
+                        {/* 4. שם מוצר — Option A: selecting product auto-fills via product data */}
                         <Field>
                           <FieldLabel className="text-right w-full">שם מוצר לחברים (דוחות / ייצוא לספק)</FieldLabel>
                           <select
                             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                             value={org.subscriptionProductName || ''}
-                            onChange={(e) =>
-                              setOrg((p) => ({ ...p, subscriptionProductName: e.target.value }))
-                            }
+                            onChange={(e) => {
+                              const name = e.target.value;
+                              const prod = (products || []).find(
+                                (p) => String(p.productName || p.name || '').trim() === name
+                              );
+                              setOrg((p) => ({
+                                ...p,
+                                subscriptionProductName: name,
+                                // auto-clear price list link when product is chosen manually
+                                priceListId: '',
+                                // auto-fill price from product's providerCost if no price set yet
+                                ...(prod?.providerCost != null && !p.monthlyPricePerMember
+                                  ? { monthlyPricePerMember: prod.providerCost }
+                                  : {}),
+                              }));
+                            }}
                           >
                             <option value="">בחר מוצר</option>
                             {products.map((pr) => {
@@ -1144,6 +1211,24 @@ export default function OrganizationDetailPage() {
                             })}
                           </select>
                         </Field>
+
+                        {/* 5. מחיר מנוי */}
+                        <Field>
+                          <FieldLabel className="text-right w-full">מחיר מנוי חודשי לחבר (₪)</FieldLabel>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            dir="rtl"
+                            className="text-right"
+                            value={org.monthlyPricePerMember ?? ''}
+                            onChange={(e) =>
+                              setOrg((p) => ({ ...p, monthlyPricePerMember: e.target.value }))
+                            }
+                          />
+                        </Field>
+
+                        {/* 6. סטטוס ארגון */}
                         <Field>
                           <FieldLabel className="text-right w-full">סטטוס ארגון</FieldLabel>
                           <select

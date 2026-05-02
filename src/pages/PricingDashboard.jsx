@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Edit2, Trash2, Receipt } from 'lucide-react';
+import { Plus, Edit2, Trash2, Receipt, ChevronDown, ChevronUp, Building2 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -23,6 +23,13 @@ import { Spinner } from '../components/ui/spinner.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
+
+function formatCurrency(v) {
+  return new Intl.NumberFormat('he-IL', {
+    style: 'currency', currency: 'ILS',
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  }).format(Number(v || 0));
+}
 
 const emptyLine = () => ({
   productId: '',
@@ -50,6 +57,21 @@ export default function PricingDashboard() {
   const [orgName, setOrgName] = useState('');
   const [lines, setLines] = useState([emptyLine()]);
   const [deleteId, setDeleteId] = useState(null);
+  const [expandedRows, setExpandedRows] = useState(new Set());
+
+  function toggleExpand(id) {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  const productMap = useMemo(
+    () => new Map((products || []).map((p) => [String(p.id), p])),
+    [products]
+  );
+
   const filteredLists = useMemo(() => {
     const q = String(search || '').trim().toLowerCase();
     return (lists || []).filter((row) => {
@@ -519,39 +541,103 @@ export default function PricingDashboard() {
               <div className="overflow-x-auto rounded-md border">
                 <Table>
                   <TableHeader>
-                    <TableRow>
+                    <TableRow className="[&_th]:text-right">
+                      <TableHead className="w-8" />
                       <TableHead>שם מחירון</TableHead>
                       <TableHead>ארגון</TableHead>
+                      <TableHead>תאריך עדכון</TableHead>
                       <TableHead>מוצרים</TableHead>
-                      <TableHead className="w-36">פעולות</TableHead>
+                      <TableHead className="w-28">פעולות</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredLists.map((row) => {
+                      const isExpanded = expandedRows.has(row.id);
+                      const dateLabel = row.updatedAt
+                        ? new Date(row.updatedAt).toLocaleDateString('he-IL')
+                        : row.createdAt
+                          ? new Date(row.createdAt).toLocaleDateString('he-IL')
+                          : '—';
                       return (
-                        <TableRow key={row.id}>
-                          <TableCell className="font-medium">{row.listName}</TableCell>
-                          <TableCell>{row.orgName || '—'}</TableCell>
-                          <TableCell>
-                            <Badge variant="secondary">{(row.lines || []).length}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <Button variant="ghost" size="icon" type="button" onClick={() => openEdit(row)} aria-label="ערוך">
-                                <Edit2 className="size-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                type="button"
-                                onClick={() => setDeleteId(row.id)}
-                                aria-label="מחק"
-                              >
-                                <Trash2 className="size-4 text-destructive" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
+                        <React.Fragment key={row.id}>
+                          <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => toggleExpand(row.id)}>
+                            <TableCell className="w-8 text-center">
+                              {isExpanded
+                                ? <ChevronUp className="size-4 text-muted-foreground" />
+                                : <ChevronDown className="size-4 text-muted-foreground" />}
+                            </TableCell>
+                            <TableCell className="font-medium">{row.listName}</TableCell>
+                            <TableCell>
+                              {row.orgName
+                                ? <Badge variant="outline" className="gap-1"><Building2 className="size-3" />{row.orgName}</Badge>
+                                : <span className="text-muted-foreground text-sm">—</span>}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{dateLabel}</TableCell>
+                            <TableCell>
+                              <Badge variant="secondary">{(row.lines || []).length}</Badge>
+                            </TableCell>
+                            <TableCell onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="icon" type="button" onClick={() => openEdit(row)} aria-label="ערוך">
+                                  <Edit2 className="size-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" type="button" onClick={() => setDeleteId(row.id)} aria-label="מחק">
+                                  <Trash2 className="size-4 text-destructive" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+
+                          {isExpanded && (
+                            <TableRow className="bg-muted/30 hover:bg-muted/30">
+                              <TableCell colSpan={6} className="p-0">
+                                <div className="px-6 py-3 space-y-2">
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">פרטי מוצרים במחירון</p>
+                                  <div className="rounded-md border overflow-x-auto bg-background">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow className="[&_th]:text-right">
+                                          <TableHead>מוצר + SKU</TableHead>
+                                          <TableHead>מחיר קמעוני</TableHead>
+                                          <TableHead>עלות ספק</TableHead>
+                                          <TableHead>עמלת סוכן</TableHead>
+                                          <TableHead>מחיר מיוחד (קמעוני)</TableHead>
+                                          <TableHead>רווח נקי</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {(row.lines || []).length === 0 ? (
+                                          <TableRow>
+                                            <TableCell colSpan={6} className="text-center text-muted-foreground text-sm py-3">אין מוצרים</TableCell>
+                                          </TableRow>
+                                        ) : (
+                                          (row.lines || []).map((line, li) => {
+                                            const prod = productMap.get(String(line.productId));
+                                            const prodName = prod?.productName || prod?.name || '—';
+                                            const sku = prod?.sku || '—';
+                                            return (
+                                              <TableRow key={li}>
+                                                <TableCell>
+                                                  <div className="font-medium">{prodName}</div>
+                                                  <div className="text-xs text-muted-foreground font-mono">{sku}</div>
+                                                </TableCell>
+                                                <TableCell className="tabular-nums">{formatCurrency(line.retailPrice)}</TableCell>
+                                                <TableCell className="tabular-nums text-muted-foreground">{formatCurrency(line.vendorCost)}</TableCell>
+                                                <TableCell className="tabular-nums text-muted-foreground">{formatCurrency(line.defaultAgentCommission)}</TableCell>
+                                                <TableCell className="tabular-nums font-medium text-primary">{formatCurrency(line.retailPrice)}</TableCell>
+                                                <TableCell className="tabular-nums font-semibold">{formatCurrency(line.netProfit)}</TableCell>
+                                              </TableRow>
+                                            );
+                                          })
+                                        )}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </React.Fragment>
                       );
                     })}
                   </TableBody>

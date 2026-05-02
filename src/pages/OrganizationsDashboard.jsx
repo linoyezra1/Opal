@@ -461,9 +461,9 @@ export default function OrganizationsDashboard() {
           <form onSubmit={submitAdd} className="space-y-4">
             <Tabs value={addTab} onValueChange={setAddTab} dir="rtl">
               <TabsList className="grid w-full grid-cols-3" dir="rtl">
-                <TabsTrigger value="org">פרטי ארגון</TabsTrigger>
-                <TabsTrigger value="contacts">אנשי קשר</TabsTrigger>
                 <TabsTrigger value="billing">תמחור מוצרים</TabsTrigger>
+                <TabsTrigger value="contacts">אנשי קשר</TabsTrigger>
+                <TabsTrigger value="org">פרטי ארגון</TabsTrigger>
               </TabsList>
               <TabsContent value="org" className="mt-4 text-right w-full" dir="rtl">
                 <FieldGroup>
@@ -992,9 +992,10 @@ export default function OrganizationsDashboard() {
                           <TableHead>שם חברה</TableHead>
                           <TableHead>ח.פ</TableHead>
                           <TableHead>סוג חיוב</TableHead>
-                          <TableHead>חברים</TableHead>
-                          <TableHead>מחיר לחבר</TableHead>
+                          <TableHead>עובדים</TableHead>
+                          <TableHead>מחיר לעובד</TableHead>
                           <TableHead>אימייל</TableHead>
+                          <TableHead>טלפון</TableHead>
                           <TableHead className="w-40">פעולות</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1033,6 +1034,9 @@ export default function OrganizationsDashboard() {
                                 <TableCell dir="ltr" className="text-start text-sm">
                                   {r.contactEmail || r.companyEmail || '—'}
                                 </TableCell>
+                                                                <TableCell dir="ltr" className="text-start text-sm">
+                                                                  {r.contactPhone || r.contactPhone || '—'}
+                                                                </TableCell>
                                 <TableCell>
                                   <div className="flex items-center gap-1 flex-wrap">
                                     <Button variant="outline" size="sm" type="button" asChild>

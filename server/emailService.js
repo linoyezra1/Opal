@@ -211,7 +211,7 @@ function buildBeneficiaryCompletionHtml(payload, logoDataUri = '') {
           <thead>
             <tr>
               <th align="right" style="padding-bottom:8px;color:#999;font-size:12px;font-weight:600;text-align:right;direction:rtl;padding-left:12px;font-family:${FONT_STACK};">שם</th>
-              <th align="right" style="padding-bottom:8px;color:#999;font-size:12px;font-weight:600;text-align:right;direction:rtl;padding-right:12px;padding-left:12px;font-family:${FONT_STACK};">שירות</th>
+
               <th align="right" style="padding-bottom:8px;color:#999;font-size:12px;font-weight:600;text-align:right;direction:rtl;font-family:${FONT_STACK};">ת.ז</th>
             </tr>
           </thead>
