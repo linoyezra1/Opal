@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Building2, Plus, Edit2, Archive, Copy, Check } from 'lucide-react';
+import { Building2, Plus, Edit2, Archive, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -73,6 +73,7 @@ export default function OrganizationsDashboard() {
   );
   const [approvingId, setApprovingId] = useState('');
   const [copiedLink, setCopiedLink] = useState('');
+  const [expandedOrgRows, setExpandedOrgRows] = useState({});
 
   function copyLink(url) {
     navigator.clipboard.writeText(url).then(() => {
@@ -309,6 +310,84 @@ export default function OrganizationsDashboard() {
     });
   }, [rows, search, billingFilter]);
 
+  function providerNameForProduct(product) {
+    if (!product || typeof product !== 'object') return '—';
+    return (
+      product.providerName
+      || product.vendorName
+      || product.provider?.vendorName
+      || product.provider?.name
+      || '—'
+    );
+  }
+
+  function getOrganizationProductRows(orgRow) {
+    const productById = new Map((products || []).map((p) => [String(p.id || p._id || ''), p]));
+    const rowsOut = [];
+
+    const customRows = Array.isArray(orgRow?.customPricing) ? orgRow.customPricing : [];
+    if (customRows.length) {
+      customRows.forEach((line) => {
+        const product = productById.get(String(line.productId || ''));
+        rowsOut.push({
+          productName: String(product?.productName || product?.name || '—'),
+          sku: String(product?.sku || '—'),
+          providerName: providerNameForProduct(product),
+          catalogPrice: Number(product?.retailPrice || 0),
+          salePrice: Number(line.memberPrice || 0),
+        });
+      });
+      return rowsOut;
+    }
+
+    if (orgRow?.singleProductId) {
+      const product = productById.get(String(orgRow.singleProductId || ''));
+      if (product) {
+        rowsOut.push({
+          productName: String(product.productName || product.name || '—'),
+          sku: String(product.sku || '—'),
+          providerName: providerNameForProduct(product),
+          catalogPrice: Number(product.retailPrice || 0),
+          salePrice: Number(orgRow.monthlyPricePerMember || product.retailPrice || 0),
+        });
+      }
+      return rowsOut;
+    }
+
+    if (orgRow?.priceListId) {
+      const list = (priceLists || []).find((pl) => String(pl.id || '') === String(orgRow.priceListId || ''));
+      const lines = Array.isArray(list?.lines) ? list.lines : [];
+      lines.forEach((line) => {
+        const product = productById.get(String(line.productId || ''));
+        rowsOut.push({
+          productName: String(line.productName || product?.productName || product?.name || '—'),
+          sku: String(line.sku || product?.sku || '—'),
+          providerName: providerNameForProduct(product),
+          catalogPrice: Number(line.retailPrice || product?.retailPrice || 0),
+          salePrice: Number(orgRow.monthlyPricePerMember || line.retailPrice || product?.retailPrice || 0),
+        });
+      });
+      return rowsOut;
+    }
+
+    if (orgRow?.subscriptionProductName) {
+      const product = (products || []).find((p) => String(p.productName || p.name || '').trim() === String(orgRow.subscriptionProductName || '').trim());
+      rowsOut.push({
+        productName: String(orgRow.subscriptionProductName || '—'),
+        sku: String(product?.sku || '—'),
+        providerName: providerNameForProduct(product),
+        catalogPrice: Number(product?.retailPrice || 0),
+        salePrice: Number(orgRow.monthlyPricePerMember || product?.retailPrice || 0),
+      });
+    }
+
+    return rowsOut;
+  }
+
+  function toggleOrgExpand(orgId) {
+    setExpandedOrgRows((prev) => ({ ...prev, [orgId]: !prev[orgId] }));
+  }
+
   useEffect(() => {
     const editId = String(searchParams.get('editId') || '').trim();
     const deepSearch = String(searchParams.get('search') || '').trim().toLowerCase();
@@ -384,7 +463,7 @@ export default function OrganizationsDashboard() {
               <TabsList className="grid w-full grid-cols-3" dir="rtl">
                 <TabsTrigger value="org">פרטי ארגון</TabsTrigger>
                 <TabsTrigger value="contacts">אנשי קשר</TabsTrigger>
-                <TabsTrigger value="billing">צורת חיוב</TabsTrigger>
+                <TabsTrigger value="billing">תמחור מוצרים</TabsTrigger>
               </TabsList>
               <TabsContent value="org" className="mt-4 text-right w-full" dir="rtl">
                 <FieldGroup>
@@ -650,7 +729,7 @@ export default function OrganizationsDashboard() {
                 <TabsList className="grid w-full grid-cols-3" dir="rtl">
                   <TabsTrigger value="org">פרטי ארגון</TabsTrigger>
                   <TabsTrigger value="contacts">אנשי קשר</TabsTrigger>
-                  <TabsTrigger value="billing">צורת חיוב</TabsTrigger>
+                  <TabsTrigger value="billing">תמחור מוצרים</TabsTrigger>
                 </TabsList>
                 <TabsContent value="org" className="mt-4 text-right w-full" dir="rtl">
                   <FieldGroup>
@@ -909,6 +988,7 @@ export default function OrganizationsDashboard() {
                     <Table className="text-right">
                       <TableHeader>
                         <TableRow className="[&_th]:text-right">
+                          <TableHead className="w-10" />
                           <TableHead>שם חברה</TableHead>
                           <TableHead>ח.פ</TableHead>
                           <TableHead>סוג חיוב</TableHead>
@@ -919,57 +999,112 @@ export default function OrganizationsDashboard() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredRows.map((r) => (
-                          <TableRow key={r.id}>
-                            <TableCell className="font-medium">{r.companyName || '—'}</TableCell>
-                            <TableCell>{r.companyId || '—'}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline">
-                                {r.billingType === 'Centralized' ? 'מרוכז' : 'פרטי'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>{r.activeMemberCount ?? 0}</TableCell>
-                            <TableCell dir="ltr">
-                              {r.monthlyPricePerMember != null && Number(r.monthlyPricePerMember) > 0
-                                ? `₪${Number(r.monthlyPricePerMember)}`
-                                : '—'}
-                            </TableCell>
-                            <TableCell dir="ltr" className="text-start text-sm">
-                              {r.contactEmail || r.companyEmail || '—'}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1 flex-wrap">
-                                <Button variant="outline" size="sm" type="button" asChild>
-                                  <Link to={`/admin/organizations/${encodeURIComponent(r.id)}`}>פרופיל</Link>
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  type="button"
-                                  onClick={() => {
-                                    setEditTab('org');
-                                    setEditOrg({
-                                      ...emptyForm(),
-                                      ...r,
-                                      pricingMethod: Array.isArray(r.customPricing) && r.customPricing.length ? 'custom' : 'priceList',
-                                      billingType: r.billingType || (r.billingMethod?.includes('מרוכז') ? 'Centralized' : 'Private'),
-                                    });
-                                  }}
-                                >
-                                  <Edit2 className="size-4" />
-                                </Button>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" type="button" onClick={() => setDeleteOrg(r)} aria-label="הפוך ללא פעיל">
-                                      <Archive className="size-4 text-destructive" />
+                        {filteredRows.map((r) => {
+                          const isExpanded = !!expandedOrgRows[r.id];
+                          const orgProducts = getOrganizationProductRows(r);
+                          return (
+                            <React.Fragment key={r.id}>
+                              <TableRow>
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    type="button"
+                                    className="size-8"
+                                    onClick={() => toggleOrgExpand(r.id)}
+                                    aria-label={isExpanded ? 'כווץ פרטי מוצרים' : 'הרחב פרטי מוצרים'}
+                                  >
+                                    {isExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                                  </Button>
+                                </TableCell>
+                                <TableCell className="font-medium">{r.companyName || '—'}</TableCell>
+                                <TableCell>{r.companyId || '—'}</TableCell>
+                                <TableCell>
+                                  <Badge variant="outline">
+                                    {r.billingType === 'Centralized' ? 'מרוכז' : 'פרטי'}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>{r.activeMemberCount ?? 0}</TableCell>
+                                <TableCell dir="ltr">
+                                  {r.monthlyPricePerMember != null && Number(r.monthlyPricePerMember) > 0
+                                    ? `₪${Number(r.monthlyPricePerMember)}`
+                                    : '—'}
+                                </TableCell>
+                                <TableCell dir="ltr" className="text-start text-sm">
+                                  {r.contactEmail || r.companyEmail || '—'}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    <Button variant="outline" size="sm" type="button" asChild>
+                                      <Link to={`/admin/organizations/${encodeURIComponent(r.id)}`}>פרופיל</Link>
                                     </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>הפוך ללא פעיל</TooltipContent>
-                                </Tooltip>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      type="button"
+                                      onClick={() => {
+                                        setEditTab('org');
+                                        setEditOrg({
+                                          ...emptyForm(),
+                                          ...r,
+                                          pricingMethod: Array.isArray(r.customPricing) && r.customPricing.length ? 'custom' : 'priceList',
+                                          billingType: r.billingType || (r.billingMethod?.includes('מרוכז') ? 'Centralized' : 'Private'),
+                                        });
+                                      }}
+                                    >
+                                      <Edit2 className="size-4" />
+                                    </Button>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" type="button" onClick={() => setDeleteOrg(r)} aria-label="הפוך ללא פעיל">
+                                          <Archive className="size-4 text-destructive" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>הפוך ללא פעיל</TooltipContent>
+                                    </Tooltip>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                              {isExpanded ? (
+                                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                  <TableCell colSpan={8} className="p-4" dir="rtl">
+                                    <div className="space-y-2 text-right">
+                                      <p className="text-sm font-semibold">סיכום מוצרים בארגון</p>
+                                      {orgProducts.length ? (
+                                        <div className="overflow-x-auto rounded-md border bg-background">
+                                          <Table className="text-right">
+                                            <TableHeader>
+                                              <TableRow className="[&_th]:text-right">
+                                                <TableHead>שם המוצר</TableHead>
+                                                <TableHead>מק&quot;ט</TableHead>
+                                                <TableHead>שם הספק</TableHead>
+                                                <TableHead>מחיר מחירון</TableHead>
+                                                <TableHead>מחיר מבצע</TableHead>
+                                              </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                              {orgProducts.map((p, idx) => (
+                                                <TableRow key={`${r.id}-product-${idx}`}>
+                                                  <TableCell>{p.productName || '—'}</TableCell>
+                                                  <TableCell>{p.sku || '—'}</TableCell>
+                                                  <TableCell>{p.providerName || '—'}</TableCell>
+                                                  <TableCell>{Number(p.catalogPrice || 0).toLocaleString('he-IL')} ₪</TableCell>
+                                                  <TableCell>{Number(p.salePrice || 0).toLocaleString('he-IL')} ₪</TableCell>
+                                                </TableRow>
+                                              ))}
+                                            </TableBody>
+                                          </Table>
+                                        </div>
+                                      ) : (
+                                        <p className="text-sm text-muted-foreground">אין פרטי מוצרים להצגה עבור ארגון זה.</p>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ) : null}
+                            </React.Fragment>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>

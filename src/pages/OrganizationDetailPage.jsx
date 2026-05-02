@@ -981,7 +981,7 @@ export default function OrganizationDetailPage() {
                 <form onSubmit={saveOrg} className="space-y-6 text-right">
                   <Tabs defaultValue="org" dir="rtl">
                   <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="billing">צורת חיוב</TabsTrigger>
+                    <TabsTrigger value="billing">תמחור מוצרים</TabsTrigger>
                       <TabsTrigger value="contacts">אנשי קשר</TabsTrigger>
                     <TabsTrigger value="org">פרטי ארגון</TabsTrigger>
                     </TabsList>
