@@ -596,6 +596,27 @@ export default function UnifiedProductWizard() {
         setCommitted((p) => ({ ...p, productId: resolvedProductId }));
       }
 
+      // When an existing product is selected, propagate the admin-configured
+      // beneficiary count so the landing page and checkout always use the latest value.
+      if (productMode === 'existing' && resolvedProductId && s1.defaultBeneficiaryCount != null) {
+        const existingProd = (products || []).find((p) => String(p.id) === String(resolvedProductId));
+        if (existingProd) {
+          setFinalizeProgress('מעדכן מוצר קיים…');
+          await fetch(`${API_BASE}/api/admin/products/${encodeURIComponent(resolvedProductId)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              productName: existingProd.productName || existingProd.name || '',
+              sku: existingProd.sku || '',
+              baseDescription: existingProd.baseDescription || '',
+              providerId: existingProd.providerId || String(existingProd.provider?.id || ''),
+              providerCost: Number(existingProd.providerCost || 0),
+              defaultBeneficiaryCount: Math.max(1, Number(s1.defaultBeneficiaryCount || 1)),
+            }),
+          }).catch(() => {}); // best-effort — non-fatal
+        }
+      }
+
       // ── 3. Price list ──────────────────────────────────────────────────────
       if (!resolvedPriceListId) {
         setFinalizeProgress('יוצר מחירון…');

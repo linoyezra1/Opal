@@ -1078,7 +1078,7 @@ app.post('/api/contact', async (req, res) => {
 /** צור קשר מדף נחיתה ייעודי — נשמר ב-contactLeads עם מקור */
 app.post('/api/public/contact-lead', async (req, res) => {
   try {
-    const { name = '', phone = '', message = '', landingSlug = '' } = req.body || {};
+    const { name = '', phone = '', message = '', landingSlug = '', category = '' } = req.body || {};
     if (!String(name).trim() || !String(phone).trim()) {
       return res.status(400).json({ success: false, error: 'נא למלא שם וטלפון' });
     }
@@ -1089,6 +1089,7 @@ app.post('/api/public/contact-lead', async (req, res) => {
       message: String(message).trim(),
       source: 'landing_contact',
       landingSlug: String(landingSlug).trim().toLowerCase(),
+      category: String(category || '').trim(),
     });
     res.json({ success: true, message: 'נשלח בהצלחה' });
   } catch (err) {

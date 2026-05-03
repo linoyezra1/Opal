@@ -941,6 +941,19 @@ export default function SubscribersDashboard() {
           supplementalInsurance: formState.supplementalInsurance || '',
         };
 
+  /** מזהה הוראת קבע — לפעמים רק ב-formState / אינדיקטור ולא בשורש העסקה */
+  const resolvedCardcomRecurringId = useMemo(() => {
+    if (!selected) return '';
+    const fs = selected.formState || {};
+    return String(
+      selected.cardcomRecurringId ||
+        fs.cardcomRecurringId ||
+        fs.step2CardcomRecurringId ||
+        selected.indicator?.cardcomRecurringId ||
+        ''
+    ).trim();
+  }, [selected]);
+
   return (
     <TooltipProvider delayDuration={300}>
       <AdminPageShell>
@@ -2119,7 +2132,7 @@ export default function SubscribersDashboard() {
               dir="rtl"
               className="overflow-hidden text-right"
             >
-              <TabsList className="grid w-full grid-cols-3 h-auto">
+              <TabsList className="grid w-full grid-cols-2 h-auto">
                 <TabsTrigger
                   value="transaction"
                   className="text-[11px] sm:text-sm whitespace-normal leading-tight"
@@ -2201,14 +2214,14 @@ export default function SubscribersDashboard() {
                     </div>
                   </CardContent>
                 </Card>
-                {selected?.cardcomRecurringId ? (
+                {resolvedCardcomRecurringId ? (
                   <div
                     role="note"
                     className="rounded-lg border border-amber-300/80 bg-amber-50 px-4 py-3 text-right text-sm leading-snug text-foreground shadow-sm dark:border-amber-700/60 dark:bg-amber-950/40"
                     dir="rtl"
                   >
                     <span className="font-semibold">מספר הוראת קבע בקארדקום לבדיקת היסטוריית חיובים:</span>{' '}
-                    <span dir="ltr" className="font-mono font-bold">{selected.cardcomRecurringId}</span>
+                    <span dir="ltr" className="font-mono font-bold">{resolvedCardcomRecurringId}</span>
                   </div>
                 ) : null}
               </TabsContent>

@@ -307,6 +307,132 @@ function ContactLandingView({ slug, content, whatYouGetRows, whatYouGetTitle, wh
   );
 }
 
+/** Contact form embedded at the bottom of every sales landing page. */
+function ContactFormSection({ slug }) {
+  const [cName, setCName] = useState('');
+  const [cPhone, setCPhone] = useState('');
+  const [cMessage, setCMessage] = useState('');
+  const [cSending, setCsending] = useState(false);
+  const [cDone, setCDone] = useState(false);
+  const [cErr, setCErr] = useState('');
+
+  async function handleContactSubmit(e) {
+    e.preventDefault();
+    setCErr('');
+    if (!cName.trim() || !cPhone.trim()) { setCErr('נא למלא שם וטלפון'); return; }
+    setCsending(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/public/contact-lead`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: cName.trim(),
+          phone: cPhone.trim(),
+          message: cMessage.trim(),
+          landingSlug: slug || '',
+          category: 'contact_us',
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || 'שגיאה בשליחה');
+      setCDone(true);
+    } catch (err) {
+      setCErr(err.message || 'שגיאת רשת');
+    } finally {
+      setCsending(false);
+    }
+  }
+
+  return (
+    <section id="contact" className="py-16 bg-muted/30 scroll-mt-20">
+      <div className="container max-w-6xl mx-auto px-4">
+        <div className="grid md:grid-cols-2 gap-10 items-start">
+          {/* Contact info */}
+          <div className="space-y-5 text-right">
+            <h2
+              style={{ fontSize: 'clamp(1.5rem, 3vw + 0.5rem, 2.25rem)' }}
+              className="font-bold text-foreground"
+            >
+              צור קשר
+            </h2>
+            <p className="text-muted-foreground text-lg leading-relaxed">
+              אופאל - בית ליזמות רפואית, המושתת על מקצועיות, מצוינות וחווית שירות פרטית.
+            </p>
+            <div className="flex flex-col gap-3">
+              <a
+                href="tel:0544261369"
+                className="flex items-center gap-3 p-4 rounded-lg bg-background border border-border hover:border-primary/40 transition-colors"
+              >
+                <Phone className="size-5 text-primary shrink-0" />
+                <span className="font-medium" dir="ltr">054-426-1369</span>
+              </a>
+              <a
+                href="mailto:opal2000@zahav.net.il"
+                className="flex items-center gap-3 p-4 rounded-lg bg-background border border-border hover:border-primary/40 transition-colors"
+              >
+                <Mail className="size-5 text-primary shrink-0" />
+                <span className="font-medium text-sm break-all" dir="ltr">opal2000@zahav.net.il</span>
+              </a>
+            </div>
+          </div>
+
+          {/* Contact form */}
+          <Card className="shadow-md border-border">
+            <CardHeader className="border-b bg-[#D9EAF3]/30">
+              <CardTitle className="text-lg">שלחו לנו הודעה</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              {cDone ? (
+                <p className="text-center text-primary font-medium py-6">תודה! קיבלנו את פנייתכם ונחזור אליכם בהקדם.</p>
+              ) : (
+                <form onSubmit={handleContactSubmit} className="space-y-4" dir="rtl">
+                  <div>
+                    <label className="text-sm font-medium block mb-1">שם מלא *</label>
+                    <input
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={cName}
+                      onChange={(e) => setCName(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium block mb-1">טלפון *</label>
+                    <input
+                      type="tel"
+                      dir="ltr"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-right"
+                      value={cPhone}
+                      onChange={(e) => setCPhone(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium block mb-1">הודעה</label>
+                    <textarea
+                      rows={3}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={cMessage}
+                      onChange={(e) => setCMessage(e.target.value)}
+                    />
+                  </div>
+                  {cErr ? <p className="text-destructive text-sm">{cErr}</p> : null}
+                  <button
+                    type="submit"
+                    disabled={cSending}
+                    className="w-full h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 transition-colors"
+                  >
+                    {cSending ? 'שולח…' : 'שליחה'}
+                  </button>
+                </form>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /**
  * דף נחיתה ציבורי — /p/:slug או /landing/:priceListId
  */
@@ -1201,41 +1327,7 @@ export function PublicLandingView({ slug: slugProp, priceListId: priceListIdProp
         </div>
       </section>
 
-      <section id="contact" className="py-16 bg-primary text-primary-foreground scroll-mt-20">
-        <div className="container max-w-5xl mx-auto px-4">
-          <div className="max-w-2xl mx-auto text-center">
-            <h2
-              style={{ fontSize: 'clamp(1.5rem, 3vw + 0.5rem, 2.25rem)' }}
-              className="font-bold mb-4"
-            >
-              צור קשר
-            </h2>
-            <p className="text-primary-foreground/90 mb-8 text-lg">
-              אופאל - בית ליזמות רפואית, המושתת על מקצועיות, מצוינות וחווית שירות פרטית.
-            </p>
-            <div className="grid gap-4 sm:grid-cols-2 max-w-md mx-auto">
-              <a
-                href="tel:0544261369"
-                className="flex items-center justify-center gap-3 p-4 rounded-lg bg-primary-foreground/10 hover:bg-primary-foreground/20 transition-colors"
-              >
-                <Phone className="size-5" />
-                <span className="font-medium" dir="ltr">
-                  054-426-1369
-                </span>
-              </a>
-              <a
-                href="mailto:opal2000@zahav.net.il"
-                className="flex items-center justify-center gap-3 p-4 rounded-lg bg-primary-foreground/10 hover:bg-primary-foreground/20 transition-colors"
-              >
-                <Mail className="size-5" />
-                <span className="font-medium text-xs sm:text-sm break-all" dir="ltr">
-                  opal2000@zahav.net.il
-                </span>
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
+      <ContactFormSection slug={slug} />
 
       <footer className="py-8 border-t bg-muted/30">
         <div className="container text-center max-w-5xl mx-auto px-4">

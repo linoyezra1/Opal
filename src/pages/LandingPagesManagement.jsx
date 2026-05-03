@@ -32,6 +32,8 @@ const emptyForm = () => ({
   subContent: '',
   imageUrl: '',
   priceListId: '',
+  validFrom: '',
+  validTo: '',
   whatYouGetTitle: '',
   whatYouGetSubtitle: '',
   whatYouGetItemsJson: '',
@@ -92,6 +94,8 @@ export default function LandingPagesManagement() {
       subContent: row.subContent || '',
       imageUrl: row.imageUrl || '',
       priceListId: row.priceListId || '',
+      validFrom: row.validFrom ? String(row.validFrom).slice(0, 10) : '',
+      validTo: row.validTo ? String(row.validTo).slice(0, 10) : '',
       whatYouGetTitle: row.whatYouGetTitle || '',
       whatYouGetSubtitle: row.whatYouGetSubtitle || '',
       whatYouGetItemsJson:
@@ -136,6 +140,8 @@ export default function LandingPagesManagement() {
         subContent: form.subContent,
         imageUrl: form.imageUrl,
         priceListId: isContact ? '' : form.priceListId,
+        validFrom: String(form.validFrom || '').trim(),
+        validTo: String(form.validTo || '').trim(),
         whatYouGetTitle: form.whatYouGetTitle,
         whatYouGetSubtitle: form.whatYouGetSubtitle,
         whatYouGetItems,
@@ -337,6 +343,17 @@ export default function LandingPagesManagement() {
                   placeholder="מלאו את הפרטים…"
                 />
               </Field>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel>תאריך פתיחה (validFrom)</FieldLabel>
+                  <Input type="date" dir="ltr" value={form.validFrom} onChange={(e) => setForm((p) => ({ ...p, validFrom: e.target.value }))} />
+                </Field>
+                <Field>
+                  <FieldLabel>תאריך תפוגה (validTo)</FieldLabel>
+                  <Input type="date" dir="ltr" value={form.validTo} onChange={(e) => setForm((p) => ({ ...p, validTo: e.target.value }))} />
+                </Field>
+              </div>
+
               {form.pageType === 'sales' ? (
                 <Field>
                   <FieldLabel>מחירון מקושר *</FieldLabel>
@@ -416,6 +433,7 @@ export default function LandingPagesManagement() {
                       <TableHead>סוג</TableHead>
                       <TableHead>כותרת</TableHead>
                       <TableHead>מחירון</TableHead>
+                      <TableHead>תפוגה</TableHead>
                       <TableHead>קישור</TableHead>
                       <TableHead className="w-28">פעולות</TableHead>
                     </TableRow>
@@ -439,6 +457,16 @@ export default function LandingPagesManagement() {
                         </TableCell>
                         <TableCell className="font-medium">{pg.pageTitle || '—'}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{pg.priceListId || '—'}</TableCell>
+                        <TableCell className="text-xs whitespace-nowrap">
+                          {(() => {
+                            const vt = pg.validTo ? String(pg.validTo).slice(0, 10) : '';
+                            if (!vt) return <span className="text-muted-foreground">—</span>;
+                            const expired = new Date(vt) < new Date(new Date().toISOString().slice(0, 10));
+                            return expired
+                              ? <span className="rounded bg-red-100 px-2 py-0.5 text-red-900">פג תוקף {vt}</span>
+                              : <span className="rounded bg-emerald-100 px-2 py-0.5 text-emerald-900">פעיל עד {vt}</span>;
+                          })()}
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <code className="text-[10px] bg-muted px-1 rounded truncate max-w-[140px]">
