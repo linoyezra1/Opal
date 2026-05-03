@@ -178,6 +178,8 @@ export default function OrganizationDetailPage() {
   const [snapEditTarget, setSnapEditTarget] = useState(null);
   const [snapEditForm, setSnapEditForm] = useState({ status: 'Pending', invoiceNum: '', receiptNum: '', notes: '' });
   const [saveSnapBusy, setSaveSnapBusy] = useState(false);
+  const [settingsInnerTab, setSettingsInnerTab] = useState('org');
+  const [settingsSaveOk, setSettingsSaveOk] = useState(false);
 
   const loadSnapshots = useCallback(async () => {
     if (!token || !id) return;
@@ -457,6 +459,7 @@ export default function OrganizationDetailPage() {
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.success) throw new Error(j.error || 'שמירה נכשלה');
+      setSettingsSaveOk(true);
       await load();
     } catch (e2) {
       setErr(e2.message || 'שגיאה');
@@ -762,7 +765,13 @@ export default function OrganizationDetailPage() {
 
         {err ? <p className="text-sm text-destructive">{err}</p> : null}
 
-        <Tabs value={tab} onValueChange={setTab}>
+        <Tabs
+          value={tab}
+          onValueChange={(v) => {
+            setTab(v);
+            if (v !== 'settings') setSettingsSaveOk(false);
+          }}
+        >
           <TabsList className="flex flex-wrap h-auto gap-1">
             <TabsTrigger value="members" className="gap-1">
               <Users className="size-4" />
@@ -1055,8 +1064,20 @@ export default function OrganizationDetailPage() {
 
               </CardHeader>
               <CardContent>
+                {settingsSaveOk ? (
+                  <p className="mb-4 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">
+                    השינויים בוצעו בהצלחה
+                  </p>
+                ) : null}
                 <form onSubmit={saveOrg} className="space-y-6 text-right">
-                  <Tabs defaultValue="org" dir="rtl">
+                  <Tabs
+                    value={settingsInnerTab}
+                    onValueChange={(v) => {
+                      setSettingsInnerTab(v);
+                      setSettingsSaveOk(false);
+                    }}
+                    dir="rtl"
+                  >
                   <TabsList className="grid w-full grid-cols-3">
                    <TabsTrigger value="org">פרטי ארגון</TabsTrigger>
                       <TabsTrigger value="contacts">אנשי קשר</TabsTrigger>
@@ -1065,44 +1086,47 @@ export default function OrganizationDetailPage() {
                     </TabsList>
                     <TabsContent value="org" className="mt-4 text-right w-full" dir="rtl">
                       <FieldGroup>
-                        <Field>
-                          <FieldLabel className="text-right w-full">שם חברה *</FieldLabel>
-                          <Input
-                            dir="rtl"
-                            className="text-right"
-                            required
-                            value={org.companyName || ''}
-                            onChange={(e) => setOrg((p) => ({ ...p, companyName: e.target.value }))}
-                          />
-                        </Field>
-                        <Field>
-                          <FieldLabel className="text-right w-full">ח.פ</FieldLabel>
-                          <Input
-                            dir="rtl"
-                            className="text-right"
-                            value={org.companyId || ''}
-                            onChange={(e) => setOrg((p) => ({ ...p, companyId: e.target.value }))}
-                          />
-                        </Field>
-                        <Field>
-                          <FieldLabel className="text-right w-full">כתובת רשמית</FieldLabel>
-                          <Input
-                            dir="rtl"
-                            className="text-right"
-                            value={org.officialAddress || ''}
-                            onChange={(e) => setOrg((p) => ({ ...p, officialAddress: e.target.value }))}
-                          />
-                        </Field>
-                        <Field>
-                          <FieldLabel className="text-right w-full">אימייל חברה</FieldLabel>
-                          <Input
-                            dir="rtl"
-                            className="text-right"
-                            value={org.companyEmail || ''}
-                            onChange={(e) => setOrg((p) => ({ ...p, companyEmail: e.target.value }))}
-                          />
-                        </Field>
-
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <Field>
+                            <FieldLabel className="text-right w-full">שם החברה *</FieldLabel>
+                            <Input
+                              dir="rtl"
+                              className="text-right"
+                              required
+                              value={org.companyName || ''}
+                              onChange={(e) => setOrg((p) => ({ ...p, companyName: e.target.value }))}
+                            />
+                          </Field>
+                          <Field>
+                            <FieldLabel className="text-right w-full">ח&quot;פ</FieldLabel>
+                            <Input
+                              dir="rtl"
+                              className="text-right"
+                              value={org.companyId || ''}
+                              onChange={(e) => setOrg((p) => ({ ...p, companyId: e.target.value }))}
+                            />
+                          </Field>
+                        </div>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <Field>
+                            <FieldLabel className="text-right w-full">כתובת רשמית</FieldLabel>
+                            <Input
+                              dir="rtl"
+                              className="text-right"
+                              value={org.officialAddress || ''}
+                              onChange={(e) => setOrg((p) => ({ ...p, officialAddress: e.target.value }))}
+                            />
+                          </Field>
+                          <Field>
+                            <FieldLabel className="text-right w-full">אימייל החברה</FieldLabel>
+                            <Input
+                              dir="rtl"
+                              className="text-right"
+                              value={org.companyEmail || ''}
+                              onChange={(e) => setOrg((p) => ({ ...p, companyEmail: e.target.value }))}
+                            />
+                          </Field>
+                        </div>
 
                         <Field>
                           <FieldLabel className="text-right w-full">הערות</FieldLabel>

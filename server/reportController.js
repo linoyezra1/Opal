@@ -280,6 +280,52 @@ export function filterDealsByProvider(deals, providerName = '') {
   );
 }
 
+/**
+ * סינון עסקאות לייצוא מנויים לספק — תואם סינון עמלות סוכנים (חיוב, סטטוס, מוצר, ספק, סוכן, ארגון, חודש בילינג).
+ */
+export function filterDealsForSubscriberExport(deals, filters = {}) {
+  const billingType = String(filters.billingType || '').trim();
+  const status = String(filters.status || '').trim();
+  const product = String(filters.product || '').trim();
+  const providerName = String(filters.provider || '').trim();
+  const agentId = String(filters.agentId || '').trim();
+  const organizationId = String(filters.organizationId || '').trim();
+  const month = String(filters.month || '').trim();
+
+  return (Array.isArray(deals) ? deals : []).filter((d) => {
+    const fs = d.formState && typeof d.formState === 'object' ? d.formState : {};
+    const bt =
+      d.isCentralized === true || String(fs.billingType || '').trim().toLowerCase() === 'centralized'
+        ? 'Centralized'
+        : 'Private';
+    if (billingType && bt !== billingType) return false;
+
+    const isCancelled =
+      String(d.status || '').toLowerCase() === 'canceled' ||
+      String(d.subscriptionStatus || '').toLowerCase() === 'cancelled';
+    if (status && status !== 'all') {
+      if (status === 'active' && isCancelled) return false;
+      if (status === 'cancelled' && !isCancelled) return false;
+    }
+
+    const pn = subscriberExportProductName(d, fs);
+    if (product && pn !== product) return false;
+
+    if (providerName && normalizeProviderName(d).toLowerCase() !== providerName.toLowerCase()) return false;
+
+    const aid = String(d.agentId || fs.agentId || '').trim();
+    if (agentId && aid !== agentId) return false;
+
+    const oid = String(d.organizationId || fs.organizationId || '').trim();
+    if (organizationId && oid !== organizationId) return false;
+
+    const bm = String(d.billingMonth || '').trim();
+    if (month && bm !== month) return false;
+
+    return true;
+  });
+}
+
 export function listProviderNamesFromDeals(deals) {
   const set = new Set();
   for (const d of Array.isArray(deals) ? deals : []) {

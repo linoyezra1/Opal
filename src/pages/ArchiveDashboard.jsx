@@ -12,7 +12,7 @@ import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
 const TOKEN_KEY = 'opal_admin_token';
 
 const TAB_CONFIG = [
-  { key: 'subscribers', label: 'לקוחות / מנויים' },
+  { key: 'subscribers', label: 'עסקאות / מנויים' },
   { key: 'products', label: 'מוצרים' },
   { key: 'vendors', label: 'ספקים' },
   { key: 'organizations', label: 'ארגונים' },

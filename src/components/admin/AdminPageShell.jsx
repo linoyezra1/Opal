@@ -38,9 +38,9 @@ const groups = [
     ],
   },
   {
-    title: 'לקוחות',
+    title: 'עסקאות',
     items: [
-      { label: 'לקוחות פרטיים', to: '/admin/subscribers', icon: UserCheck },
+      { label: 'עסקאות', to: '/admin/subscribers', icon: UserCheck },
       { label: 'מרכז ניהול ארגונים', to: '/admin/organizations', icon: Building2 },
       { label: 'ארכיון', to: '/admin/archive', icon: Archive },
       { label: 'צור קשר', to: '/admin/contacts', icon: MessageSquare },

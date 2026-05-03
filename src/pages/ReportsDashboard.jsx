@@ -84,8 +84,15 @@ export default function ReportsDashboard() {
   const [exportBusy, setExportBusy] = useState(false);
   const [exportErr, setExportErr] = useState('');
   const [providers, setProviders] = useState([]);
-  const [providerFilter, setProviderFilter] = useState('');
-  const [providerSearchText, setProviderSearchText] = useState('');
+  const [orgRows, setOrgRows] = useState([]);
+  const [productRows, setProductRows] = useState([]);
+  const [provBillingType, setProvBillingType] = useState('');
+  const [provStatusFilter, setProvStatusFilter] = useState('all');
+  const [provProductFilter, setProvProductFilter] = useState('');
+  const [provProviderFilter, setProvProviderFilter] = useState('');
+  const [provAgentId, setProvAgentId] = useState('');
+  const [provOrgId, setProvOrgId] = useState('');
+  const [provMonth, setProvMonth] = useState('');
   const [previewRows, setPreviewRows] = useState([]);
   const [previewTotal, setPreviewTotal] = useState(0);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -167,6 +174,21 @@ export default function ReportsDashboard() {
     setAgents(Array.isArray(j.rows) ? j.rows : []);
   }, [token]);
 
+  const loadOrgsAndProducts = useCallback(async () => {
+    if (!token) return;
+    try {
+      const [oRes, pRes] = await Promise.all([
+        fetch(`${API_BASE}/api/admin/organizations`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+        fetch(`${API_BASE}/api/admin/products`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+      ]);
+      if (oRes?.success) setOrgRows(Array.isArray(oRes.rows) ? oRes.rows : []);
+      setProductRows(Array.isArray(pRes?.products) ? pRes.products : []);
+    } catch {
+      setOrgRows([]);
+      setProductRows([]);
+    }
+  }, [token]);
+
   const loadProviders = useCallback(async () => {
     if (!token) return;
     try {
@@ -191,7 +213,13 @@ export default function ReportsDashboard() {
       const q = new URLSearchParams();
       if (fromDate) q.set('fromDate', fromDate);
       if (toDate) q.set('toDate', toDate);
-      if (providerFilter) q.set('provider', providerFilter);
+      if (provProviderFilter) q.set('provider', provProviderFilter);
+      if (provBillingType) q.set('billingType', provBillingType);
+      if (provStatusFilter && provStatusFilter !== 'all') q.set('status', provStatusFilter);
+      if (provProductFilter) q.set('product', provProductFilter);
+      if (provAgentId) q.set('agentId', provAgentId);
+      if (provOrgId) q.set('organizationId', provOrgId);
+      if (provMonth) q.set('month', provMonth);
       const res = await fetch(`${API_BASE}/api/admin/reports/subscribers-preview?${q.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -206,11 +234,25 @@ export default function ReportsDashboard() {
     } finally {
       setPreviewLoading(false);
     }
-  }, [token, fromDate, toDate, providerFilter]);
+  }, [
+    token,
+    fromDate,
+    toDate,
+    provProviderFilter,
+    provBillingType,
+    provStatusFilter,
+    provProductFilter,
+    provAgentId,
+    provOrgId,
+    provMonth,
+  ]);
 
   useEffect(() => {
     loadAgents();
   }, [loadAgents]);
+  useEffect(() => {
+    loadOrgsAndProducts();
+  }, [loadOrgsAndProducts]);
   useEffect(() => {
     loadProviders();
   }, [loadProviders]);
@@ -236,7 +278,13 @@ export default function ReportsDashboard() {
       const q = new URLSearchParams();
       if (fromDate) q.set('fromDate', fromDate);
       if (toDate) q.set('toDate', toDate);
-      if (providerFilter) q.set('provider', providerFilter);
+      if (provProviderFilter) q.set('provider', provProviderFilter);
+      if (provBillingType) q.set('billingType', provBillingType);
+      if (provStatusFilter && provStatusFilter !== 'all') q.set('status', provStatusFilter);
+      if (provProductFilter) q.set('product', provProductFilter);
+      if (provAgentId) q.set('agentId', provAgentId);
+      if (provOrgId) q.set('organizationId', provOrgId);
+      if (provMonth) q.set('month', provMonth);
       await downloadCsv(
         `${API_BASE}/api/admin/reports/subscribers-export-xlsx?${q.toString()}`,
         token,
@@ -336,6 +384,56 @@ export default function ReportsDashboard() {
     );
   }, [filteredAgentRows]);
 
+  const exportProductOptions = useMemo(() => {
+    const set = new Set();
+    for (const p of productRows) {
+      const n = String(p.productName || p.name || '').trim();
+      if (n) set.add(n);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'he'));
+  }, [productRows]);
+
+  const provExportFilterValues = useMemo(
+    () => ({
+      billingType: provBillingType,
+      status: provStatusFilter,
+      product: provProductFilter,
+      provider: provProviderFilter,
+      agentId: provAgentId,
+      organizationId: provOrgId,
+      month: provMonth,
+    }),
+    [
+      provBillingType,
+      provStatusFilter,
+      provProductFilter,
+      provProviderFilter,
+      provAgentId,
+      provOrgId,
+      provMonth,
+    ]
+  );
+
+  function clearProvExportFilters() {
+    setProvBillingType('');
+    setProvStatusFilter('all');
+    setProvProductFilter('');
+    setProvProviderFilter('');
+    setProvAgentId('');
+    setProvOrgId('');
+    setProvMonth('');
+  }
+
+  function setProvExportFilters(next) {
+    setProvBillingType(String(next.billingType || ''));
+    setProvStatusFilter(String(next.status ?? 'all'));
+    setProvProductFilter(String(next.product || ''));
+    setProvProviderFilter(String(next.provider || ''));
+    setProvAgentId(String(next.agentId || ''));
+    setProvOrgId(String(next.organizationId || ''));
+    setProvMonth(String(next.month || ''));
+  }
+
   return (
     <AdminPageShell>
       <div className="space-y-6 p-4 md:p-6 max-w-7xl mx-auto text-right" dir="rtl">
@@ -379,35 +477,83 @@ export default function ReportsDashboard() {
                 <CardDescription>בחרו טווח תאריכים לפי תאריך יצירת העסקה במערכת</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <UnifiedFilterShell
-                  searchValue={providerSearchText}
-                  onSearchChange={setProviderSearchText}
-                  searchPlaceholder="סנן ספקים..."
-                  basicControls={(
-                    <>
-                      <Field>
-                        <FieldLabel>מתאריך</FieldLabel>
-                        <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-                      </Field>
-                      <Field>
-                        <FieldLabel>עד תאריך</FieldLabel>
-                        <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
-                      </Field>
-                      <select
-                        className="flex h-10 w-full sm:w-56 rounded-md border border-slate-200 bg-background px-3 py-2 text-sm shadow-sm"
-                        value={providerFilter}
-                        onChange={(e) => { setProviderFilter(e.target.value); setProviderSearchText(''); }}
-                      >
-                        <option value="">כל הספקים</option>
-                        {providers
-                          .filter((p) => !providerSearchText || String(p).toLowerCase().includes(providerSearchText.toLowerCase()))
-                          .map((p) => (
-                            <option key={p} value={p}>{p}</option>
-                          ))}
-                      </select>
-                    </>
-                  )}
-                />
+                <FieldGroup className="flex flex-col sm:flex-row gap-4 flex-wrap items-end">
+                  <Field className="min-w-[160px]">
+                    <FieldLabel>מתאריך</FieldLabel>
+                    <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+                  </Field>
+                  <Field className="min-w-[160px]">
+                    <FieldLabel>עד תאריך</FieldLabel>
+                    <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+                  </Field>
+                </FieldGroup>
+                <div className="rounded-xl border p-3 md:p-4">
+                  <UnifiedFilterShell
+                    filters={[
+                      {
+                        key: 'provider',
+                        label: 'ספק',
+                        type: 'select',
+                        options: providers.map((p) => ({ value: p, label: p })),
+                      },
+                      {
+                        key: 'product',
+                        label: 'מוצר',
+                        type: 'select',
+                        options: exportProductOptions.map((p) => ({ value: p, label: p })),
+                      },
+                      {
+                        key: 'billingType',
+                        label: 'סוג חיוב',
+                        type: 'select',
+                        options: [
+                          { value: 'Centralized', label: 'מרוכז' },
+                          { value: 'Private', label: 'פרטי' },
+                        ],
+                      },
+                      {
+                        key: 'status',
+                        label: 'סטטוס',
+                        type: 'select',
+                        options: [
+                          { value: 'all', label: 'הכל' },
+                          { value: 'active', label: 'פעילים' },
+                          { value: 'cancelled', label: 'מבוטלים' },
+                        ],
+                      },
+                      {
+                        key: 'agentId',
+                        label: 'סוכן',
+                        type: 'select',
+                        options: agents.map((a) => ({
+                          value: a.id,
+                          label: `${a.agentName}${a.isActive === false ? ' (לא פעיל)' : ''}`,
+                        })),
+                      },
+                      {
+                        key: 'organizationId',
+                        label: 'ארגון',
+                        type: 'select',
+                        options: orgRows.map((o) => ({
+                          value: o.id,
+                          label: String(o.companyName || o.name || o.id),
+                        })),
+                      },
+                      {
+                        key: 'month',
+                        label: 'חודש בילינג',
+                        type: 'month',
+                        placeholder: 'YYYY-MM',
+                      },
+                    ]}
+                    values={provExportFilterValues}
+                    onChange={setProvExportFilters}
+                    onClear={clearProvExportFilters}
+                    resultsCount={previewRows.length}
+                    totalCount={previewTotal}
+                    isLoading={previewLoading}
+                  />
+                </div>
                 {exportErr ? <p className="text-sm text-destructive">{exportErr}</p> : null}
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" disabled={exportBusy} onClick={runSubscribersExport}>

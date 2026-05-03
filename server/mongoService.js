@@ -918,6 +918,17 @@ export async function updateOrganizationCompany(id, params) {
   return { ok: true };
 }
 
+/** דרישות תשלום (snapshots) שאינן בסטטוס Paid — חוסם ארכיון ארגון */
+export async function countOpenBillingSnapshotsForOrganization(orgId) {
+  const db = await getDb();
+  const oid = String(orgId || '').trim();
+  if (!oid) return 0;
+  return db.collection('billing_snapshots').countDocuments({
+    orgId: oid,
+    status: { $ne: 'Paid' },
+  });
+}
+
 export async function deleteOrganizationCompany(id) {
   const db = await getDb();
   let oid;
@@ -925,6 +936,10 @@ export async function deleteOrganizationCompany(id) {
     oid = new ObjectId(String(id));
   } catch {
     throw new Error('מזהה ארגון לא תקין');
+  }
+  const pending = await countOpenBillingSnapshotsForOrganization(String(id));
+  if (pending > 0) {
+    throw new Error('לא ניתן להעביר לארכיון ארגון עם דרישות תשלום פתוחות.');
   }
   const r = await db.collection('organizations').updateOne({ _id: oid }, { $set: { isActive: false, updatedAt: new Date() } });
   if (!r.matchedCount) throw new Error('ארגון לא נמצא');

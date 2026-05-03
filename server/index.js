@@ -127,7 +127,7 @@ import {
   buildCancellationsCsv,
   buildAgentCommissionPayload,
   generateFlattenedSubscriberRows,
-  filterDealsByProvider,
+  filterDealsForSubscriberExport,
   listProviderNamesFromDeals,
   buildSubscribersXlsxBuffer,
 } from './reportController.js';
@@ -2594,9 +2594,16 @@ app.get('/api/admin/reports/subscribers-export', requireAdmin, async (req, res) 
   try {
     const fromDate = req.query.fromDate || req.query.from || '';
     const toDate = req.query.toDate || req.query.to || '';
-    const provider = String(req.query.provider || '').trim();
     const allDeals = await findDealsCreatedInRange(fromDate || null, toDate || null);
-    const deals = provider ? filterDealsByProvider(allDeals, provider) : allDeals;
+    const deals = filterDealsForSubscriberExport(allDeals, {
+      billingType: req.query.billingType,
+      status: req.query.status,
+      product: req.query.product,
+      provider: req.query.provider,
+      agentId: req.query.agentId,
+      organizationId: req.query.organizationId,
+      month: req.query.month,
+    });
     const csv = buildSubscribersCsv(deals);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="opal-subscribers-by-person.csv"');
@@ -2611,9 +2618,16 @@ app.get('/api/admin/reports/subscribers-export-xlsx', requireAdmin, async (req, 
   try {
     const fromDate = req.query.fromDate || req.query.from || '';
     const toDate = req.query.toDate || req.query.to || '';
-    const provider = String(req.query.provider || '').trim();
     const allDeals = await findDealsCreatedInRange(fromDate || null, toDate || null);
-    const deals = provider ? filterDealsByProvider(allDeals, provider) : allDeals;
+    const deals = filterDealsForSubscriberExport(allDeals, {
+      billingType: req.query.billingType,
+      status: req.query.status,
+      product: req.query.product,
+      provider: req.query.provider,
+      agentId: req.query.agentId,
+      organizationId: req.query.organizationId,
+      month: req.query.month,
+    });
     const file = await buildSubscribersXlsxBuffer(deals);
     res.setHeader(
       'Content-Disposition',
@@ -2647,9 +2661,16 @@ app.get('/api/admin/reports/subscribers-preview', requireAdmin, async (req, res)
   try {
     const fromDate = req.query.fromDate || req.query.from || '';
     const toDate = req.query.toDate || req.query.to || '';
-    const provider = String(req.query.provider || '').trim();
     const allDeals = await findDealsCreatedInRange(fromDate || null, toDate || null);
-    const deals = provider ? filterDealsByProvider(allDeals, provider) : allDeals;
+    const deals = filterDealsForSubscriberExport(allDeals, {
+      billingType: req.query.billingType,
+      status: req.query.status,
+      product: req.query.product,
+      provider: req.query.provider,
+      agentId: req.query.agentId,
+      organizationId: req.query.organizationId,
+      month: req.query.month,
+    });
     const allRows = generateFlattenedSubscriberRows(deals);
     res.json({ success: true, rows: allRows.slice(0, 200), totalRows: allRows.length });
   } catch (e) {

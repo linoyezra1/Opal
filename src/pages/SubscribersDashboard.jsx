@@ -1664,7 +1664,7 @@ export default function SubscribersDashboard() {
             <div>
               <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
                 <UserCheck className="size-7 text-primary" />
-                לקוחות
+                עסקאות
               </h1>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -1747,7 +1747,7 @@ export default function SubscribersDashboard() {
             <CardHeader className="space-y-4 pb-2">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 <div className="text-right">
-                  <CardTitle>לקוחות</CardTitle>
+                  <CardTitle>עסקאות</CardTitle>
                 </div>
 
               </div>
@@ -1794,22 +1794,22 @@ export default function SubscribersDashboard() {
                           />
                         </TableHead>
                         <TableHead dir="rtl" className="text-right">
-                          סטטוס השלמה
-                        </TableHead>
-                        <TableHead dir="rtl" className="text-right">
-                          סטטוס חיוב עתידי (קארדקום/ארגוני)
-                        </TableHead>
-                        <TableHead dir="rtl" className="text-right">
-                          מס&apos; הזמנה
-                        </TableHead>
-                        <TableHead dir="rtl" className="text-right">
                           לקוח
                         </TableHead>
                         <TableHead dir="rtl" className="text-right">
                           סכום
                         </TableHead>
                         <TableHead dir="rtl" className="text-right">
+                          מס&apos; הזמנה
+                        </TableHead>
+                        <TableHead dir="rtl" className="text-right">
                           תאריך הצטרפות
+                        </TableHead>
+                        <TableHead dir="rtl" className="text-right">
+                          סטטוס השלמת מסמכים
+                        </TableHead>
+                        <TableHead dir="rtl" className="text-right">
+                          סטטוס חיוב עתידי
                         </TableHead>
                         <TableHead dir="rtl" className="w-28 text-right">
                           פעולות
@@ -1850,6 +1850,25 @@ export default function SubscribersDashboard() {
                               onChange={(e) => toggleSubscriptionSelection(r.id, e.target.checked)}
                               aria-label={`בחר מנוי ${r.transactionId || r.id}`}
                             />
+                          </TableCell>
+                          <TableCell dir="rtl" className="text-right">
+                            <div className="flex w-full flex-col items-end gap-1 text-right">
+                              <span>{r.fullName || '—'}</span>
+                              {r.organizationBadge ? (
+                                <Badge variant="outline" className="text-xs font-normal max-w-full whitespace-normal text-right">
+                                  {r.organizationBadge}
+                                </Badge>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                          <TableCell dir="rtl" className="text-right">
+                            {formatCurrency(r.amount)}
+                          </TableCell>
+                          <TableCell dir="rtl" className="font-mono text-xs text-right">
+                            {r.transactionId}
+                          </TableCell>
+                          <TableCell dir="rtl" className="whitespace-nowrap text-xs text-right">
+                            {fmtDateTime(r.createdAt)}
                           </TableCell>
                           <TableCell dir="rtl" className="text-right align-top">
                             {r.pendingBeneficiaryCompletion ? (
@@ -1895,25 +1914,6 @@ export default function SubscribersDashboard() {
                             ) : (
                               <Badge variant="secondary">פעיל</Badge>
                             )}
-                          </TableCell>
-                          <TableCell dir="rtl" className="font-mono text-xs text-right">
-                            {r.transactionId}
-                          </TableCell>
-                          <TableCell dir="rtl" className="text-right">
-                            <div className="flex w-full flex-col items-end gap-1 text-right">
-                              <span>{r.fullName || '—'}</span>
-                              {r.organizationBadge ? (
-                                <Badge variant="outline" className="text-xs font-normal max-w-full whitespace-normal text-right">
-                                  {r.organizationBadge}
-                                </Badge>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                          <TableCell dir="rtl" className="text-right">
-                            {formatCurrency(r.amount)}
-                          </TableCell>
-                          <TableCell dir="rtl" className="whitespace-nowrap text-xs text-right">
-                            {fmtDateTime(r.createdAt)}
                           </TableCell>
                           <TableCell dir="rtl" className="text-right">
                             <div className="hidden md:flex items-center justify-end gap-1 flex-wrap">
