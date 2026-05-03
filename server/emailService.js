@@ -162,14 +162,8 @@ function buildOrderConfirmationHtml(payload, logoDataUri = '') {
 /**
  * Email 2 — סיכום הזמנה
  *
- * 1. שם השירות/מוצר מתחת למס' הזמנה, גדול ובולט — לא בכותרת הכחולה
- * 2. "מוטבים משניים" ככותרת עצמאית מחוץ לתיבת המבוטח הראשי
- * 3. עמודת שם השירות/מוצר משמאל לעמודת ת.ז של כל מוטב
- * 4. יישור לימין אחיד לכל שמות המוטבים (ראשי + משניים)
- * 5. "לשרות רפואי חייג" גדול ובולט מעל מספר הטלפון (שהוגדל גם הוא)
- * 6. כפתור גדול להגשת מסמכים רפואיים
- * 7. "המנוי כפוף..." עובר לתוך גוף המייל (לפני האזור האפור)
- * 8. "שים לב" ותוכנו מודגשים
+ * מבוטח ראשי + מוטבים משניים באותה תיבת רקע (#F8F9FA), עם מפריד עדין ביניהם.
+ * "לשרות רפואי חייג" נשאר מתחת לתיבה עם ריווח ברור.
  */
 function buildBeneficiaryCompletionHtml(payload, logoDataUri = '') {
   const amount = Number(payload.monthlyTotal || 0).toLocaleString('he-IL');
@@ -199,20 +193,17 @@ function buildBeneficiaryCompletionHtml(payload, logoDataUri = '') {
       </tr>`;
   });
 
-  /* ── "מוטבים משניים" ככותרת עצמאית + טבלה מיושרת ── */
-  const beneficiariesBlock =
+  const secondaryBeneficiariesInner =
     secondaries.length > 0
       ? `
-      <div dir="rtl" style="margin-bottom:24px;text-align:right;">
-        <h3 style="margin:0 0 12px;font-size:16px;font-weight:700;color:${OPAL_BLUE};padding-bottom:8px;border-bottom:2px solid ${OPAL_GOLD};text-align:right;direction:rtl;font-family:${FONT_STACK};">
-          מוטבים משניים
-        </h3>
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="right" dir="rtl" style="border-collapse:collapse;direction:rtl;text-align:right;">
+      <div style="border-top:1px solid #e5e7eb;margin-top:14px;padding-top:14px;">
+        <p style="margin:0 0 10px;color:${OPAL_BLUE};font-size:12px;font-weight:600;text-align:right;direction:rtl;font-family:${FONT_STACK};letter-spacing:0.02em;">מוטבים משניים</p>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="right" dir="rtl" style="border-collapse:collapse;direction:rtl;text-align:right;font-size:13px;">
           <thead>
             <tr>
-              <th align="right" style="padding-bottom:8px;color:#999;font-size:12px;font-weight:600;text-align:right;direction:rtl;padding-left:12px;font-family:${FONT_STACK};">שם</th>
-
-              <th align="right" style="padding-bottom:8px;color:#999;font-size:12px;font-weight:600;text-align:right;direction:rtl;font-family:${FONT_STACK};">ת.ז</th>
+              <th align="right" style="padding:0 0 6px;color:#888;font-size:11px;font-weight:600;text-align:right;direction:rtl;padding-left:8px;font-family:${FONT_STACK};">שם</th>
+              <th align="right" style="padding:0 0 6px;color:#888;font-size:11px;font-weight:600;text-align:right;direction:rtl;padding-left:8px;font-family:${FONT_STACK};">שירות</th>
+              <th align="right" style="padding:0 0 6px;color:#888;font-size:11px;font-weight:600;text-align:right;direction:rtl;font-family:${FONT_STACK};">ת.ז</th>
             </tr>
           </thead>
           <tbody>${beneficiariesRows}</tbody>
@@ -263,7 +254,7 @@ function buildBeneficiaryCompletionHtml(payload, logoDataUri = '') {
                   <td align="right" style="padding:12px 0;color:${OPAL_GOLD};font-size:18px;font-weight:700;text-align:right;direction:rtl;font-family:${FONT_STACK};"><span dir="ltr" style="unicode-bidi:embed;font-family:${FONT_STACK};">${escapeHtml(monthlyDisplay)}</span></td>
                 </tr>
               </table>
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" dir="rtl" style="margin-bottom:8px;direction:rtl;text-align:right;border-collapse:collapse;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" dir="rtl" style="margin-bottom:20px;direction:rtl;text-align:right;border-collapse:collapse;">
                 <tr>
                   <td style="background-color:#F8F9FA;border-right:4px solid ${OPAL_GOLD};padding:16px;text-align:right;direction:rtl;font-family:${FONT_STACK};">
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="right" dir="rtl" style="border-collapse:collapse;direction:rtl;text-align:right;">
@@ -276,10 +267,10 @@ function buildBeneficiaryCompletionHtml(payload, logoDataUri = '') {
                         <td align="right" style="padding:6px 0;text-align:right;direction:rtl;white-space:nowrap;font-family:${FONT_STACK};"><span dir="ltr" style="unicode-bidi:embed;color:#666;font-size:14px;font-family:${FONT_STACK};">${primaryId}</span></td>
                       </tr>
                     </table>
+                    ${secondaryBeneficiariesInner}
                   </td>
                 </tr>
               </table>
-              ${beneficiariesBlock}
               <div style="border-top:1px solid #eee;margin-bottom:20px;"></div>
               <div dir="rtl" style="margin-bottom:16px;text-align:right;">
                 <p style="margin:0 0 4px;text-align:right;font-family:${FONT_STACK};"><span style="color:${OPAL_BLUE};font-size:18px;font-weight:800;font-family:${FONT_STACK};">לשרות רפואי חייג:</span></p>
