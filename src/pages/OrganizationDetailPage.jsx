@@ -1251,28 +1251,39 @@ export default function OrganizationDetailPage() {
                             {selectedProductForBilling ? (
                               <p className="text-xs text-muted-foreground mt-1.5 tabular-nums" dir="rtl">
                                 <span className="text-muted-foreground">
-                                  ({String(selectedProductForBilling.flowType || 'סוג זרימה : רופא עד הבית')})
+                                  (סוג זרימה: {String(selectedProductForBilling.flowType || '—')})
                                 </span>
                               </p>
                             ) : null}
                           </Field>
                         </div>
 
-                        <Field>
-                          <FieldLabel className="text-right w-full">שם ספק (אוטומטי מהמוצר)</FieldLabel>
-                          <Input
-                            dir="rtl"
-                            className="text-right bg-muted"
-                            readOnly
-                            value={(() => {
-                              const prod = (products || []).find(
-                                (p) => String(p.productName || p.name || '').trim() === (org.subscriptionProductName || '')
-                              );
-                              return String(prod?.provider?.vendorName || '');
-                            })()}
-                            placeholder="ייבחר אוטומטית לפי המוצר"
-                          />
-                        </Field>
+                        <div className="grid gap-4 sm:grid-cols-2 sm:gap-6 items-start">
+                          <Field>
+                            <FieldLabel className="text-right w-full">שם ספק (אוטומטי מהמוצר)</FieldLabel>
+                            <Input
+                              dir="rtl"
+                              className="text-right bg-muted"
+                              readOnly
+                              value={(() => {
+                                const prod = (products || []).find(
+                                  (p) => String(p.productName || p.name || '').trim() === (org.subscriptionProductName || '')
+                                );
+                                return String(prod?.provider?.vendorName || '');
+                              })()}
+                              placeholder="ייבחר אוטומטית לפי המוצר"
+                            />
+                          </Field>
+                          <Field>
+                            <FieldLabel className="text-right w-full">עלות ספק (₪)</FieldLabel>
+                            <Input
+                              dir="rtl"
+                              className="text-right bg-muted tabular-nums"
+                              readOnly
+                              value={formatCurrency(pricingProviderCost)}
+                            />
+                          </Field>
+                        </div>
 
                         {/* Row 3: מחיר לעובד | רווח נקי */}
                         <div className="grid gap-4 sm:grid-cols-2 sm:gap-6 items-start">

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Edit2, Trash2, Receipt, ChevronDown, ChevronUp, Eye } from 'lucide-react';
+import { Plus, Edit2, Trash2, Receipt, ChevronDown, ChevronUp, Eye, Building2 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -368,7 +368,7 @@ export default function PricingDashboard() {
           if (!o) setError('');
         }}
       >
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto text-right" dir="rtl">
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto text-right" dir="rtl">
           <DialogHeader>
             <DialogTitle>{editId ? 'עריכת מחירון' : 'מחירון חדש'}</DialogTitle>
             <DialogDescription>
@@ -398,82 +398,92 @@ export default function PricingDashboard() {
                   : '';
                 return (
                   <div key={i} className="border rounded-lg p-3 space-y-3 bg-card">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                      <Field className="gap-1.5">
-                        <FieldLabel className="text-xs">שם מוצר</FieldLabel>
-                        <select
-                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                          value={line.productId}
-                          onChange={(e) => updateLine(i, 'productId', e.target.value)}
-                          required
-                        >
-                          <option value="">— בחרו מוצר —</option>
-                          {products.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.productName || p.name}
-                            </option>
-                          ))}
-                        </select>
-                      </Field>
-                      <Field className="gap-1.5">
-                        <FieldLabel className="text-xs">מק"ט וסוג זרימה</FieldLabel>
-                        <Input className="bg-muted" readOnly value={skuFlowLabel} placeholder="—" dir="ltr" />
-                      </Field>
-                      <Field className="gap-1.5">
-                        <FieldLabel className="text-xs">שם ספק</FieldLabel>
-                        <Input className="bg-muted" readOnly value={providerLabel} placeholder="—" />
-                      </Field>
-                      <Field className="gap-1.5">
-                        <FieldLabel className="text-xs">עלות ספק (₪)</FieldLabel>
-                        <Input className="bg-muted" readOnly value={line.vendorCost} placeholder="—" dir="ltr" />
-                      </Field>
-                      <Field className="gap-1.5">
-                        <FieldLabel className="text-xs">שם סוכן</FieldLabel>
-                        <select
-                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                          value={line.agentId}
-                          onChange={(e) => updateLine(i, 'agentId', e.target.value)}
-                        >
-                          <option value="">— ללא —</option>
-                          {agents.map((a) => (
-                            <option key={a.id} value={a.id}>
-                              {a.agentName}
-                            </option>
-                          ))}
-                        </select>
-                      </Field>
-                      <Field className="gap-1.5">
-                        <FieldLabel className="text-xs">עמלת סוכן (₪)</FieldLabel>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          dir="ltr"
-                          value={line.defaultAgentCommission}
-                          onChange={(e) => updateLine(i, 'defaultAgentCommission', e.target.value)}
-                        />
-                      </Field>
-                      <Field className="gap-1.5">
-                        <FieldLabel className="text-xs">מחיר לצרכן (₪)</FieldLabel>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          dir="ltr"
-                          value={line.retailPrice}
-                          onChange={(e) => updateLine(i, 'retailPrice', e.target.value)}
-                          required
-                        />
-                      </Field>
-                      <Field className="gap-1.5">
-                        <FieldLabel className="text-xs">רווח נקי (מחושב)</FieldLabel>
-                        <Input
-                          className="bg-muted tabular-nums"
-                          readOnly
-                          value={formatCurrency(lineNetProfit(line))}
-                          dir="ltr"
-                        />
-                      </Field>
+                    <div className="space-y-3 text-sm min-w-0">
+                      <div className="grid grid-cols-2 gap-4 items-start">
+                        <Field className="gap-1.5 min-w-0">
+                          <FieldLabel className="text-xs">שם מוצר</FieldLabel>
+                          <select
+                            className="flex h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                            value={line.productId}
+                            onChange={(e) => updateLine(i, 'productId', e.target.value)}
+                            required
+                          >
+                            <option value="">— בחרו מוצר —</option>
+                            {products.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.productName || p.name}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field className="gap-1.5 min-w-0">
+                          <FieldLabel className="text-xs">מק"ט וסוג זרימה</FieldLabel>
+                          <Input className="bg-muted" readOnly value={skuFlowLabel} placeholder="—" dir="ltr" />
+                        </Field>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 items-start">
+                        <Field className="gap-1.5 min-w-0">
+                          <FieldLabel className="text-xs">שם ספק</FieldLabel>
+                          <Input className="bg-muted" readOnly value={providerLabel} placeholder="—" />
+                        </Field>
+                        <Field className="gap-1.5 min-w-0">
+                          <FieldLabel className="text-xs">עלות ספק (₪)</FieldLabel>
+                          <Input className="bg-muted" readOnly value={line.vendorCost} placeholder="—" dir="ltr" />
+                        </Field>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 items-start">
+                        <Field className="gap-1.5 min-w-0">
+                          <FieldLabel className="text-xs">שם סוכן</FieldLabel>
+                          <select
+                            className="flex h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                            value={line.agentId}
+                            onChange={(e) => updateLine(i, 'agentId', e.target.value)}
+                          >
+                            <option value="">— ללא —</option>
+                            {agents.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.agentName}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field className="gap-1.5 min-w-0">
+                          <FieldLabel className="text-xs">עמלת סוכן (₪)</FieldLabel>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            dir="ltr"
+                            className="min-w-0"
+                            value={line.defaultAgentCommission}
+                            onChange={(e) => updateLine(i, 'defaultAgentCommission', e.target.value)}
+                          />
+                        </Field>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 items-start">
+                        <Field className="gap-1.5 min-w-0">
+                          <FieldLabel className="text-xs">מחיר לצרכן (₪)</FieldLabel>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            dir="ltr"
+                            className="min-w-0"
+                            value={line.retailPrice}
+                            onChange={(e) => updateLine(i, 'retailPrice', e.target.value)}
+                            required
+                          />
+                        </Field>
+                        <Field className="gap-1.5 min-w-0">
+                          <FieldLabel className="text-xs">רווח נקי (מחושב)</FieldLabel>
+                          <Input
+                            className="bg-muted tabular-nums min-w-0"
+                            readOnly
+                            value={formatCurrency(lineNetProfit(line))}
+                            dir="ltr"
+                          />
+                        </Field>
+                      </div>
                     </div>
                     <div className="flex justify-end">
                       <Button type="button" variant="ghost" className="text-destructive" onClick={() => removeLine(i)}>
@@ -700,9 +710,12 @@ export default function PricingDashboard() {
                                         return (
                                           <li
                                             key={String(org.id || org._id || name)}
-                                            className="rounded-md border bg-background px-3 py-2"
+                                            className="flex items-center gap-2 rounded-md border bg-background px-3 py-2"
                                           >
-                                            {name} - {price} ₪
+                                            <Building2 className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                                            <span>
+                                              {name} - {price} ₪
+                                            </span>
                                           </li>
                                         );
                                       })}

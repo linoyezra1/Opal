@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Building2, Plus, Edit2, Archive, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { Building2, Plus, Archive, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -1042,22 +1042,6 @@ export default function OrganizationsDashboard() {
                                     <Button variant="outline" size="sm" type="button" asChild>
                                       <Link to={`/admin/organizations/${encodeURIComponent(r.id)}`}>פרופיל</Link>
                                     </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      type="button"
-                                      onClick={() => {
-                                        setEditTab('org');
-                                        setEditOrg({
-                                          ...emptyForm(),
-                                          ...r,
-                                          pricingMethod: Array.isArray(r.customPricing) && r.customPricing.length ? 'custom' : 'priceList',
-                                          billingType: r.billingType || (r.billingMethod?.includes('מרוכז') ? 'Centralized' : 'Private'),
-                                        });
-                                      }}
-                                    >
-                                      <Edit2 className="size-4" />
-                                    </Button>
                                     <Tooltip>
                                       <TooltipTrigger asChild>
                                         <Button variant="ghost" size="icon" type="button" onClick={() => setDeleteOrg(r)} aria-label="הפוך ללא פעיל">
@@ -1171,22 +1155,6 @@ export default function OrganizationsDashboard() {
                                   onClick={() => approveOrg(r.id)}
                                 >
                                   {approvingId === r.id ? '…' : 'אשר ארגון'}
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  type="button"
-                                  onClick={() => {
-                                    setEditTab('org');
-                                    setEditOrg({
-                                      ...emptyForm(),
-                                      ...r,
-                                      pricingMethod: Array.isArray(r.customPricing) && r.customPricing.length ? 'custom' : 'priceList',
-                                      billingType: r.billingType || 'Private',
-                                    });
-                                  }}
-                                >
-                                  <Edit2 className="size-4" />
                                 </Button>
                                 <Tooltip>
                                   <TooltipTrigger asChild>

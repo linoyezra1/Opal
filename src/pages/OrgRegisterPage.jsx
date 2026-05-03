@@ -160,7 +160,9 @@ export default function OrgRegisterPage() {
             <CardDescription>
               {org && org.billingType === 'Private' ? (
                 <>
-                  מחיר מנוי חודשי בהנחת ארגון:{' '}
+                  קיבלתם הנחה ארגונית ל-
+                  {String(org.subscriptionProductName || '').trim() || 'המוצר'}
+                  . לאחר התשלום יש להזין פרטי המוטב לצורך קבלת השירות. מחיר מנוי חודשי:{' '}
                   <strong className="text-foreground">
                     {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(
                       Number(org.monthlyPricePerMember || 0)
