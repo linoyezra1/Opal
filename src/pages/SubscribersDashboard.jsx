@@ -2212,18 +2212,14 @@ export default function SubscribersDashboard() {
                       <p className="text-xs text-muted-foreground mb-1">תאריך תחילת מנוי</p>
                       <p className="font-semibold">{selected?.formState?.subscriptionStartDate || selected?.subscriptionStartDate || '—'}</p>
                     </div>
+                    <div className="rounded-lg border p-3 bg-slate-50 dark:bg-slate-900">
+                      <p className="text-xs text-muted-foreground mb-1">היסטוריית חיובים (מס' הוראת קבע)</p>
+                      <p className="font-semibold" dir="ltr">
+                        {resolvedCardcomRecurringId || '—'}
+                      </p>
+                    </div>
                   </CardContent>
                 </Card>
-                {resolvedCardcomRecurringId ? (
-                  <div
-                    role="note"
-                    className="rounded-lg border border-amber-300/80 bg-amber-50 px-4 py-3 text-right text-sm leading-snug text-foreground shadow-sm dark:border-amber-700/60 dark:bg-amber-950/40"
-                    dir="rtl"
-                  >
-                    <span className="font-semibold">מספר הוראת קבע בקארדקום לבדיקת היסטוריית חיובים:</span>{' '}
-                    <span dir="ltr" className="font-mono font-bold">{resolvedCardcomRecurringId}</span>
-                  </div>
-                ) : null}
               </TabsContent>
               <TabsContent value="beneficiary" className="overflow-auto max-h-[68vh] space-y-4 mt-3">
                 <Card>

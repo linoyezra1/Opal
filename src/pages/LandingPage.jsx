@@ -292,7 +292,7 @@ function ContactLandingView({ slug, content, whatYouGetRows, whatYouGetTitle, wh
 
       <footer className="py-8 border-t bg-muted/30">
         <div className="container text-center max-w-5xl mx-auto px-4">
-          <p className="text-sm text-muted-foreground">כל הזכויות שמורות לאופאל - בית ליזמות רפואית</p>
+          <p className="text-sm text-muted-foreground">כל הזכויות שמורות לאופאל תקשורת שיווקית בע"מ</p>
           <a
             href={ORG_JOIN_REQUEST_URL}
             className="text-sm text-primary underline mt-4 inline-block"
