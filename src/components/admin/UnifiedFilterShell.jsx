@@ -17,6 +17,7 @@ export default function UnifiedFilterShell(props) {
     searchPlaceholder = 'חיפוש...',
     basicControls = null,
     advancedContent = null,
+    hideSearchBar = false,
   } = props;
   const [expanded, setExpanded] = React.useState(false);
   const hasNewApi = Array.isArray(filters) && values && typeof onChange === 'function';
@@ -33,31 +34,33 @@ export default function UnifiedFilterShell(props) {
   return (
     <div className={`space-y-3 ${className}`} dir="rtl">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative w-full sm:flex-1 sm:min-w-[220px] sm:max-w-xl">
-          <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
-          <Input
-            value={resolvedSearchValue}
-            onChange={(e) => {
-              if (hasNewApi && searchFilter) updateValue(searchFilter.key, e.target.value);
-              else onSearchChange?.(e.target.value);
-            }}
-            placeholder={resolvedSearchPlaceholder}
-            className="h-10 pe-10 ps-9 bg-white border-slate-200 shadow-sm"
-          />
-          {resolvedSearchValue ? (
-            <button
-              type="button"
-              onClick={() => {
-                if (hasNewApi && searchFilter) updateValue(searchFilter.key, '');
-                else onSearchChange?.('');
+        {!hideSearchBar ? (
+          <div className="relative w-full sm:flex-1 sm:min-w-[220px] sm:max-w-xl">
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+            <Input
+              value={resolvedSearchValue}
+              onChange={(e) => {
+                if (hasNewApi && searchFilter) updateValue(searchFilter.key, e.target.value);
+                else onSearchChange?.(e.target.value);
               }}
-              className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              aria-label="נקה חיפוש"
-            >
-              <X className="size-4" />
-            </button>
-          ) : null}
-        </div>
+              placeholder={resolvedSearchPlaceholder}
+              className="h-10 pe-10 ps-9 bg-white border-slate-200 shadow-sm"
+            />
+            {resolvedSearchValue ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (hasNewApi && searchFilter) updateValue(searchFilter.key, '');
+                  else onSearchChange?.('');
+                }}
+                className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="נקה חיפוש"
+              >
+                <X className="size-4" />
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         {!hasNewApi ? basicControls : null}
 

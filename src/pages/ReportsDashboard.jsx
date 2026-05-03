@@ -566,6 +566,7 @@ export default function ReportsDashboard() {
                     resultsCount={previewRows.length}
                     totalCount={previewTotal}
                     isLoading={previewLoading}
+                    hideSearchBar
                   />
                 </div>
                 {exportErr ? <p className="text-sm text-destructive">{exportErr}</p> : null}
@@ -836,7 +837,7 @@ export default function ReportsDashboard() {
                                 <TableCell className="text-xs">{snap.invoiceNum || '—'}</TableCell>
                                 <TableCell className="text-xs">{snap.receiptNum || '—'}</TableCell>
                                 <TableCell className="text-xs whitespace-nowrap">
-                                  {snap.lockedAt ? new Date(snap.lockedAt).toLocaleDateString('he-IL') : '—'}
+                                  {snap.lockedAt ? fmtDateTime(snap.lockedAt) : '—'}
                                 </TableCell>
                                 <TableCell>
                                   <TooltipProvider delayDuration={200}>

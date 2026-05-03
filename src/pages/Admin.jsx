@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { fmtDateTime } from '../utils/dateUtils.js';
 
 const API_BASE = window.location.origin;
 const TOKEN_KEY = 'opal_admin_token';
@@ -172,7 +173,7 @@ export default function Admin() {
                     <td className="p-2">{d.formState?.fullName || '-'}</td>
                     <td className="p-2">{d.formState?.selectedPlanId || '-'}</td>
                     <td className="p-2">{formatCurrency(d.payerAmount)}</td>
-                    <td className="p-2">{d.createdAt ? new Date(d.createdAt).toLocaleString('he-IL') : '-'}</td>
+                    <td className="p-2">{d.createdAt ? fmtDateTime(d.createdAt) : '-'}</td>
                     <td className="p-2">
                       <button onClick={() => setSelected(d)} className="px-3 py-1 rounded bg-medical-teal text-white">פרטים מלאים</button>
                     </td>

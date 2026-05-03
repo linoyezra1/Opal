@@ -8,6 +8,7 @@ import { Button } from '../components/ui/button.jsx';
 import { Input } from '../components/ui/input.jsx';
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '../components/ui/empty.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
+import { fmtDateTime } from '../utils/dateUtils.js';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -91,6 +92,19 @@ const HEADER_LABELS = {
 
 function labelForColumn(key) {
   return HEADER_LABELS[key] || key;
+}
+
+/** עמודות תאריך/שעה מהשרת — מוצגות ב-DD/MM/YYYY HH:mm:ss במקום ISO */
+function formatArchiveCell(columnKey, value) {
+  const k = String(columnKey || '');
+  if (!(/At$/i.test(k) || /Date$/i.test(k) || k === 'date')) {
+    return String(value ?? '');
+  }
+  const s = String(value ?? '').trim();
+  if (!s) return '';
+  const parsed = new Date(s);
+  if (Number.isNaN(parsed.getTime())) return s;
+  return fmtDateTime(s);
 }
 
 export default function ArchiveDashboard() {
@@ -249,7 +263,9 @@ export default function ArchiveDashboard() {
                           <TableBody>
                             {rows.map((row) => (
                               <TableRow key={row.id}>
-                                {displayColumns.slice(0, 5).map((c) => <TableCell key={`${row.id}-${c}`}>{String(row[c] ?? '')}</TableCell>)}
+                                {displayColumns.slice(0, 5).map((c) => (
+                                  <TableCell key={`${row.id}-${c}`}>{formatArchiveCell(c, row[c])}</TableCell>
+                                ))}
                                 <TableCell>
                                   <Button size="sm" variant="outline" onClick={() => restore(tab.key, row.id)} disabled={loading || !canRestore}>
                                     <ArchiveRestore className="size-4 me-1" />

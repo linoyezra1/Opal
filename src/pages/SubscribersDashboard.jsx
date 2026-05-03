@@ -1898,9 +1898,9 @@ export default function SubscribersDashboard() {
                               aria-label={`בחר מנוי ${r.transactionId || r.id}`}
                             />
                           </TableCell>
-                          <TableCell dir="rtl" className="text-right">
-                            <div className="flex w-full flex-col items-end gap-1 text-right">
-                              <span>{r.fullName || '—'}</span>
+                          <TableCell dir="rtl" className="text-right align-top">
+                            <div className="flex w-full flex-col items-start gap-1 text-right">
+                              <span className="block w-full text-right">{r.fullName || '—'}</span>
                               {r.organizationBadge ? (
                                 <Badge variant="outline" className="text-xs font-normal max-w-full whitespace-normal text-right">
                                   {r.organizationBadge}

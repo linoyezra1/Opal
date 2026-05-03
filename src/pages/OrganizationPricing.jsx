@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Input } from '../components/ui/input.jsx';
 import { FieldGroup, Field, FieldLabel } from '../components/ui/field.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
+import { fmtDateTime } from '../utils/dateUtils.js';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -407,7 +408,7 @@ export default function OrganizationPricing() {
                         </ul>
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-xs">
-                        {r.createdAt ? new Date(r.createdAt).toLocaleString('he-IL') : '—'}
+                        {r.createdAt ? fmtDateTime(r.createdAt) : '—'}
                       </TableCell>
                     </TableRow>
                   ))}

@@ -23,6 +23,7 @@ import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '../components/u
 import { Spinner } from '../components/ui/spinner.jsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
+import { fmtDateTime } from '../utils/dateUtils.js';
 
 const TOKEN_KEY = 'opal_admin_token';
 const PRODUCT_FLOW_TYPE_LABEL = 'רופא עד הבית';
@@ -741,7 +742,7 @@ export default function ProductManagement() {
                           {p.baseDescription || '—'}
                         </TableCell>
                         <TableCell className="text-muted-foreground whitespace-nowrap text-sm">
-                          {p.createdAt ? new Date(p.createdAt).toLocaleString('he-IL') : '—'}
+                          {p.createdAt ? fmtDateTime(p.createdAt) : '—'}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">

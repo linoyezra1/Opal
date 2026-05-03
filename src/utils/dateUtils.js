@@ -58,18 +58,15 @@ export function parseLocalEndOfDay(dateString) {
 }
 
 /**
- * Format date value as YYYY-MM-DDTHH:mm:ss (no milliseconds/timezone suffix)
+ * Format date/time for display: DD/MM/YYYY HH:mm:ss (local time).
  *
  * @param {string|Date|null|undefined} dateInput
  * @returns {string}
  */
 export function fmtDateTime(dateInput) {
   if (!dateInput) return '-';
-  const iso = dateInput instanceof Date ? dateInput.toISOString() : String(dateInput).trim();
-  if (!iso) return '-';
-  const match = iso.match(/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2}:\d{2})/);
-  if (match) return `${match[1]}T${match[2]}`;
-  const parsed = new Date(iso);
+  const parsed = dateInput instanceof Date ? dateInput : new Date(String(dateInput).trim());
   if (Number.isNaN(parsed.getTime())) return '-';
-  return parsed.toISOString().slice(0, 19);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(parsed.getDate())}/${pad(parsed.getMonth() + 1)}/${parsed.getFullYear()} ${pad(parsed.getHours())}:${pad(parsed.getMinutes())}:${pad(parsed.getSeconds())}`;
 }

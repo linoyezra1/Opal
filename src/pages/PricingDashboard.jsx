@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Edit2, Trash2, Receipt, ChevronDown, ChevronUp, Eye, Building2 } from 'lucide-react';
+import { Plus, Edit2, Archive, Receipt, ChevronDown, ChevronUp, Eye, Building2 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -20,6 +20,7 @@ import { FieldGroup, Field, FieldLabel } from '../components/ui/field.jsx';
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '../components/ui/empty.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
+import { fmtDateTime } from '../utils/dateUtils.js';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -66,7 +67,7 @@ export default function PricingDashboard() {
   const [listName, setListName] = useState('');
   const [orgName, setOrgName] = useState('');
   const [lines, setLines] = useState([emptyLine()]);
-  const [deleteId, setDeleteId] = useState(null);
+  const [archiveId, setArchiveId] = useState(null);
   const [expandedRows, setExpandedRows] = useState(new Set());
   const [organizations, setOrganizations] = useState([]);
   const [viewRow, setViewRow] = useState(null);
@@ -318,17 +319,17 @@ export default function PricingDashboard() {
     }
   }
 
-  async function confirmDelete() {
-    if (!deleteId) return;
+  async function confirmArchive() {
+    if (!archiveId) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/admin/price-lists/${deleteId}`, {
-        method: 'DELETE',
+      const res = await fetch(`${API_BASE}/api/admin/price-lists/${archiveId}/archive`, {
+        method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) throw new Error(data.error || 'מחיקה נכשלה');
-      setDeleteId(null);
+      if (!res.ok || !data.success) throw new Error(data.error || 'העברה לארכיון נכשלה');
+      setArchiveId(null);
       await loadAll();
     } catch (e2) {
       setError(e2.message || 'שגיאה');
@@ -351,13 +352,13 @@ export default function PricingDashboard() {
   return (
     <AdminPageShell>
       <ConfirmDialog
-        open={!!deleteId}
-        title="מחיקת מחירון"
-        message="למחוק מחירון זה? דפי נחיתה שמקשרים אליו יפסיקו לעבוד."
-        confirmLabel="מחק"
-        danger
-        onConfirm={confirmDelete}
-        onCancel={() => setDeleteId(null)}
+        open={!!archiveId}
+        title="העברת מחירון לארכיון"
+        message="העברת המחירון לארכיון אינה משפיעה על דפי מוצר, דפי נחיתה או מחירונים המשויכים כבר לארגונים, וזאת לצורך שמירה על רצף נתונים תקין."
+        confirmLabel="העבר לארכיון"
+        danger={false}
+        onConfirm={confirmArchive}
+        onCancel={() => setArchiveId(null)}
         isLoading={loading}
       />
 
@@ -643,9 +644,7 @@ export default function PricingDashboard() {
                   <TableBody>
                     {filteredLists.map((row) => {
                       const isExpanded = expandedRows.has(row.id);
-                      const dateLabel = row.createdAt
-                        ? new Date(row.createdAt).toLocaleDateString('he-IL')
-                        : '—';
+                      const dateLabel = row.createdAt ? fmtDateTime(row.createdAt) : '—';
                       const linkedOrgs = orgsByPriceListId.get(String(row.id)) || [];
                       return (
                         <React.Fragment key={row.id}>
@@ -684,8 +683,8 @@ export default function PricingDashboard() {
                                 <Button variant="ghost" size="icon" type="button" onClick={() => openEdit(row)} aria-label="ערוך">
                                   <Edit2 className="size-4" />
                                 </Button>
-                                <Button variant="ghost" size="icon" type="button" onClick={() => setDeleteId(row.id)} aria-label="מחק">
-                                  <Trash2 className="size-4 text-destructive" />
+                                <Button variant="ghost" size="icon" type="button" onClick={() => setArchiveId(row.id)} aria-label="ארכיון">
+                                  <Archive className="size-4 text-muted-foreground" />
                                 </Button>
                               </div>
                             </TableCell>

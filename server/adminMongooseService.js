@@ -1132,6 +1132,11 @@ export async function deletePriceList(id) {
   return { ok: true };
 }
 
+/** העברת מחירון לארכיון (אותה לוגיקה כמו deletePriceList — isActive: false) */
+export async function archivePriceList(id) {
+  return deletePriceList(id);
+}
+
 function assertValidLandingSlug(slug) {
   const s = String(slug || '').trim().toLowerCase();
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s) || s.length < 2 || s.length > 80) {

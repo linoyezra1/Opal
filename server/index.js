@@ -93,6 +93,7 @@ import {
   createVendor,
   deleteLandingPage,
   deletePriceList,
+  archivePriceList,
   deletePricingEntry,
   deleteProduct,
   deleteSalesAgent,
@@ -130,7 +131,7 @@ import {
   buildAgentCommissionPayload,
   generateFlattenedSubscriberRows,
   filterDealsForSubscriberExport,
-  listProviderNamesFromDeals,
+  listProviderNamesFromDealsForFilter,
   buildSubscribersXlsxBuffer,
 } from './reportController.js';
 import multer from 'multer';
@@ -1743,6 +1744,16 @@ app.put('/api/admin/price-lists/:id', requireAdmin, async (req, res) => {
   }
 });
 
+app.post('/api/admin/price-lists/:id/archive', requireAdmin, async (req, res) => {
+  try {
+    await archivePriceList(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    console.error(`[${ts()}] admin/price-lists archive error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to archive price list' });
+  }
+});
+
 app.delete('/api/admin/price-lists/:id', requireAdmin, async (req, res) => {
   try {
     await deletePriceList(req.params.id);
@@ -2686,7 +2697,12 @@ app.get('/api/admin/reports/providers', requireAdmin, async (req, res) => {
     const fromDate = req.query.fromDate || req.query.from || '';
     const toDate = req.query.toDate || req.query.to || '';
     const allDeals = await findDealsCreatedInRange(fromDate || null, toDate || null);
-    const providers = listProviderNamesFromDeals(allDeals);
+    const fromDeals = listProviderNamesFromDealsForFilter(allDeals);
+    const vendors = await listVendors({ activeOnly: false });
+    const vendorNames = (Array.isArray(vendors) ? vendors : [])
+      .map((v) => String(v.vendorName || '').trim())
+      .filter(Boolean);
+    const providers = [...new Set([...vendorNames, ...fromDeals])].sort((a, b) => a.localeCompare(b, 'he'));
     res.json({ success: true, providers });
   } catch (e) {
     console.error(`[${ts()}] reports/providers error:`, e);

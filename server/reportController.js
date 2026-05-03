@@ -339,6 +339,16 @@ export function listProviderNamesFromDeals(deals) {
   return Array.from(set).sort((a, b) => a.localeCompare(b, 'he'));
 }
 
+/** שמות ספקים לסינון דוחות — ללא placeholder "לא משויך" */
+export function listProviderNamesFromDealsForFilter(deals) {
+  const set = new Set();
+  for (const d of Array.isArray(deals) ? deals : []) {
+    const p = normalizeProviderName(d);
+    if (p && p !== 'לא משויך') set.add(p);
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b, 'he'));
+}
+
 export async function buildSubscribersXlsxBuffer(deals) {
   const rows = generateFlattenedSubscriberRows(deals);
   const headers = [
