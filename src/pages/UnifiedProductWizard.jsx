@@ -1375,7 +1375,7 @@ export default function UnifiedProductWizard() {
           subtitle={
             finalizeDone
               ? 'הושלם ✓'
-              : 'שייכו סוכנים לפי הצורך — קישור מחירון ללקוחות מוגדר בפרופיל הארגון (תמחור). לאחר מכן לחצו סיים ופרסם הכל'
+              : 'שייכו סוכנים לפי הצורך  לאחר מכן לחצו סיים ופרסם הכל'
           }
           done={finalizeDone}
           locked={!step2Valid}
@@ -1387,7 +1387,7 @@ export default function UnifiedProductWizard() {
             <div className="space-y-2">
               <p className="text-sm font-medium text-slate-800">סוכנים</p>
               <p className="text-xs text-muted-foreground">
-                בחרו סוכנים — יתעדכן productCommissions. העמלה מתמלאת מהגלובלית (ניתן לשנות לכל סוכן).
+                בחרו סוכנים - העמלה מתמלאת מהגלובלית (ניתן לשנות לכל סוכן).
                 {s3.slug || committed.slug ? ' לכל סוכן ייווצר קישור ייחודי לדף הנחיתה.' : ''}
               </p>
               {agents.length === 0 ? (

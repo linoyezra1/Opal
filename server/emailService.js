@@ -162,8 +162,7 @@ function buildOrderConfirmationHtml(payload, logoDataUri = '') {
 /**
  * Email 2 — סיכום הזמנה
  *
- * מבוטח ראשי + מוטבים משניים באותה תיבת רקע (#F8F9FA), עם מפריד עדין ביניהם.
- * "לשרות רפואי חייג" נשאר מתחת לתיבה עם ריווח ברור.
+ * טבלת מבוטחים אחת (סוג | שם | ת.ז), ללא רקע אפור — עיצוב תואם לטבלת התאריך/מוצר/סכום.
  */
 function buildBeneficiaryCompletionHtml(payload, logoDataUri = '') {
   const amount = Number(payload.monthlyTotal || 0).toLocaleString('he-IL');
@@ -179,37 +178,24 @@ function buildBeneficiaryCompletionHtml(payload, logoDataUri = '') {
 
   const secondaries = Array.isArray(payload.secondaryBeneficiaries) ? payload.secondaryBeneficiaries : [];
 
-  /* ── עמודות מיושרות לימין: שם | שירות | ת.ז ── */
-  let beneficiariesRows = '';
-  secondaries.forEach((b, index) => {
+  const thInsured = `padding:8px 0 10px;color:#999;font-size:13px;font-weight:600;text-align:right;direction:rtl;font-family:${FONT_STACK};border-bottom:1px solid #eee;`;
+  const tdRow = `padding:10px 0;text-align:right;direction:rtl;font-family:${FONT_STACK};border-bottom:1px solid #eee;vertical-align:middle;font-size:14px;`;
+
+  let insuredBodyRows = `<tr>
+                  <td align="right" style="${tdRow}font-weight:600;color:#333;">מבוטח ראשי</td>
+                  <td align="right" style="${tdRow}font-weight:600;color:${OPAL_BLUE};">${primaryName}</td>
+                  <td align="right" style="${tdRow}font-weight:600;color:#666;white-space:nowrap;"><span dir="ltr" style="unicode-bidi:embed;font-family:${FONT_STACK};">${primaryId}</span></td>
+                </tr>`;
+
+  secondaries.forEach((b) => {
     const name = escapeHtml(b?.name || '—');
     const idNum = escapeHtml(b?.idNumber || '—');
-    const border = index < secondaries.length - 1 ? 'border-bottom:1px solid #eee;' : 'border-bottom:none;';
-    beneficiariesRows += `
-      <tr>
-        <td align="right" style="padding:10px 12px 10px 0;color:#333;font-size:14px;text-align:right;direction:rtl;vertical-align:middle;font-family:${FONT_STACK};${border}">${name}</td>
-        <td align="right" style="padding:10px 12px;color:#555;font-size:13px;text-align:right;direction:rtl;vertical-align:middle;font-family:${FONT_STACK};${border}">${subscriptionType}</td>
-        <td align="right" style="padding:10px 0 10px 0;color:#666;font-size:14px;text-align:right;direction:rtl;vertical-align:middle;white-space:nowrap;font-family:${FONT_STACK};${border}"><span dir="ltr" style="unicode-bidi:embed;font-family:${FONT_STACK};">${idNum}</span></td>
-      </tr>`;
+    insuredBodyRows += `<tr>
+                  <td align="right" style="${tdRow}color:#666;font-weight:400;">מוטב משני</td>
+                  <td align="right" style="${tdRow}color:#333;font-weight:400;">${name}</td>
+                  <td align="right" style="${tdRow}color:#666;font-weight:400;white-space:nowrap;"><span dir="ltr" style="unicode-bidi:embed;font-family:${FONT_STACK};">${idNum}</span></td>
+                </tr>`;
   });
-
-  const secondaryBeneficiariesInner =
-    secondaries.length > 0
-      ? `
-      <div style="border-top:1px solid #e5e7eb;margin-top:14px;padding-top:14px;">
-        <p style="margin:0 0 10px;color:${OPAL_BLUE};font-size:12px;font-weight:600;text-align:right;direction:rtl;font-family:${FONT_STACK};letter-spacing:0.02em;">מוטבים משניים</p>
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="right" dir="rtl" style="border-collapse:collapse;direction:rtl;text-align:right;font-size:13px;">
-          <thead>
-            <tr>
-              <th align="right" style="padding:0 0 6px;color:#888;font-size:11px;font-weight:600;text-align:right;direction:rtl;padding-left:8px;font-family:${FONT_STACK};">שם</th>
-              <th align="right" style="padding:0 0 6px;color:#888;font-size:11px;font-weight:600;text-align:right;direction:rtl;padding-left:8px;font-family:${FONT_STACK};">שירות</th>
-              <th align="right" style="padding:0 0 6px;color:#888;font-size:11px;font-weight:600;text-align:right;direction:rtl;font-family:${FONT_STACK};">ת.ז</th>
-            </tr>
-          </thead>
-          <tbody>${beneficiariesRows}</tbody>
-        </table>
-      </div>`
-      : '';
 
   const medicalPhone = String(process.env.MEDICAL_SERVICES_PHONE || '00-0000000').trim();
   const claimsLink = String(
@@ -254,22 +240,17 @@ function buildBeneficiaryCompletionHtml(payload, logoDataUri = '') {
                   <td align="right" style="padding:12px 0;color:${OPAL_GOLD};font-size:18px;font-weight:700;text-align:right;direction:rtl;font-family:${FONT_STACK};"><span dir="ltr" style="unicode-bidi:embed;font-family:${FONT_STACK};">${escapeHtml(monthlyDisplay)}</span></td>
                 </tr>
               </table>
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" dir="rtl" style="margin-bottom:20px;direction:rtl;text-align:right;border-collapse:collapse;">
-                <tr>
-                  <td style="background-color:#F8F9FA;border-right:4px solid ${OPAL_GOLD};padding:16px;text-align:right;direction:rtl;font-family:${FONT_STACK};">
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="right" dir="rtl" style="border-collapse:collapse;direction:rtl;text-align:right;">
-                      <tr>
-                        <td align="right" style="padding:0 0 10px;color:${OPAL_GOLD};font-size:11px;font-weight:700;text-align:right;direction:rtl;text-transform:uppercase;letter-spacing:0.04em;font-family:${FONT_STACK};" colspan="3">מבוטח ראשי</td>
-                      </tr>
-                      <tr>
-                        <td align="right" style="padding:6px 0 6px 12px;text-align:right;direction:rtl;font-family:${FONT_STACK};"><span style="color:${OPAL_BLUE};font-size:16px;font-weight:600;font-family:${FONT_STACK};">${primaryName}</span></td>
-                        <td align="right" style="padding:6px 12px;text-align:right;direction:rtl;font-family:${FONT_STACK};"><span style="color:#555;font-size:13px;font-family:${FONT_STACK};">${subscriptionType}</span></td>
-                        <td align="right" style="padding:6px 0;text-align:right;direction:rtl;white-space:nowrap;font-family:${FONT_STACK};"><span dir="ltr" style="unicode-bidi:embed;color:#666;font-size:14px;font-family:${FONT_STACK};">${primaryId}</span></td>
-                      </tr>
-                    </table>
-                    ${secondaryBeneficiariesInner}
-                  </td>
-                </tr>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="right" dir="rtl" style="border-collapse:collapse;margin-bottom:20px;direction:rtl;text-align:right;font-family:${FONT_STACK};">
+                <thead>
+                  <tr>
+                    <th align="right" style="${thInsured}">סוג מבוטח</th>
+                    <th align="right" style="${thInsured}">שם</th>
+                    <th align="right" style="${thInsured}">ת.ז</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${insuredBodyRows}
+                </tbody>
               </table>
               <div style="border-top:1px solid #eee;margin-bottom:20px;"></div>
               <div dir="rtl" style="margin-bottom:16px;text-align:right;">

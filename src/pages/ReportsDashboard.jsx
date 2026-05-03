@@ -521,7 +521,7 @@ export default function ReportsDashboard() {
                         label: 'סטטוס',
                         type: 'select',
                         options: [
-                          { value: 'all', label: 'הכל' },
+
                           { value: 'active', label: 'פעילים' },
                           { value: 'cancelled', label: 'מבוטלים' },
                         ],
