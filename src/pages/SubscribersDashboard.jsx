@@ -2213,7 +2213,7 @@ export default function SubscribersDashboard() {
                       <p className="font-semibold">{selected?.formState?.subscriptionStartDate || selected?.subscriptionStartDate || '—'}</p>
                     </div>
                     <div className="rounded-lg border p-3 bg-slate-50 dark:bg-slate-900">
-                      <p className="text-xs text-muted-foreground mb-1">היסטוריית חיובים (מס' הוראת קבע)</p>
+                      <p className="text-xs text-muted-foreground mb-1">מס' הוראת קבע בקארדקום (לבדיקת היסטוריית חיוביים)</p>
                       <p className="font-semibold" dir="ltr">
                         {resolvedCardcomRecurringId || '—'}
                       </p>

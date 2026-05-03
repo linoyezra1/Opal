@@ -224,7 +224,7 @@ export default function OrganizationPricing() {
         </div>
 
         <p className="text-sm text-muted-foreground">
-          לכל שורה: בחרו <strong>ספק</strong> ו<strong>מוצר</strong> — עלות הספק והמק&quot;ט נמשכים אוטומטית מהמסד. הזינו מחיר קמעוני ועמלת סוכן; הרווחים מחושבים בזמן אמת.
+          לכל שורה: בחרו <strong>ספק</strong> ו<strong>מוצר</strong> — עלות הספק והמק&quot;ט נמשכים אוטומטית מהמסד. הזינו מחיר לצרכן ועמלת סוכן; הרווחים מחושבים בזמן אמת.
         </p>
 
         <Card>
@@ -312,7 +312,7 @@ export default function OrganizationPricing() {
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 items-end">
                         <Field className="gap-1.5">
-                          <FieldLabel className="text-xs">מחיר קמעוני</FieldLabel>
+                          <FieldLabel className="text-xs">מחיר לצרכן</FieldLabel>
                           <Input
                             type="number"
                             min="0"
@@ -400,7 +400,7 @@ export default function OrganizationPricing() {
                           {(r.relatedProducts || []).map((x, i) => (
                             <li key={i}>
                               {x.vendor?.vendorName ? `${x.vendor.vendorName} · ` : ''}
-                              {x.product?.productName || x.product?.name || x.productId}: קמעוני ₪{x.retailPrice} · ספק ₪{x.vendorCost} · סוכן ₪
+                              {x.product?.productName || x.product?.name || x.productId}: לצרכן ₪{x.retailPrice} · ספק ₪{x.vendorCost} · סוכן ₪
                               {x.agentCommission ?? 0} · נקי ₪{x.netProfit ?? x.profit}
                             </li>
                           ))}

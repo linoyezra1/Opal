@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Edit2, Trash2, Receipt, ChevronDown, ChevronUp, Building2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, Receipt, ChevronDown, ChevronUp, Eye } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -18,7 +18,6 @@ import {
 import { Input } from '../components/ui/input.jsx';
 import { FieldGroup, Field, FieldLabel } from '../components/ui/field.jsx';
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '../components/ui/empty.jsx';
-import { Badge } from '../components/ui/badge.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
 
@@ -29,6 +28,17 @@ function formatCurrency(v) {
     style: 'currency', currency: 'ILS',
     minimumFractionDigits: 2, maximumFractionDigits: 2,
   }).format(Number(v || 0));
+}
+
+function lineNetProfit(line) {
+  if (line == null) return 0;
+  if (line.netProfit != null && Number.isFinite(Number(line.netProfit))) {
+    return Number(line.netProfit);
+  }
+  const r = Number(line.retailPrice || 0);
+  const v = Number(line.vendorCost || 0);
+  const a = Number(line.defaultAgentCommission || 0);
+  return r - v - a;
 }
 
 const emptyLine = () => ({
@@ -58,6 +68,8 @@ export default function PricingDashboard() {
   const [lines, setLines] = useState([emptyLine()]);
   const [deleteId, setDeleteId] = useState(null);
   const [expandedRows, setExpandedRows] = useState(new Set());
+  const [organizations, setOrganizations] = useState([]);
+  const [viewRow, setViewRow] = useState(null);
 
   function toggleExpand(id) {
     setExpandedRows((prev) => {
@@ -81,21 +93,34 @@ export default function PricingDashboard() {
     });
   }, [lists, search, orgFilter]);
 
+  const orgsByPriceListId = useMemo(() => {
+    const m = new Map();
+    for (const org of organizations || []) {
+      const plId = String(org.priceListId || '').trim();
+      if (!plId) continue;
+      if (!m.has(plId)) m.set(plId, []);
+      m.get(plId).push(org);
+    }
+    return m;
+  }, [organizations]);
+
   async function loadAll() {
     if (!token) return;
     setLoading(true);
     setError('');
     try {
-      const [pr, vn, ls, ag] = await Promise.all([
+      const [pr, vn, ls, ag, orgRes] = await Promise.all([
         fetch(`${API_BASE}/api/admin/products`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/vendors`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/price-lists`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/agents`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+        fetch(`${API_BASE}/api/admin/organizations`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
       ]);
       if (pr.success) setProducts(pr.products || []);
       if (vn.success) setVendors(vn.vendors || []);
       if (ls.success) setLists(ls.lists || []);
       if (ag.success) setAgents(ag.rows || []);
+      if (orgRes.success) setOrganizations(Array.isArray(orgRes.rows) ? orgRes.rows : []);
     } catch (e) {
       setError(e.message || 'שגיאה');
     } finally {
@@ -353,113 +378,115 @@ export default function PricingDashboard() {
           </DialogHeader>
           <form onSubmit={saveList} className="space-y-4">
             <FieldGroup>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field>
-                  <FieldLabel>שם מחירון *</FieldLabel>
-                  <Input value={listName} onChange={(e) => setListName(e.target.value)} required />
-                </Field>
-                <Field>
-                  <FieldLabel>שם ארגון (אופציונלי)</FieldLabel>
-                  <Input value={orgName} onChange={(e) => setOrgName(e.target.value)} />
-                </Field>
-              </div>
+              <Field>
+                <FieldLabel>שם מחירון *</FieldLabel>
+                <Input value={listName} onChange={(e) => setListName(e.target.value)} required />
+              </Field>
             </FieldGroup>
 
             <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <h3 className="font-semibold text-sm">מוצרים במחירון</h3>
-                <Button type="button" variant="link" className="h-auto p-0" onClick={addLine}>
-                  + שורה
-                </Button>
-              </div>
-              {lines.map((line, i) => (
-                <div key={i} className="border rounded-lg p-3 space-y-3 bg-card">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 items-end">
-                    <Field className="gap-1.5">
-                      <FieldLabel className="text-xs">מוצר</FieldLabel>
-                      <select
-                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                        value={line.productId}
-                        onChange={(e) => updateLine(i, 'productId', e.target.value)}
-                        required
-                      >
-                        <option value="">—</option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.productName || p.name}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field className="gap-1.5">
-                      <FieldLabel className="text-xs">ספק (אוטומטי)</FieldLabel>
-                      <Input
-                        className="bg-muted"
-                        readOnly
-                        value={
-                          line.providerName ||
-                          vendors.find((v) => String(v.id) === String(line.vendorId))?.vendorName ||
-                          ''
-                        }
-                        placeholder="ייבחר אוטומטית"
-                      />
-                    </Field>
-                    <Field className="gap-1.5">
-                      <FieldLabel className="text-xs">סוכן (אופציונלי — עמלה אוטומטית)</FieldLabel>
-                      <select
-                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                        value={line.agentId}
-                        onChange={(e) => updateLine(i, 'agentId', e.target.value)}
-                      >
-                        <option value="">— ללא — (עמלה ידנית)</option>
-                        {agents.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.agentName}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field className="gap-1.5">
-                      <FieldLabel className="text-xs">מחיר קמעוני (₪)</FieldLabel>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        dir="ltr"
-                        value={line.retailPrice}
-                        onChange={(e) => updateLine(i, 'retailPrice', e.target.value)}
-                        required
-                      />
-                    </Field>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
-                    <Field className="gap-1.5">
-                      <FieldLabel className="text-xs">
-                        עמלת סוכן {line.agentId ? '(מחושבת מפרופיל)' : '(ידנית)'}
-                      </FieldLabel>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        dir="ltr"
-                        className={line.agentId ? 'bg-muted' : ''}
-                        readOnly={!!line.agentId}
-                        value={line.defaultAgentCommission}
-                        onChange={(e) => updateLine(i, 'defaultAgentCommission', e.target.value)}
-                      />
-                    </Field>
-                    <Field className="gap-1.5">
-                      <FieldLabel className="text-xs">עלות ספק (מהמסד)</FieldLabel>
-                      <Input className="bg-muted" readOnly value={line.vendorCost} placeholder="—" dir="ltr" />
-                    </Field>
-                    <div className="flex justify-end pb-2">
+              <h3 className="font-semibold text-sm">מוצרים במחירון</h3>
+              {lines.map((line, i) => {
+                const selectedProduct = (products || []).find((p) => String(p.id) === String(line.productId));
+                const providerLabel =
+                  line.providerName ||
+                  selectedProduct?.provider?.vendorName ||
+                  vendors.find((v) => String(v.id) === String(line.vendorId))?.vendorName ||
+                  '';
+                const skuFlowLabel = selectedProduct
+                  ? `${selectedProduct.sku || '—'} (Flow: ${selectedProduct.flowType || '—'})`
+                  : '';
+                return (
+                  <div key={i} className="border rounded-lg p-3 space-y-3 bg-card">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                      <Field className="gap-1.5">
+                        <FieldLabel className="text-xs">שם מוצר</FieldLabel>
+                        <select
+                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                          value={line.productId}
+                          onChange={(e) => updateLine(i, 'productId', e.target.value)}
+                          required
+                        >
+                          <option value="">— בחרו מוצר —</option>
+                          {products.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.productName || p.name}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field className="gap-1.5">
+                        <FieldLabel className="text-xs">מק"ט וסוג זרימה</FieldLabel>
+                        <Input className="bg-muted" readOnly value={skuFlowLabel} placeholder="—" dir="ltr" />
+                      </Field>
+                      <Field className="gap-1.5">
+                        <FieldLabel className="text-xs">שם ספק</FieldLabel>
+                        <Input className="bg-muted" readOnly value={providerLabel} placeholder="—" />
+                      </Field>
+                      <Field className="gap-1.5">
+                        <FieldLabel className="text-xs">עלות ספק (₪)</FieldLabel>
+                        <Input className="bg-muted" readOnly value={line.vendorCost} placeholder="—" dir="ltr" />
+                      </Field>
+                      <Field className="gap-1.5">
+                        <FieldLabel className="text-xs">שם סוכן</FieldLabel>
+                        <select
+                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                          value={line.agentId}
+                          onChange={(e) => updateLine(i, 'agentId', e.target.value)}
+                        >
+                          <option value="">— ללא —</option>
+                          {agents.map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.agentName}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field className="gap-1.5">
+                        <FieldLabel className="text-xs">עמלת סוכן (₪)</FieldLabel>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          dir="ltr"
+                          value={line.defaultAgentCommission}
+                          onChange={(e) => updateLine(i, 'defaultAgentCommission', e.target.value)}
+                        />
+                      </Field>
+                      <Field className="gap-1.5">
+                        <FieldLabel className="text-xs">מחיר לצרכן (₪)</FieldLabel>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          dir="ltr"
+                          value={line.retailPrice}
+                          onChange={(e) => updateLine(i, 'retailPrice', e.target.value)}
+                          required
+                        />
+                      </Field>
+                      <Field className="gap-1.5">
+                        <FieldLabel className="text-xs">רווח נקי (מחושב)</FieldLabel>
+                        <Input
+                          className="bg-muted tabular-nums"
+                          readOnly
+                          value={formatCurrency(lineNetProfit(line))}
+                          dir="ltr"
+                        />
+                      </Field>
+                    </div>
+                    <div className="flex justify-end">
                       <Button type="button" variant="ghost" className="text-destructive" onClick={() => removeLine(i)}>
                         הסר שורה
                       </Button>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
+              <Button type="button" variant="default" className="w-full sm:w-auto" onClick={addLine}>
+                <Plus className="size-4 me-2" />
+                הוסף מוצר למחירון
+              </Button>
             </div>
             {error ? <p className="text-destructive text-sm">{error}</p> : null}
             <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
@@ -475,7 +502,62 @@ export default function PricingDashboard() {
         </DialogContent>
       </Dialog>
 
-
+      <Dialog open={!!viewRow} onOpenChange={(o) => { if (!o) setViewRow(null); }}>
+        <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto text-right" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>פרטי מוצרים במחירון</DialogTitle>
+            <DialogDescription>
+              {viewRow?.listName ? `מחירון: ${viewRow.listName}` : null}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="[&_th]:text-right">
+                  <TableHead>מוצר + SKU</TableHead>
+                  <TableHead>עלות ספק</TableHead>
+                  <TableHead>עמלת סוכן</TableHead>
+                  <TableHead>מחיר לצרכן</TableHead>
+                  <TableHead>רווח נקי</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {!viewRow || (viewRow.lines || []).length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground text-sm py-6">
+                      אין מוצרים במחירון זה
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  (viewRow.lines || []).map((line, li) => {
+                    const prod = productMap.get(String(line.productId));
+                    const prodName = prod?.productName || prod?.name || '—';
+                    const sku = prod?.sku || '—';
+                    const net = lineNetProfit(line);
+                    return (
+                      <TableRow key={li}>
+                        <TableCell>
+                          <div className="font-medium">{prodName}</div>
+                          <div className="text-xs text-muted-foreground font-mono">{sku}</div>
+                        </TableCell>
+                        <TableCell className="tabular-nums">{formatCurrency(line.vendorCost)}</TableCell>
+                        <TableCell className="tabular-nums">{formatCurrency(line.defaultAgentCommission)}</TableCell>
+                        <TableCell className="tabular-nums font-medium">{formatCurrency(line.retailPrice)}</TableCell>
+                        <TableCell className="tabular-nums font-semibold text-primary">{formatCurrency(net)}</TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setViewRow(null)}>
+              סגור
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -544,40 +626,51 @@ export default function PricingDashboard() {
                     <TableRow className="[&_th]:text-right">
                       <TableHead className="w-8" />
                       <TableHead>שם מחירון</TableHead>
-                      <TableHead>ארגון</TableHead>
-                      <TableHead>תאריך עדכון</TableHead>
-                      <TableHead>מוצרים</TableHead>
-                      <TableHead className="w-28">פעולות</TableHead>
+                      <TableHead>תאריך יצירה</TableHead>
+                      <TableHead className="w-36">פעולות</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredLists.map((row) => {
                       const isExpanded = expandedRows.has(row.id);
-                      const dateLabel = row.updatedAt
-                        ? new Date(row.updatedAt).toLocaleDateString('he-IL')
-                        : row.createdAt
-                          ? new Date(row.createdAt).toLocaleDateString('he-IL')
-                          : '—';
+                      const dateLabel = row.createdAt
+                        ? new Date(row.createdAt).toLocaleDateString('he-IL')
+                        : '—';
+                      const linkedOrgs = orgsByPriceListId.get(String(row.id)) || [];
                       return (
                         <React.Fragment key={row.id}>
-                          <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => toggleExpand(row.id)}>
-                            <TableCell className="w-8 text-center">
+                          <TableRow className="hover:bg-muted/50">
+                            <TableCell
+                              className="w-8 text-center cursor-pointer align-middle"
+                              onClick={() => toggleExpand(row.id)}
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  toggleExpand(row.id);
+                                }
+                              }}
+                              aria-expanded={isExpanded}
+                              aria-label={isExpanded ? 'כווץ' : 'הרחב'}
+                            >
                               {isExpanded
-                                ? <ChevronUp className="size-4 text-muted-foreground" />
-                                : <ChevronDown className="size-4 text-muted-foreground" />}
+                                ? <ChevronUp className="size-4 text-muted-foreground mx-auto" />
+                                : <ChevronDown className="size-4 text-muted-foreground mx-auto" />}
                             </TableCell>
                             <TableCell className="font-medium">{row.listName}</TableCell>
-                            <TableCell>
-                              {row.orgName
-                                ? <Badge variant="outline" className="gap-1"><Building2 className="size-3" />{row.orgName}</Badge>
-                                : <span className="text-muted-foreground text-sm">—</span>}
-                            </TableCell>
                             <TableCell className="text-sm text-muted-foreground">{dateLabel}</TableCell>
                             <TableCell>
-                              <Badge variant="secondary">{(row.lines || []).length}</Badge>
-                            </TableCell>
-                            <TableCell onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  type="button"
+                                  onClick={() => setViewRow(row)}
+                                  aria-label="צפייה במוצרים"
+                                >
+                                  <Eye className="size-4" />
+                                </Button>
                                 <Button variant="ghost" size="icon" type="button" onClick={() => openEdit(row)} aria-label="ערוך">
                                   <Edit2 className="size-4" />
                                 </Button>
@@ -590,49 +683,31 @@ export default function PricingDashboard() {
 
                           {isExpanded && (
                             <TableRow className="bg-muted/30 hover:bg-muted/30">
-                              <TableCell colSpan={6} className="p-0">
-                                <div className="px-6 py-3 space-y-2">
-                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">פרטי מוצרים במחירון</p>
-                                  <div className="rounded-md border overflow-x-auto bg-background">
-                                    <Table>
-                                      <TableHeader>
-                                        <TableRow className="[&_th]:text-right">
-                                          <TableHead>מוצר + SKU</TableHead>
-                                          <TableHead>מחיר קמעוני</TableHead>
-                                          <TableHead>עלות ספק</TableHead>
-                                          <TableHead>עמלת סוכן</TableHead>
-
-                                          <TableHead>רווח נקי</TableHead>
-                                        </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
-                                        {(row.lines || []).length === 0 ? (
-                                          <TableRow>
-                                            <TableCell colSpan={6} className="text-center text-muted-foreground text-sm py-3">אין מוצרים</TableCell>
-                                          </TableRow>
-                                        ) : (
-                                          (row.lines || []).map((line, li) => {
-                                            const prod = productMap.get(String(line.productId));
-                                            const prodName = prod?.productName || prod?.name || '—';
-                                            const sku = prod?.sku || '—';
-                                            return (
-                                              <TableRow key={li}>
-                                                <TableCell>
-                                                  <div className="font-medium">{prodName}</div>
-                                                  <div className="text-xs text-muted-foreground font-mono">{sku}</div>
-                                                </TableCell>
-                                                <TableCell className="tabular-nums">{formatCurrency(line.retailPrice)}</TableCell>
-                                                <TableCell className="tabular-nums text-muted-foreground">{formatCurrency(line.vendorCost)}</TableCell>
-                                                <TableCell className="tabular-nums text-muted-foreground">{formatCurrency(line.defaultAgentCommission)}</TableCell>
-                                                <TableCell className="tabular-nums font-medium text-primary">{formatCurrency(line.retailPrice)}</TableCell>
-                                                <TableCell className="tabular-nums font-semibold">{formatCurrency(line.netProfit)}</TableCell>
-                                              </TableRow>
-                                            );
-                                          })
-                                        )}
-                                      </TableBody>
-                                    </Table>
-                                  </div>
+                              <TableCell colSpan={4} className="p-0">
+                                <div className="px-6 py-4 space-y-2">
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                    ארגונים מקושרים למחירון
+                                  </p>
+                                  {linkedOrgs.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground py-1">
+                                      לא נמצאו ארגונים מקושרים למחירון זה
+                                    </p>
+                                  ) : (
+                                    <ul className="space-y-1.5 text-sm list-none m-0 p-0">
+                                      {linkedOrgs.map((org) => {
+                                        const name = String(org.companyName || org.name || '').trim() || '—';
+                                        const price = Number(org.monthlyPricePerMember || 0);
+                                        return (
+                                          <li
+                                            key={String(org.id || org._id || name)}
+                                            className="rounded-md border bg-background px-3 py-2"
+                                          >
+                                            {name} - {price} ₪
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                  )}
                                 </div>
                               </TableCell>
                             </TableRow>
