@@ -212,7 +212,6 @@ export default function UnifiedProductWizard() {
   const [vendors, setVendors] = useState([]);
   const [products, setProducts] = useState([]);
   const [agents, setAgents] = useState([]);
-  const [orgs, setOrgs] = useState([]);
   const [loadingRef, setLoadingRef] = useState(false);
   const [landingPages, setLandingPages] = useState([]);
   const [hubLoading, setHubLoading] = useState(false);
@@ -254,7 +253,6 @@ export default function UnifiedProductWizard() {
 
   // ── Step 4 / Distribution ──────────────────────────────────────────────────
   const [selectedAgents, setSelectedAgents] = useState({});
-  const [selectedOrgs, setSelectedOrgs] = useState(new Set());
   const [copiedAgentId, setCopiedAgentId] = useState('');
 
   // ── Committed IDs (for idempotent upsert on retry) ─────────────────────────
@@ -271,16 +269,14 @@ export default function UnifiedProductWizard() {
     if (!token) return;
     setLoadingRef(true);
     try {
-      const [vRes, prRes, agRes, orgRes] = await Promise.all([
+      const [vRes, prRes, agRes] = await Promise.all([
         fetch(`${API_BASE}/api/admin/vendors`,       { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/products`,       { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/agents`,         { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
-        fetch(`${API_BASE}/api/admin/organizations`,  { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
       ]);
       setVendors(Array.isArray(vRes?.vendors)   ? vRes.vendors   : []);
       setProducts(Array.isArray(prRes?.products) ? prRes.products : []);
       setAgents(Array.isArray(agRes?.rows)      ? agRes.rows      : []);
-      setOrgs(Array.isArray(orgRes?.rows)       ? orgRes.rows     : []);
     } catch (_) {}
     finally { setLoadingRef(false); }
   }, [token]);
@@ -324,13 +320,12 @@ export default function UnifiedProductWizard() {
       const draft = {
         vendorMode, productMode, s1, s2, s3,
         selectedAgents,
-        selectedOrgs: [...selectedOrgs],
         committed,
         openStep,
       };
       sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
     }, 300);
-  }, [vendorMode, productMode, s1, s2, s3, selectedAgents, selectedOrgs, committed, openStep, draftReady]);
+  }, [vendorMode, productMode, s1, s2, s3, selectedAgents, committed, openStep, draftReady]);
 
   // ── Auto-derive s2/s3 fields when productName or vendorCost changes ──────────
   useEffect(() => {
@@ -475,7 +470,6 @@ export default function UnifiedProductWizard() {
     setS2(d.s2 || INIT_S2());
     setS3(d.s3 || INIT_S3());
     setSelectedAgents(d.selectedAgents || {});
-    setSelectedOrgs(new Set(d.selectedOrgs || []));
     setCommitted(d.committed || INIT_COMMITTED());
     setOpenStep(d.openStep || 1);
     setShowDraftPrompt(false);
@@ -674,8 +668,8 @@ export default function UnifiedProductWizard() {
         setCommitted((p) => ({ ...p, slug: resolvedSlug }));
       }
 
-      // ── 5. Distribution ────────────────────────────────────────────────────
-      if (Object.keys(selectedAgents).length > 0 || selectedOrgs.size > 0) {
+      // ── 5. Distribution (agents only) — org price lists are set in Organization Profile → Pricing
+      if (Object.keys(selectedAgents).length > 0) {
         setFinalizeProgress('מעדכן הפצה…');
         const agentUpdates = Object.entries(selectedAgents).map(([agentId, commission]) => {
           const agent = agents.find((a) => a.id === agentId);
@@ -692,17 +686,7 @@ export default function UnifiedProductWizard() {
             body: JSON.stringify({ ...rest, productCommissions: updated.filter((x) => x.productId) }),
           });
         });
-        const orgUpdates = Array.from(selectedOrgs).map((orgId) => {
-          const org = orgs.find((o) => o.id === orgId);
-          if (!org) return Promise.resolve();
-          const { id, activeMemberCount, name, taxId, ...rest } = org;
-          return fetch(`${API_BASE}/api/admin/organizations/${encodeURIComponent(orgId)}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ ...rest, priceListId: resolvedPriceListId, pricingMethod: 'priceList' }),
-          });
-        });
-        await Promise.all([...agentUpdates, ...orgUpdates]);
+        await Promise.all(agentUpdates);
       }
 
       // ── Done ───────────────────────────────────────────────────────────────
@@ -1388,7 +1372,11 @@ export default function UnifiedProductWizard() {
         <StepCard
           number={4}
           title="הפצה ופרסום"
-          subtitle={finalizeDone ? 'הושלם ✓' : 'שייכו סוכנים וארגונים — ולחצו סיים ופרסם הכל'}
+          subtitle={
+            finalizeDone
+              ? 'הושלם ✓'
+              : 'שייכו סוכנים לפי הצורך — קישור מחירון ללקוחות מוגדר בפרופיל הארגון (תמחור). לאחר מכן לחצו סיים ופרסם הכל'
+          }
           done={finalizeDone}
           locked={!step2Valid}
           open={openStep === 4}
@@ -1453,31 +1441,9 @@ export default function UnifiedProductWizard() {
               ) : null}
             </div>
 
-            {/* Organizations */}
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-800">ארגונים</p>
-              <p className="text-xs text-muted-foreground">ארגונים שנבחרו יקושרו למחירון שייווצר</p>
-              {orgs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">אין ארגונים במערכת</p>
-              ) : (
-                <div className="border rounded-lg divide-y max-h-60 overflow-y-auto">
-                  {orgs.map((o) => (
-                    <label key={o.id} className="flex items-center gap-3 p-2.5 cursor-pointer hover:bg-slate-50">
-                      <input type="checkbox" className="size-4 rounded" checked={selectedOrgs.has(o.id)}
-                        onChange={(e) => {
-                          setSelectedOrgs((prev) => {
-                            const next = new Set(prev);
-                            e.target.checked ? next.add(o.id) : next.delete(o.id);
-                            return next;
-                          });
-                        }} />
-                      <span className="flex-1 text-sm">{o.companyName}</span>
-                      <Badge variant="outline" className="text-xs">{o.billingType === 'Centralized' ? 'מרוכז' : 'פרטי'}</Badge>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed border rounded-lg bg-slate-50/80 px-3 py-2">
+              שיוך מחירון ומחירים לארגונים מתבצע בלבד מתפריט הארגון → תמחור. פרסום דף מוצר אינו משנה הגדרות ארגון.
+            </p>
 
             {/* Summary before finalize */}
             {!finalizeDone ? (

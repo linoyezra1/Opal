@@ -479,8 +479,8 @@ export default function PricingDashboard() {
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">מחירונים (דפי נחיתה)</h1>
-            <p className="text-muted-foreground">ניהול מחירונים וקישורי נחיתה</p>
+            <h1 className="text-2xl font-bold tracking-tight">מחירונים</h1>
+
           </div>
           <Button type="button" onClick={openNew}>
             <Plus className="size-4 me-2" />
@@ -601,7 +601,7 @@ export default function PricingDashboard() {
                                           <TableHead>מחיר קמעוני</TableHead>
                                           <TableHead>עלות ספק</TableHead>
                                           <TableHead>עמלת סוכן</TableHead>
-                                          <TableHead>מחיר מיוחד (קמעוני)</TableHead>
+
                                           <TableHead>רווח נקי</TableHead>
                                         </TableRow>
                                       </TableHeader>

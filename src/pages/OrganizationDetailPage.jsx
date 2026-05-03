@@ -766,7 +766,7 @@ export default function OrganizationDetailPage() {
           <TabsList className="flex flex-wrap h-auto gap-1">
             <TabsTrigger value="members" className="gap-1">
               <Users className="size-4" />
-              חברים
+              גורמים בארגון
             </TabsTrigger>
             <TabsTrigger value="import" className="gap-1">
               <Upload className="size-4" />
@@ -1102,24 +1102,8 @@ export default function OrganizationDetailPage() {
                             onChange={(e) => setOrg((p) => ({ ...p, companyEmail: e.target.value }))}
                           />
                         </Field>
-                        <Field>
-                          <FieldLabel className="text-right w-full">אימייל ליצירת קשר</FieldLabel>
-                          <Input
-                            dir="rtl"
-                            className="text-right"
-                            value={org.contactEmail || ''}
-                            onChange={(e) => setOrg((p) => ({ ...p, contactEmail: e.target.value }))}
-                          />
-                        </Field>
-                        <Field>
-                          <FieldLabel className="text-right w-full">טלפון ליצירת קשר</FieldLabel>
-                          <Input
-                            dir="rtl"
-                            className="text-right"
-                            value={org.contactPhone || ''}
-                            onChange={(e) => setOrg((p) => ({ ...p, contactPhone: e.target.value }))}
-                          />
-                        </Field>
+
+
                         <Field>
                           <FieldLabel className="text-right w-full">הערות</FieldLabel>
                           <Textarea
@@ -1243,7 +1227,7 @@ export default function OrganizationDetailPage() {
                             {selectedProductForBilling ? (
                               <p className="text-xs text-muted-foreground mt-1.5 tabular-nums" dir="rtl">
                                 <span className="text-muted-foreground">
-                                  ({String(selectedProductForBilling.flowType || 'רופא עד הבית')})
+                                  ({String(selectedProductForBilling.flowType || 'סוג זרימה : רופא עד הבית')})
                                 </span>
                               </p>
                             ) : null}
