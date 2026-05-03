@@ -121,6 +121,39 @@ function mergeRowForDetails(r) {
   };
 }
 
+/** Labels in transaction details dialog — names from deal + formState with safe fallbacks */
+function dealTxnLandingPageName(deal) {
+  if (!deal) return '';
+  const fs = deal.formState && typeof deal.formState === 'object' ? deal.formState : {};
+  return String(
+    deal.landingPageTitle ||
+      fs.landingPageTitle ||
+      fs.pageTitle ||
+      fs.listName ||
+      fs.priceListName ||
+      ''
+  ).trim();
+}
+
+function dealTxnProviderName(deal) {
+  if (!deal) return '';
+  const fs = deal.formState && typeof deal.formState === 'object' ? deal.formState : {};
+  return String(
+    deal.vendorName ||
+      fs.providerName ||
+      fs.vendorName ||
+      deal.providerName ||
+      fs.resolvedVendorName ||
+      ''
+  ).trim();
+}
+
+function dealTxnAgentName(deal) {
+  if (!deal) return '';
+  const fs = deal.formState && typeof deal.formState === 'object' ? deal.formState : {};
+  return String(deal.agentName || fs.agentName || '').trim();
+}
+
 function billingMonthLabel(value) {
   const v = String(value || '').trim();
   if (!/^\d{4}-\d{2}$/.test(v)) return v || '—';
@@ -2118,7 +2151,7 @@ export default function SubscribersDashboard() {
                                     requestArchiveForRow(r);
                                   }}
                                 >
-                                  <Archive className="size-4 shrink-0" />
+                                  <Archive className="size-4 shrink-0 text-destructive" />
                                   מחיקה
                                 </Button>
                                 <Button
@@ -2194,7 +2227,7 @@ export default function SubscribersDashboard() {
                   פרטי מוטב
                 </TabsTrigger>
               </TabsList>
-              <TabsContent value="transaction" className="overflow-auto max-h-[68vh] space-y-4 mt-3">
+              <TabsContent value="transaction" className="mt-3 space-y-3 min-h-0">
                 {(() => {
                   const oid = String(selected?.organizationId || selected?.formState?.organizationId || '').trim();
                   const oname = String(selected?.organizationName || selected?.formState?.organizationName || '').trim();
@@ -2212,59 +2245,74 @@ export default function SubscribersDashboard() {
                   );
                 })()}
                 <Card>
-                  <CardHeader>
+                  <CardHeader className="pb-2">
                     <CardTitle className="text-base">סטטוס מנוי ותשלום</CardTitle>
                   </CardHeader>
-                  <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                    <div className="rounded-lg border p-3">
-                      <p className="text-xs text-muted-foreground mb-1">סטטוס תשלום</p>
-                      <p className="font-semibold">{dealDisplayPaymentStatus(selected)}</p>
-                    </div>
-                    <div className="rounded-lg border p-3">
-                      <p className="text-xs text-muted-foreground mb-1">סטטוס מנוי</p>
-                      <p className="font-semibold">{dealDisplaySubscriptionStatus(selected)}</p>
-                    </div>
-                    <div className="rounded-lg border p-3">
-                      <p className="text-xs text-muted-foreground mb-1">סכום עסקה</p>
-                      <p className="font-semibold">{formatCurrency(selected?.payerAmount ?? selected?.amount ?? 0)}</p>
-                    </div>
-                    <div className="rounded-lg border p-3">
-                      <p className="text-xs text-muted-foreground mb-1">סטטוס השלמה</p>
-                      <p className="font-semibold">{selected?.completionStatus || '—'}</p>
-                    </div>
-                    <div className="rounded-lg border p-3">
-                      <p className="text-xs text-muted-foreground mb-1">מוצר / סוג מנוי</p>
-                      <p className="font-semibold">
-                        {selected?.formState?.productName || selected?.productName || selected?.formState?.selectedPlanId || '—'}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border p-3">
-                      <p className="text-xs text-muted-foreground mb-1">
-                        עלות ספק {(selected?.providerName || selected?.formState?.providerName || selected?.formState?.vendorName) ? `- ${selected.providerName || selected.formState.providerName || selected.formState.vendorName}` : ''}
-                      </p>
-                      <p className="font-semibold">{formatCurrency(selected?.formState?.resolvedVendorCost ?? 0)}</p>
-                    </div>
-                    <div className="rounded-lg border p-3">
-                      <p className="text-xs text-muted-foreground mb-1">
-                        עלות סוכן {(selected?.agentName || selected?.formState?.agentName) ? `- ${selected.agentName || selected.formState.agentName}` : ''}
-                      </p>
-                      <p className="font-semibold">{formatCurrency(selected?.formState?.resolvedAgentCommission ?? selected?.agentCommission ?? 0)}</p>
-                    </div>
-                    <div className="rounded-lg border p-3">
-                      <p className="text-xs text-muted-foreground mb-1">רווח נקי</p>
-                      <p className="font-semibold text-primary">
-                        {formatCurrency(selected?.formState?.resolvedNetProfit ?? 0)}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border p-3">
-                      <p className="text-xs text-muted-foreground mb-1">תאריך תחילת מנוי</p>
-                      <p className="font-semibold">{selected?.formState?.subscriptionStartDate || selected?.subscriptionStartDate || '—'}</p>
-                    </div>
-                    <div className="rounded-lg border p-3 bg-slate-50 dark:bg-slate-900">
-                      <p className="text-xs text-muted-foreground mb-1">מס' הוראת קבע בקארדקום (לבדיקת היסטוריית חיוביים)</p>
-                      <p className="font-semibold" dir="ltr">
-                        {resolvedCardcomRecurringId || '—'}
-                      </p>
+                  <CardContent className="space-y-3 text-sm pt-0">
+                    {(() => {
+                      const lp = dealTxnLandingPageName(selected);
+                      const pv = dealTxnProviderName(selected);
+                      const ag = dealTxnAgentName(selected);
+                      const productLabel = lp ? `מוצר - ${lp}` : 'מוצר';
+                      const providerLabel = pv ? `עלות ספק - ${pv}` : 'עלות ספק';
+                      const agentLabel = ag ? `עלות סוכן - ${ag}` : 'עלות סוכן';
+                      const productValue =
+                        selected?.formState?.productName ||
+                        selected?.productName ||
+                        selected?.formState?.selectedPlanId ||
+                        '—';
+                      return (
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
+                          <div className="rounded-lg border p-3 min-w-0">
+                            <p className="text-xs text-muted-foreground mb-1">סטטוס תשלום</p>
+                            <p className="font-semibold break-words">{dealDisplayPaymentStatus(selected)}</p>
+                          </div>
+                          <div className="rounded-lg border p-3 min-w-0">
+                            <p className="text-xs text-muted-foreground mb-1">סטטוס מנוי</p>
+                            <p className="font-semibold break-words">{dealDisplaySubscriptionStatus(selected)}</p>
+                          </div>
+                          <div className="rounded-lg border p-3 min-w-0">
+                            <p className="text-xs text-muted-foreground mb-1">סכום עסקה</p>
+                            <p className="font-semibold">{formatCurrency(selected?.payerAmount ?? selected?.amount ?? 0)}</p>
+                          </div>
+                          <div className="rounded-lg border p-3 min-w-0">
+                            <p className="text-xs text-muted-foreground mb-1">{productLabel}</p>
+                            <p className="font-semibold break-words">{productValue}</p>
+                          </div>
+                          <div className="rounded-lg border p-3 min-w-0">
+                            <p className="text-xs text-muted-foreground mb-1 break-words">{providerLabel}</p>
+                            <p className="font-semibold">{formatCurrency(selected?.formState?.resolvedVendorCost ?? 0)}</p>
+                          </div>
+                          <div className="rounded-lg border p-3 min-w-0">
+                            <p className="text-xs text-muted-foreground mb-1 break-words">{agentLabel}</p>
+                            <p className="font-semibold">
+                              {formatCurrency(selected?.formState?.resolvedAgentCommission ?? selected?.agentCommission ?? 0)}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border p-3 min-w-0">
+                            <p className="text-xs text-muted-foreground mb-1">רווח נקי</p>
+                            <p className="font-semibold text-primary">{formatCurrency(selected?.formState?.resolvedNetProfit ?? 0)}</p>
+                          </div>
+                          <div className="rounded-lg border p-3 min-w-0">
+                            <p className="text-xs text-muted-foreground mb-1">תאריך תחילת מנוי</p>
+                            <p className="font-semibold break-words">
+                              {selected?.formState?.subscriptionStartDate || selected?.subscriptionStartDate || '—'}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border p-3 min-w-0 max-md:col-span-2 md:col-span-1 bg-muted/40">
+                            <p className="text-xs text-muted-foreground mb-1 leading-snug">
+                              היסטוריית חיובים (Recurring ID)
+                            </p>
+                            <p className="font-semibold font-mono text-xs sm:text-sm break-all" dir="ltr">
+                              {resolvedCardcomRecurringId || '—'}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+                      <span>סטטוס השלמה:</span>
+                      <span className="font-semibold text-foreground">{selected?.completionStatus || '—'}</span>
                     </div>
                   </CardContent>
                 </Card>

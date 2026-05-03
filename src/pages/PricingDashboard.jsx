@@ -684,7 +684,7 @@ export default function PricingDashboard() {
                                   <Edit2 className="size-4" />
                                 </Button>
                                 <Button variant="ghost" size="icon" type="button" onClick={() => setArchiveId(row.id)} aria-label="ארכיון">
-                                  <Archive className="size-4 text-muted-foreground" />
+                                  <Archive className="size-4 text-destructive" />
                                 </Button>
                               </div>
                             </TableCell>

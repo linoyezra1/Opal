@@ -949,7 +949,7 @@ export default function UnifiedProductWizard() {
                                         onClick={() => deleteLandingPage(pg.id)}
                                         aria-label="העברה לארכיון"
                                       >
-                                        <Archive className="size-4" />
+                                        <Archive className="size-4 text-destructive" />
                                       </Button>
                                     </TooltipTrigger>
                                     <TooltipContent>העברה לארכיון</TooltipContent>

@@ -452,10 +452,8 @@ export default function ReportsDashboard() {
     <AdminPageShell>
       <div className="space-y-6 p-4 md:p-6 max-w-7xl mx-auto text-right" dir="rtl">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">דוחות ובילינג אופאל</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            מרכז הדוחות והבילינג של אופאל — ייצוא לספק ועמלות סוכנים
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight">דוחות</h1>
+
         </div>
 
         <Tabs

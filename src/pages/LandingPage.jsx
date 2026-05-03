@@ -239,9 +239,9 @@ function ContactLandingView({ slug, content, whatYouGetRows, whatYouGetTitle, wh
         </section>
       ) : null}
 
-      <section id="contact-form" className="py-16 bg-muted/30 scroll-mt-20">
+      <section id="contact-form" className="py-16 bg-primary text-primary-foreground scroll-mt-20">
         <div className="container max-w-xl mx-auto px-4">
-          <Card className="shadow-lg border-border">
+          <Card className="shadow-lg border-border text-card-foreground">
             <CardHeader className="border-b bg-[#D9EAF3]/30">
               <CardTitle className="text-xl">שליחת פנייה</CardTitle>
             </CardHeader>
@@ -344,34 +344,34 @@ function ContactFormSection({ slug }) {
   }
 
   return (
-    <section id="contact" className="py-16 bg-muted/30 scroll-mt-20">
+    <section id="contact" className="py-16 bg-primary text-primary-foreground scroll-mt-20">
       <div className="container max-w-6xl mx-auto px-4">
         <div className="grid md:grid-cols-2 gap-10 items-start">
           {/* Contact info */}
           <div className="space-y-5 text-right">
             <h2
               style={{ fontSize: 'clamp(1.5rem, 3vw + 0.5rem, 2.25rem)' }}
-              className="font-bold text-foreground"
+              className="font-bold text-primary-foreground"
             >
               צור קשר
             </h2>
-            <p className="text-muted-foreground text-lg leading-relaxed">
+            <p className="text-primary-foreground/90 text-lg leading-relaxed">
               אופאל - בית ליזמות רפואית, המושתת על מקצועיות, מצוינות וחווית שירות פרטית.
             </p>
             <div className="flex flex-col gap-3">
               <a
                 href="tel:0544261369"
-                className="flex items-center gap-3 p-4 rounded-lg bg-background border border-border hover:border-primary/40 transition-colors"
+                className="flex items-center gap-3 p-4 rounded-lg bg-primary-foreground/10 border border-primary-foreground/25 hover:bg-primary-foreground/15 transition-colors"
               >
-                <Phone className="size-5 text-primary shrink-0" />
-                <span className="font-medium" dir="ltr">054-426-1369</span>
+                <Phone className="size-5 text-primary-foreground shrink-0" />
+                <span className="font-medium text-primary-foreground" dir="ltr">054-426-1369</span>
               </a>
               <a
                 href="mailto:opal2000@zahav.net.il"
-                className="flex items-center gap-3 p-4 rounded-lg bg-background border border-border hover:border-primary/40 transition-colors"
+                className="flex items-center gap-3 p-4 rounded-lg bg-primary-foreground/10 border border-primary-foreground/25 hover:bg-primary-foreground/15 transition-colors"
               >
-                <Mail className="size-5 text-primary shrink-0" />
-                <span className="font-medium text-sm break-all" dir="ltr">opal2000@zahav.net.il</span>
+                <Mail className="size-5 text-primary-foreground shrink-0" />
+                <span className="font-medium text-sm break-all text-primary-foreground" dir="ltr">opal2000@zahav.net.il</span>
               </a>
             </div>
           </div>
