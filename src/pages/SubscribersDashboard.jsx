@@ -100,9 +100,25 @@ function dealDisplayPaymentStatus(deal) {
 }
 
 function dealDisplaySubscriptionStatus(deal) {
+  const es = deal?.entitlementStatus;
+  if (es === 'active') {
+    return dealCentralizedPayment(deal) ? 'חיוב מרוכז · פעיל' : 'פעיל';
+  }
+  if (es === 'pending_cancellation') return 'ממתין לביטול';
+  if (es === 'canceled') return 'מבוטל';
   return dealCentralizedPayment(deal)
     ? `חיוב מרוכז · ${String(deal?.subscriptionStatus || '—')}`
     : String(deal?.subscriptionStatus || '—');
+}
+
+function mergeRowForDetails(r) {
+  const base = r?.raw ?? r;
+  if (!base) return r;
+  return {
+    ...base,
+    entitlementStatus: r.entitlementStatus,
+    entitlementCancelAt: r.entitlementCancelAt,
+  };
 }
 
 function billingMonthLabel(value) {
@@ -716,17 +732,23 @@ export default function SubscribersDashboard() {
     // Status guard — re-applied client-side so stale server responses or race
     // conditions never leak wrong-status rows into the visible table.
     if (filters.status === 'cancelled') {
-      rows = rows.filter(
-        (r) =>
+      rows = rows.filter((r) => {
+        if (r.entitlementStatus) return r.entitlementStatus === 'canceled';
+        return (
           r.status === 'canceled' ||
-          String(r.subscriptionStatus || '').toLowerCase() === 'cancelled',
-      );
+          String(r.subscriptionStatus || '').toLowerCase() === 'cancelled'
+        );
+      });
     } else if (filters.status === 'active') {
-      rows = rows.filter(
-        (r) =>
+      rows = rows.filter((r) => {
+        if (r.entitlementStatus) {
+          return r.entitlementStatus === 'active' || r.entitlementStatus === 'pending_cancellation';
+        }
+        return (
           r.status !== 'canceled' &&
-          String(r.subscriptionStatus || '').toLowerCase() !== 'cancelled',
-      );
+          String(r.subscriptionStatus || '').toLowerCase() !== 'cancelled'
+        );
+      });
     }
 
     // Agent filter — AND logic, exact match on agent name
@@ -823,7 +845,12 @@ export default function SubscribersDashboard() {
     let canceled = 0;
     for (const r of visibleRows) {
       totalRevenue += Number(r.amount || 0);
-      if (r.status === 'canceled' || String(r.subscriptionStatus || '').toLowerCase() === 'cancelled') {
+      if (r.entitlementStatus === 'canceled') {
+        canceled += 1;
+      } else if (
+        !r.entitlementStatus &&
+        (r.status === 'canceled' || String(r.subscriptionStatus || '').toLowerCase() === 'cancelled')
+      ) {
         canceled += 1;
       }
     }
@@ -1822,7 +1849,7 @@ export default function SubscribersDashboard() {
                           סטטוס השלמת מסמכים
                         </TableHead>
                         <TableHead dir="rtl" className="text-right">
-                          סטטוס חיוב עתידי
+                          סטטוס מנוי
                         </TableHead>
                         <TableHead dir="rtl" className="w-28 text-right">
                           פעולות
@@ -1831,9 +1858,16 @@ export default function SubscribersDashboard() {
                     </TableHeader>
                     <TableBody>
                       {visibleRows.map((r) => {
-                          const isCancelled = r.status === 'canceled' || String(r.subscriptionStatus || '').toLowerCase() === 'cancelled';
+                          const isCancelled =
+                            r.entitlementStatus === 'canceled' ||
+                            (r.entitlementStatus == null &&
+                              (r.status === 'canceled' ||
+                                String(r.subscriptionStatus || '').toLowerCase() === 'cancelled'));
                           const statusNorm = String(r.subscriptionStatus || r.paymentStatus || '').trim().toLowerCase();
-                          const isPendingCancellation = String(r.subscriptionStatus || '') === 'Pending Cancellation';
+                          const isPendingCancellation =
+                            r.entitlementStatus === 'pending_cancellation' ||
+                            (r.entitlementStatus == null &&
+                              String(r.subscriptionStatus || '') === 'Pending Cancellation');
                           const workflowStatus = String(r.raw?.status || '').trim().toLowerCase();
                           const isPendingOrgApproval = workflowStatus === 'pending_org_approval';
                           // A customer is centralized only when the server says so AND there is no
@@ -1898,7 +1932,21 @@ export default function SubscribersDashboard() {
                             )}
                           </TableCell>
                           <TableCell dir="rtl" className="text-right whitespace-nowrap">
-                            {isCancelled ? (
+                            {r.entitlementStatus === 'pending_cancellation' ? (
+                              <Badge className="bg-amber-100 text-amber-950 border-amber-400 hover:bg-amber-100 font-normal whitespace-normal max-w-[18rem] text-right leading-snug">
+                                ממתין לביטול* | בוטל ב-
+                                {r.entitlementCancelAt ? fmtDateTime(r.entitlementCancelAt) : cancelledAtText || '—'}
+                              </Badge>
+                            ) : r.entitlementStatus === 'canceled' ? (
+                              <Badge variant="destructive" className="font-normal whitespace-normal max-w-[18rem] text-right leading-snug">
+                                מבוטל | בוטל ב-
+                                {r.entitlementCancelAt ? fmtDateTime(r.entitlementCancelAt) : cancelledAtText || '—'}
+                              </Badge>
+                            ) : r.entitlementStatus === 'active' ? (
+                              <Badge variant="secondary" className="bg-emerald-50 text-emerald-900 border-emerald-300 font-normal">
+                                פעיל
+                              </Badge>
+                            ) : isCancelled ? (
                               <Badge variant="destructive" className="font-normal">
                                 {isCentralized
                                   ? `בוטל${cancelledAtText ? ` ב-${cancelledAtText}` : ''}`
@@ -1938,7 +1986,7 @@ export default function SubscribersDashboard() {
                                     type="button"
                                     className="min-h-9 min-w-9 shrink-0"
                                     onClick={() => {
-                                      setSelected(r.raw ?? r);
+                                      setSelected(mergeRowForDetails(r));
                                       setSelectedDetailsTab('transaction');
                                     }}
                                     aria-label="הצג פרטים"
@@ -2042,7 +2090,7 @@ export default function SubscribersDashboard() {
                                   className="h-auto min-h-10 w-full justify-start gap-2 px-3 py-2 font-normal"
                                   onClick={(e) => {
                                     closeActionDetailsMenu(e);
-                                    setSelected(r.raw ?? r);
+                                    setSelected(mergeRowForDetails(r));
                                     setSelectedDetailsTab('transaction');
                                   }}
                                 >

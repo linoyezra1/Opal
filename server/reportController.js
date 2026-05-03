@@ -3,6 +3,7 @@
  */
 import { Parser } from 'json2csv';
 import ExcelJS from 'exceljs';
+import { passesServiceReportGate, getEntitlementStatus } from './entitlementStatus.js';
 
 /**
  * סינון חודשי לדוחות בילינג ארגוני: רק עסקאות שחודש הבילינג שלהן (שדה billingMonth) תואם בדיוק ל־YYYY-MM.
@@ -293,6 +294,7 @@ export function filterDealsForSubscriberExport(deals, filters = {}) {
   const month = String(filters.month || '').trim();
 
   return (Array.isArray(deals) ? deals : []).filter((d) => {
+    if (!passesServiceReportGate(d)) return false;
     const fs = d.formState && typeof d.formState === 'object' ? d.formState : {};
     const bt =
       d.isCentralized === true || String(fs.billingType || '').trim().toLowerCase() === 'centralized'
@@ -300,12 +302,14 @@ export function filterDealsForSubscriberExport(deals, filters = {}) {
         : 'Private';
     if (billingType && bt !== billingType) return false;
 
-    const isCancelled =
-      String(d.status || '').toLowerCase() === 'canceled' ||
-      String(d.subscriptionStatus || '').toLowerCase() === 'cancelled';
+    const ent = getEntitlementStatus(d);
     if (status && status !== 'all') {
-      if (status === 'active' && isCancelled) return false;
-      if (status === 'cancelled' && !isCancelled) return false;
+      if (status === 'active') {
+        if (ent.status !== 'active' && ent.status !== 'pending_cancellation') return false;
+      }
+      if (status === 'cancelled') {
+        if (ent.status !== 'canceled') return false;
+      }
     }
 
     const pn = subscriberExportProductName(d, fs);
@@ -414,7 +418,8 @@ export function buildCancellationsCsv(deals) {
 }
 
 export async function buildAgentCommissionPayload(deals) {
-  const rows = deals.map((d) => {
+  const base = (Array.isArray(deals) ? deals : []).filter(passesServiceReportGate);
+  const rows = base.map((d) => {
     const fs = d.formState && typeof d.formState === 'object' ? d.formState : {};
     const payerAmount = Number(d.payerAmount || 0);
     // Reports must use the commission snapshotted on the deal itself.

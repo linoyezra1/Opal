@@ -1,4 +1,5 @@
 import { MongoClient, ObjectId } from 'mongodb';
+import { getEntitlementStatus, parseFlexibleDate } from './entitlementStatus.js';
 
 const MONGO_URL = process.env.MONGODB_URI || process.env.MONGO_URL || '';
 const DB_NAME = process.env.MONGO_DB_NAME || 'opal';
@@ -2286,6 +2287,18 @@ export async function getSalesDashboardData(filters = {}) {
         String(d?.formState?.cardcomResponseDescription || '').trim(),
         ''
       );
+      const ent = getEntitlementStatus(d);
+      const fsEnt = d.formState || {};
+      let entitlementCancelAt = null;
+      const cancelCand =
+        d.cancellationDate ||
+        fsEnt.cardcomLastProcessDate ||
+        ent.cancelAt;
+      if (cancelCand) {
+        const dt =
+          cancelCand instanceof Date ? cancelCand : parseFlexibleDate(cancelCand);
+        if (dt && !Number.isNaN(dt.getTime())) entitlementCancelAt = dt.toISOString();
+      }
       const paymentStatusRaw = String(d.paymentStatus || '');
       const isFailedPayment = /fail|declin|error|denied|נכשל/i.test(paymentStatusRaw);
       const displayPaymentStatus = centralized
@@ -2340,6 +2353,8 @@ export async function getSalesDashboardData(filters = {}) {
         organizationId: String(d.organizationId || d.formState?.organizationId || '').trim(),
         paymentMethod: String(d.paymentMethod || ''),
         finalBillingMonth: String(d.finalBillingMonth || '').trim(),
+        entitlementStatus: ent.status,
+        entitlementCancelAt,
         raw: d,
       };
     }),
@@ -3219,6 +3234,69 @@ export async function markDealCancelledByAdmin(dealId) {
   );
   if (!r.matchedCount) throw new Error('עסקה לא נמצאה');
   return { success: true, cancellationDate: cancellationDate.toISOString(), status: 'Cancelled' };
+}
+
+/**
+ * ביטול הוראת קבע בקארדקום — נשארים ב"ממתין לביטול" עד תאריך החיוב הבא (שירות בתוקף).
+ */
+export async function markDealPrivateRecurringPendingEnd(dealId) {
+  const db = await getDb();
+  const deals = db.collection('deals');
+  let oid;
+  try {
+    oid = new ObjectId(String(dealId));
+  } catch {
+    throw new Error('מזהה עסקה לא תקין');
+  }
+  const now = new Date();
+  const nextBill = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const r = await deals.updateOne(
+    { _id: oid },
+    {
+      $set: {
+        subscriptionStatus: 'Pending Cancellation',
+        cancellationDate: now,
+        updatedAt: now,
+        'formState.cardcomRecurringIsActive': false,
+        'formState.cardcomNextDateToBill': nextBill.toISOString(),
+      },
+    }
+  );
+  if (!r.matchedCount) throw new Error('עסקה לא נמצאה');
+  return {
+    success: true,
+    cancellationDate: now.toISOString(),
+    cardcomNextDateToBill: nextBill.toISOString(),
+    status: 'Pending Cancellation',
+  };
+}
+
+/** עדכון שדות snapshot מה-webhook של קארדקום (MasterRecurring) על העסקה הראשית */
+export async function updateDealCardcomRecurringSnapshot(dealId, snapshot = {}) {
+  const db = await getDb();
+  const deals = db.collection('deals');
+  let oid;
+  try {
+    oid = new ObjectId(String(dealId));
+  } catch {
+    throw new Error('מזהה עסקה לא תקין');
+  }
+  const set = { updatedAt: new Date() };
+  if (snapshot.cardcomRecurringIsActive != null) {
+    set['formState.cardcomRecurringIsActive'] = !!snapshot.cardcomRecurringIsActive;
+  }
+  if (snapshot.cardcomNextDateToBill != null) {
+    set['formState.cardcomNextDateToBill'] = String(snapshot.cardcomNextDateToBill);
+  }
+  if (snapshot.cardcomCreateDate != null) {
+    set['formState.cardcomCreateDate'] = String(snapshot.cardcomCreateDate);
+  }
+  if (snapshot.cardcomLastProcessDate != null) {
+    set['formState.cardcomLastProcessDate'] = String(snapshot.cardcomLastProcessDate);
+  }
+  if (Object.keys(set).length <= 1) return { success: true, skipped: true };
+  await deals.updateOne({ _id: oid }, { $set: set });
+  return { success: true };
 }
 
 /**

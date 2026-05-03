@@ -58,6 +58,8 @@ import {
   bulkDeleteDealsAdmin,
   getDealForRecurringCancellation,
   markDealCancelledByAdmin,
+  markDealPrivateRecurringPendingEnd,
+  updateDealCardcomRecurringSnapshot,
   markDealPendingCancellation,
   runMonthlyOrgSnapshot,
   getDealEmailSentAt,
@@ -996,6 +998,40 @@ async function handleMasterRecurringWebhook(body = {}, query = {}) {
     });
     return;
   }
+
+  const isActiveField = (() => {
+    const v = normalizedBody.IsActive != null ? normalizedBody.IsActive : normalizedBody.isActive;
+    if (v === true || v === 1) return true;
+    if (v === false || v === 0) return false;
+    const s = String(v ?? '')
+      .toLowerCase()
+      .trim();
+    if (s === 'true' || s === '1') return true;
+    if (s === 'false' || s === '0') return false;
+    return null;
+  })();
+  const nextDateToBillSnap = pickFirstValue(normalizedBody, [
+    'NextDateToBill',
+    'nextDateToBill',
+    'NextDatetoBill',
+  ]);
+  const createDateSnap = pickFirstValue(normalizedBody, ['CreateDate', 'createDate']);
+  const lastProcessDateSnap = pickFirstValue(normalizedBody, [
+    'LastProssesDate',
+    'LastProcessDate',
+    'lastProcessDate',
+  ]);
+  try {
+    await updateDealCardcomRecurringSnapshot(parent.id, {
+      ...(isActiveField != null ? { cardcomRecurringIsActive: isActiveField } : {}),
+      ...(nextDateToBillSnap ? { cardcomNextDateToBill: nextDateToBillSnap } : {}),
+      ...(createDateSnap ? { cardcomCreateDate: createDateSnap } : {}),
+      ...(lastProcessDateSnap ? { cardcomLastProcessDate: lastProcessDateSnap } : {}),
+    });
+  } catch (e) {
+    console.warn(`[${ts()}] updateDealCardcomRecurringSnapshot`, e?.message || e);
+  }
+
   const fallbackTransactionId = [
     'RC',
     cardcomRecurringId || parent.cardcomRecurringId || 'unknown',
@@ -2383,7 +2419,7 @@ app.post('/api/admin/deals/:id/cancel-future-charges', requireAdmin, async (req,
       });
     }
 
-    const updated = await markDealCancelledByAdmin(req.params.id);
+    const updated = await markDealPrivateRecurringPendingEnd(req.params.id);
 
     res.json({
       success: true,

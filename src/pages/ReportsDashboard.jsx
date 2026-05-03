@@ -27,6 +27,20 @@ import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
+const REPORT_SERVICE_ENTITLEMENT_NOTICE =
+  'הרשומות המוצגות כוללות אך ורק מנויים שתאריך תחילת המנוי שלהם מופעל (הושלמו פרטי מוטבים) ונמצאים בסטטוס "פעיל" או "ממתין לביטול". לקוחות שטרם השלימו הרשמה, או מנויים מבוטלים, אינם זכאים לשירות ואינם מופיעים בדוח.';
+
+function ReportEntitlementNotice() {
+  return (
+    <div
+      className="rounded-lg border border-sky-200 bg-sky-50 dark:bg-sky-950/50 px-4 py-3 text-sm text-right leading-relaxed text-sky-950 dark:text-sky-100 mb-3"
+      role="note"
+    >
+      <span className="font-semibold">שימו לב:</span> {REPORT_SERVICE_ENTITLEMENT_NOTICE}
+    </div>
+  );
+}
+
 function currentMonthStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -564,6 +578,7 @@ export default function ReportsDashboard() {
                     הורד אקסל ביטולים
                   </Button>
                 </div>
+                <ReportEntitlementNotice />
                 <div className="rounded-md border overflow-auto">
                   <Table>
                     <TableHeader>
@@ -699,6 +714,7 @@ export default function ReportsDashboard() {
                 {agentErr ? <p className="text-sm text-destructive">{agentErr}</p> : null}
                 {agentData && (
                   <div className="space-y-3">
+                    <ReportEntitlementNotice />
                     <div className="flex flex-wrap gap-4 text-sm">
                       <span>
                         סה״כ מכירות: <strong>{formatCurrency(filteredAgentTotals.totalSales)}</strong>
