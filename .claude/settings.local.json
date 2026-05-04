@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Linoy\\\\Desktop\\\\Opal\" -Recurse -Force)",
+      "Bash(Select-Object -Property FullName, PSIsContainer)",
+      "Bash(ConvertTo-Json)",
+      "Bash(Out-String)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\Linoy\\\\Desktop\\\\Opal\" -Recurse -Force | Select-Object -Property FullName, PSIsContainer | ForEach-Object { if \\($_.PSIsContainer\\) { \"DIR: $\\($_.FullName\\)\" } else { \"FILE: $\\($_.FullName\\)\" } })"
     ]
   }
 }

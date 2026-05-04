@@ -916,7 +916,7 @@ export default function OrganizationsDashboard() {
               <Building2 className="size-6 text-primary" />
               מרכז ניהול ארגונים אופאל
             </h1>
-            <p className="text-muted-foreground">אופאל — ארגונים, חברים פעילים, יבוא והרשמה</p>
+
           </div>
           {activeMainTab === 'orgs' && (
             <Button onClick={openAdd}><Plus className="size-4 me-2" />הוסף ארגון</Button>
