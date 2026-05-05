@@ -43,7 +43,7 @@ import {
   DialogTitle,
 } from '../components/ui/dialog.jsx';
 import * as XLSX from 'xlsx';
-import { canArchiveDealUi, FORBIDDEN_ARCHIVE_ALERT_HE } from '../utils/archiveEligibility.js';
+import { ARCHIVE_BLOCKED_PRIVATE_MSG, canArchiveDealUi } from '../utils/archiveEligibility.js';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -495,15 +495,21 @@ export default function OrganizationDetailPage() {
   }
 
   function requestArchiveForDeal(d) {
-    if (
-      !canArchiveDealUi({
-        workflowStatus: d.status,
-        subscriptionStatus: d.subscriptionStatus,
-        isActive: d.isActive !== false,
-      })
-    ) {
-      window.alert(FORBIDDEN_ARCHIVE_ALERT_HE);
+    const archiveEligibility = canArchiveDealUi({
+      workflowStatus: d.status,
+      subscriptionStatus: d.subscriptionStatus,
+      entitlementStatus: d.entitlementStatus,
+      isActive: d.isActive !== false,
+      isCentralizedBilling: !!d.isCentralized,
+      pendingCancellationDateLabel: d.finalBillingMonth || '',
+    });
+    if (!archiveEligibility.allowed) {
+      window.alert(archiveEligibility.reason || ARCHIVE_BLOCKED_PRIVATE_MSG);
       return;
+    }
+    if (archiveEligibility.reason) {
+      const ok = window.confirm(archiveEligibility.reason);
+      if (!ok) return;
     }
     setDeleteTarget({ id: d.id, transactionId: d.transactionId });
   }

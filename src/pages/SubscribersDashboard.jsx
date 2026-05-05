@@ -43,13 +43,78 @@ import { Badge } from '../components/ui/badge.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '../components/ui/empty.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
-import { canArchiveDealUi, FORBIDDEN_ARCHIVE_ALERT_HE } from '../utils/archiveEligibility.js';
+import {
+  ARCHIVE_BLOCKED_PRIVATE_MSG,
+  NOT_ACTIVATED_CENTRALIZED_MSG,
+  canArchiveDealUi,
+} from '../utils/archiveEligibility.js';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
-const PENDING_ORG_CANCEL_ALERT_HE =
-  'לקוח זה לא אושר על ידי הארגון ולא הופעל לו מנוי, ולכן לא ניתן לבטל את המנוי. ניתן להעביר לארכיון בלבד. פעולה זו תגרור השבתה של יכולת מנהל הארגון לאשר עובד זה בעתיד';
+const PENDING_ORG_CANCEL_ALERT_HE = NOT_ACTIVATED_CENTRALIZED_MSG;
+
+function normalizeStatus(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+}
+
+function getCancellationDateLabel(row) {
+  if (row?.entitlementCancelAt) return fmtDateTime(row.entitlementCancelAt);
+  if (row?.cancellationDate) return fmtDateTime(row.cancellationDate);
+  const fallback = pendingCancelLabel(row?.finalBillingMonth || '');
+  if (fallback && fallback !== 'ממתין לביטול') return fallback.replace(/^יבוטל ב-/, '');
+  return '—';
+}
+
+function getRowActionContext(row) {
+  const workflowStatus = normalizeStatus(row?.raw?.status || row?.status);
+  const subscriptionStatus = normalizeStatus(row?.subscriptionStatus);
+  const entitlementStatus = normalizeStatus(row?.entitlementStatus);
+  const hasCardcomToken = !!String(row?.cardcomToken || '').trim();
+  const isCentralizedBilling = row?.isCentralized === true && !hasCardcomToken;
+
+  let state = entitlementStatus;
+  if (!state) {
+    if (workflowStatus === 'pending_org_approval' || workflowStatus === 'pending_alllow' || workflowStatus === 'pending_allow') {
+      state = 'not_activated';
+    } else if (subscriptionStatus === 'pending_cancellation' || subscriptionStatus === 'pendingcancellation') {
+      state = 'pending_cancellation';
+    } else if (workflowStatus === 'canceled' || subscriptionStatus === 'canceled' || subscriptionStatus === 'cancelled') {
+      state = 'canceled';
+    } else {
+      state = 'active';
+    }
+  }
+
+  const archive = canArchiveDealUi({
+    entitlementStatus: state,
+    workflowStatus,
+    subscriptionStatus,
+    isActive: row?.raw?.isActive,
+    isCentralizedBilling,
+    pendingCancellationDateLabel: getCancellationDateLabel(row),
+  });
+
+  const missingRecurringIds =
+    !String(row?.cardcomAccountId || '').trim() || !String(row?.cardcomRecurringId || '').trim();
+  let cancelAction = { allowed: true, disabled: false, reason: '' };
+  if (state === 'pending_cancellation' || state === 'canceled' || state === 'cancelled') {
+    cancelAction = { allowed: false, disabled: true, reason: '' };
+  } else if (state === 'not_activated' && isCentralizedBilling) {
+    cancelAction = { allowed: false, disabled: false, reason: NOT_ACTIVATED_CENTRALIZED_MSG };
+  } else if (!isCentralizedBilling && missingRecurringIds) {
+    cancelAction = {
+      allowed: false,
+      disabled: true,
+      reason: 'Subscription was not created as recurring - cancel manually in Cardcom',
+    };
+  }
+
+  return { state, isCentralizedBilling, archive, cancelAction };
+}
 
 const SUMMARY_ITEMS = [
   { key: 'primary',   label: 'לקוחות עיקריים' },
@@ -655,15 +720,14 @@ export default function SubscribersDashboard() {
   }
 
   function requestArchiveForRow(r) {
-    if (
-      !canArchiveDealUi({
-        workflowStatus: r.raw?.status,
-        subscriptionStatus: r.subscriptionStatus,
-        isActive: r.raw?.isActive,
-      })
-    ) {
-      window.alert(FORBIDDEN_ARCHIVE_ALERT_HE);
+    const { archive } = getRowActionContext(r);
+    if (!archive.allowed) {
+      window.alert(archive.reason || ARCHIVE_BLOCKED_PRIVATE_MSG);
       return;
+    }
+    if (archive.reason) {
+      const approved = window.confirm(archive.reason);
+      if (!approved) return;
     }
     setDeleteTarget({ id: r.id, transactionId: r.transactionId });
   }
@@ -990,16 +1054,11 @@ export default function SubscribersDashboard() {
   async function confirmBulkDelete() {
     if (!selectedCount || !token || bulkDeleteDisabled) return;
     const selectedRows = (data.rows || []).filter((r) => selectedSubscriptionIds.includes(String(r.id || '')));
-    const blocked = selectedRows.some(
-      (r) =>
-        !canArchiveDealUi({
-          workflowStatus: r.raw?.status,
-          subscriptionStatus: r.subscriptionStatus,
-          isActive: r.raw?.isActive,
-        })
-    );
-    if (blocked) {
-      window.alert(FORBIDDEN_ARCHIVE_ALERT_HE);
+    const firstBlocked = selectedRows
+      .map((r) => getRowActionContext(r).archive)
+      .find((archive) => !archive.allowed);
+    if (firstBlocked) {
+      window.alert(firstBlocked.reason || ARCHIVE_BLOCKED_PRIVATE_MSG);
       return;
     }
     setBulkDeleteLoading(true);
@@ -1936,25 +1995,11 @@ export default function SubscribersDashboard() {
                     </TableHeader>
                     <TableBody>
                       {visibleRows.map((r) => {
-                          const isCancelled =
-                            r.entitlementStatus === 'canceled' ||
-                            (r.entitlementStatus == null &&
-                              (r.status === 'canceled' ||
-                                String(r.subscriptionStatus || '').toLowerCase() === 'cancelled'));
-                          const statusNorm = String(r.subscriptionStatus || r.paymentStatus || '').trim().toLowerCase();
-                          const isPendingCancellation =
-                            r.entitlementStatus === 'pending_cancellation' ||
-                            (r.entitlementStatus == null &&
-                              String(r.subscriptionStatus || '') === 'Pending Cancellation');
-                          const workflowStatus = String(r.raw?.status || '').trim().toLowerCase();
-                          const isPendingOrgApproval = workflowStatus === 'pending_org_approval';
-                          // A customer is centralized only when the server says so AND there is no
-                          // cardcomToken — an org employee who pays privately has a token and must
-                          // go through the Cardcom cancel flow, not the org-employee cancel flow.
-                          const hasCardcomToken = !!String(r.cardcomToken || '').trim();
-                          const isCentralized = r.isCentralized === true && !hasCardcomToken;
-                          const missingRecurringIds =
-                            !String(r.cardcomAccountId || '').trim() || !String(r.cardcomRecurringId || '').trim();
+                          const actionCtx = getRowActionContext(r);
+                          const isCentralized = actionCtx.isCentralizedBilling;
+                          const isCancelled = actionCtx.state === 'canceled' || actionCtx.state === 'cancelled';
+                          const isPendingCancellation = actionCtx.state === 'pending_cancellation';
+                          const isPendingOrgApproval = actionCtx.state === 'not_activated' && isCentralized;
                           const cancelledAtText = r.cancellationDate
                             ? fmtDateTime(r.cancellationDate)
                             : '';
@@ -2115,16 +2160,11 @@ export default function SubscribersDashboard() {
                                       type="button"
                                       variant="outline"
                                       size="sm"
-                                      className={`h-8 px-2 text-xs shrink-0 ${isPendingOrgApproval ? 'opacity-60 pointer-events-auto' : ''}`}
-                                      disabled={
-                                        isCancelled || isPendingCancellation || (!isCentralized && missingRecurringIds)
-                                      }
+                                      className={`h-8 px-2 text-xs shrink-0 ${actionCtx.cancelAction.disabled ? 'opacity-60' : ''}`}
+                                      disabled={actionCtx.cancelAction.disabled}
                                       onClick={() => {
-                                        if (isPendingOrgApproval) {
-                                          window.alert(PENDING_ORG_CANCEL_ALERT_HE);
-                                          return;
-                                        }
-                                        if (isCancelled || isPendingCancellation || (!isCentralized && missingRecurringIds)) {
+                                        if (!actionCtx.cancelAction.allowed) {
+                                          if (actionCtx.cancelAction.reason) window.alert(actionCtx.cancelAction.reason);
                                           return;
                                         }
                                         if (isCentralized) {
@@ -2135,15 +2175,13 @@ export default function SubscribersDashboard() {
                                         }
                                       }}
                                       title={
-                                        isPendingCancellation
-                                          ? `ממתין לביטול — חודש אחרון: ${r.finalBillingMonth}`
-                                          : isPendingOrgApproval
-                                            ? PENDING_ORG_CANCEL_ALERT_HE
-                                            : !isCentralized && missingRecurringIds
-                                              ? 'Subscription was not created as recurring - cancel manually in Cardcom'
-                                              : isCentralized
-                                                ? 'ביטול מנוי עובד ארגוני (חיוב מרוכז)'
-                                                : 'ביטול מנוי (עצירת חיוב עתידי)'
+                                        actionCtx.cancelAction.reason
+                                          ? actionCtx.cancelAction.reason
+                                          : isPendingCancellation
+                                            ? `ממתין לביטול — חודש אחרון: ${r.finalBillingMonth}`
+                                            : isCentralized
+                                              ? 'ביטול מנוי עובד ארגוני (חיוב מרוכז)'
+                                              : 'ביטול מנוי (עצירת חיוב עתידי)'
                                       }
                                     >
                                       <Ban className="size-3.5 text-amber-600 sm:me-1" />
@@ -2206,17 +2244,12 @@ export default function SubscribersDashboard() {
                                 <Button
                                   type="button"
                                   variant="outline"
-                                  className={`h-auto min-h-10 w-full justify-start gap-2 px-3 py-2 text-xs font-normal ${isPendingOrgApproval ? 'opacity-60' : ''}`}
-                                  disabled={
-                                    isCancelled || isPendingCancellation || (!isCentralized && missingRecurringIds)
-                                  }
+                                  className={`h-auto min-h-10 w-full justify-start gap-2 px-3 py-2 text-xs font-normal ${actionCtx.cancelAction.disabled ? 'opacity-60' : ''}`}
+                                  disabled={actionCtx.cancelAction.disabled}
                                   onClick={(e) => {
                                     closeActionDetailsMenu(e);
-                                    if (isPendingOrgApproval) {
-                                      window.alert(PENDING_ORG_CANCEL_ALERT_HE);
-                                      return;
-                                    }
-                                    if (isCancelled || isPendingCancellation || (!isCentralized && missingRecurringIds)) {
+                                    if (!actionCtx.cancelAction.allowed) {
+                                      if (actionCtx.cancelAction.reason) window.alert(actionCtx.cancelAction.reason);
                                       return;
                                     }
                                     if (isCentralized) {

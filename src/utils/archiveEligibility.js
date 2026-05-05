@@ -1,38 +1,86 @@
-/**
- * Archive = soft-delete (isActive: false).
- * מותר לארכב: State A (לא הופעל) ו-State D (מבוטל).
- * אסור לארכב: State C (ממתין לביטול) ו-State B (פעיל).
- */
+export const NOT_ACTIVATED_CENTRALIZED_MSG =
+  'לקוח זה לא אושר על ידי הארגון ולא הופעל לו מנוי, ולכן לא ניתן לבטל את המנוי. ניתן להעביר לארכיון בלבד. פעולה זו תגרור השבתה של יכולת מנהל הארגון לאשר עובד זה בעתיד';
+export const ARCHIVE_BLOCKED_PRIVATE_MSG =
+  'לא ניתן להעביר את המידע לארכיון. נא לבטל חיוב עתידי קודם לכן בקארדקום.';
+export const ARCHIVE_BLOCKED_ACTIVE_CENTRALIZED_MSG =
+  'לא ניתן להעביר לארכיון כי המנוי בתוקף יש לבטל את המנוי';
+export const ARCHIVE_BLOCKED_PENDING_CANCELLATION_CENTRALIZED_MSG =
+  "לא ניתן להעביר לארכיון מנוי שנמצא בתהליך ביטול (יבוטל ב-1 לחודש). רק לאחר שהסטטוס ישתנה ל-'מבוטל' ניתן יהיה להעבירו לארכיון.";
 
-export const FORBIDDEN_ARCHIVE_ALERT_HE =
-  "לא ניתן להעביר לארכיון עובד שנמצא בתהליך ביטול (יבוטל ב-1 לחודש). רק לאחר שהסטטוס ישתנה ל-'מבוטל' ניתן יהיה להעבירו לארכיון.";
+function normalizeStatus(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+}
 
 export function isPendingCancellationStatus(subscriptionStatus) {
-  const s = String(subscriptionStatus || '').trim().toLowerCase();
-  return s === 'pending cancellation' || s === 'pending_cancellation';
+  const s = normalizeStatus(subscriptionStatus);
+  return s === 'pending_cancellation' || s === 'pendingcancellation';
+}
+
+function resolveState({ entitlementStatus, workflowStatus, subscriptionStatus }) {
+  const es = normalizeStatus(entitlementStatus);
+  if (es) return es;
+  const ws = normalizeStatus(workflowStatus);
+  const sub = normalizeStatus(subscriptionStatus);
+  if (ws === 'pending_org_approval' || ws === 'pending_alllow' || ws === 'pending_allow') return 'not_activated';
+  if (sub === 'pending_cancellation' || sub === 'pendingcancellation') return 'pending_cancellation';
+  if (sub === 'cancelled' || sub === 'canceled' || ws === 'canceled' || ws === 'cancelled') return 'canceled';
+  return 'active';
 }
 
 /**
- * @param {{ entitlementStatus?: string, workflowStatus?: string, subscriptionStatus?: string, isActive?: boolean }} p
+ * @param {{
+ *   entitlementStatus?: string,
+ *   workflowStatus?: string,
+ *   subscriptionStatus?: string,
+ *   isActive?: boolean,
+ *   isCentralizedBilling?: boolean,
+ *   pendingCancellationDateLabel?: string
+ * }} p
  */
-export function canArchiveDealUi({ entitlementStatus, workflowStatus, subscriptionStatus, isActive }) {
-  if (isActive === false) return false;
+export function getArchiveEligibility(p) {
+  const {
+    entitlementStatus,
+    workflowStatus,
+    subscriptionStatus,
+    isActive,
+    isCentralizedBilling,
+    pendingCancellationDateLabel,
+  } = p || {};
 
-  // שימוש ב-entitlementStatus כשזמין (המצב האחיד)
-  if (entitlementStatus) {
-    return entitlementStatus === 'not_activated' || entitlementStatus === 'canceled';
+  if (isActive === false) {
+    return { allowed: false, reason: 'רשומה זו כבר אינה פעילה.' };
   }
 
-  // fallback לשדות גולמיים
-  const ws  = String(workflowStatus  || '').trim().toLowerCase();
-  const sub = String(subscriptionStatus || '').trim().toLowerCase();
+  const state = resolveState({ entitlementStatus, workflowStatus, subscriptionStatus });
+  const isCentralized = !!isCentralizedBilling;
 
-  // A — לא הופעל
-  if (ws === 'pending_org_approval') return true;
-  // D — מבוטל
-  if (sub === 'cancelled' || sub === 'canceled') return true;
-  // C — ממתין לביטול: אסור לארכב
-  if (isPendingCancellationStatus(subscriptionStatus)) return false;
+  if (state === 'not_activated') {
+    if (isCentralized) return { allowed: true, reason: NOT_ACTIVATED_CENTRALIZED_MSG };
+    return { allowed: false, reason: ARCHIVE_BLOCKED_PRIVATE_MSG };
+  }
+  if (state === 'active') {
+    if (isCentralized) return { allowed: false, reason: ARCHIVE_BLOCKED_ACTIVE_CENTRALIZED_MSG };
+    return { allowed: false, reason: ARCHIVE_BLOCKED_PRIVATE_MSG };
+  }
+  if (state === 'pending_cancellation') {
+    if (isCentralized) {
+      return { allowed: false, reason: ARCHIVE_BLOCKED_PENDING_CANCELLATION_CENTRALIZED_MSG };
+    }
+    const dateLabel = String(pendingCancellationDateLabel || '').trim();
+    return {
+      allowed: false,
+      reason: `לא ניתן להעביר לארכיון מנוי שנמצא בתהליך ביטול (יבוטל ב-${dateLabel || '—'}). רק לאחר שהסטטוס ישתנה ל-'מבוטל' ניתן יהיה להעבירו לארכיון.`,
+    };
+  }
+  if (state === 'canceled' || state === 'cancelled') {
+    return { allowed: true, reason: '' };
+  }
+  return { allowed: false, reason: ARCHIVE_BLOCKED_PRIVATE_MSG };
+}
 
-  return false;
+export function canArchiveDealUi(params) {
+  return getArchiveEligibility(params);
 }
