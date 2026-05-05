@@ -10,7 +10,10 @@
       "Bash(node --input-type=module)",
       "Bash(npx --yes acorn --ecma2020 --module src/utils/archiveEligibility.js)",
       "Bash(node --input-type=module --eval \"import './server/entitlementStatus.js'\")",
-      "Bash(node --input-type=module --eval ' *)"
+      "Bash(node --input-type=module --eval ' *)",
+      "Bash(node -e \"const fs=require\\('fs'\\);const c=fs.readFileSync\\('server/mongoService.js','utf8'\\);const i=c.indexOf\\('export async function updateDealCardcomRecurringSnapshot'\\);console.log\\(i,c.slice\\(i,i+600\\)\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\);const c=fs.readFileSync\\('server/mongoService.js','utf8'\\);const i=c.indexOf\\('export async function updateDealCardcomRecurringSnapshot'\\);console.log\\(c.slice\\(i,i+900\\)\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\);const c=fs.readFileSync\\('server/mongoService.js','utf8'\\);const i=c.indexOf\\('export async function updateDealCardcomRecurringSnapshot'\\);console.log\\(c.slice\\(i,i+1100\\)\\);\")"
     ]
   }
 }

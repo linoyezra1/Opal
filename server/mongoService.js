@@ -3338,12 +3338,22 @@ export async function updateDealCardcomRecurringSnapshot(dealId, snapshot = {}) 
     throw new Error('מזהה עסקה לא תקין');
   }
   const set = { updatedAt: new Date() };
-  if (snapshot.cardcomRecurringIsActive != null) {
-    set['formState.cardcomRecurringIsActive'] = !!snapshot.cardcomRecurringIsActive;
+
+  const incomingIsActive = snapshot.cardcomRecurringIsActive;
+  if (incomingIsActive != null) {
+    set['formState.cardcomRecurringIsActive'] = !!incomingIsActive;
   }
+
   if (snapshot.cardcomNextDateToBill != null) {
-    set['formState.cardcomNextDateToBill'] = String(snapshot.cardcomNextDateToBill);
+    const incomingDate = String(snapshot.cardcomNextDateToBill).trim();
+    // הגנה על תאריך חלון הזכאות (Grace Period) של B2C:
+    // כאשר Cardcom מדווח על הפסקת הוראת קבע ושולח תאריך ריק —
+    // אין לדרוס את cardcomNextDateToBill הקיים, כי הוא משמש כתאריך סיום הזכאות.
+    if (!(incomingIsActive === false && incomingDate === '')) {
+      set['formState.cardcomNextDateToBill'] = incomingDate;
+    }
   }
+
   if (snapshot.cardcomCreateDate != null) {
     set['formState.cardcomCreateDate'] = String(snapshot.cardcomCreateDate);
   }
