@@ -7,6 +7,9 @@ import {
   Download,
   ArrowRight,
   Users,
+  DollarSign,
+  Clock,
+  UserX,
   RefreshCw,
   Wallet,
   UserCheck,
@@ -295,6 +298,68 @@ export default function OrganizationDetailPage() {
     if (!name) return null;
     return (products || []).find((p) => String(p.productName || p.name || '').trim() === name) || null;
   }, [org?.subscriptionProductName, products]);
+
+  const summaryStats = useMemo(() => {
+    const rows = Array.isArray(deals) ? deals : [];
+    let openDebt = 0;
+    let activeEmployees = 0;
+    let pendingApprovalEmployees = 0;
+    let pendingCancellationEmployees = 0;
+    let canceledEmployees = 0;
+
+    const normalizeStatus = (value) =>
+      String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '_');
+
+    for (const row of rows) {
+      const entitlement = normalizeStatus(row?.entitlementStatus);
+      const workflow = normalizeStatus(row?.status);
+      const subscription = normalizeStatus(row?.subscriptionStatus);
+      const paymentStatus = normalizeStatus(row?.paymentStatus);
+      const payerAmount = Number(row?.payerAmount || row?.amount || 0);
+
+      if (paymentStatus && paymentStatus !== 'paid' && Number.isFinite(payerAmount)) {
+        openDebt += payerAmount;
+      }
+
+      const effectiveEntitlement = entitlement || (() => {
+        if (workflow === 'pending_org_approval' || workflow === 'pending_alllow' || workflow === 'pending_allow') {
+          return 'pending_alllow';
+        }
+        if (subscription === 'pending_cancellation' || subscription === 'pendingcancellation') {
+          return 'pending_cancellation';
+        }
+        if (subscription === 'cancelled' || subscription === 'canceled') {
+          return 'canceled';
+        }
+        if (subscription === 'active' || workflow === 'active') {
+          return 'active';
+        }
+        return '';
+      })();
+
+      if (effectiveEntitlement === 'active') activeEmployees += 1;
+      if (
+        effectiveEntitlement === 'pending_alllow' ||
+        effectiveEntitlement === 'pending_allow' ||
+        effectiveEntitlement === 'pending_org_approval'
+      ) {
+        pendingApprovalEmployees += 1;
+      }
+      if (effectiveEntitlement === 'pending_cancellation') pendingCancellationEmployees += 1;
+      if (effectiveEntitlement === 'canceled' || effectiveEntitlement === 'cancelled') canceledEmployees += 1;
+    }
+
+    return {
+      openDebt,
+      activeEmployees,
+      pendingApprovalEmployees,
+      pendingCancellationEmployees,
+      canceledEmployees,
+    };
+  }, [deals]);
 
   async function lockSnapshot() {
     if (!id || !token) return;
@@ -764,6 +829,39 @@ export default function OrganizationDetailPage() {
         </div>
 
         {err ? <p className="text-sm text-destructive">{err}</p> : null}
+
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-5">
+          <StatsCard
+            title="סה״כ חובות פתוחים"
+            value={formatCurrency(summaryStats.openDebt)}
+            icon={DollarSign}
+            iconWrapperClassName="bg-blue-100 text-blue-700"
+          />
+          <StatsCard
+            title="עובדים פעילים"
+            value={String(summaryStats.activeEmployees)}
+            icon={Users}
+            iconWrapperClassName="bg-emerald-100 text-emerald-700"
+          />
+          <StatsCard
+            title="ממתין לביטול"
+            value={String(summaryStats.pendingCancellationEmployees)}
+            icon={Clock}
+            iconWrapperClassName="bg-amber-100 text-amber-700"
+          />
+          <StatsCard
+            title="ממתין לאישור"
+            value={String(summaryStats.pendingApprovalEmployees)}
+            icon={Clock}
+            iconWrapperClassName="bg-slate-100 text-slate-700"
+          />
+          <StatsCard
+            title="מבוטלים"
+            value={String(summaryStats.canceledEmployees)}
+            icon={UserX}
+            iconWrapperClassName="bg-red-100 text-red-700"
+          />
+        </div>
 
         <Tabs
           value={tab}

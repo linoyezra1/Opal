@@ -5,15 +5,25 @@ import { cn } from '../../lib/cn.js';
 /**
  * כרטיס סטטיסטיקה — תואם ל־_New_Backup/components/admin/stats-card
  */
-export function StatsCard({ title, value, icon: Icon, trend, className, loading, subText }) {
+export function StatsCard({
+  title,
+  value,
+  icon: Icon,
+  trend,
+  className,
+  loading,
+  subText,
+  iconWrapperClassName,
+  iconClassName,
+}) {
   const isPositive = trend && trend.value >= 0;
 
   return (
     <Card className={cn('relative overflow-hidden', className)}>
       <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
         <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Icon className="size-4" />
+        <div className={cn('flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary', iconWrapperClassName)}>
+          <Icon className={cn('size-4', iconClassName)} />
         </div>
       </CardHeader>
       <CardContent>
