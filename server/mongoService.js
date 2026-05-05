@@ -1655,6 +1655,8 @@ export async function getDeals() {
 
 function isCancelledStatus(doc) {
   const sub = String(doc?.subscriptionStatus || '').trim().toLowerCase();
+  // "Pending Cancellation" אינו ביטול — מנוי עדיין בתוקף עד ה-1 לחודש הבא
+  if (sub === 'pending cancellation') return false;
   const st = String(doc?.status || '').trim().toLowerCase();
   const pay = String(doc?.paymentStatus || '').trim().toLowerCase();
   const recurringId = String(doc?.cardcomRecurringId || '').trim();
@@ -2293,10 +2295,12 @@ export async function getSalesDashboardData(filters = {}) {
       const ent = getEntitlementStatus(d);
       const fsEnt = d.formState || {};
       let entitlementCancelAt = null;
+      // עבור "ממתין לביטול": מציגים את תאריך סיום השירות (serviceUntil = 1 לחודש הבא),
+      // לא את תאריך פעולת הביטול (cancelAt = היום). כך הבאדג' מראה "יבוטל ב-01/06/2026".
       const cancelCand =
-        d.cancellationDate ||
-        fsEnt.cardcomLastProcessDate ||
-        ent.cancelAt;
+        ent.status === 'pending_cancellation'
+          ? (ent.serviceUntil || ent.cancelAt || d.cancellationDate)
+          : (d.cancellationDate || fsEnt.cardcomLastProcessDate || ent.cancelAt);
       if (cancelCand) {
         const dt =
           cancelCand instanceof Date ? cancelCand : parseFlexibleDate(cancelCand);
@@ -2524,18 +2528,32 @@ export async function getControlPanelOverviewData(filters = {}) {
           },
         },
         _isCancelled: {
-          $or: [
+          // "Pending Cancellation" matches /cancel/ — exclude it explicitly.
+          // Only exact 'cancelled'/'canceled' or 'cancel' (not 'pending cancellation') counts.
+          $and: [
             {
-              $regexMatch: {
-                input: { $toLower: { $ifNull: ['$subscriptionStatus', ''] } },
-                regex: 'cancel',
+              $not: {
+                $regexMatch: {
+                  input: { $toLower: { $ifNull: ['$subscriptionStatus', ''] } },
+                  regex: 'pending.+cancel',
+                },
               },
             },
             {
-              $regexMatch: {
-                input: { $toLower: { $ifNull: ['$status', ''] } },
-                regex: 'cancel',
-              },
+              $or: [
+                {
+                  $regexMatch: {
+                    input: { $toLower: { $ifNull: ['$subscriptionStatus', ''] } },
+                    regex: 'cancel',
+                  },
+                },
+                {
+                  $regexMatch: {
+                    input: { $toLower: { $ifNull: ['$status', ''] } },
+                    regex: 'cancel',
+                  },
+                },
+              ],
             },
           ],
         },

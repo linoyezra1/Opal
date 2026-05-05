@@ -128,12 +128,9 @@ export function getEntitlementStatus(deal, now = new Date()) {
 
   // ═══════════════════════════════════════════════════════════
   // תשלום פרטי (כרטיס אשראי / Cardcom)
+  // עדיפות: איתות Cardcom (active/inactive) מקבל קדימות על פני subscriptionStartDate.
+  // subscriptionStartDate נבדק רק כאשר אין איתות Cardcom.
   // ═══════════════════════════════════════════════════════════
-
-  // A — לא הופעל: טרם הושלמו מסמכים / תאריך תחילת מנוי חסר
-  if (!hasActivatedSubscription(deal)) {
-    return { status: STATUS_NOT_ACTIVATED, cancelAt: null, serviceUntil: null };
-  }
 
   const nextBillRaw = firstNonEmpty(
     fs.cardcomNextDateToBill,
@@ -153,39 +150,45 @@ export function getEntitlementStatus(deal, now = new Date()) {
     fs.cardcomRecurringIsActive === 0 ||
     fs.cardcomRecurringIsActive === '0';
 
-  // B — פעיל: הוראת קבע פעילה
-  if (activeExplicit) {
-    return { status: STATUS_ACTIVE, cancelAt: null, serviceUntil: null };
-  }
-
-  // C / D — הוראת קבע אינה פעילה: בדיקת NextDateToBill
+  // C / D — הוראת קבע אינה פעילה: בדיקת NextDateToBill (קדימות על hasActivatedSubscription)
   if (inactiveExplicit && nextBill) {
     const nb = startOfLocalDay(nextBill);
     if (nb && today && today < nb) {
-      // C — ממתין לביטול: עדיין לפני תאריך החיוב הבא
+      // C — ממתין לביטול: שירות בתוקף עד תאריך החיוב הבא
       return { status: STATUS_PENDING_CANCELLATION, cancelAt: cancellationDate, serviceUntil: nextBill };
     }
     // D — מבוטל: עבר תאריך החיוב הבא
     return { status: STATUS_CANCELED, cancelAt: cancellationDate || nextBill, serviceUntil: null };
   }
 
-  // fallback לפי subscriptionStatus גולמי
-  if (sub === 'Pending Cancellation') {
-    return { status: STATUS_PENDING_CANCELLATION, cancelAt: cancellationDate, serviceUntil: nextBill };
-  }
-
   if (inactiveExplicit && !nextBill) {
-    if (subL.includes('pending')) {
+    if (sub === 'Pending Cancellation' || subL.includes('pending')) {
       return { status: STATUS_PENDING_CANCELLATION, cancelAt: cancellationDate, serviceUntil: null };
     }
     return { status: STATUS_CANCELED, cancelAt: cancellationDate, serviceUntil: null };
+  }
+
+  // A — לא הופעל: טרם הושלמו מסמכים (בדיקה כאשר אין איתות Cardcom inactive)
+  if (!hasActivatedSubscription(deal)) {
+    // אם Cardcom פעיל אבל המסמכים חסרים — עדיין לא הופעל
+    return { status: STATUS_NOT_ACTIVATED, cancelAt: null, serviceUntil: null };
+  }
+
+  // B — פעיל: הוראת קבע פעילה
+  if (activeExplicit) {
+    return { status: STATUS_ACTIVE, cancelAt: null, serviceUntil: null };
+  }
+
+  // fallback לפי subscriptionStatus גולמי (אין איתות Cardcom + יש subscriptionStartDate)
+  if (sub === 'Pending Cancellation') {
+    return { status: STATUS_PENDING_CANCELLATION, cancelAt: cancellationDate, serviceUntil: nextBill };
   }
 
   if (subL === 'cancelled' || subL === 'canceled' || String(deal?.status || '').toLowerCase() === 'cancelled') {
     return { status: STATUS_CANCELED, cancelAt: cancellationDate, serviceUntil: null };
   }
 
-  // B — פעיל (ברירת מחדל לאחר שאושר subscriptionStartDate)
+  // B — פעיל (ברירת מחדל: יש subscriptionStartDate, אין איתות ביטול)
   return { status: STATUS_ACTIVE, cancelAt: null, serviceUntil: null };
 }
 

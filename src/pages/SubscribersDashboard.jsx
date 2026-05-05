@@ -102,7 +102,20 @@ function getRowActionContext(row) {
     !String(row?.cardcomAccountId || '').trim() || !String(row?.cardcomRecurringId || '').trim();
   let cancelAction = { allowed: true, disabled: false, reason: '' };
   if (state === 'pending_cancellation' || state === 'canceled' || state === 'cancelled') {
-    cancelAction = { allowed: false, disabled: true, reason: '' };
+    if (state === 'pending_cancellation') {
+      const when = getCancellationDateLabel(row);
+      cancelAction = {
+        allowed: false,
+        disabled: true,
+        reason: `לא ניתן לבצע ביטול נוסף כי המנוי כבר בתהליך ביטול (יבוטל ב-${when}).`,
+      };
+    } else {
+      cancelAction = {
+        allowed: false,
+        disabled: true,
+        reason: 'המנוי כבר מבוטל ולכן פעולת ביטול אינה זמינה.',
+      };
+    }
   } else if (state === 'not_activated' && isCentralizedBilling) {
     cancelAction = { allowed: false, disabled: false, reason: NOT_ACTIVATED_CENTRALIZED_MSG };
   } else if (!isCentralizedBilling && missingRecurringIds) {
@@ -2192,6 +2205,9 @@ export default function SubscribersDashboard() {
                                   </span>
                                 </TooltipTrigger>
                                 {isPendingOrgApproval ? <TooltipContent>{PENDING_ORG_CANCEL_ALERT_HE}</TooltipContent> : null}
+                                {actionCtx.cancelAction.reason && !isPendingOrgApproval ? (
+                                  <TooltipContent>{actionCtx.cancelAction.reason}</TooltipContent>
+                                ) : null}
                               </Tooltip>
                             </div>
                             <details className="relative md:hidden">
