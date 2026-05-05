@@ -101,6 +101,9 @@ function dealDisplayPaymentStatus(deal) {
 
 function dealDisplaySubscriptionStatus(deal) {
   const es = deal?.entitlementStatus;
+  if (es === 'not_activated') {
+    return dealCentralizedPayment(deal) ? 'לא הופעל · ממתין לאישור מנהל' : 'לא הופעל · השלמת מסמכים';
+  }
   if (es === 'active') {
     return dealCentralizedPayment(deal) ? 'חיוב מרוכז · פעיל' : 'פעיל';
   }
@@ -311,8 +314,10 @@ export default function SubscribersDashboard() {
         label: 'סטטוס',
         type: 'select',
         options: [
-          { value: 'active', label: 'פעילים' },
-          { value: 'cancelled', label: 'מבוטלים' },
+          { value: 'active',               label: 'פעילים' },
+          { value: 'pending_cancellation', label: 'ממתין לביטול' },
+          { value: 'not_activated',        label: 'לא הופעל' },
+          { value: 'cancelled',            label: 'מבוטלים' },
         ],
       },
       {
@@ -772,14 +777,33 @@ export default function SubscribersDashboard() {
           String(r.subscriptionStatus || '').toLowerCase() === 'cancelled'
         );
       });
+    } else if (filters.status === 'pending_cancellation') {
+      rows = rows.filter((r) => {
+        if (r.entitlementStatus) return r.entitlementStatus === 'pending_cancellation';
+        return String(r.subscriptionStatus || '') === 'Pending Cancellation';
+      });
+    } else if (filters.status === 'not_activated') {
+      rows = rows.filter((r) => {
+        if (r.entitlementStatus) return r.entitlementStatus === 'not_activated';
+        const wf = String(r.raw?.status || r.status || '').toLowerCase();
+        const sub = String(r.subscriptionStatus || '');
+        return (
+          wf === 'pending_org_approval' ||
+          sub === 'ממתין לאישור הארגון' ||
+          (r.pendingBeneficiaryCompletion === true && !r.entitlementStatus)
+        );
+      });
     } else if (filters.status === 'active') {
       rows = rows.filter((r) => {
         if (r.entitlementStatus) {
-          return r.entitlementStatus === 'active' || r.entitlementStatus === 'pending_cancellation';
+          // "פעילים" = רק פעיל אמיתי (State B) ← לא כולל pending_cancellation
+          return r.entitlementStatus === 'active';
         }
         return (
           r.status !== 'canceled' &&
-          String(r.subscriptionStatus || '').toLowerCase() !== 'cancelled'
+          String(r.subscriptionStatus || '').toLowerCase() !== 'cancelled' &&
+          String(r.subscriptionStatus || '') !== 'Pending Cancellation' &&
+          String(r.raw?.status || '').toLowerCase() !== 'pending_org_approval'
         );
       });
     }
@@ -875,19 +899,32 @@ export default function SubscribersDashboard() {
   // so summary cards always reflect what the user actually sees in the table.
   const visibleSummary = useMemo(() => {
     let totalRevenue = 0;
+    let active = 0;
+    let pendingCancellation = 0;
+    let notActivated = 0;
     let canceled = 0;
     for (const r of visibleRows) {
       totalRevenue += Number(r.amount || 0);
-      if (r.entitlementStatus === 'canceled') {
+      const es = r.entitlementStatus;
+      if (es === 'not_activated') {
+        notActivated += 1;
+      } else if (es === 'active') {
+        active += 1;
+      } else if (es === 'pending_cancellation') {
+        pendingCancellation += 1;
+      } else if (es === 'canceled') {
         canceled += 1;
-      } else if (
-        !r.entitlementStatus &&
-        (r.status === 'canceled' || String(r.subscriptionStatus || '').toLowerCase() === 'cancelled')
-      ) {
-        canceled += 1;
+      } else {
+        // ללא entitlementStatus — fallback לשדות גולמיים
+        const sub = String(r.subscriptionStatus || '').toLowerCase();
+        const wf  = String(r.raw?.status || r.status || '').toLowerCase();
+        if (sub === 'cancelled' || r.status === 'canceled') canceled += 1;
+        else if (String(r.subscriptionStatus || '') === 'Pending Cancellation') pendingCancellation += 1;
+        else if (wf === 'pending_org_approval' || r.subscriptionStatus === 'ממתין לאישור הארגון') notActivated += 1;
+        else active += 1;
       }
     }
-    return { totalRevenue, canceled, active: visibleRows.length - canceled };
+    return { totalRevenue, active, pendingCancellation, notActivated, canceled };
   }, [visibleRows]);
 
   const calculatedCounts = useMemo(() => {
@@ -901,8 +938,16 @@ export default function SubscribersDashboard() {
       total: primary + secondary,
     };
   }, [visibleRows]);
-  const statusSummaryTitle = filters.status === 'cancelled' ? 'מבוטלים (סיכום)' : 'מנויים פעילים (סיכום)';
-  const statusSummaryValue = filters.status === 'cancelled' ? visibleSummary.canceled : visibleSummary.active;
+  const statusSummaryTitle =
+    filters.status === 'cancelled'            ? 'מבוטלים (סיכום)' :
+    filters.status === 'pending_cancellation' ? 'ממתין לביטול (סיכום)' :
+    filters.status === 'not_activated'        ? 'לא הופעל (סיכום)' :
+    'מנויים פעילים (סיכום)';
+  const statusSummaryValue =
+    filters.status === 'cancelled'            ? visibleSummary.canceled :
+    filters.status === 'pending_cancellation' ? visibleSummary.pendingCancellation :
+    filters.status === 'not_activated'        ? visibleSummary.notActivated :
+    visibleSummary.active;
   const visibleRowIds = useMemo(
     () => visibleRows.map((r) => String(r.id || '')).filter(Boolean),
     [visibleRows]
@@ -1965,7 +2010,11 @@ export default function SubscribersDashboard() {
                             )}
                           </TableCell>
                           <TableCell dir="rtl" className="text-right whitespace-nowrap">
-                            {r.entitlementStatus === 'pending_cancellation' ? (
+                            {r.entitlementStatus === 'not_activated' ? (
+                              <Badge className="bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-100 font-normal whitespace-normal max-w-[18rem] text-right leading-snug">
+                                {isCentralized ? 'ממתין לאישור מנהל' : 'מנוי לא הופעל'}
+                              </Badge>
+                            ) : r.entitlementStatus === 'pending_cancellation' ? (
                               <Badge className="bg-amber-100 text-amber-950 border-amber-400 hover:bg-amber-100 font-normal whitespace-normal max-w-[18rem] text-right leading-snug">
                                 ממתין לביטול* | בוטל ב-
                                 {r.entitlementCancelAt ? fmtDateTime(r.entitlementCancelAt) : cancelledAtText || '—'}

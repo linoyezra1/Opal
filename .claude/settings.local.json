@@ -6,7 +6,11 @@
       "Bash(Select-Object -Property FullName, PSIsContainer)",
       "Bash(ConvertTo-Json)",
       "Bash(Out-String)",
-      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\Linoy\\\\Desktop\\\\Opal\" -Recurse -Force | Select-Object -Property FullName, PSIsContainer | ForEach-Object { if \\($_.PSIsContainer\\) { \"DIR: $\\($_.FullName\\)\" } else { \"FILE: $\\($_.FullName\\)\" } })"
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\Linoy\\\\Desktop\\\\Opal\" -Recurse -Force | Select-Object -Property FullName, PSIsContainer | ForEach-Object { if \\($_.PSIsContainer\\) { \"DIR: $\\($_.FullName\\)\" } else { \"FILE: $\\($_.FullName\\)\" } })",
+      "Bash(node --input-type=module)",
+      "Bash(npx --yes acorn --ecma2020 --module src/utils/archiveEligibility.js)",
+      "Bash(node --input-type=module --eval \"import './server/entitlementStatus.js'\")",
+      "Bash(node --input-type=module --eval ' *)"
     ]
   }
 }

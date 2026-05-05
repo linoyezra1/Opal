@@ -973,7 +973,10 @@ export async function countActiveMembersByOrganizationId(organizationId) {
   return db.collection('deals').countDocuments({
     organizationId: oid,
     paymentStatus: { $regex: /success|paid|test_success/i },
-    subscriptionStatus: { $ne: 'Cancelled' },
+    // מוחרגים: מבוטל, ממתין לאישור הארגון (State A), ממתין לאישור ב-workflow
+    subscriptionStatus: { $nin: ['Cancelled', 'ממתין לאישור הארגון'] },
+    status: { $ne: 'pending_org_approval' },
+    isActive: { $ne: false },
   });
 }
 
@@ -2670,6 +2673,21 @@ export async function getControlPanelOverviewData(filters = {}) {
 
   // Summary cards are always computed from full selected range (independent of status filter).
   const paidRows = createdRangeDeals.filter((d) => d.isPaidSuccess && !isCancelledDeal(d));
+  // ספירות 4-מצבים (מחושב מכלל העסקאות, לא רק הטווח)
+  const pendingCancellationRows = deals.filter((d) => {
+    const sub = String(d.subscriptionStatus || '').toLowerCase();
+    return (sub.includes('pending') && sub.includes('cancel')) && !isCancelledDeal(d);
+  });
+  const notActivatedRows = deals.filter((d) => {
+    const sub = String(d.subscriptionStatus || '');
+    const wf = String(d.status || '').toLowerCase();
+    return (
+      sub === 'ממתין לאישור הארגון' ||
+      wf === 'pending_org_approval' ||
+      wf === 'pending_allow' ||
+      wf === 'pending_alllow'
+    ) && !isCancelledDeal(d);
+  });
   const totalRevenue = paidRows.reduce((s, d) => s + Number(d.revenue || 0), 0);
   const totalProviderPayments = paidRows.reduce((s, d) => s + Number(d.providerCost || 0), 0);
   const totalAgentPayments = paidRows.reduce((s, d) => s + Number(d.agentCommission || 0), 0);
@@ -2900,6 +2918,8 @@ export async function getControlPanelOverviewData(filters = {}) {
       contactTasks: contactTaskRows.length,
       organizationCollectionsDebt,
       cancellationsCount: statusFilteredCancelledDeals.length,
+      pendingCancellationCount: pendingCancellationRows.length,
+      notActivatedCount: notActivatedRows.length,
       chartSeries: chartSeriesWithCancellations,
       totalCancellationRevenue,
       totalCancellations,
@@ -2953,6 +2973,24 @@ export async function getControlPanelOverviewData(filters = {}) {
           comments: String(d.formState?.failedPaymentComment || ''),
         };
       }),
+      pendingCancellationCount: pendingCancellationRows.map((d) => ({
+        id: String(d._id || ''),
+        transactionId: d.transactionId || '',
+        fullName: d.formState?.fullName || '—',
+        phone: d.formState?.phone || '—',
+        cancellationDate: d.cancellationDate || d.updatedAt || d.createdAt,
+        finalBillingMonth: String(d.finalBillingMonth || '').trim(),
+        subscriptionStatus: String(d.subscriptionStatus || ''),
+      })),
+      notActivatedCount: notActivatedRows.map((d) => ({
+        id: String(d._id || ''),
+        transactionId: d.transactionId || '',
+        fullName: d.formState?.fullName || '—',
+        phone: d.formState?.phone || '—',
+        status: String(d.status || ''),
+        subscriptionStatus: String(d.subscriptionStatus || ''),
+        createdAt: d.createdAt,
+      })),
       cancelledCustomers: statusFilteredCancelledDeals.map((d) => ({
         id: String(d._id || ''),
         orderId: d.transactionId || '',

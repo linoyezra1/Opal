@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, RefreshCw, Wallet, Users, CreditCard, UserCheck, AlertCircle, Building2, Pencil, MessageSquareText, Bell } from 'lucide-react';
+import { LayoutDashboard, RefreshCw, Wallet, Users, CreditCard, UserCheck, AlertCircle, Building2, Pencil, MessageSquareText, Bell, Clock, UserX } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { API_BASE } from '../apiBase.js';
 import { fmtDateTime } from '../utils/dateUtils.js';
@@ -30,7 +30,8 @@ function formatCurrency(v) {
 const SECTIONS = [
   { title: 'הכנסות', keys: ['totalRevenue', 'activeSubscribers', 'totalTransactions'] },
   { title: 'הוצאות', keys: ['totalExpenses', 'totalProviderPayments', 'totalAgentPayments'] },
-  { title: 'משימות לטיפול', keys: ['failedPayments', 'cancellationsCount', 'abandonedCarts', 'pendingBeneficiaries', 'contactTasks'] },
+  { title: 'סטטוס מנויים', keys: ['pendingCancellationCount', 'cancellationsCount', 'notActivatedCount'] },
+  { title: 'משימות לטיפול', keys: ['failedPayments', 'abandonedCarts', 'pendingBeneficiaries', 'contactTasks'] },
 ];
 
 const CARD_META = {
@@ -40,8 +41,10 @@ const CARD_META = {
   totalExpenses: { title: 'סה״כ הוצאות', icon: AlertCircle, money: true, className: 'border-red-300 bg-red-50/60' },
   totalProviderPayments: { title: 'סה״כ תשלום לספק', icon: Building2, money: true },
   totalAgentPayments: { title: 'סה״כ תשלום לסוכן', icon: UserCheck, money: true },
-  failedPayments: { title: 'פיגור תשלום', icon: AlertCircle, task: true },
+  pendingCancellationCount: { title: 'ממתין לביטול', icon: Clock, task: true, className: 'border-amber-300 bg-amber-50/60' },
   cancellationsCount: { title: 'מבוטלים', icon: AlertCircle, task: true, className: 'border-red-300 bg-red-50/60' },
+  notActivatedCount: { title: 'לא הופעל', icon: UserX, task: true, className: 'border-gray-300 bg-gray-50/60' },
+  failedPayments: { title: 'פיגור תשלום', icon: AlertCircle, task: true },
   abandonedCarts: { title: 'עגלות נטושות', icon: CreditCard, task: true },
   pendingBeneficiaries: { title: 'לקוחות להשלמת פרטים', icon: Users, task: true },
   contactTasks: { title: 'פניות צור קשר', icon: CreditCard, task: true },

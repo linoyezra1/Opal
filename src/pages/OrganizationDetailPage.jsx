@@ -94,17 +94,39 @@ function pendingCancelLabel(finalBillingMonth) {
   return `יבוטל ב-1 ל${monthName}`;
 }
 
-function getEmployeeStatusBadge(statusRaw, finalBillingMonth = '') {
+/**
+ * מחזיר badge לסטטוס עובד — מבוסס על 4 המצבים האחידים.
+ * @param {string} statusRaw       — שדה status / subscriptionStatus / entitlementStatus
+ * @param {string} subscriptionStatusRaw — subscriptionStatus גולמי (לזיהוי מבוטל/ממתין לביטול)
+ * @param {string} finalBillingMonth
+ */
+function getEmployeeStatusBadge(statusRaw, subscriptionStatusRaw = '', finalBillingMonth = '') {
   const status = String(statusRaw || '').trim().toLowerCase();
-  if (['active', 'completed', 'approved'].includes(status)) {
-    return { label: 'מאושר', className: 'bg-emerald-100 text-emerald-800 border-emerald-300' };
+  const sub    = String(subscriptionStatusRaw || '').trim().toLowerCase();
+
+  // D — מבוטל
+  if (status === 'canceled' || status === 'cancelled' || sub === 'cancelled' || sub === 'canceled') {
+    return { label: 'מבוטל', className: 'bg-red-100 text-red-800 border-red-300' };
   }
-  if (['pending', 'pending_org_approval'].includes(status)) {
-    return { label: 'ממתין לאישור', className: 'bg-amber-100 text-amber-800 border-amber-300' };
-  }
-  if (status === 'pending cancellation' || status === 'pending_cancellation') {
+
+  // C — ממתין לביטול
+  if (
+    status === 'pending_cancellation' || status === 'pending cancellation' ||
+    sub   === 'pending cancellation'  || sub   === 'pending_cancellation'
+  ) {
     return { label: pendingCancelLabel(finalBillingMonth), className: 'bg-orange-100 text-orange-800 border-orange-300' };
   }
+
+  // A — לא הופעל (ממתין לאישור מנהל)
+  if (['pending', 'pending_org_approval', 'pending_allow', 'pending_alllow'].includes(status) || sub === 'ממתין לאישור הארגון') {
+    return { label: 'ממתין לאישור', className: 'bg-amber-100 text-amber-800 border-amber-300' };
+  }
+
+  // B — פעיל
+  if (['active', 'completed', 'approved'].includes(status)) {
+    return { label: 'מאושר · פעיל', className: 'bg-emerald-100 text-emerald-800 border-emerald-300' };
+  }
+
   return null;
 }
 
@@ -930,9 +952,10 @@ export default function OrganizationDetailPage() {
                           const isPendingCancellation = String(d.subscriptionStatus || '') === 'Pending Cancellation';
                           const centralized = !!d.isCentralized;
                           const badgeRaw =
-                            workflowStatus === 'pending_org_approval'
+                            d.entitlementStatus ||
+                            (workflowStatus === 'pending_org_approval'
                               ? 'pending_org_approval'
-                              : d.subscriptionStatus || d.paymentStatus || '';
+                              : d.subscriptionStatus || d.paymentStatus || '');
                           return (
                           <TableRow key={d.id}>
                             <TableCell className="font-medium text-right">{d.fullName || '—'}</TableCell>
@@ -951,7 +974,7 @@ export default function OrganizationDetailPage() {
                             <TableCell className="text-right">₪{Number(d.payerAmount || 0)}</TableCell>
                             <TableCell className="text-right">
                               {(() => {
-                                const badge = getEmployeeStatusBadge(badgeRaw, d.finalBillingMonth);
+                                const badge = getEmployeeStatusBadge(badgeRaw, d.subscriptionStatus, d.finalBillingMonth);
                                 if (badge) {
                                   return <Badge className={badge.className}>{badge.label}</Badge>;
                                 }

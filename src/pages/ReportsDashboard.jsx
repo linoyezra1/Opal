@@ -373,15 +373,22 @@ export default function ReportsDashboard() {
       const provider = String(r.provider || '').trim();
       const productName = String(r.productName || '').trim();
       const billingType = String(r.billingType || '').trim();
-      const isCancelled =
-        r.status === 'canceled' ||
-        String(r.subscriptionStatus || '').toLowerCase() === 'cancelled';
+
+      // שימוש ב-entitlementStatus כשזמין — fallback לשדות גולמיים
+      const es = r.entitlementStatus;
+      const isCancelled = es
+        ? es === 'canceled'
+        : (r.status === 'canceled' || String(r.subscriptionStatus || '').toLowerCase() === 'cancelled');
+      const isPendingCancellation = es
+        ? es === 'pending_cancellation'
+        : String(r.subscriptionStatus || '') === 'Pending Cancellation';
 
       if (agentProviderFilter && provider !== agentProviderFilter) return false;
       if (agentProductFilter && productName !== agentProductFilter) return false;
       if (agentBillingTypeFilter && billingType !== agentBillingTypeFilter) return false;
       if (agentStatusFilter === 'cancelled' && !isCancelled) return false;
-      if (agentStatusFilter === 'active' && isCancelled) return false;
+      if (agentStatusFilter === 'pending_cancellation' && !isPendingCancellation) return false;
+      if (agentStatusFilter === 'active' && (isCancelled || isPendingCancellation)) return false;
       return true;
     });
   }, [agentData, agentProviderFilter, agentProductFilter, agentBillingTypeFilter, agentStatusFilter]);
@@ -681,9 +688,10 @@ export default function ReportsDashboard() {
                         label: 'סטטוס',
                         type: 'select',
                         options: [
-
-                          { value: 'active', label: 'פעילים' },
-                          { value: 'cancelled', label: 'מבוטלים' },
+                          { value: 'all',                  label: 'הכל' },
+                          { value: 'active',               label: 'פעילים' },
+                          { value: 'pending_cancellation', label: 'ממתין לביטול' },
+                          { value: 'cancelled',            label: 'מבוטלים' },
                         ],
                       },
                     ]}
