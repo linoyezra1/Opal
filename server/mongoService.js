@@ -2324,6 +2324,11 @@ export async function getSalesDashboardData(filters = {}) {
         dealSource: String(d.source || ''),
         cancellationDate:
           cancellationDateRaw && !Number.isNaN(cancellationDateRaw.getTime()) ? cancellationDateRaw.toISOString() : null,
+        subscriptionEndDate: d.subscriptionEndDate
+          ? (d.subscriptionEndDate instanceof Date
+              ? d.subscriptionEndDate.toISOString()
+              : String(d.subscriptionEndDate))
+          : (ent.cancelAt || null),
         internalDealNumber: String(d.indicator?.internalDealNumber || '').trim(),
         lowProfileCode: String(d.lowProfileCode || ''),
         cardcomAccountId: String(d.cardcomAccountId || '').trim(),
@@ -3300,17 +3305,38 @@ export async function markDealPrivateRecurringPendingEnd(dealId) {
   } catch {
     throw new Error('מזהה עסקה לא תקין');
   }
+  const existing = await deals.findOne(
+    { _id: oid },
+    { projection: { formState: 1, isActive: 1 } }
+  );
+  if (!existing) throw new Error('עסקה לא נמצאה');
+  if (existing.isActive === false) throw new Error('לא ניתן לבטל מנוי לעסקה בארכיון');
+
   const now = new Date();
-  const nextBill = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const fs = existing.formState && typeof existing.formState === 'object' ? existing.formState : {};
+  const nextDateToBill = parseFlexibleDate(fs.cardcomNextDateToBill);
+  const subscriptionStartDate = parseFlexibleDate(fs.subscriptionStartDate);
+  let endDate = nextDateToBill;
+  if (!endDate && subscriptionStartDate) {
+    endDate = new Date(subscriptionStartDate);
+    endDate.setMonth(endDate.getMonth() + 1);
+  }
+  if (!endDate || Number.isNaN(endDate.getTime())) {
+    endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  }
+  const endDateIso = endDate.toISOString();
+
   const r = await deals.updateOne(
     { _id: oid },
     {
       $set: {
         subscriptionStatus: 'Pending Cancellation',
         cancellationDate: now,
+        cancelAt: endDate,
+        subscriptionEndDate: endDate,
         updatedAt: now,
         'formState.cardcomRecurringIsActive': false,
-        'formState.cardcomNextDateToBill': nextBill.toISOString(),
+        'formState.cardcomNextDateToBill': endDateIso,
       },
     }
   );
@@ -3318,7 +3344,9 @@ export async function markDealPrivateRecurringPendingEnd(dealId) {
   return {
     success: true,
     cancellationDate: now.toISOString(),
-    cardcomNextDateToBill: nextBill.toISOString(),
+    cardcomNextDateToBill: endDateIso,
+    cancelAt: endDateIso,
+    subscriptionEndDate: endDateIso,
     status: 'Pending Cancellation',
   };
 }
@@ -3415,13 +3443,20 @@ export async function markDealPendingCancellation(dealId) {
         subscriptionStatus: 'Pending Cancellation',
         finalBillingMonth,
         cancelAt,
+        subscriptionEndDate: cancelAt,
         cancellationDate: now,
         updatedAt: now,
       },
     }
   );
   if (!r.matchedCount) throw new Error('עסקה לא נמצאה');
-  return { success: true, finalBillingMonth, cancelAt: cancelAt.toISOString(), status: 'Pending Cancellation' };
+  return {
+    success: true,
+    finalBillingMonth,
+    cancelAt: cancelAt.toISOString(),
+    subscriptionEndDate: cancelAt.toISOString(),
+    status: 'Pending Cancellation',
+  };
 }
 
 /**
