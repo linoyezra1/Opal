@@ -990,36 +990,48 @@ export async function findDealsByOrganizationId(organizationId, limit = 500) {
     .sort({ createdAt: -1 })
     .limit(limit)
     .toArray();
-  return docs.map((d) => ({
-    id: String(d._id),
-    transactionId: d.transactionId,
-    payerAmount: d.payerAmount,
-    paymentStatus: d.paymentStatus,
-    subscriptionStatus: d.subscriptionStatus,
-    status: d.status,
-    isCentralized: isCentralizedOrgPayment(d),
-    finalBillingMonth: String(d.finalBillingMonth || '').trim(),
-    memberType: d.memberType || 'Primary',
-    isOrganizationDeal: !!d.isOrganizationDeal,
-    fullName: d.formState?.fullName,
-    productName: d.formState?.productName || d.formState?.subscriptionProductName || '',
-    idNumber: d.formState?.id,
-    email: d.formState?.email,
-    phone: d.formState?.phone,
-    dateOfBirth: d.formState?.dateOfBirth,
-    gender: d.formState?.gender,
-    healthFund: d.formState?.healthFund,
-    address: d.formState?.address,
-    createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
-    lowProfileCode: String(d.lowProfileCode || '').trim(),
-    cardcomAccountId: String(d.cardcomAccountId || '').trim(),
-    cardcomRecurringId: String(d.cardcomRecurringId || '').trim(),
-    cardcomInternalDealNumber: String(d?.indicator?.internalDealNumber || '').trim(),
-    cardcomResponseDescription: String(d?.indicator?.responsdescription || d?.formState?.cardcomResponseDescription || '').trim(),
-    Lest4Numbers: String(d?.indicator?.Lest4Numbers || d?.formState?.lastFourDigits || '').trim(),
-    MutagName: String(d?.indicator?.MutagName || d?.formState?.cardBrand || '').trim(),
-    source: d.source,
-  }));
+  return docs.map((d) => {
+    const ent = getEntitlementStatus(d);
+    const toIso = (v) => {
+      if (!v) return null;
+      const dt = v instanceof Date ? v : new Date(v);
+      return Number.isNaN(dt.getTime()) ? null : dt.toISOString();
+    };
+    return {
+      id: String(d._id),
+      transactionId: d.transactionId,
+      payerAmount: d.payerAmount,
+      paymentStatus: d.paymentStatus,
+      subscriptionStatus: d.subscriptionStatus,
+      status: d.status,
+      isCentralized: isCentralizedOrgPayment(d),
+      finalBillingMonth: String(d.finalBillingMonth || '').trim(),
+      memberType: d.memberType || 'Primary',
+      isOrganizationDeal: !!d.isOrganizationDeal,
+      fullName: d.formState?.fullName,
+      productName: d.formState?.productName || d.formState?.subscriptionProductName || '',
+      idNumber: d.formState?.id,
+      email: d.formState?.email,
+      phone: d.formState?.phone,
+      dateOfBirth: d.formState?.dateOfBirth,
+      gender: d.formState?.gender,
+      healthFund: d.formState?.healthFund,
+      address: d.formState?.address,
+      createdAt: toIso(d.createdAt),
+      cancellationDate: toIso(d.cancellationDate),
+      subscriptionEndDate: toIso(d.subscriptionEndDate) || ent.cancelAt || null,
+      subscriptionStartDate: String(d.formState?.subscriptionStartDate || '').trim(),
+      entitlementStatus: ent.status,
+      lowProfileCode: String(d.lowProfileCode || '').trim(),
+      cardcomAccountId: String(d.cardcomAccountId || '').trim(),
+      cardcomRecurringId: String(d.cardcomRecurringId || '').trim(),
+      cardcomInternalDealNumber: String(d?.indicator?.internalDealNumber || '').trim(),
+      cardcomResponseDescription: String(d?.indicator?.responsdescription || d?.formState?.cardcomResponseDescription || '').trim(),
+      Lest4Numbers: String(d?.indicator?.Lest4Numbers || d?.formState?.lastFourDigits || '').trim(),
+      MutagName: String(d?.indicator?.MutagName || d?.formState?.cardBrand || '').trim(),
+      source: d.source,
+    };
+  });
 }
 
 export async function getOrganizationMonthlyPayments(orgId, monthsBack = 12) {
@@ -3313,17 +3325,29 @@ export async function markDealPrivateRecurringPendingEnd(dealId) {
   if (existing.isActive === false) throw new Error('לא ניתן לבטל מנוי לעסקה בארכיון');
 
   const now = new Date();
-  const fs = existing.formState && typeof existing.formState === 'object' ? existing.formState : {};
-  const nextDateToBill = parseFlexibleDate(fs.cardcomNextDateToBill);
-  const subscriptionStartDate = parseFlexibleDate(fs.subscriptionStartDate);
-  let endDate = nextDateToBill;
+  const fsData = existing.formState && typeof existing.formState === 'object' ? existing.formState : {};
+
+  // B2C end-date: primary = cardcomNextDateToBill, fallback = subscriptionStartDate + 1 month exact.
+  // Explicitly avoids 1st-of-month (B2B logic).
+  const nextDateToBill = parseFlexibleDate(fsData.cardcomNextDateToBill);
+  const subscriptionStartDate = parseFlexibleDate(fsData.subscriptionStartDate);
+
+  let endDate = nextDateToBill; // primary source
+
   if (!endDate && subscriptionStartDate) {
-    endDate = new Date(subscriptionStartDate);
-    endDate.setMonth(endDate.getMonth() + 1);
+    // fallback: exact 1 month from subscription start date
+    const d = new Date(subscriptionStartDate);
+    d.setMonth(d.getMonth() + 1);
+    if (!Number.isNaN(d.getTime())) endDate = d;
   }
+
   if (!endDate || Number.isNaN(endDate.getTime())) {
-    endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    // last resort (both fields missing): exact 1 month from today — B2C style, not B2B 1st-of-month
+    const d = new Date(now);
+    d.setMonth(d.getMonth() + 1);
+    endDate = d;
   }
+
   const endDateIso = endDate.toISOString();
 
   const r = await deals.updateOne(

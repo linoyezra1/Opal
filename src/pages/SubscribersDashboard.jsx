@@ -1933,6 +1933,9 @@ export default function SubscribersDashboard() {
                           תאריך הצטרפות
                         </TableHead>
                         <TableHead dir="rtl" className="text-right">
+                          תאריך ביטול
+                        </TableHead>
+                        <TableHead dir="rtl" className="text-right">
                           סטטוס השלמת מסמכים
                         </TableHead>
                         <TableHead dir="rtl" className="text-right">
@@ -1987,6 +1990,9 @@ export default function SubscribersDashboard() {
                           </TableCell>
                           <TableCell dir="rtl" className="whitespace-nowrap text-xs text-right">
                             {fmtDateTime(r.createdAt)}
+                          </TableCell>
+                          <TableCell dir="rtl" className="whitespace-nowrap text-xs font-mono text-right">
+                            {r.cancellationDate ? fmtDateTime(r.cancellationDate) : '—'}
                           </TableCell>
                           <TableCell dir="rtl" className="text-right align-top">
                             {r.pendingBeneficiaryCompletion ? (
@@ -2309,18 +2315,43 @@ export default function SubscribersDashboard() {
                             <p className="text-xs text-muted-foreground mb-1">רווח נקי</p>
                             <p className="font-semibold text-primary">{formatCurrency(selected?.formState?.resolvedNetProfit ?? 0)}</p>
                           </div>
-                          <div className="rounded-lg border p-3 min-w-0">
-                            <p className="text-xs text-muted-foreground mb-1">תאריך תחילת מנוי</p>
-                            <p className="font-semibold break-words">
-                              {selected?.formState?.subscriptionStartDate || selected?.subscriptionStartDate || '—'}
-                            </p>
-                          </div>
                           <div className="rounded-lg border p-3 min-w-0 max-md:col-span-2 md:col-span-1 bg-muted/40">
                             <p className="text-xs text-muted-foreground mb-1 leading-snug">
                               היסטוריית חיובים (Recurring ID)
                             </p>
                             <p className="font-semibold font-mono text-xs sm:text-sm break-all" dir="ltr">
                               {resolvedCardcomRecurringId || '—'}
+                            </p>
+                          </div>
+                        </div>
+                        {/* ── 4 תאריכי ליבה ── */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 pt-1">
+                          <div className="rounded-lg border p-3 min-w-0">
+                            <p className="text-xs text-muted-foreground mb-1">תאריך הצטרפות</p>
+                            <p className="font-semibold text-xs font-mono">
+                              {selected?.createdAt ? fmtDateTime(selected.createdAt) : '—'}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border p-3 min-w-0">
+                            <p className="text-xs text-muted-foreground mb-1">תאריך תחילת מנוי</p>
+                            <p className="font-semibold text-xs font-mono">
+                              {selected?.subscriptionStartDate || selected?.formState?.subscriptionStartDate || '—'}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border p-3 min-w-0">
+                            <p className="text-xs text-muted-foreground mb-1">תאריך לחיצה על ביטול</p>
+                            <p className="font-semibold text-xs font-mono">
+                              {selected?.cancellationDate ? fmtDateTime(selected.cancellationDate) : 'טרם בוטל'}
+                            </p>
+                          </div>
+                          <div className={`rounded-lg border p-3 min-w-0 ${selected?.subscriptionEndDate || selected?.entitlementCancelAt ? 'border-amber-300 bg-amber-50/60' : ''}`}>
+                            <p className="text-xs text-muted-foreground mb-1">תאריך סיום זכאות לשירות</p>
+                            <p className="font-semibold text-xs font-mono">
+                              {selected?.subscriptionEndDate
+                                ? fmtDateTime(selected.subscriptionEndDate)
+                                : selected?.entitlementCancelAt
+                                  ? fmtDateTime(selected.entitlementCancelAt)
+                                  : '—'}
                             </p>
                           </div>
                         </div>

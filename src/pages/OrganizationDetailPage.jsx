@@ -904,6 +904,8 @@ export default function OrganizationDetailPage() {
                           <TableHead className="text-right">אימייל</TableHead>
                           <TableHead className="text-right">טלפון</TableHead>
                           <TableHead className="text-right">סכום</TableHead>
+                          <TableHead className="text-right">תאריך הצטרפות</TableHead>
+                          <TableHead className="text-right">תאריך ביטול</TableHead>
                           <TableHead className="text-right">סטטוס</TableHead>
                           <TableHead className="text-right">מקור</TableHead>
                           <TableHead className="text-right">פעולות</TableHead>
@@ -911,10 +913,16 @@ export default function OrganizationDetailPage() {
                       </TableHeader>
                       <TableBody>
                         {deals.map((d) => {
+                          // entitlementStatus כעת מגיע מהשרת דרך findDealsByOrganizationId
                           const entitlement = String(d.entitlementStatus || '').trim().toLowerCase();
-                          const isPendingOrgApproval = entitlement === 'not_activated';
-                          const isCancelled = entitlement === 'canceled';
-                          const isPendingCancellation = entitlement === 'pending_cancellation';
+                          const workflowRaw = String(d.status || '').trim().toLowerCase();
+                          const subRaw = String(d.subscriptionStatus || '').trim().toLowerCase();
+                          const isPendingOrgApproval = entitlement === 'not_activated'
+                            || workflowRaw === 'pending_org_approval';
+                          const isCancelled = entitlement === 'canceled'
+                            || subRaw === 'cancelled' || subRaw === 'canceled';
+                          const isPendingCancellation = entitlement === 'pending_cancellation'
+                            || subRaw === 'pending cancellation';
                           const centralized = !!d.isCentralized;
                           return (
                           <TableRow key={d.id}>
@@ -932,9 +940,19 @@ export default function OrganizationDetailPage() {
                               {d.phone || '—'}
                             </TableCell>
                             <TableCell className="text-right">₪{Number(d.payerAmount || 0)}</TableCell>
+                            <TableCell className="whitespace-nowrap text-xs font-mono text-right">
+                              {d.createdAt ? new Date(d.createdAt).toLocaleDateString('he-IL') : '—'}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap text-xs font-mono text-right">
+                              {d.cancellationDate ? new Date(d.cancellationDate).toLocaleDateString('he-IL') : '—'}
+                            </TableCell>
                             <TableCell className="text-right">
                               {(() => {
-                                const badge = getEmployeeStatusBadge(d.entitlementStatus, d.finalBillingMonth);
+                                const badge = getEmployeeStatusBadge(
+                                  entitlement || workflowRaw || subRaw,
+                                  d.subscriptionStatus,
+                                  d.finalBillingMonth
+                                );
                                 if (badge) {
                                   return <Badge className={badge.className}>{badge.label}</Badge>;
                                 }

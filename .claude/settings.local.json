@@ -13,7 +13,11 @@
       "Bash(node --input-type=module --eval ' *)",
       "Bash(node -e \"const fs=require\\('fs'\\);const c=fs.readFileSync\\('server/mongoService.js','utf8'\\);const i=c.indexOf\\('export async function updateDealCardcomRecurringSnapshot'\\);console.log\\(i,c.slice\\(i,i+600\\)\\);\")",
       "Bash(node -e \"const fs=require\\('fs'\\);const c=fs.readFileSync\\('server/mongoService.js','utf8'\\);const i=c.indexOf\\('export async function updateDealCardcomRecurringSnapshot'\\);console.log\\(c.slice\\(i,i+900\\)\\);\")",
-      "Bash(node -e \"const fs=require\\('fs'\\);const c=fs.readFileSync\\('server/mongoService.js','utf8'\\);const i=c.indexOf\\('export async function updateDealCardcomRecurringSnapshot'\\);console.log\\(c.slice\\(i,i+1100\\)\\);\")"
+      "Bash(node -e \"const fs=require\\('fs'\\);const c=fs.readFileSync\\('server/mongoService.js','utf8'\\);const i=c.indexOf\\('export async function updateDealCardcomRecurringSnapshot'\\);console.log\\(c.slice\\(i,i+1100\\)\\);\")",
+      "Bash(not exist *)",
+      "Bash(node scripts/auditEntitlement.js)",
+      "Bash(node -e ' *)",
+      "Bash(node --input-type=module --eval \"import './server/mongoService.js'\")"
     ]
   }
 }
