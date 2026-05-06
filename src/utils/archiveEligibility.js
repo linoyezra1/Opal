@@ -14,28 +14,14 @@ function normalizeStatus(value) {
     .replace(/\s+/g, '_');
 }
 
-export function isPendingCancellationStatus(subscriptionStatus) {
-  const s = normalizeStatus(subscriptionStatus);
+export function isPendingCancellationStatus(entitlementStatus) {
+  const s = normalizeStatus(entitlementStatus);
   return s === 'pending_cancellation' || s === 'pendingcancellation';
-}
-
-function resolveState({ entitlementStatus, workflowStatus, subscriptionStatus }) {
-  const es = normalizeStatus(entitlementStatus);
-  if (es) return es;
-  const ws = normalizeStatus(workflowStatus);
-  const sub = normalizeStatus(subscriptionStatus);
-  if (ws === 'pending_org_approval' || ws === 'pending_alllow' || ws === 'pending_allow') return 'not_activated';
-  if (sub === 'pending_cancellation' || sub === 'pendingcancellation') return 'pending_cancellation';
-  if (sub === 'cancelled' || sub === 'canceled' || ws === 'canceled' || ws === 'cancelled') return 'canceled';
-  return 'active';
 }
 
 /**
  * @param {{
  *   entitlementStatus?: string,
- *   workflowStatus?: string,
- *   subscriptionStatus?: string,
- *   isActive?: boolean,
  *   isCentralizedBilling?: boolean,
  *   pendingCancellationDateLabel?: string
  * }} p
@@ -43,18 +29,11 @@ function resolveState({ entitlementStatus, workflowStatus, subscriptionStatus })
 export function getArchiveEligibility(p) {
   const {
     entitlementStatus,
-    workflowStatus,
-    subscriptionStatus,
-    isActive,
     isCentralizedBilling,
     pendingCancellationDateLabel,
   } = p || {};
 
-  if (isActive === false) {
-    return { allowed: false, reason: 'רשומה זו כבר אינה פעילה.' };
-  }
-
-  const state = resolveState({ entitlementStatus, workflowStatus, subscriptionStatus });
+  const state = normalizeStatus(entitlementStatus);
   const isCentralized = !!isCentralizedBilling;
 
   if (state === 'not_activated') {
@@ -78,7 +57,7 @@ export function getArchiveEligibility(p) {
   if (state === 'canceled' || state === 'cancelled') {
     return { allowed: true, reason: '' };
   }
-  return { allowed: false, reason: ARCHIVE_BLOCKED_PRIVATE_MSG };
+  return { allowed: false, reason: 'סטטוס זכאות לא זמין לפעולה זו.' };
 }
 
 export function canArchiveDealUi(params) {

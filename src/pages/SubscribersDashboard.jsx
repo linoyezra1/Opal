@@ -70,36 +70,16 @@ function getCancellationDateLabel(row) {
 }
 
 function getRowActionContext(row) {
-  const workflowStatus = normalizeStatus(row?.raw?.status || row?.status);
-  const subscriptionStatus = normalizeStatus(row?.subscriptionStatus);
-  const entitlementStatus = normalizeStatus(row?.entitlementStatus);
+  const state = normalizeStatus(row?.entitlementStatus);
   const hasCardcomToken = !!String(row?.cardcomToken || '').trim();
   const isCentralizedBilling = row?.isCentralized === true && !hasCardcomToken;
 
-  let state = entitlementStatus;
-  if (!state) {
-    if (workflowStatus === 'pending_org_approval' || workflowStatus === 'pending_alllow' || workflowStatus === 'pending_allow') {
-      state = 'not_activated';
-    } else if (subscriptionStatus === 'pending_cancellation' || subscriptionStatus === 'pendingcancellation') {
-      state = 'pending_cancellation';
-    } else if (workflowStatus === 'canceled' || subscriptionStatus === 'canceled' || subscriptionStatus === 'cancelled') {
-      state = 'canceled';
-    } else {
-      state = 'active';
-    }
-  }
-
   const archive = canArchiveDealUi({
     entitlementStatus: state,
-    workflowStatus,
-    subscriptionStatus,
-    isActive: row?.raw?.isActive,
     isCentralizedBilling,
     pendingCancellationDateLabel: getCancellationDateLabel(row),
   });
 
-  const missingRecurringIds =
-    !String(row?.cardcomAccountId || '').trim() || !String(row?.cardcomRecurringId || '').trim();
   let cancelAction = { allowed: true, disabled: false, reason: '' };
   if (state === 'pending_cancellation' || state === 'canceled' || state === 'cancelled') {
     if (state === 'pending_cancellation') {
@@ -118,12 +98,6 @@ function getRowActionContext(row) {
     }
   } else if (state === 'not_activated' && isCentralizedBilling) {
     cancelAction = { allowed: false, disabled: false, reason: NOT_ACTIVATED_CENTRALIZED_MSG };
-  } else if (!isCentralizedBilling && missingRecurringIds) {
-    cancelAction = {
-      allowed: false,
-      disabled: true,
-      reason: 'Subscription was not created as recurring - cancel manually in Cardcom',
-    };
   }
 
   return { state, isCentralizedBilling, archive, cancelAction };
@@ -187,9 +161,7 @@ function dealDisplaySubscriptionStatus(deal) {
   }
   if (es === 'pending_cancellation') return 'ממתין לביטול';
   if (es === 'canceled') return 'מבוטל';
-  return dealCentralizedPayment(deal)
-    ? `חיוב מרוכז · ${String(deal?.subscriptionStatus || '—')}`
-    : String(deal?.subscriptionStatus || '—');
+  return '—';
 }
 
 function mergeRowForDetails(r) {
@@ -847,42 +819,13 @@ export default function SubscribersDashboard() {
     // Status guard — re-applied client-side so stale server responses or race
     // conditions never leak wrong-status rows into the visible table.
     if (filters.status === 'cancelled') {
-      rows = rows.filter((r) => {
-        if (r.entitlementStatus) return r.entitlementStatus === 'canceled';
-        return (
-          r.status === 'canceled' ||
-          String(r.subscriptionStatus || '').toLowerCase() === 'cancelled'
-        );
-      });
+      rows = rows.filter((r) => r.entitlementStatus === 'canceled');
     } else if (filters.status === 'pending_cancellation') {
-      rows = rows.filter((r) => {
-        if (r.entitlementStatus) return r.entitlementStatus === 'pending_cancellation';
-        return String(r.subscriptionStatus || '') === 'Pending Cancellation';
-      });
+      rows = rows.filter((r) => r.entitlementStatus === 'pending_cancellation');
     } else if (filters.status === 'not_activated') {
-      rows = rows.filter((r) => {
-        if (r.entitlementStatus) return r.entitlementStatus === 'not_activated';
-        const wf = String(r.raw?.status || r.status || '').toLowerCase();
-        const sub = String(r.subscriptionStatus || '');
-        return (
-          wf === 'pending_org_approval' ||
-          sub === 'ממתין לאישור הארגון' ||
-          (r.pendingBeneficiaryCompletion === true && !r.entitlementStatus)
-        );
-      });
+      rows = rows.filter((r) => r.entitlementStatus === 'not_activated');
     } else if (filters.status === 'active') {
-      rows = rows.filter((r) => {
-        if (r.entitlementStatus) {
-          // "פעילים" = רק פעיל אמיתי (State B) ← לא כולל pending_cancellation
-          return r.entitlementStatus === 'active';
-        }
-        return (
-          r.status !== 'canceled' &&
-          String(r.subscriptionStatus || '').toLowerCase() !== 'cancelled' &&
-          String(r.subscriptionStatus || '') !== 'Pending Cancellation' &&
-          String(r.raw?.status || '').toLowerCase() !== 'pending_org_approval'
-        );
-      });
+      rows = rows.filter((r) => r.entitlementStatus === 'active');
     }
 
     // Agent filter — AND logic, exact match on agent name
@@ -992,13 +935,7 @@ export default function SubscribersDashboard() {
       } else if (es === 'canceled') {
         canceled += 1;
       } else {
-        // ללא entitlementStatus — fallback לשדות גולמיים
-        const sub = String(r.subscriptionStatus || '').toLowerCase();
-        const wf  = String(r.raw?.status || r.status || '').toLowerCase();
-        if (sub === 'cancelled' || r.status === 'canceled') canceled += 1;
-        else if (String(r.subscriptionStatus || '') === 'Pending Cancellation') pendingCancellation += 1;
-        else if (wf === 'pending_org_approval' || r.subscriptionStatus === 'ממתין לאישור הארגון') notActivated += 1;
-        else active += 1;
+        active += 1;
       }
     }
     return { totalRevenue, active, pendingCancellation, notActivated, canceled };
@@ -2010,8 +1947,6 @@ export default function SubscribersDashboard() {
                       {visibleRows.map((r) => {
                           const actionCtx = getRowActionContext(r);
                           const isCentralized = actionCtx.isCentralizedBilling;
-                          const isCancelled = actionCtx.state === 'canceled' || actionCtx.state === 'cancelled';
-                          const isPendingCancellation = actionCtx.state === 'pending_cancellation';
                           const isPendingOrgApproval = actionCtx.state === 'not_activated' && isCentralized;
                           const cancelledAtText = r.cancellationDate
                             ? fmtDateTime(r.cancellationDate)
@@ -2062,7 +1997,7 @@ export default function SubscribersDashboard() {
                                 ממתין להשלמת מסמכים
                               </Badge>
                             ) : (
-                              <Badge className={isCancelled ? 'bg-gray-500 hover:bg-gray-600 text-white border-0' : 'bg-emerald-600 hover:bg-emerald-600 text-white border-0'}>
+                              <Badge className={r.entitlementStatus === 'canceled' ? 'bg-gray-500 hover:bg-gray-600 text-white border-0' : 'bg-emerald-600 hover:bg-emerald-600 text-white border-0'}>
                                 הושלם
                               </Badge>
                             )}
@@ -2086,21 +2021,6 @@ export default function SubscribersDashboard() {
                               <Badge variant="secondary" className="bg-emerald-50 text-emerald-900 border-emerald-300 font-normal">
                                 פעיל
                               </Badge>
-                            ) : isCancelled ? (
-                              <Badge variant="destructive" className="font-normal">
-                                {isCentralized
-                                  ? `בוטל${cancelledAtText ? ` ב-${cancelledAtText}` : ''}`
-                                  : `בוטל מול קארדקום${cancelledAtText ? ` ב-${cancelledAtText}` : ''}`}
-                              </Badge>
-                            ) : isPendingCancellation ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Badge className="bg-orange-100 text-orange-800 border-orange-300 hover:bg-orange-100 font-normal cursor-help">
-                                    {pendingCancelLabel(r.finalBillingMonth)}
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>חודש חיוב אחרון: {r.finalBillingMonth}. החל מה-1 לחודש הבא לא ייספר בחיוב.</TooltipContent>
-                              </Tooltip>
                             ) : String(r.futureBillingStatus || '').trim() ? (
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -2190,9 +2110,7 @@ export default function SubscribersDashboard() {
                                       title={
                                         actionCtx.cancelAction.reason
                                           ? actionCtx.cancelAction.reason
-                                          : isPendingCancellation
-                                            ? `ממתין לביטול — חודש אחרון: ${r.finalBillingMonth}`
-                                            : isCentralized
+                                          : isCentralized
                                               ? 'ביטול מנוי עובד ארגוני (חיוב מרוכז)'
                                               : 'ביטול מנוי (עצירת חיוב עתידי)'
                                       }

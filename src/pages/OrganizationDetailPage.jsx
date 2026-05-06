@@ -95,35 +95,22 @@ function pendingCancelLabel(finalBillingMonth) {
 }
 
 /**
- * מחזיר badge לסטטוס עובד — מבוסס על 4 המצבים האחידים.
- * @param {string} statusRaw       — שדה status / subscriptionStatus / entitlementStatus
- * @param {string} subscriptionStatusRaw — subscriptionStatus גולמי (לזיהוי מבוטל/ממתין לביטול)
+ * מחזיר badge לסטטוס עובד — מבוסס על entitlementStatus בלבד.
+ * @param {string} statusRaw
  * @param {string} finalBillingMonth
  */
-function getEmployeeStatusBadge(statusRaw, subscriptionStatusRaw = '', finalBillingMonth = '') {
+function getEmployeeStatusBadge(statusRaw, finalBillingMonth = '') {
   const status = String(statusRaw || '').trim().toLowerCase();
-  const sub    = String(subscriptionStatusRaw || '').trim().toLowerCase();
-
-  // D — מבוטל
-  if (status === 'canceled' || status === 'cancelled' || sub === 'cancelled' || sub === 'canceled') {
+  if (status === 'canceled' || status === 'cancelled') {
     return { label: 'מבוטל', className: 'bg-red-100 text-red-800 border-red-300' };
   }
-
-  // C — ממתין לביטול
-  if (
-    status === 'pending_cancellation' || status === 'pending cancellation' ||
-    sub   === 'pending cancellation'  || sub   === 'pending_cancellation'
-  ) {
+  if (status === 'pending_cancellation') {
     return { label: pendingCancelLabel(finalBillingMonth), className: 'bg-orange-100 text-orange-800 border-orange-300' };
   }
-
-  // A — לא הופעל (ממתין לאישור מנהל)
-  if (['pending', 'pending_org_approval', 'pending_allow', 'pending_alllow'].includes(status) || sub === 'ממתין לאישור הארגון') {
+  if (status === 'not_activated') {
     return { label: 'ממתין לאישור', className: 'bg-amber-100 text-amber-800 border-amber-300' };
   }
-
-  // B — פעיל
-  if (['active', 'completed', 'approved'].includes(status)) {
+  if (status === 'active') {
     return { label: 'מאושר · פעיל', className: 'bg-emerald-100 text-emerald-800 border-emerald-300' };
   }
 
@@ -337,8 +324,6 @@ export default function OrganizationDetailPage() {
 
     for (const row of rows) {
       const entitlement = normalizeStatus(row?.entitlementStatus);
-      const workflow = normalizeStatus(row?.status);
-      const subscription = normalizeStatus(row?.subscriptionStatus);
       const paymentStatus = normalizeStatus(row?.paymentStatus);
       const payerAmount = Number(row?.payerAmount || row?.amount || 0);
 
@@ -346,32 +331,10 @@ export default function OrganizationDetailPage() {
         openDebt += payerAmount;
       }
 
-      const effectiveEntitlement = entitlement || (() => {
-        if (workflow === 'pending_org_approval' || workflow === 'pending_alllow' || workflow === 'pending_allow') {
-          return 'pending_alllow';
-        }
-        if (subscription === 'pending_cancellation' || subscription === 'pendingcancellation') {
-          return 'pending_cancellation';
-        }
-        if (subscription === 'cancelled' || subscription === 'canceled') {
-          return 'canceled';
-        }
-        if (subscription === 'active' || workflow === 'active') {
-          return 'active';
-        }
-        return '';
-      })();
-
-      if (effectiveEntitlement === 'active') activeEmployees += 1;
-      if (
-        effectiveEntitlement === 'pending_alllow' ||
-        effectiveEntitlement === 'pending_allow' ||
-        effectiveEntitlement === 'pending_org_approval'
-      ) {
-        pendingApprovalEmployees += 1;
-      }
-      if (effectiveEntitlement === 'pending_cancellation') pendingCancellationEmployees += 1;
-      if (effectiveEntitlement === 'canceled' || effectiveEntitlement === 'cancelled') canceledEmployees += 1;
+      if (entitlement === 'active') activeEmployees += 1;
+      if (entitlement === 'not_activated') pendingApprovalEmployees += 1;
+      if (entitlement === 'pending_cancellation') pendingCancellationEmployees += 1;
+      if (entitlement === 'canceled' || entitlement === 'cancelled') canceledEmployees += 1;
     }
 
     return {
@@ -496,10 +459,7 @@ export default function OrganizationDetailPage() {
 
   function requestArchiveForDeal(d) {
     const archiveEligibility = canArchiveDealUi({
-      workflowStatus: d.status,
-      subscriptionStatus: d.subscriptionStatus,
       entitlementStatus: d.entitlementStatus,
-      isActive: d.isActive !== false,
       isCentralizedBilling: !!d.isCentralized,
       pendingCancellationDateLabel: d.finalBillingMonth || '',
     });
@@ -951,17 +911,11 @@ export default function OrganizationDetailPage() {
                       </TableHeader>
                       <TableBody>
                         {deals.map((d) => {
-                          const workflowStatus = String(d.status || '').trim().toLowerCase();
-                          const isPendingOrgApproval = workflowStatus === 'pending_org_approval';
-                          const isCancelled =
-                            d.status === 'canceled' || String(d.subscriptionStatus || '').toLowerCase() === 'cancelled';
-                          const isPendingCancellation = String(d.subscriptionStatus || '') === 'Pending Cancellation';
+                          const entitlement = String(d.entitlementStatus || '').trim().toLowerCase();
+                          const isPendingOrgApproval = entitlement === 'not_activated';
+                          const isCancelled = entitlement === 'canceled';
+                          const isPendingCancellation = entitlement === 'pending_cancellation';
                           const centralized = !!d.isCentralized;
-                          const badgeRaw =
-                            d.entitlementStatus ||
-                            (workflowStatus === 'pending_org_approval'
-                              ? 'pending_org_approval'
-                              : d.subscriptionStatus || d.paymentStatus || '');
                           return (
                           <TableRow key={d.id}>
                             <TableCell className="font-medium text-right">{d.fullName || '—'}</TableCell>
@@ -980,13 +934,13 @@ export default function OrganizationDetailPage() {
                             <TableCell className="text-right">₪{Number(d.payerAmount || 0)}</TableCell>
                             <TableCell className="text-right">
                               {(() => {
-                                const badge = getEmployeeStatusBadge(badgeRaw, d.subscriptionStatus, d.finalBillingMonth);
+                                const badge = getEmployeeStatusBadge(d.entitlementStatus, d.finalBillingMonth);
                                 if (badge) {
                                   return <Badge className={badge.className}>{badge.label}</Badge>;
                                 }
                                 return (
                                   <Badge variant="outline" className="text-xs">
-                                    {d.subscriptionStatus || d.paymentStatus || '—'}
+                                    —
                                   </Badge>
                                 );
                               })()}

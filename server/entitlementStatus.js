@@ -1,11 +1,7 @@
 /**
- * זכאות לשירות — לוגיקה אחידה לכל המערכת (דוחות, ממשק מנויים, ארגונים).
- *
- * 4 מצבי זכאות אפשריים:
- *   A. not_activated  — לא הופעל (ממתין לאישור מנהל / טרם הושלמו מסמכים)
- *   B. active         — פעיל
- *   C. pending_cancellation — ממתין לביטול (ייבוטל ב-1 לחודש הבא)
- *   D. canceled       — מבוטל
+ * זכאות לשירות — לוגיקה מבוססת תאריכים בלבד.
+ * מקורות נתונים: createdAt, formState.subscriptionStartDate, cancellationDate,
+ * ותאריך סיום שירות (B2C: cardcomNextDateToBill, B2B: cancelAt).
  */
 
 // ─── קבועים — ייבוא יחיד בכל המערכת ────────────────────────────────────────
@@ -13,14 +9,6 @@ export const STATUS_NOT_ACTIVATED        = 'not_activated';
 export const STATUS_ACTIVE               = 'active';
 export const STATUS_PENDING_CANCELLATION = 'pending_cancellation';
 export const STATUS_CANCELED             = 'canceled';
-
-// ─── עזרים ────────────────────────────────────────────────────────────────────
-function firstNonEmpty(...vals) {
-  for (const v of vals) {
-    if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
-  }
-  return '';
-}
 
 export function parseFlexibleDate(input) {
   if (input == null || input === '') return null;
@@ -44,12 +32,6 @@ export function parseFlexibleDate(input) {
   return null;
 }
 
-export function startOfLocalDay(d) {
-  const x = d instanceof Date ? d : new Date(d);
-  if (Number.isNaN(x.getTime())) return null;
-  return new Date(x.getFullYear(), x.getMonth(), x.getDate());
-}
-
 function resolvePaymentMethod(deal) {
   const fs = deal?.formState && typeof deal.formState === 'object' ? deal.formState : {};
   const raw = String(
@@ -64,132 +46,64 @@ function resolvePaymentMethod(deal) {
   return raw || 'private';
 }
 
-/** האם טופס מוטבים / תאריך תחילת מנוי כבר קיימים (State B עבור תשלום פרטי) */
-export function hasActivatedSubscription(deal) {
-  const fs = deal?.formState && typeof deal.formState === 'object' ? deal.formState : {};
-  const v = fs.subscriptionStartDate ?? deal?.subscriptionStartDate;
-  return v != null && String(v).trim() !== '';
+function addOneMonth(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+  const d = new Date(date);
+  d.setMonth(d.getMonth() + 1);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
-// ─── פונקציה ראשית ────────────────────────────────────────────────────────────
 /**
  * מחזיר את מצב הזכאות של עסקה.
  *
  * @returns {{
  *   status: 'not_activated'|'active'|'pending_cancellation'|'canceled',
- *   cancelAt: Date|null,
- *   serviceUntil: Date|null
+ *   label: string,
+ *   cancelAt?: string
  * }}
  */
 export function getEntitlementStatus(deal, now = new Date()) {
+  if (!deal) return { status: STATUS_CANCELED, label: 'מבוטל' };
+
   const fs = deal?.formState && typeof deal.formState === 'object' ? deal.formState : {};
-  const pm = resolvePaymentMethod(deal);
-  const sub = String(deal?.subscriptionStatus || '').trim();
-  const subL = sub.toLowerCase();
-  const workflowStatus = String(deal?.status || '').trim().toLowerCase();
-  const cancellationDate = parseFlexibleDate(deal?.cancellationDate);
-  const today = startOfLocalDay(now);
+  const startDate = parseFlexibleDate(fs.subscriptionStartDate);
+  const requestedAt = parseFlexibleDate(deal?.cancellationDate);
+  const hasRequestedCancel = !!requestedAt;
+  const nowDate = parseFlexibleDate(now) || new Date();
 
-  // ═══════════════════════════════════════════════════════════
-  // תשלום מרוכז (ארגוני)
-  // ═══════════════════════════════════════════════════════════
-  if (pm === 'centralized') {
+  const isCentralized =
+    deal?.isCentralized === true || resolvePaymentMethod(deal) === 'centralized';
 
-    // A — לא הופעל: ממתין לאישור מנהל
-    if (
-      sub === 'ממתין לאישור הארגון' ||
-      workflowStatus === 'pending_org_approval' ||
-      workflowStatus === 'pending_allow' ||
-      workflowStatus === 'pending_alllow'
-    ) {
-      return { status: STATUS_NOT_ACTIVATED, cancelAt: null, serviceUntil: null };
+  let endDate = null;
+  if (isCentralized) {
+    endDate = parseFlexibleDate(deal?.cancelAt);
+  } else {
+    endDate = parseFlexibleDate(fs.cardcomNextDateToBill);
+    // B2C חודש ראשון: עדיין אין NextDateToBill בקארדקום.
+    if (!endDate && startDate) {
+      endDate = addOneMonth(startDate);
     }
+  }
 
-    // C — ממתין לביטול (עם בדיקת מעבר אוטומטי לביטול לאחר התאריך)
-    if (sub === 'Pending Cancellation' || (subL.includes('pending') && subL.includes('cancel'))) {
-      if (cancellationDate) {
-        const cancelDay = startOfLocalDay(cancellationDate);
-        if (cancelDay && today && today >= cancelDay) {
-          // התאריך עבר — מעבר אוטומטי ל-מבוטל
-          return { status: STATUS_CANCELED, cancelAt: cancellationDate, serviceUntil: null };
-        }
-      }
-      return { status: STATUS_PENDING_CANCELLATION, cancelAt: cancellationDate, serviceUntil: null };
+  if (!startDate) return { status: STATUS_NOT_ACTIVATED, label: 'מנוי לא הופעל' };
+  if (!hasRequestedCancel) return { status: STATUS_ACTIVE, label: 'פעיל' };
+
+  if (endDate) {
+    if (nowDate < endDate) {
+      return {
+        status: STATUS_PENDING_CANCELLATION,
+        label: 'ממתין לביטול',
+        cancelAt: endDate.toISOString(),
+      };
     }
-
-    // D — מבוטל
-    if (subL === 'cancelled' || subL === 'canceled') {
-      return { status: STATUS_CANCELED, cancelAt: cancellationDate, serviceUntil: null };
-    }
-
-    // B — פעיל
-    return { status: STATUS_ACTIVE, cancelAt: null, serviceUntil: null };
+    return {
+      status: STATUS_CANCELED,
+      label: 'מבוטל',
+      cancelAt: endDate.toISOString(),
+    };
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // תשלום פרטי (כרטיס אשראי / Cardcom)
-  // עדיפות: איתות Cardcom (active/inactive) מקבל קדימות על פני subscriptionStartDate.
-  // subscriptionStartDate נבדק רק כאשר אין איתות Cardcom.
-  // ═══════════════════════════════════════════════════════════
-
-  const nextBillRaw = firstNonEmpty(
-    fs.cardcomNextDateToBill,
-    fs.nextDateToBill,
-    deal?.cardcomNextDateToBill
-  );
-  const nextBill = parseFlexibleDate(nextBillRaw);
-
-  const activeExplicit =
-    fs.cardcomRecurringIsActive === true ||
-    fs.cardcomRecurringIsActive === 'true' ||
-    fs.cardcomRecurringIsActive === 1 ||
-    fs.cardcomRecurringIsActive === '1';
-  const inactiveExplicit =
-    fs.cardcomRecurringIsActive === false ||
-    fs.cardcomRecurringIsActive === 'false' ||
-    fs.cardcomRecurringIsActive === 0 ||
-    fs.cardcomRecurringIsActive === '0';
-
-  // C / D — הוראת קבע אינה פעילה: בדיקת NextDateToBill (קדימות על hasActivatedSubscription)
-  if (inactiveExplicit && nextBill) {
-    const nb = startOfLocalDay(nextBill);
-    if (nb && today && today < nb) {
-      // C — ממתין לביטול: שירות בתוקף עד תאריך החיוב הבא
-      return { status: STATUS_PENDING_CANCELLATION, cancelAt: cancellationDate, serviceUntil: nextBill };
-    }
-    // D — מבוטל: עבר תאריך החיוב הבא
-    return { status: STATUS_CANCELED, cancelAt: cancellationDate || nextBill, serviceUntil: null };
-  }
-
-  if (inactiveExplicit && !nextBill) {
-    if (sub === 'Pending Cancellation' || subL.includes('pending')) {
-      return { status: STATUS_PENDING_CANCELLATION, cancelAt: cancellationDate, serviceUntil: null };
-    }
-    return { status: STATUS_CANCELED, cancelAt: cancellationDate, serviceUntil: null };
-  }
-
-  // A — לא הופעל: טרם הושלמו מסמכים (בדיקה כאשר אין איתות Cardcom inactive)
-  if (!hasActivatedSubscription(deal)) {
-    // אם Cardcom פעיל אבל המסמכים חסרים — עדיין לא הופעל
-    return { status: STATUS_NOT_ACTIVATED, cancelAt: null, serviceUntil: null };
-  }
-
-  // B — פעיל: הוראת קבע פעילה
-  if (activeExplicit) {
-    return { status: STATUS_ACTIVE, cancelAt: null, serviceUntil: null };
-  }
-
-  // fallback לפי subscriptionStatus גולמי (אין איתות Cardcom + יש subscriptionStartDate)
-  if (sub === 'Pending Cancellation') {
-    return { status: STATUS_PENDING_CANCELLATION, cancelAt: cancellationDate, serviceUntil: nextBill };
-  }
-
-  if (subL === 'cancelled' || subL === 'canceled' || String(deal?.status || '').toLowerCase() === 'cancelled') {
-    return { status: STATUS_CANCELED, cancelAt: cancellationDate, serviceUntil: null };
-  }
-
-  // B — פעיל (ברירת מחדל: יש subscriptionStartDate, אין איתות ביטול)
-  return { status: STATUS_ACTIVE, cancelAt: null, serviceUntil: null };
+  return { status: STATUS_CANCELED, label: 'מבוטל' };
 }
 
 // ─── שומר הדוחות ────────────────────────────────────────────────────────────
@@ -198,7 +112,6 @@ export function getEntitlementStatus(deal, now = new Date()) {
  * לא מופעל (A) ומבוטל (D) — מוחרגים.
  */
 export function passesServiceReportGate(deal) {
-  if (!hasActivatedSubscription(deal)) return false;
   const ent = getEntitlementStatus(deal);
   return ent.status === STATUS_ACTIVE || ent.status === STATUS_PENDING_CANCELLATION;
 }
