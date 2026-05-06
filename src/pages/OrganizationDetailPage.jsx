@@ -915,14 +915,9 @@ export default function OrganizationDetailPage() {
                         {deals.map((d) => {
                           // entitlementStatus כעת מגיע מהשרת דרך findDealsByOrganizationId
                           const entitlement = String(d.entitlementStatus || '').trim().toLowerCase();
-                          const workflowRaw = String(d.status || '').trim().toLowerCase();
-                          const subRaw = String(d.subscriptionStatus || '').trim().toLowerCase();
-                          const isPendingOrgApproval = entitlement === 'not_activated'
-                            || workflowRaw === 'pending_org_approval';
-                          const isCancelled = entitlement === 'canceled'
-                            || subRaw === 'cancelled' || subRaw === 'canceled';
-                          const isPendingCancellation = entitlement === 'pending_cancellation'
-                            || subRaw === 'pending cancellation';
+                          const isPendingOrgApproval = entitlement === 'not_activated';
+                          const isCancelled = entitlement === 'canceled';
+                          const isPendingCancellation = entitlement === 'pending_cancellation';
                           const centralized = !!d.isCentralized;
                           return (
                           <TableRow key={d.id}>
@@ -949,8 +944,7 @@ export default function OrganizationDetailPage() {
                             <TableCell className="text-right">
                               {(() => {
                                 const badge = getEmployeeStatusBadge(
-                                  entitlement || workflowRaw || subRaw,
-                                  d.subscriptionStatus,
+                                  entitlement,
                                   d.finalBillingMonth
                                 );
                                 if (badge) {

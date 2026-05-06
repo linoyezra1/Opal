@@ -2284,6 +2284,7 @@ export default function SubscribersDashboard() {
                         selected?.formState?.selectedPlanId ||
                         '—';
                       return (
+                        <>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
                           <div className="rounded-lg border p-3 min-w-0">
                             <p className="text-xs text-muted-foreground mb-1">סטטוס תשלום</p>
@@ -2324,7 +2325,6 @@ export default function SubscribersDashboard() {
                             </p>
                           </div>
                         </div>
-                        {/* ── 4 תאריכי ליבה ── */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 pt-1">
                           <div className="rounded-lg border p-3 min-w-0">
                             <p className="text-xs text-muted-foreground mb-1">תאריך הצטרפות</p>
@@ -2344,7 +2344,13 @@ export default function SubscribersDashboard() {
                               {selected?.cancellationDate ? fmtDateTime(selected.cancellationDate) : 'טרם בוטל'}
                             </p>
                           </div>
-                          <div className={`rounded-lg border p-3 min-w-0 ${selected?.subscriptionEndDate || selected?.entitlementCancelAt ? 'border-amber-300 bg-amber-50/60' : ''}`}>
+                          <div
+                            className={
+                              selected?.subscriptionEndDate || selected?.entitlementCancelAt
+                                ? 'rounded-lg border p-3 min-w-0 border-amber-300 bg-amber-50/60'
+                                : 'rounded-lg border p-3 min-w-0'
+                            }
+                          >
                             <p className="text-xs text-muted-foreground mb-1">תאריך סיום זכאות לשירות</p>
                             <p className="font-semibold text-xs font-mono">
                               {selected?.subscriptionEndDate
@@ -2355,6 +2361,7 @@ export default function SubscribersDashboard() {
                             </p>
                           </div>
                         </div>
+                        </>
                       );
                     })()}
                     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
