@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowRight, Copy, Edit2, ExternalLink, Lock, Pencil, Percent, RefreshCw, Save, Users, Wallet } from 'lucide-react';
+import { ArrowRight, Check, Copy, Edit2, ExternalLink, Globe, Lock, Pencil, Percent, RefreshCw, Users, Wallet } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
-import { ISRAELI_ID_INVALID_MSG, validateIsraeliId } from '../utils/israeliId.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { StatsCard } from '../components/admin/stats-card.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -14,6 +13,7 @@ import { Badge } from '../components/ui/badge.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog.jsx';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -30,29 +30,6 @@ function formatDate(v) {
   if (Number.isNaN(d.getTime())) return '—';
   return d.toLocaleDateString('he-IL');
 }
-function normalizeAgentForEdit(r) {
-  const b = r?.bankDetails || {};
-  const pc = Array.isArray(r?.productCommissions) ? r.productCommissions : [];
-  return {
-    agentName: r?.agentName || '',
-    idNum: r?.idNum || '',
-    phone: r?.phone || '',
-    email: r?.email || '',
-    address: r?.address || '',
-    bankDetails: { bankName: b.bankName || '', bankNum: b.bankNum || '', accountHolder: b.accountHolder || '', branchNum: b.branchNum || '', accountNum: b.accountNum || '' },
-    productCommissions: pc.map((x) => ({ productId: String(x.productId || ''), commission: String(x.commission ?? ''), productName: x.productName || '' })),
-  };
-}
-function buildPayload(form) {
-  const rows = Array.isArray(form.productCommissions) ? form.productCommissions.filter((x) => x.productId).map((x) => ({ productId: x.productId, commission: Number(x.commission || 0) })) : [];
-  return { ...form, productCommissions: rows };
-}
-function idHint(value) {
-  const compact = String(value || '').trim().replace(/\s/g, '');
-  if (compact.length < 7 || !/^\d{7,9}$/.test(compact)) return '';
-  if (!validateIsraeliId(compact)) return ISRAELI_ID_INVALID_MSG;
-  return '';
-}
 
 export default function AgentDetailPage() {
   const { id } = useParams();
@@ -61,11 +38,11 @@ export default function AgentDetailPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [agent, setAgent] = useState(null);
-  const [editForm, setEditForm] = useState(null);
   const [month, setMonth] = useState(currentMonthLabel());
   const [products, setProducts] = useState([]);
   const [landingPages, setLandingPages] = useState([]);
   const [priceLists, setPriceLists] = useState([]);
+  const [deals, setDeals] = useState([]);
   const [preview, setPreview] = useState({ summary: { totalCommissions: 0, activeDeals: 0, pendingPayouts: 0 }, rows: [] });
   const [snapshots, setSnapshots] = useState([]);
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -98,29 +75,58 @@ export default function AgentDetailPage() {
     return { products: rows.length, total: rows.reduce((s, r) => s + Number(r.commission || 0), 0) };
   }, [agent]);
   const shownEligibleDealsCount = useMemo(() => (Array.isArray(preview?.rows) ? preview.rows.length : 0), [preview?.rows]);
+  const successfulDeals = useMemo(
+    () =>
+      (deals || []).filter((d) => {
+        const aid = String(d?.agentId || d?.formState?.agentId || '').trim();
+        return aid === String(id) && /success|paid|test_success/i.test(String(d?.paymentStatus || ''));
+      }),
+    [deals, id]
+  );
+  const productPurchaseCounts = useMemo(() => {
+    const map = new Map();
+    for (const d of successfulDeals) {
+      const pid = String(d?.formState?.productId || '').trim();
+      if (!pid) continue;
+      map.set(pid, (map.get(pid) || 0) + 1);
+    }
+    return map;
+  }, [successfulDeals]);
+  const productSlugPurchaseCounts = useMemo(() => {
+    const map = new Map();
+    for (const d of successfulDeals) {
+      const pid = String(d?.formState?.productId || '').trim();
+      const slug = String(d?.landingSlug || d?.formState?.landingPageSlug || '').trim().toLowerCase();
+      if (!pid || !slug) continue;
+      const key = `${pid}::${slug}`;
+      map.set(key, (map.get(key) || 0) + 1);
+    }
+    return map;
+  }, [successfulDeals]);
 
   const load = useCallback(async () => {
     if (!token || !id) return;
     setLoading(true);
     setErr('');
     try {
-      const [agentsRes, previewRes, snapsRes, prRes, lpRes, plRes] = await Promise.all([
+      const [agentsRes, previewRes, snapsRes, prRes, lpRes, plRes, dealsRes] = await Promise.all([
         fetch(`${API_BASE}/api/admin/agents?includeInactive=true`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/agents/${encodeURIComponent(id)}/commissions-preview?month=${encodeURIComponent(month)}`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/agents/${encodeURIComponent(id)}/commission-snapshots`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/products`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/landing-pages`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/price-lists`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+        fetch(`${API_BASE}/api/admin/deals`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
       ]);
       const found = (agentsRes?.rows || []).find((r) => String(r.id) === String(id));
       if (!found) throw new Error('סוכן לא נמצא');
       setAgent(found);
-      setEditForm(normalizeAgentForEdit(found));
       setPreview({ summary: { totalCommissions: Number(previewRes?.summary?.totalCommissions || 0), activeDeals: Number(previewRes?.summary?.activeDeals || 0), pendingPayouts: Number(previewRes?.summary?.pendingPayouts || 0) }, rows: Array.isArray(previewRes?.rows) ? previewRes.rows : [] });
       setSnapshots(Array.isArray(snapsRes?.snapshots) ? snapsRes.snapshots : []);
       setProducts(Array.isArray(prRes?.products) ? prRes.products : []);
       setLandingPages(Array.isArray(lpRes?.pages) ? lpRes.pages : []);
       setPriceLists(Array.isArray(plRes?.lists) ? plRes.lists : []);
+      setDeals(Array.isArray(dealsRes?.deals) ? dealsRes.deals : []);
     } catch (e) {
       setErr(e.message || 'שגיאה');
     } finally {
@@ -135,18 +141,6 @@ export default function AgentDetailPage() {
       const res = await fetch(`${API_BASE}/api/admin/agents/${encodeURIComponent(id)}/lock-commissions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ month }) });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.success) throw new Error(j.error || 'נעילה נכשלה');
-      await load();
-    } catch (e) { setErr(e.message || 'שגיאה'); } finally { setBusy(false); }
-  }
-  async function saveAgentDetails() {
-    if (!editForm) return;
-    const hint = idHint(editForm.idNum);
-    if (hint) return setErr(hint);
-    setBusy(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/agents/${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(buildPayload(editForm)) });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok || !j.success) throw new Error(j.error || 'שמירה נכשלה');
       await load();
     } catch (e) { setErr(e.message || 'שגיאה'); } finally { setBusy(false); }
   }
@@ -178,6 +172,7 @@ export default function AgentDetailPage() {
   if (!token) return <AdminPageShell><p className="p-6 text-muted-foreground">נדרשת התחברות לממשק ניהול.</p></AdminPageShell>;
 
   return (
+    <TooltipProvider delayDuration={250}>
     <AdminPageShell>
       <ConfirmDialog open={archiveOpen} title="העברה לארכיון" message='⚠️ לא ניתן לייצר עמלה לסוכנים שאינם פעילים. לפני העברת סוכן לארכיון, יש לוודא כי כל הדוחות והתשלומים המגיעים לו עבור החודש הנוכחי ננעלו ושולמו. לאחר הארכוב, המערכת תפסיק לשייך עסקאות וחשבונות לסוכן זה.' confirmLabel="העבר לארכיון" danger onConfirm={() => archiveAgent(false)} onCancel={() => setArchiveOpen(false)} isLoading={busy} />
       <ConfirmDialog open={!!archiveWarn} title="אזהרת ארכוב" message={archiveWarn} confirmLabel="המשך בכל זאת" onConfirm={() => archiveAgent(true)} onCancel={() => setArchiveWarn('')} isLoading={busy} />
@@ -209,7 +204,7 @@ export default function AgentDetailPage() {
           <StatsCard title="סהכ מנויים פעילים+ממתינים לביטול" value={String(shownEligibleDealsCount)} icon={Users} />
           <StatsCard title="סה״כ עמלות שנרשמו בטיוטה" value={formatCurrency(preview.summary.totalCommissions)} icon={Wallet} />
           <StatsCard title="מוצרים עם עמלה" value={String(commissionSummary.products)} icon={Percent} />
-          <StatsCard title="סיכום עמלות מוצרים" value={formatCurrency(commissionSummary.total)} icon={Wallet} />
+
         </div>
 
         <Tabs defaultValue="deals">
@@ -217,8 +212,6 @@ export default function AgentDetailPage() {
             <TabsTrigger value="deals">עסקאות סוכן</TabsTrigger>
             <TabsTrigger value="commissions">תשלומים לסוכן</TabsTrigger>
             <TabsTrigger value="distribution">קישורי הפצה ודפי נחיתה</TabsTrigger>
-            <TabsTrigger value="settings">פרטי סוכן</TabsTrigger>
-            <TabsTrigger value="product-commissions">עמלות מוצרים</TabsTrigger>
           </TabsList>
 
           <TabsContent value="deals" className="mt-4">
@@ -233,19 +226,12 @@ export default function AgentDetailPage() {
           </TabsContent>
 
           <TabsContent value="distribution" className="mt-4">
-            <Card><CardHeader><CardTitle>קישורי הפצה ודפי נחיתה</CardTitle><CardDescription>מבנה וערכים זהים לתצוגת רשימת המוצרים, מותאם לסוכן</CardDescription></CardHeader><CardContent><div className="rounded-md border overflow-x-auto"><Table className="text-right"><TableHeader><TableRow className="[&_th]:text-right"><TableHead>מוצר</TableHead><TableHead>עמלת מוצר</TableHead><TableHead>דף נחיתה</TableHead><TableHead>קישור</TableHead><TableHead>פעולות</TableHead></TableRow></TableHeader><TableBody>{(agent?.productCommissions || []).flatMap((c) => { const product = products.find((p) => String(p.id) === String(c.productId)); const entries = productSlugMap.get(String(c.productId)) || []; const base = { productName: product?.productName || product?.name || c.productName || c.productId, commission: Number(c?.commission || 0) }; if (!entries.length) return [{ key: `${c.productId}-none`, ...base, pageTitle: '—', link: '' }]; return entries.map((e) => ({ key: `${c.productId}-${e.slug}`, ...base, pageTitle: e.pageTitle || e.slug, link: `${window.location.origin}/p/${e.slug}?agentId=${encodeURIComponent(id)}` })); }).map((r) => <TableRow key={r.key}><TableCell>{r.productName}</TableCell><TableCell>{formatCurrency(r.commission)}</TableCell><TableCell>{r.pageTitle}</TableCell><TableCell dir="ltr" className="text-end text-xs">{r.link || '—'}</TableCell><TableCell><div className="flex items-center justify-end gap-1">{r.link ? <><Button type="button" variant="ghost" size="icon" onClick={async () => { try { await navigator.clipboard.writeText(r.link); setCopiedLink(r.link); setTimeout(() => setCopiedLink(''), 1200); } catch {} }} title={copiedLink === r.link ? 'הועתק' : 'העתק קישור'}><Copy className="size-4" /></Button><a href={r.link} target="_blank" rel="noreferrer"><Button type="button" variant="ghost" size="icon"><ExternalLink className="size-4" /></Button></a></> : '—'}</div></TableCell></TableRow>)}{!(agent?.productCommissions || []).length ? <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">אין מוצרים מוגדרים לסוכן</TableCell></TableRow> : null}</TableBody></Table></div></CardContent></Card>
-          </TabsContent>
-
-          <TabsContent value="settings" className="mt-4">
-            <Card><CardHeader><CardTitle>פרטי סוכן</CardTitle><CardDescription>כל השדות מוצגים וניתנים לעריכה</CardDescription></CardHeader><CardContent className="space-y-3">{editForm ? <div className="grid gap-3 sm:grid-cols-2">{[['agentName','שם סוכן'],['idNum','ת"ז / ח.פ'],['phone','טלפון'],['email','אימייל'],['address','כתובת']].map(([k,l]) => <div key={k}><p className="text-xs text-muted-foreground mb-1">{l}</p><Input dir={k==='idNum'||k==='phone'||k==='email'?'ltr':'rtl'} className={k==='idNum'||k==='phone'||k==='email'?'text-end':'text-right'} value={editForm[k]} onChange={(e)=>setEditForm((p)=>({...p,[k]:e.target.value}))} /></div>)}</div> : null}{idHint(editForm?.idNum) ? <p className="text-destructive text-xs">{idHint(editForm?.idNum)}</p> : null}<div className="flex flex-wrap gap-2"><Button onClick={saveAgentDetails} disabled={busy}><Save className="size-4 me-2" />שמור פרטי סוכן</Button><Button variant="destructive" onClick={() => setArchiveOpen(true)} disabled={busy}>העבר סוכן לארכיון</Button></div></CardContent></Card>
-          </TabsContent>
-
-          <TabsContent value="product-commissions" className="mt-4">
-            <Card><CardHeader><CardTitle>עמלות מוצרים</CardTitle><CardDescription>צפייה ועריכה של עמלה לכל מוצר מקושר</CardDescription></CardHeader><CardContent><div className="rounded-md border overflow-x-auto"><Table className="text-right"><TableHeader><TableRow className="[&_th]:text-right"><TableHead>מוצר</TableHead><TableHead>עמלה (₪)</TableHead></TableRow></TableHeader><TableBody>{(editForm?.productCommissions || []).map((r, idx) => <TableRow key={`${r.productId}-${idx}`}><TableCell>{r.productName || r.productId}</TableCell><TableCell><Input type="number" min="0" step="0.01" dir="ltr" className="text-end max-w-[180px]" value={r.commission} onChange={(e) => setEditForm((p) => ({ ...p, productCommissions: (p.productCommissions || []).map((x, i) => (i === idx ? { ...x, commission: e.target.value } : x)) }))} /></TableCell></TableRow>)}{!(editForm?.productCommissions || []).length ? <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground">אין מוצרים עם עמלה</TableCell></TableRow> : null}</TableBody></Table></div><div className="mt-3"><Button onClick={saveAgentDetails} disabled={busy}><Save className="size-4 me-2" />שמור עמלות מוצרים</Button></div></CardContent></Card>
+            <Card><CardHeader><CardTitle>קישורי הפצה ודפי נחיתה</CardTitle><CardDescription>עיצוב וערכים זהים לצפייה ממסך המוצרים, מותאם לסוכן</CardDescription></CardHeader><CardContent className="space-y-4">{(agent?.productCommissions || []).flatMap((c) => { const product = products.find((p) => String(p.id) === String(c.productId)); const entries = productSlugMap.get(String(c.productId)) || []; const productId = String(c.productId || ''); const productName = product?.productName || product?.name || c.productName || productId; const totalPurchases = productPurchaseCounts.get(productId) ?? 0; return [{ productId, productName, providerName: product?.provider?.vendorName || '', providerCost: Number(product?.providerCost || 0), entries, totalPurchases }]; }).map((row) => (<div key={row.productId} className="rounded-xl border p-4 space-y-3"><div className="flex items-start justify-between gap-3"><div className="space-y-1"><p className="text-lg font-bold text-foreground">{row.productName}</p><p className="text-xs text-muted-foreground">{row.providerName ? `ספק: ${row.providerName}` : 'ספק: —'}</p></div><Badge className="shrink-0 bg-green-100 text-green-800 border-green-200 hover:bg-green-100">פעיל</Badge></div><div className="grid grid-cols-3 gap-3 rounded-xl border bg-gradient-to-l from-[#D9EAF3]/40 to-[#D9EAF3]/10 p-4"><div className="text-center space-y-0.5"><p className="text-2xl font-bold text-primary">{row.entries.length}</p><p className="text-xs text-muted-foreground">דפי נחיתה פעילים</p></div><div className="text-center space-y-0.5"><p className="text-2xl font-bold text-primary">{row.totalPurchases}</p><p className="text-xs text-muted-foreground">כמות רכישות</p></div><div className="text-center space-y-0.5"><p className="text-2xl font-bold text-[#C9A227]">{row.providerCost > 0 ? `₪${row.providerCost}` : '—'}</p><p className="text-xs text-muted-foreground">עלות ספק</p></div></div>{row.entries.length === 0 ? (<div className="rounded-xl border-2 border-dashed border-slate-200 p-6 text-center"><Globe className="size-8 text-slate-300 mx-auto mb-2" /><p className="text-sm text-muted-foreground">המוצר אינו משויך לדפי נחיתה</p><p className="text-xs text-muted-foreground mt-1">ניתן לשייך דרך הקמת דף מוצר</p></div>) : (<div className="rounded-xl border overflow-hidden"><table className="w-full text-sm"><thead className="bg-slate-50 border-b"><tr><th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600">שם דף</th><th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600 w-28">כמות רכישות</th><th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600">קישור</th></tr></thead><tbody className="divide-y">{row.entries.map(({ slug, pageTitle }) => { const link = `${window.location.origin}/p/${slug}?agentId=${encodeURIComponent(id)}`; const justCopied = copiedLink === link; const slugCount = productSlugPurchaseCounts.get(`${row.productId}::${String(slug || '').toLowerCase()}`) ?? 0; return (<tr key={`${row.productId}-${slug}`} className="hover:bg-slate-50 transition-colors"><td className="px-3 py-3 font-medium text-foreground">{pageTitle || slug}</td><td className="px-3 py-3 text-center font-semibold text-primary">{slugCount}</td><td className="px-3 py-3"><div className="flex items-center gap-1.5"><span className="flex-1 truncate text-xs font-mono text-slate-500 bg-slate-100 rounded px-2 py-1 max-w-[200px]" title={link}>/p/{slug}?agentId={id}</span><Tooltip><TooltipTrigger asChild><button type="button" onClick={async () => { try { await navigator.clipboard.writeText(link); setCopiedLink(link); setTimeout(() => setCopiedLink(''), 2000); } catch {} }} className={`inline-flex items-center gap-1 h-7 px-2 rounded border text-xs transition-all shrink-0 ${justCopied ? 'bg-green-100 border-green-300 text-green-700' : 'bg-white border-slate-200 text-slate-600 hover:border-primary hover:text-primary'}`}>{justCopied ? <Check className="size-3" /> : <Copy className="size-3" />}{justCopied ? 'הועתק' : 'העתק'}</button></TooltipTrigger><TooltipContent>{pageTitle || slug}</TooltipContent></Tooltip><Tooltip><TooltipTrigger asChild><a href={link} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center h-7 w-7 rounded border border-slate-200 bg-white text-slate-500 hover:border-primary hover:text-primary transition-colors shrink-0"><ExternalLink className="size-3" /></a></TooltipTrigger><TooltipContent>פתח קישור</TooltipContent></Tooltip></div></td></tr>); })}</tbody></table></div>)}</div>))}{!(agent?.productCommissions || []).length ? <div className="rounded-md border p-6 text-center text-muted-foreground">אין מוצרים מוגדרים לסוכן</div> : null}</CardContent></Card>
           </TabsContent>
         </Tabs>
       </div>
     </AdminPageShell>
+    </TooltipProvider>
   );
 }
 

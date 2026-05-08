@@ -3209,12 +3209,48 @@ export async function updateDealAdmin(dealId, body = {}) {
       ...(existingBU.primaryMember && typeof existingBU.primaryMember === 'object' ? existingBU.primaryMember : {}),
       ...(incomingBU.primaryMember && typeof incomingBU.primaryMember === 'object' ? incomingBU.primaryMember : {}),
     };
-    // Do not set submittedAt to "now" on admin edits — preserves completion / pending-docs state.
+    const now = new Date();
+    const primaryFirst = String(mergedPrimary.firstName || '').trim();
+    const primaryLast = String(mergedPrimary.lastName || '').trim();
+    const primaryId = String(mergedPrimary.id || '').trim();
+    const primaryDateOfBirth = String(mergedPrimary.dateOfBirth || '').trim();
+    const primaryGender = String(mergedPrimary.gender || '').trim();
+    const primaryPhone = String(mergedPrimary.phone || '').trim();
+    const primaryEmail = String(mergedPrimary.email || '').trim();
+    const primaryAddress = String(mergedPrimary.address || '').trim();
+    const primaryMaritalStatus = String(mergedPrimary.maritalStatus || '').trim();
+    const primaryHealthFund = String(mergedPrimary.healthFund || '').trim();
+    const primarySupplementalInsurance = String(mergedPrimary.supplementalInsurance || '').trim();
+    const isBeneficiaryCompletion =
+      Boolean(primaryFirst) &&
+      Boolean(primaryLast) &&
+      Boolean(primaryId) &&
+      Boolean(primaryDateOfBirth) &&
+      Boolean(primaryGender) &&
+      Boolean(primaryPhone) &&
+      Boolean(primaryEmail) &&
+      Boolean(primaryAddress) &&
+      Boolean(primaryMaritalStatus) &&
+      Boolean(primaryHealthFund) &&
+      Boolean(primarySupplementalInsurance);
+
     set.beneficiaryUpdate = {
       ...existingBU,
       ...incomingBU,
       primaryMember: mergedPrimary,
+      // Admin beneficiary completion must behave like customer link completion.
+      ...(isBeneficiaryCompletion
+        ? { submittedAt: existingBU.submittedAt || now }
+        : {}),
     };
+
+    if (isBeneficiaryCompletion) {
+      fs.subscriptionStartDate = now.toISOString().slice(0, 10);
+      const incomingAdditional = Array.isArray(incomingBU.additionalMembers)
+        ? incomingBU.additionalMembers
+        : [];
+      fs.beneficiaryCount = incomingAdditional.length;
+    }
   }
   if (body.payerAmount != null && body.payerAmount !== '') set.payerAmount = Number(body.payerAmount);
   if (body.paymentStatus != null && String(body.paymentStatus).trim() !== '') set.paymentStatus = String(body.paymentStatus).trim();

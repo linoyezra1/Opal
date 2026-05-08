@@ -1327,6 +1327,13 @@ app.post('/api/update-beneficiaries', async (req, res) => {
     const primaryLastName = String(pm.lastName ?? '').trim();
     const primaryId = String(pm.id ?? '').trim();
     const primaryEmail = String(pm.email ?? '').trim();
+    const primaryPhone = String(pm.phone ?? '').trim();
+    const primaryAddress = String(pm.address ?? '').trim();
+    const primaryDateOfBirth = String(pm.dateOfBirth ?? '').trim();
+    const primaryGender = String(pm.gender ?? '').trim();
+    const primaryMaritalStatus = String(pm.maritalStatus ?? '').trim();
+    const primaryHealthFund = String(pm.healthFund ?? '').trim();
+    const primarySupplementalInsurance = String(pm.supplementalInsurance ?? '').trim();
 
     if (!transactionId) {
       return res.status(400).json({ success: false, error: 'חסר מס׳ הזמנה (Transaction ID).' });
@@ -1336,6 +1343,21 @@ app.post('/api/update-beneficiaries', async (req, res) => {
     }
     if (!primaryId) {
       return res.status(400).json({ success: false, error: 'חסרה תעודת זהות למבוטח הראשי.' });
+    }
+    if (
+      !primaryDateOfBirth ||
+      !primaryGender ||
+      !primaryPhone ||
+      !primaryEmail ||
+      !primaryAddress ||
+      !primaryMaritalStatus ||
+      !primaryHealthFund ||
+      !primarySupplementalInsurance
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: 'יש למלא את כל שדות החובה של המוטב הראשי: תאריך לידה, מין, טלפון, אימייל, כתובת, מצב משפחתי, קופת חולים וביטוח משלים.',
+      });
     }
     const primaryDigits = String(primaryId).replace(/\D/g, '');
     if (!validateIsraeliId(primaryDigits)) {
@@ -1384,13 +1406,13 @@ app.post('/api/update-beneficiaries', async (req, res) => {
         lastName: primaryLastName,
         id: primaryIdNorm,
         email: primaryEmail,
-        phone: String(pm.phone ?? '').trim(),
-        address: String(pm.address ?? '').trim(),
-        dateOfBirth: String(pm.dateOfBirth ?? '').trim(),
-        gender: String(pm.gender ?? '').trim(),
-        maritalStatus: String(pm.maritalStatus ?? '').trim(),
-        healthFund: String(pm.healthFund ?? '').trim(),
-        supplementalInsurance: String(pm.supplementalInsurance ?? '').trim(),
+        phone: primaryPhone,
+        address: primaryAddress,
+        dateOfBirth: primaryDateOfBirth,
+        gender: primaryGender,
+        maritalStatus: primaryMaritalStatus,
+        healthFund: primaryHealthFund,
+        supplementalInsurance: primarySupplementalInsurance,
       },
       additionalMembers: beneficiariesNorm,
     });
@@ -1405,13 +1427,13 @@ app.post('/api/update-beneficiaries', async (req, res) => {
         lastName: primaryLastName,
         id: primaryIdNorm,
         email: primaryEmail,
-        phone: String(pm.phone ?? '').trim(),
-        address: String(pm.address ?? '').trim(),
-        dateOfBirth: String(pm.dateOfBirth ?? '').trim(),
-        gender: String(pm.gender ?? '').trim(),
-        maritalStatus: String(pm.maritalStatus ?? '').trim(),
-        healthFund: String(pm.healthFund ?? '').trim(),
-        supplementalInsurance: String(pm.supplementalInsurance ?? '').trim(),
+        phone: primaryPhone,
+        address: primaryAddress,
+        dateOfBirth: primaryDateOfBirth,
+        gender: primaryGender,
+        maritalStatus: primaryMaritalStatus,
+        healthFund: primaryHealthFund,
+        supplementalInsurance: primarySupplementalInsurance,
       },
       additionalMembers: beneficiariesNorm,
       payerAmount: deal?.payerAmount,
