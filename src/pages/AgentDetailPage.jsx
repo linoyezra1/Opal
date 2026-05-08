@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowRight, Lock, Wallet, Users, Clock, RefreshCw, Edit2 } from 'lucide-react';
+import { ArrowRight, Copy, Edit2, ExternalLink, Lock, Percent, RefreshCw, Save, Users, Wallet } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
+import { ISRAELI_ID_INVALID_MSG, validateIsraeliId } from '../utils/israeliId.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { StatsCard } from '../components/admin/stats-card.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -13,14 +14,7 @@ import { Badge } from '../components/ui/badge.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../components/ui/dialog.jsx';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -28,16 +22,37 @@ function currentMonthLabel() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
-
-function formatCurrency(value) {
-  return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 2 }).format(Number(value || 0));
+function formatCurrency(v) {
+  return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 2 }).format(Number(v || 0));
 }
-
-function formatDate(value) {
-  if (!value) return '—';
-  const d = new Date(value);
+function formatDate(v) {
+  if (!v) return '—';
+  const d = new Date(v);
   if (Number.isNaN(d.getTime())) return '—';
   return d.toLocaleDateString('he-IL');
+}
+function normalizeAgentForEdit(r) {
+  const b = r?.bankDetails || {};
+  const pc = Array.isArray(r?.productCommissions) ? r.productCommissions : [];
+  return {
+    agentName: r?.agentName || '',
+    idNum: r?.idNum || '',
+    phone: r?.phone || '',
+    email: r?.email || '',
+    address: r?.address || '',
+    bankDetails: { bankName: b.bankName || '', bankNum: b.bankNum || '', accountHolder: b.accountHolder || '', branchNum: b.branchNum || '', accountNum: b.accountNum || '' },
+    productCommissions: pc.map((x) => ({ productId: String(x.productId || ''), commission: String(x.commission ?? ''), productName: x.productName || '' })),
+  };
+}
+function buildPayload(form) {
+  const rows = Array.isArray(form.productCommissions) ? form.productCommissions.filter((x) => x.productId).map((x) => ({ productId: x.productId, commission: Number(x.commission || 0) })) : [];
+  return { ...form, productCommissions: rows };
+}
+function idHint(value) {
+  const compact = String(value || '').trim().replace(/\s/g, '');
+  if (compact.length < 7 || !/^\d{7,9}$/.test(compact)) return '';
+  if (!validateIsraeliId(compact)) return ISRAELI_ID_INVALID_MSG;
+  return '';
 }
 
 export default function AgentDetailPage() {
@@ -47,414 +62,186 @@ export default function AgentDetailPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [agent, setAgent] = useState(null);
+  const [editForm, setEditForm] = useState(null);
   const [month, setMonth] = useState(currentMonthLabel());
+  const [products, setProducts] = useState([]);
+  const [landingPages, setLandingPages] = useState([]);
+  const [priceLists, setPriceLists] = useState([]);
   const [preview, setPreview] = useState({ summary: { totalCommissions: 0, activeDeals: 0, pendingPayouts: 0 }, rows: [] });
   const [snapshots, setSnapshots] = useState([]);
-  const [providerFilter, setProviderFilter] = useState('');
-  const [productFilter, setProductFilter] = useState('');
-  const [billingTypeFilter, setBillingTypeFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [snapEditOpen, setSnapEditOpen] = useState(false);
-  const [snapEditTarget, setSnapEditTarget] = useState(null);
-  const [snapEditForm, setSnapEditForm] = useState({
-    status: 'Pending',
-    invoiceNum: '',
-    invoiceAmount: 0,
-    creditNoteNum: '',
-    creditNoteAmount: 0,
-    totalPaid: 0,
-    notes: '',
-  });
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archiveWarn, setArchiveWarn] = useState('');
+  const [copiedLink, setCopiedLink] = useState('');
+  const [snapEditOpen, setSnapEditOpen] = useState(false);
+  const [snapEditTarget, setSnapEditTarget] = useState(null);
+  const [snapEditForm, setSnapEditForm] = useState({ status: 'Pending', invoiceNum: '', invoiceAmount: 0, creditNoteNum: '', creditNoteAmount: 0, totalPaid: 0, notes: '' });
+
+  const productSlugMap = useMemo(() => {
+    const map = new Map();
+    const plIndex = new Map((priceLists || []).map((pl) => [pl.id, pl]));
+    for (const page of landingPages || []) {
+      if (!page?.slug || !page?.priceListId) continue;
+      const pl = plIndex.get(page.priceListId);
+      if (!pl) continue;
+      for (const ln of pl.lines || []) {
+        if (!ln?.productId) continue;
+        const key = String(ln.productId);
+        const curr = map.get(key) || [];
+        if (!curr.some((x) => x.slug === page.slug)) curr.push({ slug: page.slug, pageTitle: page.pageTitle || page.slug });
+        map.set(key, curr);
+      }
+    }
+    return map;
+  }, [landingPages, priceLists]);
+
+  const commissionSummary = useMemo(() => {
+    const rows = Array.isArray(agent?.productCommissions) ? agent.productCommissions : [];
+    return { products: rows.length, total: rows.reduce((s, r) => s + Number(r.commission || 0), 0) };
+  }, [agent]);
 
   const load = useCallback(async () => {
     if (!token || !id) return;
     setLoading(true);
     setErr('');
     try {
-      const [agentsRes, previewRes, snapsRes] = await Promise.all([
+      const [agentsRes, previewRes, snapsRes, prRes, lpRes, plRes] = await Promise.all([
         fetch(`${API_BASE}/api/admin/agents?includeInactive=true`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/agents/${encodeURIComponent(id)}/commissions-preview?month=${encodeURIComponent(month)}`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch(`${API_BASE}/api/admin/agents/${encodeURIComponent(id)}/commission-snapshots`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+        fetch(`${API_BASE}/api/admin/products`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+        fetch(`${API_BASE}/api/admin/landing-pages`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+        fetch(`${API_BASE}/api/admin/price-lists`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
       ]);
       const found = (agentsRes?.rows || []).find((r) => String(r.id) === String(id));
       if (!found) throw new Error('סוכן לא נמצא');
       setAgent(found);
-      if (!previewRes.success) throw new Error(previewRes.error || 'טעינת טיוטת עמלות נכשלה');
-      setPreview({
-        summary: {
-          totalCommissions: Number(previewRes.summary?.totalCommissions || 0),
-          activeDeals: Number(previewRes.summary?.activeDeals || 0),
-          pendingPayouts: Number(previewRes.summary?.pendingPayouts || 0),
-        },
-        rows: Array.isArray(previewRes.rows) ? previewRes.rows : [],
-        note: String(previewRes.note || ''),
-      });
+      setEditForm(normalizeAgentForEdit(found));
+      setPreview({ summary: { totalCommissions: Number(previewRes?.summary?.totalCommissions || 0), activeDeals: Number(previewRes?.summary?.activeDeals || 0), pendingPayouts: Number(previewRes?.summary?.pendingPayouts || 0) }, rows: Array.isArray(previewRes?.rows) ? previewRes.rows : [] });
       setSnapshots(Array.isArray(snapsRes?.snapshots) ? snapsRes.snapshots : []);
+      setProducts(Array.isArray(prRes?.products) ? prRes.products : []);
+      setLandingPages(Array.isArray(lpRes?.pages) ? lpRes.pages : []);
+      setPriceLists(Array.isArray(plRes?.lists) ? plRes.lists : []);
     } catch (e) {
       setErr(e.message || 'שגיאה');
     } finally {
       setLoading(false);
     }
   }, [id, month, token]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   async function lockCommissions() {
-    if (!token || !id) return;
     setBusy(true);
-    setErr('');
     try {
-      const res = await fetch(`${API_BASE}/api/admin/agents/${encodeURIComponent(id)}/lock-commissions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ month }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json.success) throw new Error(json.error || 'נעילת דוח עמלות נכשלה');
+      const res = await fetch(`${API_BASE}/api/admin/agents/${encodeURIComponent(id)}/lock-commissions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ month }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.success) throw new Error(j.error || 'נעילה נכשלה');
       await load();
-    } catch (e) {
-      setErr(e.message || 'שגיאה');
-    } finally {
-      setBusy(false);
-    }
+    } catch (e) { setErr(e.message || 'שגיאה'); } finally { setBusy(false); }
   }
-
-  async function archiveAgent() {
-    if (!token || !id) return;
+  async function saveAgentDetails() {
+    if (!editForm) return;
+    const hint = idHint(editForm.idNum);
+    if (hint) return setErr(hint);
     setBusy(true);
-    setErr('');
     try {
-      const res = await fetch(`${API_BASE}/api/admin/agents/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json.success) {
-        if (res.status === 409 && json.code === 'UNLOCKED_COMMISSIONS') {
-          setArchiveWarn(json.error || '');
-          setArchiveOpen(false);
-          return;
-        }
-        throw new Error(json.error || 'ארכוב נכשל');
+      const res = await fetch(`${API_BASE}/api/admin/agents/${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(buildPayload(editForm)) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.success) throw new Error(j.error || 'שמירה נכשלה');
+      await load();
+    } catch (e) { setErr(e.message || 'שגיאה'); } finally { setBusy(false); }
+  }
+  async function archiveAgent(force = false) {
+    setBusy(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/agents/${encodeURIComponent(id)}${force ? '?force=true' : ''}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.success) {
+        if (res.status === 409 && j.code === 'UNLOCKED_COMMISSIONS') return setArchiveWarn(j.error || '');
+        throw new Error(j.error || 'ארכוב נכשל');
       }
+      setArchiveWarn('');
       setArchiveOpen(false);
       await load();
-    } catch (e) {
-      setErr(e.message || 'שגיאה');
-    } finally {
-      setBusy(false);
-    }
+    } catch (e) { setErr(e.message || 'שגיאה'); } finally { setBusy(false); }
   }
-
-  const pendingSnapshots = useMemo(
-    () => snapshots.filter((s) => String(s.status || 'Pending') !== 'Paid').length,
-    [snapshots]
-  );
-
-  const filteredPreviewRows = useMemo(() => {
-    return (preview.rows || []).filter((r) => {
-      if (providerFilter && String(r.provider || '').trim() !== providerFilter) return false;
-      if (productFilter && String(r.productName || '').trim() !== productFilter) return false;
-      if (billingTypeFilter && String(r.billingType || '').trim() !== billingTypeFilter) return false;
-      if (statusFilter !== 'all' && String(r.entitlementStatus || '').trim() !== statusFilter) return false;
-      return true;
-    });
-  }, [preview.rows, providerFilter, productFilter, billingTypeFilter, statusFilter]);
-
-  const providerOptions = useMemo(() => {
-    return Array.from(new Set((preview.rows || []).map((r) => String(r.provider || '').trim()).filter(Boolean)));
-  }, [preview.rows]);
-  const productOptions = useMemo(() => {
-    return Array.from(new Set((preview.rows || []).map((r) => String(r.productName || '').trim()).filter(Boolean)));
-  }, [preview.rows]);
-
   async function saveSnapshotEdit() {
-    if (!snapEditTarget?.id) return;
     setBusy(true);
     try {
-      const res = await fetch(
-        `${API_BASE}/api/admin/agents/${encodeURIComponent(id)}/commission-snapshots/${encodeURIComponent(snapEditTarget.id)}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify(snapEditForm),
-        }
-      );
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json.success) throw new Error(json.error || 'שמירה נכשלה');
+      const res = await fetch(`${API_BASE}/api/admin/agents/${encodeURIComponent(id)}/commission-snapshots/${encodeURIComponent(snapEditTarget.id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(snapEditForm) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.success) throw new Error(j.error || 'שמירה נכשלה');
       setSnapEditOpen(false);
       await load();
-    } catch (e) {
-      setErr(e.message || 'שגיאה');
-    } finally {
-      setBusy(false);
-    }
+    } catch (e) { setErr(e.message || 'שגיאה'); } finally { setBusy(false); }
   }
 
-  if (!token) {
-    return <AdminPageShell><p className="p-6 text-muted-foreground">נדרשת התחברות לממשק ניהול.</p></AdminPageShell>;
-  }
+  if (!token) return <AdminPageShell><p className="p-6 text-muted-foreground">נדרשת התחברות לממשק ניהול.</p></AdminPageShell>;
 
   return (
     <AdminPageShell>
-      <ConfirmDialog
-        open={archiveOpen}
-        title="העברה לארכיון"
-        message='לא ניתן לייצר עמלה לסוכנים שאינם פעילים. לפני העברת סוכן לארכיון, יש לוודא כי כל הדוחות והתשלומים המגיעים לו עבור החודש הנוכחי ננעלו ושולמו. לאחר הארכוב, המערכת תפסיק לשייך עסקאות וחשבונות לסוכן זה.'
-        confirmLabel="העבר לארכיון"
-        danger
-        onConfirm={archiveAgent}
-        onCancel={() => setArchiveOpen(false)}
-        isLoading={busy}
-      />
-      <ConfirmDialog
-        open={!!archiveWarn}
-        title="אזהרת ארכוב"
-        message={archiveWarn}
-        confirmLabel="Continue"
-        onConfirm={async () => {
-          setBusy(true);
-          try {
-            const res = await fetch(`${API_BASE}/api/admin/agents/${encodeURIComponent(id)}?force=true`, {
-              method: 'DELETE',
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok || !json.success) throw new Error(json.error || 'ארכוב נכשל');
-            setArchiveWarn('');
-            await load();
-          } catch (e) {
-            setErr(e.message || 'שגיאה');
-          } finally {
-            setBusy(false);
-          }
-        }}
-        onCancel={() => setArchiveWarn('')}
-        isLoading={busy}
-      />
-      <Dialog open={snapEditOpen} onOpenChange={(o) => { if (!o) setSnapEditOpen(false); }}>
+      <ConfirmDialog open={archiveOpen} title="העברה לארכיון" message='⚠️ לא ניתן לייצר עמלה לסוכנים שאינם פעילים. לפני העברת סוכן לארכיון, יש לוודא כי כל הדוחות והתשלומים המגיעים לו עבור החודש הנוכחי ננעלו ושולמו. לאחר הארכוב, המערכת תפסיק לשייך עסקאות וחשבונות לסוכן זה.' confirmLabel="העבר לארכיון" danger onConfirm={() => archiveAgent(false)} onCancel={() => setArchiveOpen(false)} isLoading={busy} />
+      <ConfirmDialog open={!!archiveWarn} title="אזהרת ארכוב" message={archiveWarn} confirmLabel="Continue" onConfirm={() => archiveAgent(true)} onCancel={() => setArchiveWarn('')} isLoading={busy} />
+      <Dialog open={snapEditOpen} onOpenChange={(o) => !o && setSnapEditOpen(false)}>
         <DialogContent className="max-w-md text-right" dir="rtl">
-          <DialogHeader>
-            <DialogTitle>עריכת פרטי תשלום לסוכן</DialogTitle>
-            <DialogDescription>{snapEditTarget ? `${snapEditTarget.month} · ${snapEditTarget.agentName}` : ''}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
+          <DialogHeader><DialogTitle>עריכת פרטי תשלום</DialogTitle><DialogDescription>{snapEditTarget ? `${snapEditTarget.month} · ${snapEditTarget.agentName}` : ''}</DialogDescription></DialogHeader>
+          <div className="space-y-2">
             <Input placeholder="Invoice #" value={snapEditForm.invoiceNum} onChange={(e) => setSnapEditForm((p) => ({ ...p, invoiceNum: e.target.value }))} />
             <Input type="number" placeholder="Invoice Amt" value={snapEditForm.invoiceAmount} onChange={(e) => setSnapEditForm((p) => ({ ...p, invoiceAmount: Number(e.target.value || 0) }))} />
             <Input placeholder="Credit Note #" value={snapEditForm.creditNoteNum} onChange={(e) => setSnapEditForm((p) => ({ ...p, creditNoteNum: e.target.value }))} />
             <Input type="number" placeholder="Credit Note Amt" value={snapEditForm.creditNoteAmount} onChange={(e) => setSnapEditForm((p) => ({ ...p, creditNoteAmount: Number(e.target.value || 0) }))} />
             <Input type="number" placeholder="Amount Paid" value={snapEditForm.totalPaid} onChange={(e) => setSnapEditForm((p) => ({ ...p, totalPaid: Number(e.target.value || 0) }))} />
           </div>
-          <DialogFooter className="flex-row-reverse gap-2">
-            <Button type="button" variant="outline" onClick={() => setSnapEditOpen(false)}>Cancel</Button>
-            <Button type="button" onClick={saveSnapshotEdit} disabled={busy}>Save</Button>
-          </DialogFooter>
+          <DialogFooter className="flex-row-reverse gap-2"><Button variant="outline" onClick={() => setSnapEditOpen(false)}>ביטול</Button><Button onClick={saveSnapshotEdit} disabled={busy}>שמור</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+
       <div className="space-y-6 p-4 md:p-6 max-w-6xl mx-auto text-right" dir="rtl">
         <div className="flex items-center justify-between">
           <div>
-            <Button variant="ghost" size="sm" className="mb-2 -ms-2" asChild>
-              <Link to="/admin/agents" className="gap-1">
-                <ArrowRight className="size-4 rotate-180" />
-                חזרה לרשימת סוכנים
-              </Link>
-            </Button>
+            <Button variant="ghost" size="sm" className="mb-2 -ms-2" asChild><Link to="/admin/agents"><ArrowRight className="size-4 rotate-180 ms-1" />חזרה לרשימת סוכנים</Link></Button>
             <h1 className="text-2xl font-bold">{agent?.agentName || 'סוכן'}</h1>
-            <p className="text-sm text-muted-foreground">{agent?.idNum || '—'}</p>
           </div>
-          <Button variant="outline" onClick={load} disabled={loading || busy}>
-            <RefreshCw className={`size-4 me-2 ${loading ? 'animate-spin' : ''}`} />
-            רענון
-          </Button>
+          <Button variant="outline" onClick={load} disabled={loading || busy}><RefreshCw className={`size-4 me-2 ${loading ? 'animate-spin' : ''}`} />רענון</Button>
         </div>
-
         {err ? <p className="text-sm text-destructive">{err}</p> : null}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatsCard title="סה״כ מנויים" value={String(agent?.totalSales || 0)} icon={Users} />
           <StatsCard title="סה״כ עמלות לטיוטה" value={formatCurrency(preview.summary.totalCommissions)} icon={Wallet} />
-          <StatsCard title="עסקאות זכאיות" value={String(preview.summary.activeDeals || 0)} icon={Users} />
-          <StatsCard title="דרישות תשלום פתוחות" value={String(pendingSnapshots)} icon={Clock} />
+          <StatsCard title="מוצרים עם עמלה" value={String(commissionSummary.products)} icon={Percent} />
+          <StatsCard title="סיכום עמלות מוצרים" value={formatCurrency(commissionSummary.total)} icon={Wallet} />
         </div>
 
         <Tabs defaultValue="deals">
-          <TabsList className="grid grid-cols-3 w-full max-w-lg">
-            <TabsTrigger value="deals">Deals</TabsTrigger>
-            <TabsTrigger value="commissions">Commissions History</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
+          <TabsList className="flex flex-wrap h-auto gap-1">
+            <TabsTrigger value="deals">עסקאות</TabsTrigger>
+            <TabsTrigger value="commissions">היסטוריית עמלות</TabsTrigger>
+            <TabsTrigger value="distribution">קישורי הפצה ודפי נחיתה</TabsTrigger>
+            <TabsTrigger value="settings">פרטי סוכן</TabsTrigger>
+            <TabsTrigger value="product-commissions">עמלות מוצרים</TabsTrigger>
           </TabsList>
 
           <TabsContent value="deals" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>עסקאות זכאיות לחודש</CardTitle>
-                <CardDescription>{month}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="rounded-xl border p-3 md:p-4 mb-3">
-                  <UnifiedFilterShell
-                    filters={[
-                      { key: 'provider', label: 'ספק', type: 'select', options: providerOptions.map((p) => ({ value: p, label: p })) },
-                      { key: 'product', label: 'מוצר', type: 'select', options: productOptions.map((p) => ({ value: p, label: p })) },
-                      { key: 'billingType', label: 'סוג חיוב', type: 'select', options: [{ value: 'Centralized', label: 'מרוכז' }, { value: 'Private', label: 'פרטי' }] },
-                      { key: 'status', label: 'סטטוס', type: 'select', options: [{ value: 'all', label: 'הכל' }, { value: 'active', label: 'פעיל' }, { value: 'pending_cancellation', label: 'ממתין לביטול' }, { value: 'canceled', label: 'מבוטל' }] },
-                    ]}
-                    values={{ provider: providerFilter, product: productFilter, billingType: billingTypeFilter, status: statusFilter }}
-                    onChange={(next) => {
-                      setProviderFilter(String(next.provider || ''));
-                      setProductFilter(String(next.product || ''));
-                      setBillingTypeFilter(String(next.billingType || ''));
-                      setStatusFilter(String(next.status || 'all'));
-                    }}
-                    onClear={() => {
-                      setProviderFilter('');
-                      setProductFilter('');
-                      setBillingTypeFilter('');
-                      setStatusFilter('all');
-                    }}
-                    resultsCount={filteredPreviewRows.length}
-                    totalCount={(preview.rows || []).length}
-                    isLoading={loading}
-                  />
-                </div>
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-right">עסקה</TableHead>
-                        <TableHead className="text-right">לקוח</TableHead>
-                        <TableHead className="text-right">תחילת מנוי</TableHead>
-                        <TableHead className="text-right">סיום מנוי</TableHead>
-                        <TableHead className="text-right">עמלה</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredPreviewRows.map((r) => (
-                        <TableRow key={r.dealId}>
-                          <TableCell>{r.transactionId || r.dealId}</TableCell>
-                          <TableCell>{r.employeeName || '—'}</TableCell>
-                          <TableCell>{formatDate(r.subscriptionStartDate)}</TableCell>
-                          <TableCell>{formatDate(r.subscriptionEndDate)}</TableCell>
-                          <TableCell>{formatCurrency(r.amount)}</TableCell>
-                        </TableRow>
-                      ))}
-                      {!filteredPreviewRows.length ? (
-                        <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">אין רשומות זכאיות</TableCell></TableRow>
-                      ) : null}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
+            <Card><CardHeader><CardTitle>טיוטת עסקאות זכאיות</CardTitle><CardDescription>{month}</CardDescription></CardHeader><CardContent>
+              <div className="flex flex-wrap items-end gap-3 mb-3"><Input type="month" value={month} onChange={(e) => setMonth(e.target.value || currentMonthLabel())} className="max-w-xs" /><Button onClick={lockCommissions} disabled={busy || loading}>{busy ? <Spinner className="size-4 me-2" /> : <Lock className="size-4 me-2" />}סגור דוח והפק דרישת תשלום לסוכן</Button></div>
+              <div className="rounded-md border overflow-x-auto"><Table className="text-right"><TableHeader><TableRow className="[&_th]:text-right"><TableHead>עסקה</TableHead><TableHead>לקוח</TableHead><TableHead>תחילת מנוי</TableHead><TableHead>סיום מנוי</TableHead><TableHead>עמלה</TableHead></TableRow></TableHeader><TableBody>{(preview.rows || []).map((r) => <TableRow key={r.dealId}><TableCell>{r.transactionId || r.dealId}</TableCell><TableCell>{r.employeeName || '—'}</TableCell><TableCell>{formatDate(r.subscriptionStartDate)}</TableCell><TableCell>{formatDate(r.subscriptionEndDate)}</TableCell><TableCell>{formatCurrency(r.amount)}</TableCell></TableRow>)}{!(preview.rows || []).length ? <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">אין רשומות זכאיות</TableCell></TableRow> : null}</TableBody></Table></div>
+            </CardContent></Card>
           </TabsContent>
 
-          <TabsContent value="commissions" className="mt-4 space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>דוח חודשי — טיוטה לנעילה</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">חודש דוח</p>
-                  <Input type="month" value={month} onChange={(e) => setMonth(e.target.value || currentMonthLabel())} />
-                </div>
-                <Button type="button" onClick={lockCommissions} disabled={busy || loading}>
-                  {busy ? <Spinner className="size-4 me-2" /> : <Lock className="size-4 me-2" />}
-                  סגור דוח והפק דרישת תשלום לסוכן
-                </Button>
-              </CardContent>
-            </Card>
+          <TabsContent value="commissions" className="mt-4">
+            <Card><CardHeader><CardTitle>Commissions History</CardTitle></CardHeader><CardContent><div className="rounded-md border overflow-x-auto"><Table className="text-right"><TableHeader><TableRow className="[&_th]:text-right"><TableHead>חודש</TableHead><TableHead>Invoice #</TableHead><TableHead>Invoice Amt</TableHead><TableHead>Credit Note #</TableHead><TableHead>Credit Note Amt</TableHead><TableHead>Total Due</TableHead><TableHead>Amount Paid</TableHead><TableHead>יתרה לתשלום</TableHead><TableHead>עסקאות</TableHead><TableHead>סטטוס</TableHead><TableHead>פעולות</TableHead></TableRow></TableHeader><TableBody>{snapshots.map((s) => <TableRow key={s.id}><TableCell>{s.month}</TableCell><TableCell>{s.invoiceNum || '—'}</TableCell><TableCell>{formatCurrency(s.invoiceAmount)}</TableCell><TableCell>{s.creditNoteNum || '—'}</TableCell><TableCell>{formatCurrency(s.creditNoteAmount)}</TableCell><TableCell>{formatCurrency(s.totalAmount)}</TableCell><TableCell>{formatCurrency(s.totalPaid)}</TableCell><TableCell>{formatCurrency(s.balance)}</TableCell><TableCell>{Number(s.totalDeals || 0)}</TableCell><TableCell><Badge variant={s.status === 'Paid' ? 'default' : 'secondary'}>{s.status === 'Paid' ? 'שולם' : 'ממתין'}</Badge></TableCell><TableCell><Button size="icon" variant="ghost" onClick={() => { setSnapEditTarget(s); setSnapEditForm({ status: String(s.status || 'Pending'), invoiceNum: String(s.invoiceNum || ''), invoiceAmount: Number(s.invoiceAmount || 0), creditNoteNum: String(s.creditNoteNum || ''), creditNoteAmount: Number(s.creditNoteAmount || 0), totalPaid: Number(s.totalPaid || 0), notes: String(s.notes || '') }); setSnapEditOpen(true); }}><Edit2 className="size-4" /></Button></TableCell></TableRow>)}{!snapshots.length ? <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground">אין דוחות נעולים</TableCell></TableRow> : null}</TableBody></Table></div></CardContent></Card>
+          </TabsContent>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Commissions History</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-right">חודש</TableHead>
-                        <TableHead className="text-right">Invoice #</TableHead>
-                        <TableHead className="text-right">Invoice Amt</TableHead>
-                        <TableHead className="text-right">Credit Note #</TableHead>
-                        <TableHead className="text-right">Credit Note Amt</TableHead>
-                        <TableHead className="text-right">Total Due</TableHead>
-                        <TableHead className="text-right">Amount Paid</TableHead>
-                        <TableHead className="text-right">יתרה לתשלום</TableHead>
-                        <TableHead className="text-right">עסקאות</TableHead>
-                        <TableHead className="text-right">סטטוס</TableHead>
-                        <TableHead className="text-right">פעולות</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {snapshots.map((s) => (
-                        <TableRow key={s.id}>
-                          <TableCell>{s.month}</TableCell>
-                          <TableCell>{s.invoiceNum || '—'}</TableCell>
-                          <TableCell>{formatCurrency(s.invoiceAmount)}</TableCell>
-                          <TableCell>{s.creditNoteNum || '—'}</TableCell>
-                          <TableCell>{formatCurrency(s.creditNoteAmount)}</TableCell>
-                          <TableCell>{formatCurrency(s.totalAmount)}</TableCell>
-                          <TableCell>{formatCurrency(s.totalPaid)}</TableCell>
-                          <TableCell>{formatCurrency(Number(s.totalAmount || 0) - Number(s.totalPaid || 0))}</TableCell>
-                          <TableCell>{Number(s.totalDeals || 0)}</TableCell>
-                          <TableCell><Badge variant={s.status === 'Paid' ? 'default' : 'secondary'}>{s.status === 'Paid' ? 'שולם' : 'ממתין'}</Badge></TableCell>
-                          <TableCell>
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => {
-                                setSnapEditTarget(s);
-                                setSnapEditForm({
-                                  status: String(s.status || 'Pending'),
-                                  invoiceNum: String(s.invoiceNum || ''),
-                                  invoiceAmount: Number(s.invoiceAmount || 0),
-                                  creditNoteNum: String(s.creditNoteNum || ''),
-                                  creditNoteAmount: Number(s.creditNoteAmount || 0),
-                                  totalPaid: Number(s.totalPaid || 0),
-                                  notes: String(s.notes || ''),
-                                });
-                                setSnapEditOpen(true);
-                              }}
-                            >
-                              <Edit2 className="size-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {!snapshots.length ? (
-                        <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground">אין דוחות נעולים</TableCell></TableRow>
-                      ) : null}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
+          <TabsContent value="distribution" className="mt-4">
+            <Card><CardHeader><CardTitle>קישורי הפצה ודפי נחיתה</CardTitle><CardDescription>קישורים ייחודיים לסוכן לפי מוצר ודף נחיתה</CardDescription></CardHeader><CardContent><div className="rounded-md border overflow-x-auto"><Table className="text-right"><TableHeader><TableRow className="[&_th]:text-right"><TableHead>מוצר</TableHead><TableHead>דף נחיתה</TableHead><TableHead>קישור</TableHead><TableHead>QR</TableHead><TableHead>פעולות</TableHead></TableRow></TableHeader><TableBody>{(agent?.productCommissions || []).flatMap((c) => { const product = products.find((p) => String(p.id) === String(c.productId)); const entries = productSlugMap.get(String(c.productId)) || []; if (!entries.length) return [{ key: `${c.productId}-none`, productName: product?.productName || product?.name || c.productName || c.productId, pageTitle: '—', link: '' }]; return entries.map((e) => ({ key: `${c.productId}-${e.slug}`, productName: product?.productName || product?.name || c.productName || c.productId, pageTitle: e.pageTitle || e.slug, link: `${window.location.origin}/p/${e.slug}?agentId=${encodeURIComponent(id)}` })); }).map((r) => <TableRow key={r.key}><TableCell>{r.productName}</TableCell><TableCell>{r.pageTitle}</TableCell><TableCell dir="ltr" className="text-end text-xs">{r.link || '—'}</TableCell><TableCell>{r.link ? <img alt="QR" src={`https://api.qrserver.com/v1/create-qr-code/?size=64x64&data=${encodeURIComponent(r.link)}`} className="h-12 w-12 border rounded" /> : '—'}</TableCell><TableCell><div className="flex items-center justify-end gap-1">{r.link ? <><Button type="button" variant="ghost" size="icon" onClick={async () => { try { await navigator.clipboard.writeText(r.link); setCopiedLink(r.link); setTimeout(() => setCopiedLink(''), 1200); } catch {} }} title={copiedLink === r.link ? 'הועתק' : 'העתק קישור'}><Copy className="size-4" /></Button><a href={r.link} target="_blank" rel="noreferrer"><Button type="button" variant="ghost" size="icon"><ExternalLink className="size-4" /></Button></a></> : '—'}</div></TableCell></TableRow>)}{!(agent?.productCommissions || []).length ? <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">אין מוצרים מוגדרים לסוכן</TableCell></TableRow> : null}</TableBody></Table></div></CardContent></Card>
           </TabsContent>
 
           <TabsContent value="settings" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>הגדרות סוכן</CardTitle>
-                <CardDescription>
-                  לפני ארכוב סוכן יש לוודא שכל דוחות העמלה הרלוונטיים ננעלו ושולמו.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                  ⚠️ לא ניתן לייצר עמלה לסוכנים שאינם פעילים. לפני העברת סוכן לארכיון, יש לוודא כי כל הדוחות והתשלומים המגיעים לו עבור החודש הנוכחי ננעלו ושולמו. לאחר הארכוב, המערכת תפסיק לשייך עסקאות וחשבונות לסוכן זה.
-                </div>
-                <Button type="button" variant="destructive" onClick={() => setArchiveOpen(true)} disabled={busy}>
-                  העבר סוכן לארכיון
-                </Button>
-              </CardContent>
-            </Card>
+            <Card><CardHeader><CardTitle>פרטי סוכן</CardTitle><CardDescription>כל השדות מוצגים וניתנים לעריכה</CardDescription></CardHeader><CardContent className="space-y-3">{editForm ? <div className="grid gap-3 sm:grid-cols-2">{[['agentName','שם סוכן'],['idNum','ת"ז / ח.פ'],['phone','טלפון'],['email','אימייל'],['address','כתובת']].map(([k,l]) => <div key={k}><p className="text-xs text-muted-foreground mb-1">{l}</p><Input dir={k==='idNum'||k==='phone'||k==='email'?'ltr':'rtl'} className={k==='idNum'||k==='phone'||k==='email'?'text-end':'text-right'} value={editForm[k]} onChange={(e)=>setEditForm((p)=>({...p,[k]:e.target.value}))} /></div>)}</div> : null}{idHint(editForm?.idNum) ? <p className="text-destructive text-xs">{idHint(editForm?.idNum)}</p> : null}<div className="flex flex-wrap gap-2"><Button onClick={saveAgentDetails} disabled={busy}><Save className="size-4 me-2" />שמור פרטי סוכן</Button><Button variant="destructive" onClick={() => setArchiveOpen(true)} disabled={busy}>העבר סוכן לארכיון</Button></div></CardContent></Card>
+          </TabsContent>
+
+          <TabsContent value="product-commissions" className="mt-4">
+            <Card><CardHeader><CardTitle>עמלות מוצרים</CardTitle><CardDescription>צפייה ועריכה של עמלה לכל מוצר מקושר</CardDescription></CardHeader><CardContent><div className="rounded-md border overflow-x-auto"><Table className="text-right"><TableHeader><TableRow className="[&_th]:text-right"><TableHead>מוצר</TableHead><TableHead>עמלה (₪)</TableHead></TableRow></TableHeader><TableBody>{(editForm?.productCommissions || []).map((r, idx) => <TableRow key={`${r.productId}-${idx}`}><TableCell>{r.productName || r.productId}</TableCell><TableCell><Input type="number" min="0" step="0.01" dir="ltr" className="text-end max-w-[180px]" value={r.commission} onChange={(e) => setEditForm((p) => ({ ...p, productCommissions: (p.productCommissions || []).map((x, i) => (i === idx ? { ...x, commission: e.target.value } : x)) }))} /></TableCell></TableRow>)}{!(editForm?.productCommissions || []).length ? <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground">אין מוצרים עם עמלה</TableCell></TableRow> : null}</TableBody></Table></div><div className="mt-3"><Button onClick={saveAgentDetails} disabled={busy}><Save className="size-4 me-2" />שמור עמלות מוצרים</Button></div></CardContent></Card>
           </TabsContent>
         </Tabs>
       </div>
