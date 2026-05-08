@@ -2015,7 +2015,7 @@ export default function SubscribersDashboard() {
                               </Badge>
                             ) : r.entitlementStatus === 'pending_cancellation' ? (
                               <Badge className="bg-amber-100 text-amber-950 border-amber-400 hover:bg-amber-100 font-normal whitespace-normal max-w-[18rem] text-right leading-snug">
-                                ממתין לביטול* | בוטל ב-
+                                ממתין לביטול | יבוטל ב-
                                 {r.entitlementCancelAt ? fmtDateTime(r.entitlementCancelAt) : cancelledAtText || '—'}
                               </Badge>
                             ) : r.entitlementStatus === 'canceled' ? (

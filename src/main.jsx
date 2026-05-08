@@ -9,6 +9,7 @@ import Admin from './pages/Admin.jsx';
 import SubscribersDashboard from './pages/SubscribersDashboard.jsx';
 import LandingPage from './pages/LandingPage.jsx';
 import AgentSetup from './pages/AgentSetup.jsx';
+import AgentDetailPage from './pages/AgentDetailPage.jsx';
 import ProductManagement from './pages/ProductManagement.jsx';
 import AdminControlPanel from './pages/AdminControlPanel.jsx';
 import VendorDashboard from './pages/VendorDashboard.jsx';
@@ -53,6 +54,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/admin/organizations/:id" element={<OrganizationDetailPage />} />
         <Route path="/register" element={<OrgRegisterPage />} />
         <Route path="/admin/agents" element={<AgentSetup />} />
+        <Route path="/admin/agents/:id" element={<AgentDetailPage />} />
         <Route path="/admin/product-page-setup" element={<UnifiedProductWizard />} />
         <Route path="/admin/reports" element={<ReportsDashboard />} />
         <Route path="/admin/archive" element={<ArchiveDashboard />} />

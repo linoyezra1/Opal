@@ -113,14 +113,9 @@ export default function ReportsDashboard() {
 
   const [agents, setAgents] = useState([]);
   const [agentId, setAgentId] = useState('');
-  const [agentMonth, setAgentMonth] = useState(currentMonthStr());
-  const [agentProviderFilter, setAgentProviderFilter] = useState('');
-  const [agentProductFilter, setAgentProductFilter] = useState('');
-  const [agentBillingTypeFilter, setAgentBillingTypeFilter] = useState('');
-  const [agentStatusFilter, setAgentStatusFilter] = useState('all');
+  const [agentSnaps, setAgentSnaps] = useState([]);
   const [agentLoading, setAgentLoading] = useState(false);
   const [agentErr, setAgentErr] = useState('');
-  const [agentData, setAgentData] = useState(null);
 
   const [tab, setTab] = useState(() => String(searchParams.get('tab') || 'provider'));
   useEffect(() => {
@@ -276,10 +271,9 @@ export default function ReportsDashboard() {
   }, [tab, loadPreview]);
   useEffect(() => {
     if (tab !== 'agents') return;
-    if (!agentId || !agentMonth) return;
-    loadAgentCommissions();
+    loadAgentSnapshots();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, agentId, agentMonth]);
+  }, [tab, agentId]);
   useEffect(() => {
     if (tab !== 'snapshots') return;
     loadAllSnapshots();
@@ -330,80 +324,24 @@ export default function ReportsDashboard() {
     }
   };
 
-  const loadAgentCommissions = async () => {
+  const loadAgentSnapshots = async () => {
     setAgentErr('');
     setAgentLoading(true);
-    setAgentData(null);
     try {
-      if (!agentId || !agentMonth) throw new Error('בחרו סוכן וחודש');
-      const q = new URLSearchParams({ agentId, month: agentMonth });
-      const res = await fetch(`${API_BASE}/api/admin/reports/agent-commissions?${q}`, {
+      const q = new URLSearchParams();
+      if (agentId) q.set('agentId', agentId);
+      const res = await fetch(`${API_BASE}/api/admin/agent-commission-snapshots?${q}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error || 'שגיאה');
-      setAgentData(j);
+      setAgentSnaps(Array.isArray(j.snapshots) ? j.snapshots : []);
     } catch (e) {
       setAgentErr(e?.message || 'שגיאה');
     } finally {
       setAgentLoading(false);
     }
   };
-
-  const agentProviderOptions = useMemo(() => {
-    const set = new Set(
-      (agentData?.rows || [])
-        .map((r) => String(r.provider || '').trim())
-        .filter(Boolean)
-    );
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'he'));
-  }, [agentData]);
-
-  const agentProductOptions = useMemo(() => {
-    const set = new Set(
-      (agentData?.rows || [])
-        .map((r) => String(r.productName || '').trim())
-        .filter(Boolean)
-    );
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'he'));
-  }, [agentData]);
-
-  const filteredAgentRows = useMemo(() => {
-    return (agentData?.rows || []).filter((r) => {
-      const provider = String(r.provider || '').trim();
-      const productName = String(r.productName || '').trim();
-      const billingType = String(r.billingType || '').trim();
-
-      // שימוש ב-entitlementStatus כשזמין — fallback לשדות גולמיים
-      const es = r.entitlementStatus;
-      const isCancelled = es
-        ? es === 'canceled'
-        : (r.status === 'canceled' || String(r.subscriptionStatus || '').toLowerCase() === 'cancelled');
-      const isPendingCancellation = es
-        ? es === 'pending_cancellation'
-        : String(r.subscriptionStatus || '') === 'Pending Cancellation';
-
-      if (agentProviderFilter && provider !== agentProviderFilter) return false;
-      if (agentProductFilter && productName !== agentProductFilter) return false;
-      if (agentBillingTypeFilter && billingType !== agentBillingTypeFilter) return false;
-      if (agentStatusFilter === 'cancelled' && !isCancelled) return false;
-      if (agentStatusFilter === 'pending_cancellation' && !isPendingCancellation) return false;
-      if (agentStatusFilter === 'active' && (isCancelled || isPendingCancellation)) return false;
-      return true;
-    });
-  }, [agentData, agentProviderFilter, agentProductFilter, agentBillingTypeFilter, agentStatusFilter]);
-
-  const filteredAgentTotals = useMemo(() => {
-    return filteredAgentRows.reduce(
-      (acc, row) => {
-        acc.totalSales += Number(row.payerAmount || 0);
-        acc.totalCommission += Number(row.commissionAmount || 0);
-        acc.dealCount += 1;
-        return acc;
-      },
-      { totalSales: 0, totalCommission: 0, dealCount: 0 }
-    );
-  }, [filteredAgentRows]);
 
   const exportProductOptions = useMemo(() => {
     const set = new Set();
@@ -627,7 +565,7 @@ export default function ReportsDashboard() {
             <Card className="text-right" dir="rtl">
               <CardHeader className="text-right">
                 <CardTitle>עמלות סוכנים</CardTitle>
-                <CardDescription>עסקאות לפי מזהה סוכן וחודש (תאריך יצירת העסקה)</CardDescription>
+                <CardDescription>מציג רק דוחות עמלות נעולים (Approved Debts) מתוך snapshots</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <FieldGroup className="flex flex-col sm:flex-row gap-4 items-end">
@@ -650,116 +588,39 @@ export default function ReportsDashboard() {
                       ))}
                     </select>
                   </Field>
-                  <Field>
-                    <FieldLabel>חודש</FieldLabel>
-                    <Input
-                      type="month"
-                      value={agentMonth}
-                      onChange={(e) => setAgentMonth(e.target.value)}
-                    />
-                  </Field>
                 </FieldGroup>
-                <div className="rounded-xl border p-3 md:p-4">
-                  <UnifiedFilterShell
-                    filters={[
-                      {
-                        key: 'provider',
-                        label: 'ספק',
-                        type: 'select',
-                        options: agentProviderOptions.map((p) => ({ value: p, label: p })),
-                      },
-                      {
-                        key: 'product',
-                        label: 'מוצר',
-                        type: 'select',
-                        options: agentProductOptions.map((p) => ({ value: p, label: p })),
-                      },
-                      {
-                        key: 'billingType',
-                        label: 'סוג חיוב',
-                        type: 'select',
-                        options: [
-                          { value: 'Centralized', label: 'מרוכז' },
-                          { value: 'Private', label: 'פרטי' },
-                        ],
-                      },
-                      {
-                        key: 'status',
-                        label: 'סטטוס',
-                        type: 'select',
-                        options: [
-                          { value: 'all',                  label: 'הכל' },
-                          { value: 'active',               label: 'פעילים' },
-                          { value: 'pending_cancellation', label: 'ממתין לביטול' },
-                          { value: 'cancelled',            label: 'מבוטלים' },
-                        ],
-                      },
-                    ]}
-                    values={{
-                      provider: agentProviderFilter,
-                      product: agentProductFilter,
-                      billingType: agentBillingTypeFilter,
-                      status: agentStatusFilter,
-                    }}
-                    onChange={(next) => {
-                      setAgentProviderFilter(String(next.provider || ''));
-                      setAgentProductFilter(String(next.product || ''));
-                      setAgentBillingTypeFilter(String(next.billingType || ''));
-                      setAgentStatusFilter(String(next.status || 'all'));
-                    }}
-                    onClear={() => {
-                      setAgentProviderFilter('');
-                      setAgentProductFilter('');
-                      setAgentBillingTypeFilter('');
-                      setAgentStatusFilter('all');
-                    }}
-                    resultsCount={filteredAgentRows.length}
-                    totalCount={(agentData?.rows || []).length}
-                    isLoading={agentLoading}
-                  />
-                </div>
                 {agentErr ? <p className="text-sm text-destructive">{agentErr}</p> : null}
-                {agentData && (
+                {agentSnaps && (
                   <div className="space-y-3">
-                    <ReportEntitlementNotice />
-                    <div className="flex flex-wrap gap-4 text-sm">
-                      <span>
-                        סה״כ מכירות: <strong>{formatCurrency(filteredAgentTotals.totalSales)}</strong>
-                      </span>
-                      <span>
-                        סה״כ עמלות: <strong>{formatCurrency(filteredAgentTotals.totalCommission)}</strong>
-                      </span>
-                      <span>
-                        מספר עסקאות: <strong>{filteredAgentTotals.dealCount}</strong>
-                      </span>
-                    </div>
                     <div className="rounded-md border overflow-x-auto" dir="rtl">
                       <Table className="text-right">
                         <TableHeader>
                           <TableRow className="[&_th]:text-right">
-                            <TableHead className="text-right">הזמנה</TableHead>
-                            <TableHead className="text-right">תאריך</TableHead>
-                            <TableHead className="text-right">מוצר</TableHead>
-                            <TableHead className="text-right">סכום</TableHead>
-                            <TableHead className="text-right">עמלה</TableHead>
+                            <TableHead className="text-right">סוכן</TableHead>
+                            <TableHead className="text-right">חודש</TableHead>
+                            <TableHead className="text-right">עסקאות</TableHead>
+                            <TableHead className="text-right">סה״כ לתשלום</TableHead>
+                            <TableHead className="text-right">שולם</TableHead>
+                            <TableHead className="text-right">יתרה</TableHead>
+                            <TableHead className="text-right">סטטוס</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredAgentRows.map((r) => (
-                            <TableRow key={r.dealId}>
-                              <TableCell className="font-mono text-xs">{r.transactionId}</TableCell>
-                              <TableCell className="text-xs whitespace-nowrap">
-                                {fmtDateTime(r.createdAt)}
-                              </TableCell>
-                              <TableCell>{r.productName || '—'}</TableCell>
-                              <TableCell>{formatCurrency(r.payerAmount)}</TableCell>
-                              <TableCell>{formatCurrency(r.commissionAmount)}</TableCell>
+                          {agentSnaps.map((r) => (
+                            <TableRow key={r.id}>
+                              <TableCell>{r.agentName || '—'}</TableCell>
+                              <TableCell>{r.month}</TableCell>
+                              <TableCell>{Number(r.totalDeals || 0)}</TableCell>
+                              <TableCell>{formatCurrency(r.totalAmount)}</TableCell>
+                              <TableCell>{formatCurrency(r.totalPaid)}</TableCell>
+                              <TableCell>{formatCurrency(r.balance)}</TableCell>
+                              <TableCell>{r.status === 'Paid' ? 'שולם' : 'ממתין'}</TableCell>
                             </TableRow>
                           ))}
-                          {!filteredAgentRows.length ? (
+                          {!agentSnaps.length ? (
                             <TableRow>
-                              <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
-                                אין רשומות לפי הסינון שנבחר
+                              <TableCell colSpan={7} className="text-center text-muted-foreground py-6">
+                                אין snapshots נעולים להצגה
                               </TableCell>
                             </TableRow>
                           ) : null}

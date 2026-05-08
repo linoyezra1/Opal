@@ -68,6 +68,12 @@ import {
   findDealsCreatedInRange,
   findDealsCancelledInRange,
   findDealsByAgentAndMonth,
+  getAgentCommissionPreview,
+  lockAgentCommissionsSnapshot,
+  listAgentCommissionSnapshots,
+  listAllAgentCommissionSnapshots,
+  updateAgentCommissionSnapshot,
+  hasUnlockedAgentCommissionsForMonth,
   listMonthlyInvoices,
   generateMonthlyInvoicesForMonth,
   updateMonthlyInvoice,
@@ -2585,11 +2591,82 @@ app.put('/api/admin/agents/:id', requireAdmin, async (req, res) => {
 
 app.delete('/api/admin/agents/:id', requireAdmin, async (req, res) => {
   try {
+    const force = String(req.query.force || '') === 'true';
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const preview = await getAgentCommissionPreview(req.params.id, currentMonth);
+    const snapshots = await listAgentCommissionSnapshots(req.params.id, 50);
+    const hasOpen = await hasUnlockedAgentCommissionsForMonth(req.params.id, currentMonth);
+    const hasCurrentMonthSnapshot = snapshots.some((s) => String(s.month || '') === currentMonth);
+    const openDeals = (preview?.rows || []).map((r) => String(r.transactionId || r.dealId || '')).filter(Boolean);
+    const needsWarning = hasOpen || (Number(preview?.summary?.activeDeals || 0) > 0 && !hasCurrentMonthSnapshot);
+    if (needsWarning && !force) {
+      return res.status(409).json({
+        success: false,
+        code: 'UNLOCKED_COMMISSIONS',
+        openDeals,
+        error: `קיימות עסקאות פתוחות שטרם ננעלו בדוח עמלות (רשימה: ${openDeals.slice(0, 8).join(', ') || '—'}). האם ברצונך להמשיך בארכוב בכל זאת?`,
+      });
+    }
     await deleteSalesAgent(req.params.id);
     res.json({ success: true });
   } catch (e) {
     console.error(`[${ts()}] admin/agents delete error:`, e);
     res.status(500).json({ success: false, error: e.message || 'Failed to delete agent' });
+  }
+});
+
+app.get('/api/admin/agents/:id/commissions-preview', requireAdmin, async (req, res) => {
+  try {
+    const month = String(req.query.month || '').trim();
+    if (!month) return res.status(400).json({ success: false, error: 'נדרש month (YYYY-MM)' });
+    const payload = await getAgentCommissionPreview(req.params.id, month);
+    res.json({ success: true, ...payload });
+  } catch (e) {
+    console.error(`[${ts()}] admin/agents/:id/commissions-preview error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to load commissions preview' });
+  }
+});
+
+app.get('/api/admin/agents/:id/commission-snapshots', requireAdmin, async (req, res) => {
+  try {
+    const snapshots = await listAgentCommissionSnapshots(req.params.id, Number(req.query.limit) || 100);
+    res.json({ success: true, snapshots });
+  } catch (e) {
+    console.error(`[${ts()}] admin/agents/:id/commission-snapshots error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to list snapshots' });
+  }
+});
+
+app.patch('/api/admin/agents/:id/commission-snapshots/:snapId', requireAdmin, async (req, res) => {
+  try {
+    const result = await updateAgentCommissionSnapshot(req.params.id, req.params.snapId, req.body || {});
+    res.json({ success: true, ...result });
+  } catch (e) {
+    console.error(`[${ts()}] admin/agents/:id/commission-snapshots/:snapId patch error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to update snapshot' });
+  }
+});
+
+app.get('/api/admin/agent-commission-snapshots', requireAdmin, async (req, res) => {
+  try {
+    const snapshots = await listAllAgentCommissionSnapshots(Number(req.query.limit) || 500, req.query.agentId || '');
+    res.json({ success: true, snapshots });
+  } catch (e) {
+    console.error(`[${ts()}] admin/agent-commission-snapshots error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to list agent snapshots' });
+  }
+});
+
+app.post('/api/admin/agents/:id/lock-commissions', requireAdmin, async (req, res) => {
+  try {
+    const month = String(req.body?.month || req.query.month || '').trim();
+    if (!month) return res.status(400).json({ success: false, error: 'נדרש month (YYYY-MM)' });
+    const snapshot = await lockAgentCommissionsSnapshot(req.params.id, month);
+    res.json({ success: true, snapshot });
+  } catch (e) {
+    console.error(`[${ts()}] admin/agents/:id/lock-commissions error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to lock commissions' });
   }
 });
 

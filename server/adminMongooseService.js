@@ -169,6 +169,8 @@ const salesAgentSchema = new mongoose.Schema(
     /** ???? ??????? ??? ???? (???? ?????? ????) */
     productCommissions: { type: [agentProductCommissionSchema], default: [] },
     isActive: { type: Boolean, default: true, index: true },
+    status: { type: String, default: 'Active' },
+    deactivatedAt: { type: Date, default: null },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
   },
@@ -1635,6 +1637,8 @@ export async function listSalesAgentsWithSales(options = {}) {
         bankDetails: d.bankDetails || {},
         productCommissions,
         isActive: d.isActive !== false,
+        status: String(d.status || (d.isActive === false ? 'Archived' : 'Active')),
+        deactivatedAt: d.deactivatedAt ? new Date(d.deactivatedAt).toISOString() : null,
         totalSales: stats.activeSubscribers,
         totalDeals: stats.totalDeals,
         activeSubscribers: stats.activeSubscribers,
@@ -1685,7 +1689,7 @@ export async function deleteSalesAgent(id) {
   // deals defeats the purpose of soft-delete — the guard is intentionally removed.
   const r = await SalesAgent.findByIdAndUpdate(
     oid,
-    { $set: { isActive: false, updatedAt: new Date() } },
+    { $set: { isActive: false, status: 'Archived', deactivatedAt: new Date(), updatedAt: new Date() } },
     { returnDocument: 'after' }
   );
   if (!r) throw new Error('Agent not found');

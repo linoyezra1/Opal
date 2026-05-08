@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Archive, Check, Copy, Edit2, ExternalLink, Eye, Percent, Phone,
   Plus, Users,
@@ -511,6 +511,7 @@ function AgentFormTabs({ data, setData, tab, setTab, products }) {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function AgentSetup() {
+  const navigate = useNavigate();
   const [token] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [products, setProducts] = useState([]);
   const [rows, setRows] = useState([]);
@@ -852,7 +853,7 @@ export default function AgentSetup() {
                               <button
                                 type="button"
                                 className="font-semibold text-foreground hover:text-primary transition-colors text-start"
-                                onClick={() => setViewAgent(r)}
+                                onClick={() => navigate(`/admin/agents/${encodeURIComponent(r.id)}`)}
                               >
                                 {r.agentName}
                               </button>
@@ -894,7 +895,7 @@ export default function AgentSetup() {
                                     <Button
                                       variant="ghost" size="icon" type="button"
                                       className="size-8 text-primary hover:text-primary hover:bg-primary/10"
-                                      onClick={() => setViewAgent(r)}
+                                      onClick={() => navigate(`/admin/agents/${encodeURIComponent(r.id)}`)}
                                       aria-label="צפייה"
                                     >
                                       <Eye className="size-4" />

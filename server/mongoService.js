@@ -3743,6 +3743,285 @@ export async function findDealsByAgentAndMonth(agentId, monthStr) {
     .toArray();
 }
 
+function buildAgentIdOrClauses(agentId) {
+  const aid = String(agentId || '').trim();
+  const or = [{ agentId: aid }, { 'formState.agentId': aid }];
+  if (ObjectId.isValid(aid)) {
+    try {
+      const oid = new ObjectId(aid);
+      or.push({ agentId: oid });
+      or.push({ 'formState.agentId': oid });
+    } catch {
+      // ignore
+    }
+  }
+  return { aid, or };
+}
+
+function monthLabelFromDate(dateValue) {
+  const d = parseFlexibleDate(dateValue);
+  if (!d) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getCommissionAmountForDeal(deal, commissionByProduct) {
+  const fs = deal?.formState && typeof deal.formState === 'object' ? deal.formState : {};
+  const snap = Number(fs.resolvedAgentCommission);
+  if (Number.isFinite(snap)) return Math.max(0, snap);
+  const pid = String(fs.productId || '').trim();
+  if (pid && commissionByProduct.has(pid)) return Math.max(0, Number(commissionByProduct.get(pid) || 0));
+  const fallback = Number(deal?.agentCommission || 0);
+  return Number.isFinite(fallback) ? Math.max(0, fallback) : 0;
+}
+
+export async function getAgentCommissionPreview(agentId, monthStr) {
+  const month = String(monthStr || '').trim();
+  const range = parseMonthToRange(month);
+  if (!range) throw new Error('חודש לא תקין (נדרש YYYY-MM)');
+  const db = await getDb();
+  const { aid, or } = buildAgentIdOrClauses(agentId);
+  if (!aid) throw new Error('מזהה סוכן חסר');
+
+  const agent = await db.collection('sales_agents').findOne(
+    ObjectId.isValid(aid) ? { _id: new ObjectId(aid) } : { _id: null },
+    { projection: { agentName: 1, isActive: 1, deactivatedAt: 1, productCommissions: 1 } }
+  );
+  if (!agent) throw new Error('סוכן לא נמצא');
+
+  const deactivatedMonth = monthLabelFromDate(agent.deactivatedAt);
+  const agentEligibleForMonth = !deactivatedMonth || month <= deactivatedMonth;
+  if (!agentEligibleForMonth) {
+    return {
+      month,
+      agent: {
+        id: String(agent._id),
+        agentName: String(agent.agentName || ''),
+        isActive: agent.isActive !== false,
+        deactivatedAt: agent.deactivatedAt instanceof Date ? agent.deactivatedAt.toISOString() : null,
+      },
+      summary: { totalCommissions: 0, activeDeals: 0, pendingPayouts: 0 },
+      rows: [],
+      note: 'הסוכן הועבר לארכיון לפני חודש הדוח שנבחר.',
+    };
+  }
+
+  const commissionByProduct = new Map(
+    (Array.isArray(agent.productCommissions) ? agent.productCommissions : []).map((x) => [
+      String(x?.productId || ''),
+      Number(x?.commission || 0),
+    ])
+  );
+
+  const docs = await db
+    .collection('deals')
+    .find({ $or: or, isRecurringCycle: { $ne: true } })
+    .project({
+      source: 1,
+      transactionId: 1,
+      formState: 1,
+      createdAt: 1,
+      subscriptionEndDate: 1,
+      cancelAt: 1,
+      subscriptionStatus: 1,
+      status: 1,
+      paymentStatus: 1,
+      isActive: 1,
+    })
+    .toArray();
+
+  const rows = [];
+  for (const d of docs) {
+    const fs = d?.formState && typeof d.formState === 'object' ? d.formState : {};
+    const startDate = parseFlexibleDate(fs.subscriptionStartDate);
+    if (!startDate) continue;
+    const endDate = parseFlexibleDate(d.subscriptionEndDate || d.cancelAt || fs.cardcomNextDateToBill);
+    const subscriptionEligible = startDate < range.end && (!endDate || endDate > range.start);
+    if (!subscriptionEligible) continue;
+    rows.push({
+      dealId: String(d._id),
+      transactionId: String(d.transactionId || ''),
+      employeeName: String(fs.fullName || '').trim() || '—',
+      idNumber: String(fs.id || '').trim() || '—',
+      provider: String(fs.providerName || fs.vendorName || '').trim(),
+      productName: String(fs.productName || '').trim(),
+      billingType:
+        String(fs.paymentMethod || fs.organizationPaymentMethod || '').toLowerCase() === 'centralized' ||
+        String(d.source || '') === 'org-bulk-import'
+          ? 'Centralized'
+          : 'Private',
+      entitlementStatus: getEntitlementStatus(d).status,
+      subscriptionStartDate: startDate.toISOString(),
+      subscriptionEndDate: endDate ? endDate.toISOString() : null,
+      amount: getCommissionAmountForDeal(d, commissionByProduct),
+      paymentStatus: String(d.paymentStatus || ''),
+      billingMonth: month,
+    });
+  }
+
+  const snapshots = await db
+    .collection('agent_commission_snapshots')
+    .find({ agentId: String(agent._id), month })
+    .project({ totalAmount: 1, status: 1 })
+    .toArray();
+  const pendingPayouts = snapshots
+    .filter((s) => String(s.status || 'Pending') !== 'Paid')
+    .reduce((sum, s) => sum + Number(s.totalAmount || 0), 0);
+
+  return {
+    month,
+    agent: {
+      id: String(agent._id),
+      agentName: String(agent.agentName || ''),
+      isActive: agent.isActive !== false,
+      deactivatedAt: agent.deactivatedAt instanceof Date ? agent.deactivatedAt.toISOString() : null,
+    },
+    summary: {
+      totalCommissions: rows.reduce((sum, r) => sum + Number(r.amount || 0), 0),
+      activeDeals: rows.length,
+      pendingPayouts,
+    },
+    rows,
+  };
+}
+
+export async function lockAgentCommissionsSnapshot(agentId, monthStr) {
+  const preview = await getAgentCommissionPreview(agentId, monthStr);
+  const db = await getDb();
+  const now = new Date();
+  const snapshot = {
+    agentId: String(preview.agent.id),
+    agentName: String(preview.agent.agentName || ''),
+    month: preview.month,
+    totalAmount: Number(preview.summary.totalCommissions || 0),
+    totalDeals: Number(preview.summary.activeDeals || 0),
+    rows: preview.rows,
+    status: 'Pending',
+    invoiceNum: '',
+    invoiceAmount: 0,
+    creditNoteNum: '',
+    creditNoteAmount: 0,
+    totalPaid: 0,
+    balance: Number(preview.summary.totalCommissions || 0),
+    notes: '',
+    createdAt: now,
+    updatedAt: now,
+  };
+  const result = await db.collection('agent_commission_snapshots').insertOne(snapshot);
+  return { success: true, snapshotId: String(result.insertedId), ...snapshot };
+}
+
+export async function listAgentCommissionSnapshots(agentId, limit = 100) {
+  const db = await getDb();
+  const aid = String(agentId || '').trim();
+  const docs = await db
+    .collection('agent_commission_snapshots')
+    .find({ agentId: aid })
+    .sort({ month: -1, createdAt: -1 })
+    .limit(Math.max(1, Math.min(Number(limit) || 100, 500)))
+    .toArray();
+  return docs.map((d) => ({
+    id: String(d._id),
+    agentId: String(d.agentId || ''),
+    agentName: String(d.agentName || ''),
+    month: String(d.month || ''),
+    totalAmount: Number(d.totalAmount || 0),
+    totalDeals: Number(d.totalDeals || 0),
+    status: String(d.status || 'Pending'),
+    invoiceNum: String(d.invoiceNum || ''),
+    invoiceAmount: Number(d.invoiceAmount || 0),
+    creditNoteNum: String(d.creditNoteNum || ''),
+    creditNoteAmount: Number(d.creditNoteAmount || 0),
+    totalPaid: Number(d.totalPaid || 0),
+    balance: Number(
+      d.balance != null
+        ? d.balance
+        : (Number(d.totalAmount || 0) - Number(d.totalPaid || 0))
+    ),
+    notes: String(d.notes || ''),
+    rows: Array.isArray(d.rows) ? d.rows : [],
+    createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+    updatedAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : d.updatedAt,
+  }));
+}
+
+export async function listAllAgentCommissionSnapshots(limit = 500, agentId = '') {
+  const db = await getDb();
+  const aid = String(agentId || '').trim();
+  const query = aid ? { agentId: aid } : {};
+  const docs = await db
+    .collection('agent_commission_snapshots')
+    .find(query)
+    .sort({ month: -1, createdAt: -1 })
+    .limit(Math.max(1, Math.min(Number(limit) || 500, 2000)))
+    .toArray();
+  return docs.map((d) => ({
+    id: String(d._id),
+    agentId: String(d.agentId || ''),
+    agentName: String(d.agentName || ''),
+    month: String(d.month || ''),
+    totalAmount: Number(d.totalAmount || 0),
+    totalDeals: Number(d.totalDeals || 0),
+    status: String(d.status || 'Pending'),
+    invoiceNum: String(d.invoiceNum || ''),
+    invoiceAmount: Number(d.invoiceAmount || 0),
+    creditNoteNum: String(d.creditNoteNum || ''),
+    creditNoteAmount: Number(d.creditNoteAmount || 0),
+    totalPaid: Number(d.totalPaid || 0),
+    balance: Number(
+      d.balance != null
+        ? d.balance
+        : (Number(d.totalAmount || 0) - Number(d.totalPaid || 0))
+    ),
+    notes: String(d.notes || ''),
+    createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+    updatedAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : d.updatedAt,
+  }));
+}
+
+export async function updateAgentCommissionSnapshot(agentId, snapshotId, patch = {}) {
+  const db = await getDb();
+  let sid;
+  try {
+    sid = new ObjectId(String(snapshotId));
+  } catch {
+    throw new Error('מזהה snapshot לא תקין');
+  }
+  const aid = String(agentId || '').trim();
+  const existing = await db.collection('agent_commission_snapshots').findOne(
+    { _id: sid, agentId: aid },
+    { projection: { totalAmount: 1 } }
+  );
+  if (!existing) throw new Error('Snapshot לא נמצא');
+
+  const set = { updatedAt: new Date() };
+  if (patch.status != null) set.status = String(patch.status || 'Pending');
+  if (patch.notes != null) set.notes = String(patch.notes || '');
+  if (patch.invoiceNum != null) set.invoiceNum = String(patch.invoiceNum || '');
+  if (patch.invoiceAmount != null) set.invoiceAmount = Number(patch.invoiceAmount || 0);
+  if (patch.creditNoteNum != null) set.creditNoteNum = String(patch.creditNoteNum || '');
+  if (patch.creditNoteAmount != null) set.creditNoteAmount = Number(patch.creditNoteAmount || 0);
+  if (patch.totalPaid != null) set.totalPaid = Math.max(0, Number(patch.totalPaid || 0));
+
+  const totalPaidNext = set.totalPaid != null ? Number(set.totalPaid || 0) : 0;
+  set.balance = Number(existing.totalAmount || 0) - totalPaidNext;
+
+  const r = await db.collection('agent_commission_snapshots').updateOne({ _id: sid, agentId: aid }, { $set: set });
+  if (!r.matchedCount) throw new Error('Snapshot לא נמצא');
+  return { success: true };
+}
+
+export async function hasUnlockedAgentCommissionsForMonth(agentId, monthStr) {
+  const db = await getDb();
+  const aid = String(agentId || '').trim();
+  const month = String(monthStr || '').trim();
+  if (!aid || !month) return false;
+  const hit = await db.collection('agent_commission_snapshots').findOne(
+    { agentId: aid, month, status: { $ne: 'Paid' } },
+    { projection: { _id: 1 } }
+  );
+  return !!hit;
+}
+
 export async function listMonthlyInvoices(limit = 300, monthFilter = null) {
   const db = await getDb();
   const mf = String(monthFilter || '').trim();
