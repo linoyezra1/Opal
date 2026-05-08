@@ -3766,6 +3766,8 @@ function monthLabelFromDate(dateValue) {
 
 function getCommissionAmountForDeal(deal, commissionByProduct) {
   const fs = deal?.formState && typeof deal.formState === 'object' ? deal.formState : {};
+  const persisted = Number(deal?.commissionAmount);
+  if (Number.isFinite(persisted)) return Math.max(0, persisted);
   const snap = Number(fs.resolvedAgentCommission);
   if (Number.isFinite(snap)) return Math.max(0, snap);
   const pid = String(fs.productId || '').trim();
@@ -3776,8 +3778,7 @@ function getCommissionAmountForDeal(deal, commissionByProduct) {
 
 export async function getAgentCommissionPreview(agentId, monthStr) {
   const month = String(monthStr || '').trim();
-  const range = parseMonthToRange(month);
-  if (!range) throw new Error('חודש לא תקין (נדרש YYYY-MM)');
+  if (!parseMonthToRange(month)) throw new Error('חודש לא תקין (נדרש YYYY-MM)');
   const db = await getDb();
   const { aid, or } = buildAgentIdOrClauses(agentId);
   if (!aid) throw new Error('מזהה סוכן חסר');
@@ -3820,6 +3821,8 @@ export async function getAgentCommissionPreview(agentId, monthStr) {
       transactionId: 1,
       formState: 1,
       createdAt: 1,
+      cancellationDate: 1,
+      commissionAmount: 1,
       subscriptionEndDate: 1,
       cancelAt: 1,
       subscriptionStatus: 1,
@@ -3830,12 +3833,15 @@ export async function getAgentCommissionPreview(agentId, monthStr) {
     .toArray();
 
   const rows = [];
+  const now = new Date();
   for (const d of docs) {
     const fs = d?.formState && typeof d.formState === 'object' ? d.formState : {};
     const startDate = parseFlexibleDate(fs.subscriptionStartDate);
     if (!startDate) continue;
-    const endDate = parseFlexibleDate(d.subscriptionEndDate || d.cancelAt || fs.cardcomNextDateToBill);
-    const subscriptionEligible = startDate < range.end && (!endDate || endDate > range.start);
+    const endDateRaw = d.subscriptionEndDate || d.cancelAt || fs.cardcomNextDateToBill || null;
+    const endDate = parseFlexibleDate(endDateRaw);
+    // תנאי כניסה לדוח: start עבר, ו-end עתידי או ריק.
+    const subscriptionEligible = startDate <= now && (!endDate || endDate > now);
     if (!subscriptionEligible) continue;
     rows.push({
       dealId: String(d._id),
@@ -3851,7 +3857,11 @@ export async function getAgentCommissionPreview(agentId, monthStr) {
           : 'Private',
       entitlementStatus: getEntitlementStatus(d).status,
       subscriptionStartDate: startDate.toISOString(),
+      cancellationDate: d.cancellationDate
+        ? (d.cancellationDate instanceof Date ? d.cancellationDate.toISOString() : String(d.cancellationDate))
+        : null,
       subscriptionEndDate: endDate ? endDate.toISOString() : null,
+      subscriptionEndDateRaw: endDateRaw,
       amount: getCommissionAmountForDeal(d, commissionByProduct),
       paymentStatus: String(d.paymentStatus || ''),
       billingMonth: month,
