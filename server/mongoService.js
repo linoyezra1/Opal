@@ -209,35 +209,9 @@ export async function findDealForRecurringEvent(params = {}) {
   const recurringId = String(params.cardcomRecurringId || '').trim();
   const accountId = String(params.cardcomAccountId || '').trim();
   const token = String(params.cardcomToken || '').trim();
-  const or = [];
-  if (tid) or.push({ transactionId: tid });
-  if (lowProfileCode) or.push({ lowProfileCode });
-  if (recurringId) {
-    const asNum = Number(recurringId);
-    if (Number.isFinite(asNum) && !Number.isNaN(asNum) && String(asNum) === recurringId) {
-      const vals = [recurringId, asNum];
-      or.push({ cardcomRecurringId: { $in: vals } });
-      or.push({ 'formState.cardcomRecurringId': { $in: vals } });
-      or.push({ 'indicator.step2CardcomRecurringId': { $in: vals } });
-      or.push({ 'indicator.cardcomRecurringId': { $in: vals } });
-    } else {
-      or.push({ cardcomRecurringId: recurringId });
-      or.push({ 'formState.cardcomRecurringId': recurringId });
-      or.push({ 'indicator.step2CardcomRecurringId': recurringId });
-      or.push({ 'indicator.cardcomRecurringId': recurringId });
-    }
-  }
-  if (accountId) or.push({ cardcomAccountId: accountId });
-  if (token) or.push({ cardcomToken: token });
-  if (!or.length) return null;
-  const rows = await deals
-    .find({ $or: or, isActive: { $ne: false } })
-    .sort({ createdAt: 1 })
-    .limit(20)
-    .toArray();
-  if (!rows.length) return null;
-  const primary = rows.find((d) => d.isRecurringCycle !== true) || rows[0];
-  return {
+
+  const pickPrimary = (rows) => rows.find((d) => d.isRecurringCycle !== true) || rows[0];
+  const toResult = (primary) => ({
     id: String(primary._id),
     transactionId: String(primary.transactionId || ''),
     formState: primary.formState && typeof primary.formState === 'object' ? primary.formState : {},
@@ -246,7 +220,43 @@ export async function findDealForRecurringEvent(params = {}) {
     agentId: primary.agentId ? String(primary.agentId) : null,
     source: String(primary.source || ''),
     cardcomRecurringId: String(primary.cardcomRecurringId || ''),
-  };
+  });
+  const query = (filter) =>
+    deals.find({ ...filter, isActive: { $ne: false } }).sort({ createdAt: 1 }).limit(20).toArray();
+
+  // --- שלב 1: מזהים ייחודיים למנוי (transactionId, lowProfileCode, cardcomRecurringId) ---
+  const uniqueOr = [];
+  if (tid) uniqueOr.push({ transactionId: tid });
+  if (lowProfileCode) uniqueOr.push({ lowProfileCode });
+  if (recurringId) {
+    const asNum = Number(recurringId);
+    if (Number.isFinite(asNum) && !Number.isNaN(asNum) && String(asNum) === recurringId) {
+      const vals = [recurringId, asNum];
+      uniqueOr.push({ cardcomRecurringId: { $in: vals } });
+      uniqueOr.push({ 'formState.cardcomRecurringId': { $in: vals } });
+      uniqueOr.push({ 'indicator.step2CardcomRecurringId': { $in: vals } });
+      uniqueOr.push({ 'indicator.cardcomRecurringId': { $in: vals } });
+    } else {
+      uniqueOr.push({ cardcomRecurringId: recurringId });
+      uniqueOr.push({ 'formState.cardcomRecurringId': recurringId });
+      uniqueOr.push({ 'indicator.step2CardcomRecurringId': recurringId });
+      uniqueOr.push({ 'indicator.cardcomRecurringId': recurringId });
+    }
+  }
+  if (uniqueOr.length) {
+    const rows = await query({ $or: uniqueOr });
+    if (rows.length) return toResult(pickPrimary(rows));
+  }
+
+  // --- שלב 2: fallback בלבד לאחר שכל המזהים הייחודיים מיצו ---
+  // accountId ו-token עלולים להתאים לכמה מנויים — משתמשים בהם רק כאחרון מוצא
+  const fallbackOr = [];
+  if (token) fallbackOr.push({ cardcomToken: token });
+  if (accountId) fallbackOr.push({ cardcomAccountId: accountId });
+  if (!fallbackOr.length) return null;
+  const fallbackRows = await query({ $or: fallbackOr });
+  if (!fallbackRows.length) return null;
+  return toResult(pickPrimary(fallbackRows));
 }
 
 const SUBSCRIPTION_ARREARS_LABEL = 'שגיאת סליקה - פיגור בתשלום';

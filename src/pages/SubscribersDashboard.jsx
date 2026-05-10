@@ -169,6 +169,9 @@ function mergeRowForDetails(r) {
   if (!base) return r;
   return {
     ...base,
+    // r.id is always String(d._id) from the API mapping; base._id is the raw BSON ObjectId.
+    // Without this line, selected.id is undefined and the billing-history fetch never fires.
+    id: r.id || String(base._id || ''),
     entitlementStatus: r.entitlementStatus,
     entitlementCancelAt: r.entitlementCancelAt,
   };
@@ -531,23 +534,24 @@ export default function SubscribersDashboard() {
   }, [searchParams, setSearchParams, data.rows]);
 
   useEffect(() => {
-    if (!token || !selected?.id) {
+    const dealId = String(selected?.id || selected?._id || '').trim();
+    if (!token || !dealId) {
       setBillingHistory(null);
       return;
     }
     let cancelled = false;
     setBillingHistoryLoading(true);
-    fetch(`${API_BASE}/api/admin/deals/${encodeURIComponent(selected.id)}/billing-history?limit=200`, {
+    fetch(`${API_BASE}/api/admin/deals/${encodeURIComponent(dealId)}/billing-history?limit=200`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.json())
       .then((j) => {
         if (cancelled) return;
         if (j.success) setBillingHistory(j);
-        else setBillingHistory({ rows: [], cardcomRecurringId: '' });
+        else setBillingHistory({ rows: [], cardcomRecurringId: '', error: j.error || '' });
       })
       .catch(() => {
-        if (!cancelled) setBillingHistory({ rows: [], cardcomRecurringId: '' });
+        if (!cancelled) setBillingHistory({ rows: [], cardcomRecurringId: '', error: 'שגיאת רשת' });
       })
       .finally(() => {
         if (!cancelled) setBillingHistoryLoading(false);
@@ -555,7 +559,7 @@ export default function SubscribersDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [selected?.id, token]);
+  }, [selected?.id, selected?._id, token]);
 
   function openEdit(row) {
     const fs = row.raw?.formState || {};
@@ -2453,13 +2457,44 @@ export default function SubscribersDashboard() {
               </TabsContent>
               <TabsContent value="payments" className="overflow-auto max-h-[68vh] space-y-4 mt-3">
                 <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">היסטוריית חיובים (Cardcom DetailRecurring)</CardTitle>
-                    <CardDescription className="text-xs">
-                      {billingHistory?.cardcomRecurringId
-                        ? `מזהה הזמנה חוזרת: ${billingHistory.cardcomRecurringId}`
-                        : 'לא הוגדר מזהה הזמנה חוזרת בעסקה'}
-                    </CardDescription>
+                  <CardHeader className="flex flex-row items-start justify-between gap-2 pb-2">
+                    <div className="min-w-0">
+                      <CardTitle className="text-base">היסטוריית חיובים (Cardcom DetailRecurring)</CardTitle>
+                      <CardDescription className="text-xs mt-1">
+                        {billingHistory?.cardcomRecurringId
+                          ? `מזהה הזמנה חוזרת: ${billingHistory.cardcomRecurringId}`
+                          : billingHistory === null
+                            ? 'טוען…'
+                            : 'לא הוגדר מזהה הזמנה חוזרת בעסקה'}
+                      </CardDescription>
+                      {billingHistory?.error && (
+                        <p className="text-xs text-destructive mt-1">{billingHistory.error}</p>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0 text-xs h-7 px-2"
+                      disabled={billingHistoryLoading}
+                      onClick={() => {
+                        const dealId = String(selected?.id || selected?._id || '').trim();
+                        if (!token || !dealId) return;
+                        setBillingHistoryLoading(true);
+                        fetch(`${API_BASE}/api/admin/deals/${encodeURIComponent(dealId)}/billing-history?limit=200`, {
+                          headers: { Authorization: `Bearer ${token}` },
+                        })
+                          .then((r) => r.json())
+                          .then((j) => {
+                            if (j.success) setBillingHistory(j);
+                            else setBillingHistory({ rows: [], cardcomRecurringId: '', error: j.error || '' });
+                          })
+                          .catch(() => setBillingHistory({ rows: [], cardcomRecurringId: '', error: 'שגיאת רשת' }))
+                          .finally(() => setBillingHistoryLoading(false));
+                      }}
+                    >
+                      רענן
+                    </Button>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {billingHistoryLoading ? (
@@ -2478,52 +2513,64 @@ export default function SubscribersDashboard() {
                           </TableHeader>
                           <TableBody>
                             {(() => {
-                              const raw = Array.isArray(billingHistory?.rows) ? billingHistory.rows : [];
-                              const sorted = [...raw].sort((a, b) => {
-                                const ta = new Date(a.lastBillDate || a.createdAt || 0).getTime();
-                                const tb = new Date(b.lastBillDate || b.createdAt || 0).getTime();
-                                return tb - ta;
-                              });
-                              return sorted.map((row, idx) => (
-                                <TableRow key={`${row.source}-${row.id || idx}`}>
-                                  <TableCell dir="ltr" className="font-mono text-xs">
-                                    {row.lastBillDate
-                                      ? fmtDateTime(row.lastBillDate)
-                                      : row.createdAt
-                                        ? fmtDateTime(row.createdAt)
-                                        : '—'}
-                                  </TableCell>
-                                  <TableCell>
-                                    {row.source === 'detail_recurring'
-                                      ? row.statusLabel || row.status || '—'
-                                      : row.status || '—'}
-                                  </TableCell>
-                                  <TableCell className="font-medium">
-                                    {row.source === 'detail_recurring' && row.sum != null
-                                      ? new Intl.NumberFormat('he-IL', {
-                                          style: 'currency',
-                                          currency: 'ILS',
-                                          maximumFractionDigits: 2,
-                                        }).format(Number(row.sum))
-                                      : '—'}
-                                  </TableCell>
-                                  <TableCell className="text-muted-foreground text-xs">
-                                    {row.source === 'detail_recurring' ? 'חיוב בפועל' : 'מחזור ישן'}
-                                  </TableCell>
-                                  <TableCell dir="ltr" className="font-mono text-xs">
-                                    {row.rowId || row.id || '—'}
-                                  </TableCell>
-                                </TableRow>
-                              ));
+                              const rawRows = Array.isArray(billingHistory?.rows) ? billingHistory.rows : [];
+                              if (rawRows.length === 0) {
+                                return (
+                                  <TableRow>
+                                    <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
+                                      אין רשומות חיוב עדיין
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              }
+                              return [...rawRows]
+                                .sort((a, b) => {
+                                  const ta = new Date(a.lastBillDate || a.createdAt || 0).getTime();
+                                  const tb = new Date(b.lastBillDate || b.createdAt || 0).getTime();
+                                  return tb - ta;
+                                })
+                                .map((row, idx) => (
+                                  <TableRow key={`${row.source}-${row.rowId || row.id || idx}`}>
+                                    <TableCell dir="ltr" className="font-mono text-xs">
+                                      {row.lastBillDate
+                                        ? fmtDateTime(row.lastBillDate)
+                                        : row.createdAt
+                                          ? fmtDateTime(row.createdAt)
+                                          : '—'}
+                                    </TableCell>
+                                    <TableCell>
+                                      <span
+                                        className={
+                                          Number(row.statusCode) === 1
+                                            ? 'text-emerald-600 font-medium'
+                                            : 'text-muted-foreground'
+                                        }
+                                      >
+                                        {row.source === 'detail_recurring'
+                                          ? row.statusLabel || row.status || '—'
+                                          : row.status || '—'}
+                                      </span>
+                                    </TableCell>
+                                    <TableCell className="font-medium">
+                                      {row.source === 'detail_recurring' && row.sum != null
+                                        ? new Intl.NumberFormat('he-IL', {
+                                            style: 'currency',
+                                            currency: 'ILS',
+                                            maximumFractionDigits: 2,
+                                          }).format(Number(row.sum))
+                                        : row.source === 'legacy_cycle_deal'
+                                          ? '—'
+                                          : '—'}
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground text-xs">
+                                      {row.source === 'detail_recurring' ? 'חיוב בפועל' : 'מחזור ישן'}
+                                    </TableCell>
+                                    <TableCell dir="ltr" className="font-mono text-xs">
+                                      {row.rowId || row.id || '—'}
+                                    </TableCell>
+                                  </TableRow>
+                                ));
                             })()}
-                            {!billingHistoryLoading &&
-                            (!billingHistory?.rows || billingHistory.rows.length === 0) ? (
-                              <TableRow>
-                                <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
-                                  אין רשומות חיוב עדיין
-                                </TableCell>
-                              </TableRow>
-                            ) : null}
                           </TableBody>
                         </Table>
                       </div>
