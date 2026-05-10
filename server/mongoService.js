@@ -368,23 +368,38 @@ export async function processDetailRecurringWebhook(body = {}, query = {}) {
     process.env.CARDCOM_DETAIL_RECURRING_SECRET || process.env.CARDCOM_MASTER_RECURRING_SECRET || ''
   ).trim();
   const secretReceived = String(normalized.Secret ?? normalized.secret ?? '').trim();
+  const secretValidated = !secretExpected || secretReceived === secretExpected;
+  console.log(
+    `[DetailRecurring] Secret validation: ${secretValidated ? 'PASSED' : 'FAILED'} (hasExpectedSecret=${secretExpected ? 'yes' : 'no'})`
+  );
   if (secretExpected && secretReceived !== secretExpected) {
     throw new Error('Invalid DetailRecurring secret');
   }
 
   const rowId = pickDrField(normalized, ['RowID', 'rowId', 'RowId']);
+  console.log(`[DetailRecurring] rowId received: ${rowId || '(empty)'}`);
   if (!rowId) throw new Error('DetailRecurring missing RowID');
 
+  const internalDealNumber = pickDrField(normalized, ['InternalDealNumber', 'internalDealNumber']);
+  const lowProfileCode = pickDrField(normalized, ['LowProfileCode', 'lowProfileCode']);
+  const recurringIdRaw = pickDrField(normalized, ['RecurringId', 'recurringId']);
+  const accountIdRaw = pickDrField(normalized, ['AccountId', 'accountId']);
+  const tokenRaw = pickDrField(normalized, ['Token', 'CardToken', 'TokenToSave']);
+  console.log(
+    `[DetailRecurring] Match keys: InternalDealNumber=${internalDealNumber || '(empty)'}, RecurringId=${recurringIdRaw || '(empty)'}, AccountId=${accountIdRaw || '(empty)'}, Token=${tokenRaw || '(empty)'}, LowProfileCode=${lowProfileCode || '(empty)'}`
+  );
   const parent = await findDealForRecurringEvent({
-    transactionId: pickDrField(normalized, ['InternalDealNumber', 'internalDealNumber']),
-    lowProfileCode: pickDrField(normalized, ['LowProfileCode', 'lowProfileCode']),
-    cardcomRecurringId: pickDrField(normalized, ['RecurringId', 'recurringId']),
-    cardcomAccountId: pickDrField(normalized, ['AccountId', 'accountId']),
-    cardcomToken: pickDrField(normalized, ['Token', 'CardToken', 'TokenToSave']),
+    transactionId: internalDealNumber,
+    lowProfileCode,
+    cardcomRecurringId: recurringIdRaw,
+    cardcomAccountId: accountIdRaw,
+    cardcomToken: tokenRaw,
   });
   if (!parent) {
+    console.log(`DetailRecurring: Parent deal not found for RecurringId: ${recurringIdRaw || '(empty)'}`);
     return { ok: false, error: 'parent_deal_not_found', rowId };
   }
+  console.log(`DetailRecurring: Parent deal FOUND: ${parent.id}`);
 
   const statusRaw = normalized.Status ?? normalized.status;
   const statusCode = mapDetailRecurringStatusCode(statusRaw);
