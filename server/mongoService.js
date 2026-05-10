@@ -214,11 +214,18 @@ export async function findDealForRecurringEvent(params = {}) {
   if (lowProfileCode) or.push({ lowProfileCode });
   if (recurringId) {
     const asNum = Number(recurringId);
-    const idMatch =
-      Number.isFinite(asNum) && !Number.isNaN(asNum) && String(asNum) === recurringId
-        ? { cardcomRecurringId: { $in: [recurringId, asNum] } }
-        : { cardcomRecurringId: recurringId };
-    or.push(idMatch);
+    if (Number.isFinite(asNum) && !Number.isNaN(asNum) && String(asNum) === recurringId) {
+      const vals = [recurringId, asNum];
+      or.push({ cardcomRecurringId: { $in: vals } });
+      or.push({ 'formState.cardcomRecurringId': { $in: vals } });
+      or.push({ 'indicator.step2CardcomRecurringId': { $in: vals } });
+      or.push({ 'indicator.cardcomRecurringId': { $in: vals } });
+    } else {
+      or.push({ cardcomRecurringId: recurringId });
+      or.push({ 'formState.cardcomRecurringId': recurringId });
+      or.push({ 'indicator.step2CardcomRecurringId': recurringId });
+      or.push({ 'indicator.cardcomRecurringId': recurringId });
+    }
   }
   if (accountId) or.push({ cardcomAccountId: accountId });
   if (token) or.push({ cardcomToken: token });
@@ -410,30 +417,33 @@ export async function processDetailRecurringWebhook(body = {}, query = {}) {
   const lastBillDt = parseFlexibleDate(lastBillRaw) || new Date();
   const billingMonth = `${lastBillDt.getFullYear()}-${String(lastBillDt.getMonth() + 1).padStart(2, '0')}`;
 
-  const { resolveEconomicsForBillingPayment } = await import('./adminMongooseService.js');
-
   let vendorCost = 0;
   let agentCommission = 0;
   let netProfit = 0;
 
   if (statusCode === 1 && sum > 0) {
-    const econ = await resolveEconomicsForBillingPayment(parent.formState || {}, sum);
-    vendorCost = Number(econ.resolvedVendorCost ?? 0);
-    agentCommission = Number(econ.resolvedAgentCommission ?? 0);
-    netProfit = Number(econ.resolvedNetProfit ?? 0);
+    try {
+      const { resolveEconomicsForBillingPayment } = await import('./adminMongooseService.js');
+      const econ = await resolveEconomicsForBillingPayment(parent.formState || {}, sum);
+      vendorCost = Number(econ.resolvedVendorCost ?? 0);
+      agentCommission = Number(econ.resolvedAgentCommission ?? 0);
+      netProfit = Number(econ.resolvedNetProfit ?? 0);
 
-    const aidRaw = parent.agentId || parent.formState?.agentId;
-    if (aidRaw && ObjectId.isValid(String(aidRaw))) {
-      const dbA = await getDb();
-      const agentDoc = await dbA.collection('sales_agents').findOne(
-        { _id: new ObjectId(String(aidRaw)) },
-        { projection: { deactivatedAt: 1 } }
-      );
-      const deactivatedAt = agentDoc?.deactivatedAt ? new Date(agentDoc.deactivatedAt) : null;
-      if (deactivatedAt && lastBillDt > deactivatedAt) {
-        agentCommission = 0;
-        netProfit = sum - vendorCost;
+      const aidRaw = parent.agentId || parent.formState?.agentId;
+      if (aidRaw && ObjectId.isValid(String(aidRaw))) {
+        const dbA = await getDb();
+        const agentDoc = await dbA.collection('sales_agents').findOne(
+          { _id: new ObjectId(String(aidRaw)) },
+          { projection: { deactivatedAt: 1 } }
+        );
+        const deactivatedAt = agentDoc?.deactivatedAt ? new Date(agentDoc.deactivatedAt) : null;
+        if (deactivatedAt && !Number.isNaN(deactivatedAt.getTime()) && lastBillDt > deactivatedAt) {
+          agentCommission = 0;
+          netProfit = sum - vendorCost;
+        }
       }
+    } catch (econErr) {
+      console.error(`[DetailRecurring] Economics resolution failed for rowId=${rowId}:`, econErr?.message || econErr);
     }
   }
 
@@ -493,14 +503,22 @@ export async function processDetailRecurringWebhook(body = {}, query = {}) {
   const db = await getDb();
   const deals = db.collection('deals');
   const oid = new ObjectId(parent.id);
-  const existing = await deals.findOne({ _id: oid }, { projection: { detailRecurringEvents: 1 } });
+  const existing = await deals.findOne({ _id: oid }, { projection: { detailRecurringEvents: 1, cardcomRecurringId: 1 } });
   const arr = Array.isArray(existing?.detailRecurringEvents) ? existing.detailRecurringEvents : [];
   const idx = arr.findIndex((e) => String(e.rowId) === String(rowId));
-  if (idx >= 0) {
-    await deals.updateOne({ _id: oid }, { $set: { [`detailRecurringEvents.${idx}`]: event, updatedAt: new Date() } });
-  } else {
-    await deals.updateOne({ _id: oid }, { $push: { detailRecurringEvents: event }, $set: { updatedAt: new Date() } });
+
+  const recurringIdForDeal = event.recurringId || recurringIdRaw || '';
+  const setFields = { updatedAt: new Date() };
+  if (recurringIdForDeal && !existing?.cardcomRecurringId) {
+    setFields.cardcomRecurringId = recurringIdForDeal;
   }
+
+  if (idx >= 0) {
+    await deals.updateOne({ _id: oid }, { $set: { [`detailRecurringEvents.${idx}`]: event, ...setFields } });
+  } else {
+    await deals.updateOne({ _id: oid }, { $push: { detailRecurringEvents: event }, $set: setFields });
+  }
+  console.log(`[DetailRecurring] Event written to deal ${parent.id}: rowId=${rowId}, statusCode=${statusCode}, sum=${sum}`);
 
   try {
     await db.collection('agent_commission_ledger').createIndex({ rowId: 1 }, { unique: true });
@@ -509,9 +527,10 @@ export async function processDetailRecurringWebhook(body = {}, query = {}) {
   }
 
   const aidStr = String(parent.agentId || parent.formState?.agentId || '').trim();
+  const existingLed = await db.collection('agent_commission_ledger').findOne({ rowId }, { projection: { locked: 1 } });
+
   if (statusCode === 1 && sum > 0 && aidStr) {
-    const ledgerDoc = {
-      rowId,
+    const ledgerUpdateFields = {
       agentId: aidStr,
       dealId: parent.id,
       transactionId: parent.transactionId,
@@ -527,31 +546,27 @@ export async function processDetailRecurringWebhook(body = {}, query = {}) {
       netProfit,
       locked: false,
       snapshotId: null,
-      createdAt: new Date(),
       updatedAt: new Date(),
       source: 'detail_recurring',
     };
-    const existingLed = await db.collection('agent_commission_ledger').findOne({ rowId });
     if (existingLed?.locked === true) {
       await db.collection('agent_commission_ledger').updateOne(
         { rowId },
-        {
-          $set: {
-            actualAmount: sum,
-            sumNoVat,
-            vendorCost,
-            agentCommission,
-            netProfit,
-            statusCode,
-            lastBillDate: lastBillDt,
-            billingMonth,
-            updatedAt: new Date(),
-          },
-        }
+        { $set: { actualAmount: sum, sumNoVat, vendorCost, agentCommission, netProfit, statusCode, lastBillDate: lastBillDt, billingMonth, updatedAt: new Date() } }
       );
     } else {
-      await db.collection('agent_commission_ledger').updateOne({ rowId }, { $set: ledgerDoc }, { upsert: true });
+      await db.collection('agent_commission_ledger').updateOne(
+        { rowId },
+        { $set: ledgerUpdateFields, $setOnInsert: { rowId, createdAt: new Date() } },
+        { upsert: true }
+      );
     }
+  } else if (statusCode !== 1 && existingLed && existingLed.locked !== true) {
+    // חיוב נכשל/התבטל — מסמנים את העמלה כמבוטלת למניעת עמלות רפאים
+    await db.collection('agent_commission_ledger').updateOne(
+      { rowId },
+      { $set: { statusCode, agentCommission: 0, netProfit: 0, updatedAt: new Date(), reversedAt: new Date() } }
+    );
   }
 
   return { ok: true, dealId: parent.id, rowId, statusCode };
