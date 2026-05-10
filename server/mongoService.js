@@ -999,32 +999,46 @@ export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
       invoiceDescription: String(ev.invoiceDescription || '').trim() || null,
       isRecurringCycle: false,
     }));
-  const cycleRows = docs.map((d) => {
-    const month =
-      String(d.billingMonth || '').trim() ||
-      formatBillingMonthFromDate(d.createdAt instanceof Date ? d.createdAt : new Date(d.createdAt));
-    const success = /success|paid|test_success|completed/i.test(String(d.paymentStatus || ''));
-    const errorReason = String(d?.indicator?.responsdescription || d?.formState?.cardcomResponseDescription || '').trim();
-    const statusCode = success ? 1 : 7;
-    return {
-      source: 'legacy_cycle_deal',
-      id: String(d._id),
-      rowId: `LEGACY_CYCLE_${String(d._id)}`,
-      statusCode,
-      statusLabel: DETAIL_RECURRING_STATUS_LABELS[statusCode] || 'OTHER',
-      billingMonth: month,
-      sum: Number(d.payerAmount ?? 0),
-      sumNoVat: Number(d.payerAmount ?? 0),
-      lastBillDate: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
-      status: success ? 'הצלחה' : 'כישלון',
-      paymentStatus: String(d.paymentStatus || ''),
-      errorReason: errorReason || (success ? '—' : String(d.paymentStatus || '—')),
-      createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
-      invoiceDescription: null,
-      isRecurringCycle: d.isRecurringCycle === true,
-    };
-  });
+  /** רק מסמכי מחזור ישנים (ילדי recurring) — לא עסקת האב (חיוב ראשון מכוסה ב-INITIAL_CHECKOUT) */
   const initialCheckoutRow = normalizeInitialDealPaymentAsDetailRow(mainDeal);
+  const cycleRowsRaw = docs
+    .filter((d) => d.isRecurringCycle === true)
+    .map((d) => {
+      const month =
+        String(d.billingMonth || '').trim() ||
+        formatBillingMonthFromDate(d.createdAt instanceof Date ? d.createdAt : new Date(d.createdAt));
+      const success = /success|paid|test_success|completed/i.test(String(d.paymentStatus || ''));
+      const errorReason = String(d?.indicator?.responsdescription || d?.formState?.cardcomResponseDescription || '').trim();
+      const statusCode = success ? 1 : 7;
+      return {
+        source: 'legacy_cycle_deal',
+        id: String(d._id),
+        rowId: `LEGACY_CYCLE_${String(d._id)}`,
+        statusCode,
+        statusLabel: DETAIL_RECURRING_STATUS_LABELS[statusCode] || 'OTHER',
+        billingMonth: month,
+        sum: Number(d.payerAmount ?? 0),
+        sumNoVat: Number(d.payerAmount ?? 0),
+        lastBillDate: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+        status: success ? 'הצלחה' : 'כישלון',
+        paymentStatus: String(d.paymentStatus || ''),
+        errorReason: errorReason || (success ? '—' : String(d.paymentStatus || '—')),
+        createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+        invoiceDescription: null,
+        isRecurringCycle: true,
+      };
+    });
+  /** אל תכפול חיוב ראשון: אם יש INITIAL_CHECKOUT לאותו יום וסכום — לא LEGACY_CYCLE */
+  const cycleRows =
+    initialCheckoutRow == null
+      ? cycleRowsRaw
+      : cycleRowsRaw.filter((row) => {
+          const a = new Date(row.lastBillDate || 0).toISOString().slice(0, 10);
+          const b = new Date(initialCheckoutRow.lastBillDate || 0).toISOString().slice(0, 10);
+          const sameDay = a === b;
+          const sameAmount = Number(row.sum) === Number(initialCheckoutRow.sum);
+          return !(sameDay && sameAmount);
+        });
   const unifiedRows = [...(initialCheckoutRow ? [initialCheckoutRow] : []), ...detailRows, ...cycleRows];
   unifiedRows.sort((a, b) => {
     const ta = new Date(a.lastBillDate || a.createdAt || 0).getTime();
@@ -2674,7 +2688,6 @@ function applyCategoryFilters(deals, categories = []) {
   });
 }
 
-/** רווח נקי לפי שדות שנשמרו בעסקה: הכנסה - עלות ספק - עמלת סוכן */
 /** סכום LTV: חיוב ראשון מוצלח + כל אירועי DetailRecurring מוצלחים */
 function computeTotalCustomerRevenue(deal) {
   if (!deal) return 0;
@@ -2688,6 +2701,16 @@ function computeTotalCustomerRevenue(deal) {
   return initial + recurring;
 }
 
+function isSubscriptionStatusActiveLabel(sub) {
+  const s = String(sub ?? '').trim();
+  const sl = s.toLowerCase();
+  return sl === 'active' || sl === 'פעיל' || s === 'פעיל';
+}
+
+function isSubscriptionStatusPendingCancellationLabel(sub) {
+  return String(sub ?? '').trim().toLowerCase() === 'pending cancellation';
+}
+
 /**
  * 4 קטגוריות מנוי לווידג'טים (בלעדיות — עדכון ראשון שמתאים)
  */
@@ -2698,8 +2721,8 @@ function classifySubscriptionWidgetBucket(d) {
   const subL = sub.toLowerCase();
   if (wf === 'pending_org_approval' || sub === 'ממתין לאישור הארגון') return 'pending_org';
   if (subL === 'cancelled' || subL === 'canceled' || d.isCanceled === true) return 'cancelled';
-  if (subL === 'pending cancellation') return 'pending_cancel';
-  if (sub === 'Active') return 'active';
+  if (isSubscriptionStatusPendingCancellationLabel(sub)) return 'pending_cancel';
+  if (isSubscriptionStatusActiveLabel(sub)) return 'active';
   return 'other';
 }
 
@@ -4532,28 +4555,16 @@ function monthLabelFromDate(dateValue) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function getCommissionAmountForDeal(deal, commissionByProduct) {
-  const fs = deal?.formState && typeof deal.formState === 'object' ? deal.formState : {};
-  const persisted = Number(deal?.commissionAmount);
-  if (Number.isFinite(persisted)) return Math.max(0, persisted);
-  const snap = Number(fs.resolvedAgentCommission);
-  if (Number.isFinite(snap)) return Math.max(0, snap);
-  const pid = String(fs.productId || '').trim();
-  if (pid && commissionByProduct.has(pid)) return Math.max(0, Number(commissionByProduct.get(pid) || 0));
-  const fallback = Number(deal?.agentCommission || 0);
-  return Number.isFinite(fallback) ? Math.max(0, fallback) : 0;
-}
-
 export async function getAgentCommissionPreview(agentId, monthStr) {
   const month = String(monthStr || '').trim();
   if (!parseMonthToRange(month)) throw new Error('חודש לא תקין (נדרש YYYY-MM)');
   const db = await getDb();
-  const { aid, or } = buildAgentIdOrClauses(agentId);
+  const { aid } = buildAgentIdOrClauses(agentId);
   if (!aid) throw new Error('מזהה סוכן חסר');
 
   const agent = await db.collection('sales_agents').findOne(
     ObjectId.isValid(aid) ? { _id: new ObjectId(aid) } : { _id: null },
-    { projection: { agentName: 1, isActive: 1, deactivatedAt: 1, productCommissions: 1 } }
+    { projection: { agentName: 1, isActive: 1, deactivatedAt: 1 } }
   );
   if (!agent) throw new Error('סוכן לא נמצא');
 
@@ -4574,13 +4585,6 @@ export async function getAgentCommissionPreview(agentId, monthStr) {
     };
   }
 
-  const commissionByProduct = new Map(
-    (Array.isArray(agent.productCommissions) ? agent.productCommissions : []).map((x) => [
-      String(x?.productId || ''),
-      Number(x?.commission || 0),
-    ])
-  );
-
   /** יומן עמלות לפי חיובים בפועל (DetailRecurring) */
   const ledgerDocs = await db
     .collection('agent_commission_ledger')
@@ -4593,10 +4597,9 @@ export async function getAgentCommissionPreview(agentId, monthStr) {
     .toArray();
 
   let rows = [];
-  let previewSource = 'subscription_dates';
+  const previewSource = 'cash_billing';
 
   if (ledgerDocs.length > 0) {
-    previewSource = 'cash_billing';
     const dealIds = [...new Set(ledgerDocs.map((l) => l.dealId).filter(Boolean))];
     const dealsMap = new Map();
     if (dealIds.length) {
@@ -4657,60 +4660,6 @@ export async function getAgentCommissionPreview(agentId, monthStr) {
         billingMonth: month,
       };
     });
-  } else {
-    const docs = await db
-      .collection('deals')
-      .find({ $or: or, isRecurringCycle: { $ne: true } })
-      .project({
-        source: 1,
-        transactionId: 1,
-        formState: 1,
-        createdAt: 1,
-        cancellationDate: 1,
-        commissionAmount: 1,
-        subscriptionEndDate: 1,
-        cancelAt: 1,
-        subscriptionStatus: 1,
-        status: 1,
-        paymentStatus: 1,
-        isActive: 1,
-      })
-      .toArray();
-
-    const now = new Date();
-    for (const d of docs) {
-      const fs = d?.formState && typeof d.formState === 'object' ? d.formState : {};
-      const startDate = parseFlexibleDate(fs.subscriptionStartDate);
-      if (!startDate) continue;
-      const endDateRaw = d.subscriptionEndDate || d.cancelAt || fs.cardcomNextDateToBill || null;
-      const endDate = parseFlexibleDate(endDateRaw);
-      const subscriptionEligible = startDate <= now && (!endDate || endDate > now);
-      if (!subscriptionEligible) continue;
-      rows.push({
-        ledgerEntryId: null,
-        dealId: String(d._id),
-        transactionId: String(d.transactionId || ''),
-        employeeName: String(fs.fullName || '').trim() || '—',
-        idNumber: String(fs.id || '').trim() || '—',
-        provider: String(fs.providerName || fs.vendorName || '').trim(),
-        productName: String(fs.productName || '').trim(),
-        billingType:
-          String(fs.paymentMethod || fs.organizationPaymentMethod || '').toLowerCase() === 'centralized' ||
-          String(d.source || '') === 'org-bulk-import'
-            ? 'Centralized'
-            : 'Private',
-        entitlementStatus: getEntitlementStatus(d).status,
-        subscriptionStartDate: startDate.toISOString(),
-        cancellationDate: d.cancellationDate
-          ? (d.cancellationDate instanceof Date ? d.cancellationDate.toISOString() : String(d.cancellationDate))
-          : null,
-        subscriptionEndDate: endDate ? endDate.toISOString() : null,
-        subscriptionEndDateRaw: endDateRaw,
-        amount: getCommissionAmountForDeal(d, commissionByProduct),
-        paymentStatus: String(d.paymentStatus || ''),
-        billingMonth: month,
-      });
-    }
   }
 
   const snapshots = await db
@@ -4737,10 +4686,10 @@ export async function getAgentCommissionPreview(agentId, monthStr) {
       pendingPayouts,
     },
     rows,
-    ...(previewSource !== 'cash_billing'
+    ...(rows.length === 0
       ? {
           note:
-            'מצב גיבוי: אין עדיין רשומות חיוב בפועל לסוכן בחודש זה — מוצגות עסקאות לפי מנוי. לאחר חיבור webhook DetailRecurring יוצגו עמלות לפי תשלומים בפועל.',
+            'אין רשומות עמלה לחודש זה. העמלה מחושבת רק מחיובים בפועל (תשלום ראשון ואירועי DetailRecurring ביומן) — ללא שורות תיאורטיות לפי תאריכי מנוי.',
         }
       : {}),
   };
