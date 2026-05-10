@@ -575,6 +575,14 @@ app.post('/api/cardcom-detail-recurring-webhook', (req, res) => {
  */
 async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQuery = {}) {
   try {
+    const pending = pendingDeals.get(lowProfileCode);
+    if (!pending) {
+      console.warn(`[${ts()}] Webhook: no pending deal for LowProfileCode (duplicate or already processed)`, lowProfileCode);
+      return;
+    }
+    // In-memory lock: consume immediately to prevent concurrent handlers from triggering Step2 twice.
+    pendingDeals.delete(lowProfileCode);
+
     const terminal = parseInt(process.env.CARDCOM_TERMINAL, 10) || 0;
     const user = process.env.CARDCOM_USER ?? '';
     if (!terminal || !user) {
@@ -650,7 +658,6 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
         processEndOk: indicator?.processEndOk,
         dealResponse: indicator?.dealResponse,
       });
-      const pending = pendingDeals.get(lowProfileCode);
       if (pending) {
         try {
           const transactionIdFail =
@@ -692,20 +699,12 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
             },
             normalizedPayload: buildDealPayloadFromFormState(mergedFailedForm),
           });
-          pendingDeals.delete(lowProfileCode);
         } catch (failPersistErr) {
           console.warn(`[${ts()}] failed deal persistence (non-blocking):`, failPersistErr?.message || failPersistErr);
         }
       }
       return;
     }
-
-    const pending = pendingDeals.get(lowProfileCode);
-    if (!pending) {
-      console.warn(`[${ts()}] Webhook: no pending deal for LowProfileCode`, lowProfileCode);
-      return;
-    }
-    pendingDeals.delete(lowProfileCode);
 
     const transactionId = indicator?.internalDealNumber != null ? String(indicator.internalDealNumber) : lowProfileCode;
 

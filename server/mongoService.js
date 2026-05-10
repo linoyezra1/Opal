@@ -582,50 +582,112 @@ export async function processDetailRecurringWebhook(body = {}, query = {}) {
   return { ok: true, dealId: parent.id, rowId, statusCode };
 }
 
-/** סיכום כספי לפי אירועי DetailRecurring מוצלחים בחודש */
+/** סיכום כספי Cash-Based בטווח תאריכים: חיוב ראשון + אירועי DetailRecurring */
+async function getCashFinancialTotalsForDateRange(from, to) {
+  if (!(from instanceof Date) || !(to instanceof Date)) {
+    return {
+      totalRevenue: 0,
+      totalVendorCost: 0,
+      totalAgentCommission: 0,
+      totalNetProfit: 0,
+      eventCount: 0,
+      initialDealCount: 0,
+      recurringEventCount: 0,
+    };
+  }
+  const db = await getDb();
+  const deals = db.collection('deals');
+
+  const initialAgg = await deals
+    .aggregate([
+      {
+        $match: {
+          isRecurringCycle: { $ne: true },
+          createdAt: { $gte: from, $lte: to },
+          paymentStatus: { $regex: /success|paid|test_success|completed/i },
+          subscriptionStatus: { $not: /cancel|בוטל/i },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          eventCount: { $sum: 1 },
+          totalRevenue: { $sum: { $ifNull: ['$payerAmount', 0] } },
+          totalVendorCost: { $sum: { $ifNull: ['$formState.resolvedVendorCost', 0] } },
+          totalAgentCommission: { $sum: { $ifNull: ['$formState.resolvedAgentCommission', 0] } },
+          totalNetProfit: { $sum: { $ifNull: ['$formState.resolvedNetProfit', 0] } },
+        },
+      },
+    ])
+    .toArray();
+
+  const recurringAgg = await deals
+    .aggregate([
+      { $match: { detailRecurringEvents: { $exists: true, $ne: [] } } },
+      { $unwind: '$detailRecurringEvents' },
+      { $match: { 'detailRecurringEvents.statusCode': 1 } },
+      {
+        $addFields: {
+          _drDate: {
+            $convert: {
+              input: {
+                $ifNull: [
+                  '$detailRecurringEvents.lastBillDateIso',
+                  { $ifNull: ['$detailRecurringEvents.lastBillDate', null] },
+                ],
+              },
+              to: 'date',
+              onError: null,
+              onNull: null,
+            },
+          },
+        },
+      },
+      { $match: { _drDate: { $ne: null, $gte: from, $lte: to } } },
+      {
+        $group: {
+          _id: null,
+          eventCount: { $sum: 1 },
+          totalRevenue: { $sum: { $ifNull: ['$detailRecurringEvents.sum', 0] } },
+          totalVendorCost: { $sum: { $ifNull: ['$detailRecurringEvents.vendorCost', 0] } },
+          totalAgentCommission: { $sum: { $ifNull: ['$detailRecurringEvents.agentCommission', 0] } },
+          totalNetProfit: { $sum: { $ifNull: ['$detailRecurringEvents.netProfit', 0] } },
+        },
+      },
+    ])
+    .toArray();
+
+  const i = initialAgg[0] || {};
+  const r = recurringAgg[0] || {};
+  return {
+    totalRevenue: Number(i.totalRevenue || 0) + Number(r.totalRevenue || 0),
+    totalVendorCost: Number(i.totalVendorCost || 0) + Number(r.totalVendorCost || 0),
+    totalAgentCommission: Number(i.totalAgentCommission || 0) + Number(r.totalAgentCommission || 0),
+    totalNetProfit: Number(i.totalNetProfit || 0) + Number(r.totalNetProfit || 0),
+    eventCount: Number(i.eventCount || 0) + Number(r.eventCount || 0),
+    initialDealCount: Number(i.eventCount || 0),
+    recurringEventCount: Number(r.eventCount || 0),
+  };
+}
+
+/** סיכום כספי לפי חודש נבחר — Cash-Based בלבד */
 export async function getCashFinancialTotalsForMonth(monthStr) {
   const month = String(monthStr || '').trim();
-  if (!/^\d{4}-\d{2}$/.test(month)) {
+  const range = parseMonthToRange(month);
+  if (!range) {
     return {
       month,
       eventCount: 0,
+      initialDealCount: 0,
+      recurringEventCount: 0,
       totalRevenue: 0,
       totalVendorCost: 0,
       totalAgentCommission: 0,
       totalNetProfit: 0,
     };
   }
-  const db = await getDb();
-  const pipeline = [
-    { $match: { detailRecurringEvents: { $exists: true, $ne: [] } } },
-    { $unwind: '$detailRecurringEvents' },
-    {
-      $match: {
-        'detailRecurringEvents.billingMonth': month,
-        'detailRecurringEvents.statusCode': 1,
-      },
-    },
-    {
-      $group: {
-        _id: null,
-        eventCount: { $sum: 1 },
-        totalRevenue: { $sum: { $ifNull: ['$detailRecurringEvents.sum', 0] } },
-        totalVendorCost: { $sum: { $ifNull: ['$detailRecurringEvents.vendorCost', 0] } },
-        totalAgentCommission: { $sum: { $ifNull: ['$detailRecurringEvents.agentCommission', 0] } },
-        totalNetProfit: { $sum: { $ifNull: ['$detailRecurringEvents.netProfit', 0] } },
-      },
-    },
-  ];
-  const agg = await db.collection('deals').aggregate(pipeline).toArray();
-  const g = agg[0];
-  return {
-    month,
-    eventCount: g ? Number(g.eventCount || 0) : 0,
-    totalRevenue: g ? Number(g.totalRevenue || 0) : 0,
-    totalVendorCost: g ? Number(g.totalVendorCost || 0) : 0,
-    totalAgentCommission: g ? Number(g.totalAgentCommission || 0) : 0,
-    totalNetProfit: g ? Number(g.totalNetProfit || 0) : 0,
-  };
+  const totals = await getCashFinancialTotalsForDateRange(range.start, range.end);
+  return { month, ...totals };
 }
 
 function uniqDealDocs(docs) {
@@ -2712,14 +2774,12 @@ export async function getSalesDashboardData(filters = {}) {
   let billingEventCount = 0;
   if (filters.month && /^\d{4}-\d{2}$/.test(String(filters.month))) {
     const cash = await getCashFinancialTotalsForMonth(String(filters.month));
-    if (cash && cash.eventCount > 0) {
-      revenueOut = cash.totalRevenue;
-      vendorOut = cash.totalVendorCost;
-      agentOut = cash.totalAgentCommission;
-      netOut = cash.totalNetProfit;
-      cashBasedSummary = true;
-      billingEventCount = cash.eventCount;
-    }
+    revenueOut = Number(cash.totalRevenue || 0);
+    vendorOut = Number(cash.totalVendorCost || 0);
+    agentOut = Number(cash.totalAgentCommission || 0);
+    netOut = Number(cash.totalNetProfit || 0);
+    cashBasedSummary = true;
+    billingEventCount = Number(cash.eventCount || 0);
   }
 
   return {
@@ -3181,13 +3241,14 @@ export async function getControlPanelOverviewData(filters = {}) {
       wf === 'pending_alllow'
     ) && !isCancelledDeal(d);
   });
-  const totalRevenue = paidRows.reduce((s, d) => s + Number(d.revenue || 0), 0);
-  const totalProviderPayments = paidRows.reduce((s, d) => s + Number(d.providerCost || 0), 0);
-  const totalAgentPayments = paidRows.reduce((s, d) => s + Number(d.agentCommission || 0), 0);
+  const cashTotals = await getCashFinancialTotalsForDateRange(from, to);
+  const totalRevenue = Number(cashTotals.totalRevenue || 0);
+  const totalProviderPayments = Number(cashTotals.totalVendorCost || 0);
+  const totalAgentPayments = Number(cashTotals.totalAgentCommission || 0);
   const totalExpenses = totalProviderPayments + totalAgentPayments;
-  const totalNetProfit = totalRevenue - totalProviderPayments - totalAgentPayments;
+  const totalNetProfit = Number(cashTotals.totalNetProfit || 0);
   const activeSubscribers = paidRows.reduce((s, d) => s + Number(d.individualsCount || 1), 0);
-  const totalTransactions = paidRows.length;
+  const totalTransactions = Number(cashTotals.eventCount || 0);
   const failedPaymentRows = createdRangeDeals.filter((d) => {
     const ps = String(d.paymentStatus || '').toLowerCase();
     const isCancelled = ps.includes('cancel') || ps.includes('בוטל') || ps === 'cancelled';
@@ -3327,7 +3388,6 @@ export async function getControlPanelOverviewData(filters = {}) {
     { $sort: { debt: -1 } },
   ]).toArray();
   const organizationCollectionsDebt = orgDebtRows.reduce((s, r) => s + Number(r.debt || 0), 0);
-  const totalRevenueWithOrgDebt = totalRevenue + organizationCollectionsDebt;
 
   const dayMap = new Map();
   for (const d of paidRows) {
@@ -3397,7 +3457,7 @@ export async function getControlPanelOverviewData(filters = {}) {
   return {
     range: { fromDate: from.toISOString().slice(0, 10), toDate: to.toISOString().slice(0, 10) },
     overview: {
-      totalRevenue: totalRevenueWithOrgDebt,
+      totalRevenue,
       successfulRevenue: totalRevenue,
       totalExpenses,
       totalNetProfit,
@@ -3410,6 +3470,9 @@ export async function getControlPanelOverviewData(filters = {}) {
       abandonedCarts: abandonedCartRows.length,
       contactTasks: contactTaskRows.length,
       organizationCollectionsDebt,
+      cashBasedSummary: true,
+      initialDealCashCount: Number(cashTotals.initialDealCount || 0),
+      recurringCashEventCount: Number(cashTotals.recurringEventCount || 0),
       cancellationsCount: statusFilteredCancelledDeals.length,
       pendingCancellationCount: pendingCancellationRows.length,
       notActivatedCount: notActivatedRows.length,
