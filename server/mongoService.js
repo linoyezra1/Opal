@@ -621,7 +621,32 @@ export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
     if (m) mainDeal = m;
   }
 
-  const recurringId = String(mainDeal.cardcomRecurringId || mainDeal.formState?.cardcomRecurringId || '').trim();
+  // Fallback resolver for legacy imports where recurring id is not copied to top-level.
+  const resolvedParent = await findDealForRecurringEvent({
+    transactionId: String(seed.transactionId || '').trim(),
+    lowProfileCode: String(seed.lowProfileCode || '').trim(),
+    cardcomRecurringId: String(
+      seed.cardcomRecurringId ||
+        seed.formState?.cardcomRecurringId ||
+        seed.indicator?.step2CardcomRecurringId ||
+        seed.indicator?.cardcomRecurringId ||
+        ''
+    ).trim(),
+    cardcomAccountId: String(seed.cardcomAccountId || seed.indicator?.step2CardcomAccountId || '').trim(),
+    cardcomToken: String(seed.cardcomToken || seed.indicator?.cardcomToken || '').trim(),
+  });
+  if (resolvedParent?.id && ObjectId.isValid(String(resolvedParent.id))) {
+    const resolvedMain = await deals.findOne({ _id: new ObjectId(String(resolvedParent.id)) });
+    if (resolvedMain) mainDeal = resolvedMain;
+  }
+
+  const recurringId = String(
+    mainDeal.cardcomRecurringId ||
+      mainDeal.formState?.cardcomRecurringId ||
+      mainDeal.indicator?.step2CardcomRecurringId ||
+      mainDeal.indicator?.cardcomRecurringId ||
+      ''
+  ).trim();
   const recurringIdValues = [];
   if (recurringId) {
     recurringIdValues.push(recurringId);
