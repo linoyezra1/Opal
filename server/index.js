@@ -76,7 +76,6 @@ import {
   hasUnlockedAgentCommissionsForMonth,
   processDetailRecurringWebhook,
   tryAcquireCheckoutLock,
-  releaseCheckoutLock,
   persistCheckoutSession,
   loadCheckoutSession,
   ensureCheckoutCollectionIndexes,
@@ -585,13 +584,9 @@ app.post('/api/cardcom-detail-recurring-webhook', (req, res) => {
  * Uses fallbacks everywhere so missing metadata does not crash.
  */
 async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQuery = {}) {
-  // ── Distributed lock ────────────────────────────────────────────────────────
-  // Uses MongoDB's unique-key constraint as an atomic mutex that works across
-  // all server processes and instances.  The first request to arrive acquires
-  // the lock; every subsequent concurrent or duplicate webhook skips processing.
-  // The lock is released after the deal is saved so that legitimate Cardcom
-  // retries can enter, verify the saved deal, and exit without calling Step2
-  // again (guarded by the "deal already has RecurringId" check below).
+  // ── Distributed idempotency (native _id on checkout_locks) ──────────────────
+  // First webhook insert wins (_id = LowProfileCode); duplicates get E11000 → skip.
+  // The document is never deleted: permanent idempotency key for Cardcom retries.
   let lockAcquired = false;
   try {
     lockAcquired = await tryAcquireCheckoutLock(lowProfileCode);
@@ -600,7 +595,7 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
     return; // safer to skip than to risk a duplicate profile
   }
   if (!lockAcquired) {
-    console.log(`[${ts()}] Webhook: ${lowProfileCode} already being processed — duplicate skipped`);
+    console.log(`[${ts()}] Webhook: ${lowProfileCode} idempotency key exists — duplicate webhook skipped`);
     return;
   }
   // ────────────────────────────────────────────────────────────────────────────
@@ -979,10 +974,6 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
     const paymentStatus = (Number(process.env.CARDCOM_TERMINAL) === 1000) ? 'TEST' : 'LIVE';
     console.log(`[${ts()}] Payment status: ${paymentStatus} - Result: FAILURE`);
     console.error(`[${ts()}] Webhook: handleWebhookSuccess failed`, err);
-  } finally {
-    // Release lock so legitimate Cardcom retries can re-enter.
-    // They will find the already-saved deal via findDealByLowProfileCode and skip Step2.
-    await releaseCheckoutLock(lowProfileCode);
   }
 }
 

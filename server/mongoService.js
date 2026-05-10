@@ -53,15 +53,12 @@ async function ensureDealsIndexes(db) {
 //   which then calls createRecurringProfileFromLowProfile — producing duplicate
 //   recurring profiles.
 //
-//   MongoDB's insertOne with a unique index is atomic across all connections.
-//   The first process to insert wins; every other insert throws a duplicate-key
-//   error (code 11000), which we treat as "lock already held".
+//   Uniqueness uses the collection _id (built-in unique index on every collection).
+//   First insertOne({ _id: lowProfileCode, ... }) wins; concurrent inserts throw
+//   duplicate key 11000 — no extra user-defined index or disk for a custom index.
 //
-// Indexes (created once at first getDb() call via ensureCheckoutCollectionIndexes):
-//   checkout_locks.lowProfileCode  — unique, ensures atomic acquisition
-//   checkout_locks.lockedAt        — TTL 30 min, self-cleans stale locks
-//   checkout_sessions.lowProfileCode — unique
-//   checkout_sessions.savedAt      — TTL 2 h, self-cleans old form data
+// Indexes (ensureCheckoutCollectionIndexes): checkout_sessions only — TTL + lookup
+// for persisted session payloads (checkout_locks needs no extra indexes).
 // ─────────────────────────────────────────────────────────────────────────────
 
 let checkoutIndexesPromise = null;
@@ -70,14 +67,6 @@ export async function ensureCheckoutCollectionIndexes() {
   if (checkoutIndexesPromise) return checkoutIndexesPromise;
   checkoutIndexesPromise = (async () => {
     const db = await getDb();
-    await db.collection('checkout_locks').createIndex(
-      { lowProfileCode: 1 },
-      { unique: true, name: 'lpc_unique' }
-    );
-    await db.collection('checkout_locks').createIndex(
-      { lockedAt: 1 },
-      { expireAfterSeconds: 1800, name: 'lpc_ttl_30min' }
-    );
     await db.collection('checkout_sessions').createIndex(
       { lowProfileCode: 1 },
       { unique: true, name: 'cs_lpc_unique' }
@@ -94,38 +83,33 @@ export async function ensureCheckoutCollectionIndexes() {
 }
 
 /**
- * Atomically acquire a per-lowProfileCode processing lock.
- * Returns true if the lock was acquired (caller should proceed).
- * Returns false if another process already holds it (caller should skip).
- * Throws on unexpected DB errors.
+ * Atomically acquire a per-lowProfileCode idempotency record (native _id uniqueness).
+ * Returns true if this request owns the first insert for this code.
+ * Returns false on duplicate key (11000) — another webhook already claimed this LowProfileCode.
  */
 export async function tryAcquireCheckoutLock(lowProfileCode) {
   const db = await getDb();
+  const id = String(lowProfileCode ?? '').trim();
+  if (!id) throw new Error('tryAcquireCheckoutLock: missing lowProfileCode');
   try {
     await db.collection('checkout_locks').insertOne({
-      lowProfileCode: String(lowProfileCode),
-      lockedAt: new Date(),
+      _id: id,
+      createdAt: new Date(),
+      source: 'cardcom_webhook',
     });
     return true;
   } catch (e) {
-    if (e.code === 11000) return false; // duplicate key → another process holds the lock
+    if (e.code === 11000) return false;
     throw e;
   }
 }
 
 /**
- * Release the lock (delete the document).
- * Called after successful processing so that legitimate Cardcom retries can
- * enter and verify the deal — they will find the deal already saved and skip Step2.
- * Non-blocking: if the delete fails the TTL index cleans up within 30 minutes.
+ * Legacy no-op: locks are permanent idempotency keys (_id = LowProfileCode) and are not deleted.
+ * @deprecated Retained for API compatibility; does nothing.
  */
-export async function releaseCheckoutLock(lowProfileCode) {
-  try {
-    const db = await getDb();
-    await db.collection('checkout_locks').deleteOne({ lowProfileCode: String(lowProfileCode) });
-  } catch {
-    /* non-critical — TTL index will remove the stale lock automatically */
-  }
+export async function releaseCheckoutLock(_lowProfileCode) {
+  /* permanent lock document — see tryAcquireCheckoutLock */
 }
 
 /**
