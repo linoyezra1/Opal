@@ -275,7 +275,7 @@ export default function AgentDetailPage() {
                   )}
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent dir="rtl" className="space-y-3">
                 {preview.note ? (
                   <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-3">
                     {preview.note}
@@ -293,10 +293,10 @@ export default function AgentDetailPage() {
                     סגור דוח והפק דרישת תשלום לסוכן
                   </Button>
                 </div>
-                <div className="rounded-md border overflow-x-auto">
-                  <Table className="text-right">
+                <div className="rounded-md border overflow-x-auto" dir="rtl">
+                  <Table dir="rtl" className="w-full text-sm text-right [&_th]:text-right [&_td]:text-right">
                     <TableHeader>
-                      <TableRow className="[&_th]:text-right">
+                      <TableRow>
                         {lockNeedsSelection ? (
                           <TableHead className="w-10 text-center">
                             <input

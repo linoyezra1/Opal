@@ -733,6 +733,38 @@ function pickRecurringIdFromDealDoc(d) {
   ).trim();
 }
 
+const INITIAL_CHECKOUT_INVOICE_DESC = 'חיוב ראשוני - הקמת מנוי';
+
+/** שורת חיוב ראשון — מנורמל לצורת DetailRecurring לטבלה אחידה ב-UI */
+function normalizeInitialDealPaymentAsDetailRow(mainDeal) {
+  if (!mainDeal || !mainDeal._id) return null;
+  const createdRaw =
+    mainDeal.createdAt instanceof Date ? mainDeal.createdAt : new Date(mainDeal.createdAt || 0);
+  if (Number.isNaN(createdRaw.getTime())) return null;
+  const payStatus = String(mainDeal.paymentStatus || '').trim();
+  const success = /success|paid|test_success|completed/i.test(payStatus);
+  const statusCode = success ? 1 : 7;
+  const sum = Number(mainDeal.payerAmount ?? 0);
+  const billingMonth = formatBillingMonthFromDate(createdRaw);
+  return {
+    source: 'initial_checkout',
+    id: `initial-checkout-${String(mainDeal._id)}`,
+    rowId: `INITIAL_CHECKOUT_${String(mainDeal._id)}`,
+    statusCode,
+    statusLabel: DETAIL_RECURRING_STATUS_LABELS[statusCode] || 'OTHER',
+    sum,
+    sumNoVat: sum,
+    lastBillDate: createdRaw.toISOString(),
+    billingMonth,
+    status: success ? 'הצלחה' : 'אחר',
+    paymentStatus: success ? 'paid' : payStatus || String(statusCode),
+    errorReason: '—',
+    createdAt: createdRaw.toISOString(),
+    invoiceDescription: INITIAL_CHECKOUT_INVOICE_DESC,
+    isRecurringCycle: false,
+  };
+}
+
 export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
   const db = await getDb();
   if (!ObjectId.isValid(String(dealId || ''))) return { cardcomRecurringId: '', rows: [] };
@@ -844,6 +876,7 @@ export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
       paymentStatus: Number(ev.statusCode) === 1 ? 'paid' : String(ev.statusCode ?? ''),
       errorReason: '—',
       createdAt: ev.receivedAt instanceof Date ? ev.receivedAt.toISOString() : ev.receivedAt,
+      invoiceDescription: String(ev.invoiceDescription || '').trim() || null,
       isRecurringCycle: false,
     }));
   const cycleRows = docs.map((d) => {
@@ -852,22 +885,38 @@ export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
       formatBillingMonthFromDate(d.createdAt instanceof Date ? d.createdAt : new Date(d.createdAt));
     const success = /success|paid|test_success|completed/i.test(String(d.paymentStatus || ''));
     const errorReason = String(d?.indicator?.responsdescription || d?.formState?.cardcomResponseDescription || '').trim();
+    const statusCode = success ? 1 : 7;
     return {
       source: 'legacy_cycle_deal',
       id: String(d._id),
+      rowId: `LEGACY_CYCLE_${String(d._id)}`,
+      statusCode,
+      statusLabel: DETAIL_RECURRING_STATUS_LABELS[statusCode] || 'OTHER',
       billingMonth: month,
+      sum: Number(d.payerAmount ?? 0),
+      sumNoVat: Number(d.payerAmount ?? 0),
+      lastBillDate: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
       status: success ? 'הצלחה' : 'כישלון',
       paymentStatus: String(d.paymentStatus || ''),
       errorReason: errorReason || (success ? '—' : String(d.paymentStatus || '—')),
       createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+      invoiceDescription: null,
       isRecurringCycle: d.isRecurringCycle === true,
     };
+  });
+  const initialCheckoutRow = normalizeInitialDealPaymentAsDetailRow(mainDeal);
+  const unifiedRows = [...(initialCheckoutRow ? [initialCheckoutRow] : []), ...detailRows, ...cycleRows];
+  unifiedRows.sort((a, b) => {
+    const ta = new Date(a.lastBillDate || a.createdAt || 0).getTime();
+    const tb = new Date(b.lastBillDate || b.createdAt || 0).getTime();
+    return tb - ta;
   });
   return {
     cardcomRecurringId: displayRecurringId,
     detailRecurringRows: detailRows,
     legacyCycleRows: cycleRows,
-    rows: [...detailRows, ...cycleRows],
+    initialCheckoutRow,
+    rows: unifiedRows,
   };
 }
 
@@ -2506,6 +2555,34 @@ function applyCategoryFilters(deals, categories = []) {
 }
 
 /** רווח נקי לפי שדות שנשמרו בעסקה: הכנסה - עלות ספק - עמלת סוכן */
+/** סכום LTV: חיוב ראשון מוצלח + כל אירועי DetailRecurring מוצלחים */
+function computeTotalCustomerRevenue(deal) {
+  if (!deal) return 0;
+  const payOk = /success|paid|test_success|completed/i.test(String(deal.paymentStatus || ''));
+  const initial = payOk ? Number(deal.payerAmount || 0) : 0;
+  const events = Array.isArray(deal.detailRecurringEvents) ? deal.detailRecurringEvents : [];
+  let recurring = 0;
+  for (const ev of events) {
+    if (Number(ev?.statusCode) === 1) recurring += Number(ev?.sum ?? 0);
+  }
+  return initial + recurring;
+}
+
+/**
+ * 4 קטגוריות מנוי לווידג'טים (בלעדיות — עדכון ראשון שמתאים)
+ */
+function classifySubscriptionWidgetBucket(d) {
+  if (!d) return 'other';
+  const wf = String(d.status || '').trim().toLowerCase();
+  const sub = String(d.subscriptionStatus || '').trim();
+  const subL = sub.toLowerCase();
+  if (wf === 'pending_org_approval' || sub === 'ממתין לאישור הארגון') return 'pending_org';
+  if (subL === 'cancelled' || subL === 'canceled' || d.isCanceled === true) return 'cancelled';
+  if (subL === 'pending cancellation') return 'pending_cancel';
+  if (sub === 'Active') return 'active';
+  return 'other';
+}
+
 function economicsFromDeal(d) {
   const fs = d.formState || {};
   const rev = Number(d.payerAmount || 0);
@@ -2739,7 +2816,7 @@ export async function getSalesDashboardData(filters = {}) {
   }
 
   const amountDue = Number(filters.amountDue || 0);
-  const totalRevenue = shown.reduce((sum, d) => sum + Number(d.payerAmount || 0), 0);
+  const totalRevenueLtv = shown.reduce((sum, d) => sum + computeTotalCustomerRevenue(d), 0);
   const econ = shown.map((d) => economicsFromDeal(d));
   const totalVendorCost = econ.reduce((s, e) => s + e.vendorCost, 0);
   const totalAgentCommission = econ.reduce((s, e) => s + e.agentCommission, 0);
@@ -2766,7 +2843,7 @@ export async function getSalesDashboardData(filters = {}) {
       .filter(Boolean)
   ).size;
 
-  let revenueOut = totalRevenue;
+  let revenueOut = totalRevenueLtv;
   let vendorOut = totalVendorCost;
   let agentOut = totalAgentCommission;
   let netOut = totalNetProfitFromDeals;
@@ -2774,13 +2851,17 @@ export async function getSalesDashboardData(filters = {}) {
   let billingEventCount = 0;
   if (filters.month && /^\d{4}-\d{2}$/.test(String(filters.month))) {
     const cash = await getCashFinancialTotalsForMonth(String(filters.month));
-    revenueOut = Number(cash.totalRevenue || 0);
     vendorOut = Number(cash.totalVendorCost || 0);
     agentOut = Number(cash.totalAgentCommission || 0);
     netOut = Number(cash.totalNetProfit || 0);
     cashBasedSummary = true;
     billingEventCount = Number(cash.eventCount || 0);
   }
+
+  const subscriptionPendingOrgApproval = shown.filter((d) => classifySubscriptionWidgetBucket(d) === 'pending_org').length;
+  const subscriptionActive = shown.filter((d) => classifySubscriptionWidgetBucket(d) === 'active').length;
+  const subscriptionPendingCancellation = shown.filter((d) => classifySubscriptionWidgetBucket(d) === 'pending_cancel').length;
+  const subscriptionCancelled = shown.filter((d) => classifySubscriptionWidgetBucket(d) === 'cancelled').length;
 
   return {
     summary: {
@@ -2801,6 +2882,10 @@ export async function getSalesDashboardData(filters = {}) {
       totalNetProfit: netOut,
       cashBasedSummary,
       billingEventCount,
+      subscriptionPendingOrgApproval,
+      subscriptionActive,
+      subscriptionPendingCancellation,
+      subscriptionCancelled,
     },
     searchResults: {
       totalTransactions: shown.length,
@@ -2880,6 +2965,8 @@ export async function getSalesDashboardData(filters = {}) {
         agentCommission: e.agentCommission,
         netProfit: e.netProfit,
         amount: Number(d.payerAmount || 0),
+        totalCustomerRevenue: computeTotalCustomerRevenue(d),
+        subscriptionWidgetBucket: classifySubscriptionWidgetBucket(d),
         primaryCount: d.primaryCount,
         secondaryCount: d.secondaryCount,
         activeCustomersCount: d.activeCustomersCount,

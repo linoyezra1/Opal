@@ -6,13 +6,16 @@ import {
   Filter,
   TrendingUp,
   Users,
-  Calendar,
   Edit2,
   Archive,
   Download,
   Eye,
   Ban,
   MoreVertical,
+  Hourglass,
+  CheckCircle2,
+  CalendarClock,
+  UserX,
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import {
@@ -958,7 +961,7 @@ export default function SubscribersDashboard() {
     let notActivated = 0;
     let canceled = 0;
     for (const r of visibleRows) {
-      totalRevenue += Number(r.amount || 0);
+      totalRevenue += Number(r.totalCustomerRevenue ?? r.amount ?? 0);
       const es = r.entitlementStatus;
       if (es === 'not_activated') {
         notActivated += 1;
@@ -975,6 +978,32 @@ export default function SubscribersDashboard() {
     return { totalRevenue, active, pendingCancellation, notActivated, canceled };
   }, [visibleRows]);
 
+  const subscriptionWidgetCounts = useMemo(() => {
+    let pendingOrg = 0;
+    let active = 0;
+    let pendingCancel = 0;
+    let cancelled = 0;
+    for (const r of visibleRows) {
+      switch (r.subscriptionWidgetBucket) {
+        case 'pending_org':
+          pendingOrg += 1;
+          break;
+        case 'active':
+          active += 1;
+          break;
+        case 'pending_cancel':
+          pendingCancel += 1;
+          break;
+        case 'cancelled':
+          cancelled += 1;
+          break;
+        default:
+          break;
+      }
+    }
+    return { pendingOrg, active, pendingCancel, cancelled };
+  }, [visibleRows]);
+
   const calculatedCounts = useMemo(() => {
     const rows = visibleRows || [];
     const primary = rows.length;
@@ -986,16 +1015,6 @@ export default function SubscribersDashboard() {
       total: primary + secondary,
     };
   }, [visibleRows]);
-  const statusSummaryTitle =
-    filters.status === 'cancelled'            ? 'מבוטלים (סיכום)' :
-    filters.status === 'pending_cancellation' ? 'ממתין לביטול (סיכום)' :
-    filters.status === 'not_activated'        ? 'לא הופעל (סיכום)' :
-    'מנויים פעילים (סיכום)';
-  const statusSummaryValue =
-    filters.status === 'cancelled'            ? visibleSummary.canceled :
-    filters.status === 'pending_cancellation' ? visibleSummary.pendingCancellation :
-    filters.status === 'not_activated'        ? visibleSummary.notActivated :
-    visibleSummary.active;
   const visibleRowIds = useMemo(
     () => visibleRows.map((r) => String(r.id || '')).filter(Boolean),
     [visibleRows]
@@ -1838,19 +1857,25 @@ export default function SubscribersDashboard() {
 
           <div className="w-full mb-6">
             {/* כרטיסי סטטיסטיקה מאוחדים — נתונים כלליים + מסנני קטגוריות */}
-            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
               
               {/* 1. קוביות סטטיסטיקה כלליות */}
               <StatsCard title="סה״כ הכנסות" value={formatCurrency(visibleSummary.totalRevenue)} icon={TrendingUp} loading={loading} />
               <StatsCard title="עסקאות בתוצאות" value={visibleRows.length} icon={Users} loading={loading} />
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="rounded-lg outline-none">
-                    <StatsCard title={statusSummaryTitle} value={statusSummaryValue} icon={Calendar} loading={loading} />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>לפי מסנני הקטגוריות והדוח בשרת</TooltipContent>
-              </Tooltip>
+              <StatsCard
+                title="סה״כ מנוי לא הופעל/ממתין לאישור"
+                value={String(subscriptionWidgetCounts.pendingOrg)}
+                icon={Hourglass}
+                loading={loading}
+              />
+              <StatsCard title="סה״כ מנוי פעיל" value={String(subscriptionWidgetCounts.active)} icon={CheckCircle2} loading={loading} />
+              <StatsCard
+                title="סה״כ מנוי ממתין לביטול"
+                value={String(subscriptionWidgetCounts.pendingCancel)}
+                icon={CalendarClock}
+                loading={loading}
+              />
+              <StatsCard title="סה״כ מנוי מבוטלים" value={String(subscriptionWidgetCounts.cancelled)} icon={UserX} loading={loading} />
 
               {/* 2. קוביות הסטטיסטיקה של הקטגוריות */}
               {SUMMARY_ITEMS.map((item) => {
@@ -1942,7 +1967,7 @@ export default function SubscribersDashboard() {
                 </Empty>
               ) : (
                 <div className="rounded-md border overflow-x-auto -mx-4 md:mx-0">
-                  <Table dir="rtl" className="text-right min-w-[900px]">
+                  <Table dir="rtl" className="text-right min-w-[1020px]">
                     <TableHeader>
                         <TableRow className="[&_th]:text-right" dir="rtl">
                         <TableHead dir="rtl" className="w-12 text-right">
@@ -1958,7 +1983,10 @@ export default function SubscribersDashboard() {
                           לקוח
                         </TableHead>
                         <TableHead dir="rtl" className="text-right">
-                          סכום
+                          סכום עסקה
+                        </TableHead>
+                        <TableHead dir="rtl" className="text-right whitespace-nowrap">
+                          סה״כ הכנסות מלקוח (LTV)
                         </TableHead>
                         <TableHead dir="rtl" className="text-right">
                           מס&apos; הזמנה
@@ -2018,6 +2046,9 @@ export default function SubscribersDashboard() {
                           </TableCell>
                           <TableCell dir="rtl" className="text-right">
                             {formatCurrency(r.amount)}
+                          </TableCell>
+                          <TableCell dir="rtl" className="text-right font-medium tabular-nums">
+                            {formatCurrency(r.totalCustomerRevenue ?? r.amount)}
                           </TableCell>
                           <TableCell dir="rtl" className="font-mono text-xs text-right">
                             {r.transactionId}
@@ -2459,13 +2490,13 @@ export default function SubscribersDashboard() {
                 <Card>
                   <CardHeader className="flex flex-row items-start justify-between gap-2 pb-2">
                     <div className="min-w-0">
-                      <CardTitle className="text-base">היסטוריית חיובים (Cardcom DetailRecurring)</CardTitle>
+                      <CardTitle className="text-base">היסטוריית חיובים</CardTitle>
                       <CardDescription className="text-xs mt-1">
                         {billingHistory?.cardcomRecurringId
                           ? `מזהה הזמנה חוזרת: ${billingHistory.cardcomRecurringId}`
                           : billingHistory === null
                             ? 'טוען…'
-                            : 'לא הוגדר מזהה הזמנה חוזרת בעסקה'}
+                            : 'חיוב ראשון וחיובים חוזרים — רישום כרונולוגי אחד'}
                       </CardDescription>
                       {billingHistory?.error && (
                         <p className="text-xs text-destructive mt-1">{billingHistory.error}</p>
@@ -2507,7 +2538,7 @@ export default function SubscribersDashboard() {
                               <TableHead>תאריך חיוב</TableHead>
                               <TableHead>סטטוס</TableHead>
                               <TableHead>סכום</TableHead>
-                              <TableHead>מקור</TableHead>
+                              <TableHead>תיאור / מקור</TableHead>
                               <TableHead className="whitespace-nowrap">מזהה שורה</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -2523,13 +2554,34 @@ export default function SubscribersDashboard() {
                                   </TableRow>
                                 );
                               }
+                              const formatShekel = (n) =>
+                                new Intl.NumberFormat('he-IL', {
+                                  style: 'currency',
+                                  currency: 'ILS',
+                                  maximumFractionDigits: 2,
+                                }).format(Number(n || 0));
+                              const sourceLabel = (row) =>
+                                row.invoiceDescription ||
+                                (row.source === 'initial_checkout'
+                                  ? 'חיוב ראשוני - הקמת מנוי'
+                                  : row.source === 'detail_recurring'
+                                    ? 'חיוב חוזר (Cardcom)'
+                                    : 'מחזור ישן');
+                              const statusText = (row) => row.statusLabel || row.status || '—';
                               return [...rawRows]
                                 .sort((a, b) => {
                                   const ta = new Date(a.lastBillDate || a.createdAt || 0).getTime();
                                   const tb = new Date(b.lastBillDate || b.createdAt || 0).getTime();
                                   return tb - ta;
                                 })
-                                .map((row, idx) => (
+                                .map((row, idx) => {
+                                  const showAmount =
+                                    row.source === 'detail_recurring' ||
+                                    row.source === 'initial_checkout' ||
+                                    (row.source === 'legacy_cycle_deal' &&
+                                      row.sum != null &&
+                                      !Number.isNaN(Number(row.sum)));
+                                  return (
                                   <TableRow key={`${row.source}-${row.rowId || row.id || idx}`}>
                                     <TableCell dir="ltr" className="font-mono text-xs">
                                       {row.lastBillDate
@@ -2546,30 +2598,21 @@ export default function SubscribersDashboard() {
                                             : 'text-muted-foreground'
                                         }
                                       >
-                                        {row.source === 'detail_recurring'
-                                          ? row.statusLabel || row.status || '—'
-                                          : row.status || '—'}
+                                        {statusText(row)}
                                       </span>
                                     </TableCell>
                                     <TableCell className="font-medium">
-                                      {row.source === 'detail_recurring' && row.sum != null
-                                        ? new Intl.NumberFormat('he-IL', {
-                                            style: 'currency',
-                                            currency: 'ILS',
-                                            maximumFractionDigits: 2,
-                                          }).format(Number(row.sum))
-                                        : row.source === 'legacy_cycle_deal'
-                                          ? '—'
-                                          : '—'}
+                                      {showAmount ? formatShekel(row.sum) : '—'}
                                     </TableCell>
-                                    <TableCell className="text-muted-foreground text-xs">
-                                      {row.source === 'detail_recurring' ? 'חיוב בפועל' : 'מחזור ישן'}
+                                    <TableCell className="text-muted-foreground text-xs max-w-[220px] leading-snug">
+                                      {sourceLabel(row)}
                                     </TableCell>
                                     <TableCell dir="ltr" className="font-mono text-xs">
                                       {row.rowId || row.id || '—'}
                                     </TableCell>
                                   </TableRow>
-                                ));
+                                  );
+                                });
                             })()}
                           </TableBody>
                         </Table>
