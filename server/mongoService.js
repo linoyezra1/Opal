@@ -603,6 +603,49 @@ export async function getCashFinancialTotalsForMonth(monthStr) {
   };
 }
 
+function uniqDealDocs(docs) {
+  const seen = new Set();
+  const out = [];
+  for (const d of docs) {
+    if (!d || d._id == null) continue;
+    const id = String(d._id);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(d);
+  }
+  return out;
+}
+
+/** מיזוג אירועי DetailRecurring מכמה מסמכי deals (אותו לקוח / recurring), לפי rowId — האחרון מנצח */
+function mergeDetailRecurringEventsFromDocs(dealDocs) {
+  const byRow = new Map();
+  for (const d of dealDocs) {
+    const arr = Array.isArray(d?.detailRecurringEvents) ? d.detailRecurringEvents : [];
+    for (const ev of arr) {
+      const rid = String(ev?.rowId ?? '').trim();
+      if (!rid) continue;
+      const prev = byRow.get(rid);
+      const tNew =
+        ev?.receivedAt instanceof Date ? ev.receivedAt.getTime() : new Date(ev?.receivedAt || 0).getTime();
+      const tOld =
+        prev?.receivedAt instanceof Date ? prev.receivedAt.getTime() : new Date(prev?.receivedAt || 0).getTime();
+      if (!prev || tNew >= tOld) byRow.set(rid, ev);
+    }
+  }
+  return [...byRow.values()];
+}
+
+function pickRecurringIdFromDealDoc(d) {
+  if (!d) return '';
+  return String(
+    d.cardcomRecurringId ||
+      d.formState?.cardcomRecurringId ||
+      d.indicator?.step2CardcomRecurringId ||
+      d.indicator?.cardcomRecurringId ||
+      ''
+  ).trim();
+}
+
 export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
   const db = await getDb();
   if (!ObjectId.isValid(String(dealId || ''))) return { cardcomRecurringId: '', rows: [] };
@@ -671,7 +714,28 @@ export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
     .sort({ createdAt: 1 })
     .limit(lim)
     .toArray();
-  const detailEvents = Array.isArray(mainDeal.detailRecurringEvents) ? mainDeal.detailRecurringEvents : [];
+  const tid = String(seed.transactionId || '').trim();
+  let txDeals = [];
+  if (tid) {
+    const asNum = Number(tid);
+    const txQuery =
+      Number.isFinite(asNum) && !Number.isNaN(asNum) && String(asNum) === tid
+        ? { $or: [{ transactionId: tid }, { transactionId: asNum }] }
+        : { transactionId: tid };
+    txDeals = await deals.find(txQuery).limit(100).toArray();
+  }
+  const allDealDocs = uniqDealDocs([mainDeal, ...docs, ...txDeals]);
+  const detailEvents = mergeDetailRecurringEventsFromDocs(allDealDocs);
+  let displayRecurringId = recurringId;
+  if (!displayRecurringId) {
+    for (const d of allDealDocs) {
+      const r = pickRecurringIdFromDealDoc(d);
+      if (r) {
+        displayRecurringId = r;
+        break;
+      }
+    }
+  }
   const detailRows = detailEvents
     .slice()
     .sort((a, b) => {
@@ -713,7 +777,7 @@ export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
     };
   });
   return {
-    cardcomRecurringId: recurringId,
+    cardcomRecurringId: displayRecurringId,
     detailRecurringRows: detailRows,
     legacyCycleRows: cycleRows,
     rows: [...detailRows, ...cycleRows],
