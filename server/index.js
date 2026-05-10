@@ -74,6 +74,7 @@ import {
   listAllAgentCommissionSnapshots,
   updateAgentCommissionSnapshot,
   hasUnlockedAgentCommissionsForMonth,
+  processDetailRecurringWebhook,
   listMonthlyInvoices,
   generateMonthlyInvoicesForMonth,
   updateMonthlyInvoice,
@@ -554,6 +555,16 @@ app.post('/api/cardcom-master-recurring-webhook', (req, res) => {
   setImmediate(() =>
     handleMasterRecurringWebhook(req.body, req.query).catch((err) =>
       console.error(`[${ts()}] MasterRecurring webhook error:`, err?.message || err)
+    )
+  );
+});
+
+/** Cardcom DetailRecurring — שורת חיוב בפועל (BillGold). */
+app.post('/api/cardcom-detail-recurring-webhook', (req, res) => {
+  res.status(200).send('OK');
+  setImmediate(() =>
+    handleDetailRecurringWebhook(req.body, req.query).catch((err) =>
+      console.error(`[${ts()}] DetailRecurring webhook error:`, err?.message || err)
     )
   );
 });
@@ -1090,6 +1101,15 @@ async function handleMasterRecurringWebhook(body = {}, query = {}) {
     cardcomRecurringId || parent.cardcomRecurringId || '',
     { paymentSuccess, responseDescription }
   );
+}
+
+async function handleDetailRecurringWebhook(body = {}, query = {}) {
+  try {
+    await processDetailRecurringWebhook(body, query);
+  } catch (e) {
+    console.error(`[${ts()}] handleDetailRecurringWebhook`, e?.message || e);
+    throw e;
+  }
 }
 
 const OPAL_EMAIL = process.env.OPAL_EMAIL || 'opal2000@zahav.net.il';
@@ -2684,7 +2704,8 @@ app.post('/api/admin/agents/:id/lock-commissions', requireAdmin, async (req, res
   try {
     const month = String(req.body?.month || req.query.month || '').trim();
     if (!month) return res.status(400).json({ success: false, error: 'נדרש month (YYYY-MM)' });
-    const snapshot = await lockAgentCommissionsSnapshot(req.params.id, month);
+    const entryIds = Array.isArray(req.body?.entryIds) ? req.body.entryIds : null;
+    const snapshot = await lockAgentCommissionsSnapshot(req.params.id, month, entryIds);
     res.json({ success: true, snapshot });
   } catch (e) {
     console.error(`[${ts()}] admin/agents/:id/lock-commissions error:`, e);

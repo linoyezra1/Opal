@@ -976,6 +976,25 @@ export async function resolveCheckoutEconomics(formState) {
   };
 }
 
+/**
+ * כלכלת חיוב בפועל (DetailRecurring): שומר עלויות ספק ועמלת סוכן מהמודל הקיים,
+ * ומחשב רווח נקי לפי הסכום שחויב בפועל בחיוב החוזר.
+ */
+export async function resolveEconomicsForBillingPayment(formState, actualAmount) {
+  const econ = await resolveCheckoutEconomics(formState);
+  const amt = Number(actualAmount);
+  if (!Number.isFinite(amt) || amt < 0) return econ;
+  const vc = Number(econ.resolvedVendorCost ?? 0);
+  const ac = Number(econ.resolvedAgentCommission ?? 0);
+  return {
+    ...econ,
+    payerAmount: amt,
+    resolvedVendorCost: Number.isFinite(vc) ? vc : 0,
+    resolvedAgentCommission: Number.isFinite(ac) ? ac : 0,
+    resolvedNetProfit: amt - (Number.isFinite(vc) ? vc : 0) - (Number.isFinite(ac) ? ac : 0),
+  };
+}
+
 function serializePriceListDoc(d) {
   if (!d) return null;
   const lines = (d.lines || []).map((line) => {

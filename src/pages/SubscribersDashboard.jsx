@@ -264,6 +264,9 @@ export default function SubscribersDashboard() {
   const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('');
   const [toastMessage, setToastMessage] = useState('');
 
+  const [billingHistory, setBillingHistory] = useState(null);
+  const [billingHistoryLoading, setBillingHistoryLoading] = useState(false);
+
   const [data, setData] = useState({
     summary: {},
     filterOptions: { providers: [], agents: [] },
@@ -526,6 +529,33 @@ export default function SubscribersDashboard() {
     next.delete('editDealId');
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams, data.rows]);
+
+  useEffect(() => {
+    if (!token || !selected?.id) {
+      setBillingHistory(null);
+      return;
+    }
+    let cancelled = false;
+    setBillingHistoryLoading(true);
+    fetch(`${API_BASE}/api/admin/deals/${encodeURIComponent(selected.id)}/billing-history?limit=200`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((j) => {
+        if (cancelled) return;
+        if (j.success) setBillingHistory(j);
+        else setBillingHistory({ rows: [], cardcomRecurringId: '' });
+      })
+      .catch(() => {
+        if (!cancelled) setBillingHistory({ rows: [], cardcomRecurringId: '' });
+      })
+      .finally(() => {
+        if (!cancelled) setBillingHistoryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selected?.id, token]);
 
   function openEdit(row) {
     const fs = row.raw?.formState || {};
@@ -2235,7 +2265,7 @@ export default function SubscribersDashboard() {
               dir="rtl"
               className="overflow-hidden text-right"
             >
-              <TabsList className="grid w-full grid-cols-2 h-auto">
+              <TabsList className="grid w-full grid-cols-3 h-auto">
                 <TabsTrigger
                   value="transaction"
                   className="text-[11px] sm:text-sm whitespace-normal leading-tight"
@@ -2247,6 +2277,12 @@ export default function SubscribersDashboard() {
                   className="text-[11px] sm:text-sm whitespace-normal leading-tight"
                 >
                   פרטי מוטב
+                </TabsTrigger>
+                <TabsTrigger
+                  value="payments"
+                  className="text-[11px] sm:text-sm whitespace-normal leading-tight"
+                >
+                  היסטוריית חיובים
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="transaction" className="mt-3 space-y-3 min-h-0">
@@ -2411,6 +2447,86 @@ export default function SubscribersDashboard() {
                           <div>ביטוח משלים: <strong>{m.supplementalInsurance || '—'}</strong></div>
                         </div>
                       ))
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              <TabsContent value="payments" className="overflow-auto max-h-[68vh] space-y-4 mt-3">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">היסטוריית חיובים (Cardcom DetailRecurring)</CardTitle>
+                    <CardDescription className="text-xs">
+                      {billingHistory?.cardcomRecurringId
+                        ? `מזהה הזמנה חוזרת: ${billingHistory.cardcomRecurringId}`
+                        : 'לא הוגדר מזהה הזמנה חוזרת בעסקה'}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {billingHistoryLoading ? (
+                      <p className="text-sm text-muted-foreground">טוען…</p>
+                    ) : (
+                      <div className="rounded-md border overflow-x-auto">
+                        <Table className="text-right text-sm">
+                          <TableHeader>
+                            <TableRow className="[&_th]:text-right">
+                              <TableHead>תאריך חיוב</TableHead>
+                              <TableHead>סטטוס</TableHead>
+                              <TableHead>סכום</TableHead>
+                              <TableHead>מקור</TableHead>
+                              <TableHead className="whitespace-nowrap">מזהה שורה</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {(() => {
+                              const raw = Array.isArray(billingHistory?.rows) ? billingHistory.rows : [];
+                              const sorted = [...raw].sort((a, b) => {
+                                const ta = new Date(a.lastBillDate || a.createdAt || 0).getTime();
+                                const tb = new Date(b.lastBillDate || b.createdAt || 0).getTime();
+                                return tb - ta;
+                              });
+                              return sorted.map((row, idx) => (
+                                <TableRow key={`${row.source}-${row.id || idx}`}>
+                                  <TableCell dir="ltr" className="font-mono text-xs">
+                                    {row.lastBillDate
+                                      ? fmtDateTime(row.lastBillDate)
+                                      : row.createdAt
+                                        ? fmtDateTime(row.createdAt)
+                                        : '—'}
+                                  </TableCell>
+                                  <TableCell>
+                                    {row.source === 'detail_recurring'
+                                      ? row.statusLabel || row.status || '—'
+                                      : row.status || '—'}
+                                  </TableCell>
+                                  <TableCell className="font-medium">
+                                    {row.source === 'detail_recurring' && row.sum != null
+                                      ? new Intl.NumberFormat('he-IL', {
+                                          style: 'currency',
+                                          currency: 'ILS',
+                                          maximumFractionDigits: 2,
+                                        }).format(Number(row.sum))
+                                      : '—'}
+                                  </TableCell>
+                                  <TableCell className="text-muted-foreground text-xs">
+                                    {row.source === 'detail_recurring' ? 'חיוב בפועל' : 'מחזור ישן'}
+                                  </TableCell>
+                                  <TableCell dir="ltr" className="font-mono text-xs">
+                                    {row.rowId || row.id || '—'}
+                                  </TableCell>
+                                </TableRow>
+                              ));
+                            })()}
+                            {!billingHistoryLoading &&
+                            (!billingHistory?.rows || billingHistory.rows.length === 0) ? (
+                              <TableRow>
+                                <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
+                                  אין רשומות חיוב עדיין
+                                </TableCell>
+                              </TableRow>
+                            ) : null}
+                          </TableBody>
+                        </Table>
+                      </div>
                     )}
                   </CardContent>
                 </Card>

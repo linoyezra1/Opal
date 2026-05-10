@@ -43,7 +43,13 @@ export default function AgentDetailPage() {
   const [landingPages, setLandingPages] = useState([]);
   const [priceLists, setPriceLists] = useState([]);
   const [deals, setDeals] = useState([]);
-  const [preview, setPreview] = useState({ summary: { totalCommissions: 0, activeDeals: 0, pendingPayouts: 0 }, rows: [] });
+  const [preview, setPreview] = useState({
+    previewSource: '',
+    note: '',
+    summary: { totalCommissions: 0, activeDeals: 0, pendingPayouts: 0 },
+    rows: [],
+  });
+  const [selectedLedgerEntryIds, setSelectedLedgerEntryIds] = useState([]);
   const [snapshots, setSnapshots] = useState([]);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archiveWarn, setArchiveWarn] = useState('');
@@ -104,6 +110,28 @@ export default function AgentDetailPage() {
     return map;
   }, [successfulDeals]);
 
+  const ledgerPreviewRows = useMemo(
+    () => (preview.rows || []).filter((r) => r.ledgerEntryId),
+    [preview.rows]
+  );
+  const lockNeedsSelection = preview.previewSource === 'cash_billing';
+  const lockDisabled =
+    busy || loading || (lockNeedsSelection && selectedLedgerEntryIds.length === 0);
+
+  function toggleLedgerEntry(entryId, checked) {
+    const sid = String(entryId);
+    setSelectedLedgerEntryIds((prev) => {
+      const next = new Set(prev.map(String));
+      if (checked) next.add(sid);
+      else next.delete(sid);
+      return [...next];
+    });
+  }
+  function toggleAllLedger(checked) {
+    const ids = (preview.rows || []).filter((r) => r.ledgerEntryId).map((r) => String(r.ledgerEntryId));
+    setSelectedLedgerEntryIds(checked ? ids : []);
+  }
+
   const load = useCallback(async () => {
     if (!token || !id) return;
     setLoading(true);
@@ -121,7 +149,19 @@ export default function AgentDetailPage() {
       const found = (agentsRes?.rows || []).find((r) => String(r.id) === String(id));
       if (!found) throw new Error('סוכן לא נמצא');
       setAgent(found);
-      setPreview({ summary: { totalCommissions: Number(previewRes?.summary?.totalCommissions || 0), activeDeals: Number(previewRes?.summary?.activeDeals || 0), pendingPayouts: Number(previewRes?.summary?.pendingPayouts || 0) }, rows: Array.isArray(previewRes?.rows) ? previewRes.rows : [] });
+      const previewRows = Array.isArray(previewRes?.rows) ? previewRes.rows : [];
+      setPreview({
+        previewSource: previewRes?.previewSource || '',
+        note: previewRes?.note || '',
+        summary: {
+          totalCommissions: Number(previewRes?.summary?.totalCommissions || 0),
+          activeDeals: Number(previewRes?.summary?.activeDeals || 0),
+          pendingPayouts: Number(previewRes?.summary?.pendingPayouts || 0),
+        },
+        rows: previewRows,
+      });
+      const cashIds = previewRows.filter((r) => r.ledgerEntryId).map((r) => String(r.ledgerEntryId));
+      setSelectedLedgerEntryIds(previewRes?.previewSource === 'cash_billing' ? cashIds : []);
       setSnapshots(Array.isArray(snapsRes?.snapshots) ? snapsRes.snapshots : []);
       setProducts(Array.isArray(prRes?.products) ? prRes.products : []);
       setLandingPages(Array.isArray(lpRes?.pages) ? lpRes.pages : []);
@@ -138,7 +178,15 @@ export default function AgentDetailPage() {
   async function lockCommissions() {
     setBusy(true);
     try {
-      const res = await fetch(`${API_BASE}/api/admin/agents/${encodeURIComponent(id)}/lock-commissions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ month }) });
+      const body =
+        preview.previewSource === 'cash_billing'
+          ? { month, entryIds: selectedLedgerEntryIds }
+          : { month };
+      const res = await fetch(`${API_BASE}/api/admin/agents/${encodeURIComponent(id)}/lock-commissions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.success) throw new Error(j.error || 'נעילה נכשלה');
       await load();
@@ -215,10 +263,121 @@ export default function AgentDetailPage() {
           </TabsList>
 
           <TabsContent value="deals" className="mt-4">
-            <Card><CardHeader><CardTitle>טיוטת עסקאות זכאיות</CardTitle><CardDescription>{month}</CardDescription></CardHeader><CardContent>
-              <div className="flex flex-wrap items-end gap-3 mb-3"><Input type="month" value={month} onChange={(e) => setMonth(e.target.value || currentMonthLabel())} className="max-w-xs" /><Button onClick={lockCommissions} disabled={busy || loading}>{busy ? <Spinner className="size-4 me-2" /> : <Lock className="size-4 me-2" />}סגור דוח והפק דרישת תשלום לסוכן</Button></div>
-              <div className="rounded-md border overflow-x-auto"><Table className="text-right"><TableHeader><TableRow className="[&_th]:text-right"><TableHead>לקוח</TableHead><TableHead>מספר הזמנה</TableHead><TableHead>תחילת מנוי</TableHead><TableHead>תאריך ביטול</TableHead><TableHead>תאריך סיום מנוי</TableHead><TableHead>עמלה שנרשמה</TableHead><TableHead>פעולה</TableHead></TableRow></TableHeader><TableBody>{(preview.rows || []).map((r) => <TableRow key={r.dealId}><TableCell>{r.employeeName || '—'}</TableCell><TableCell>{r.transactionId || '—'}</TableCell><TableCell>{formatDate(r.subscriptionStartDate)}</TableCell><TableCell>{formatDate(r.cancellationDate)}</TableCell><TableCell>{formatDate(r.subscriptionEndDate || r.subscriptionEndDateRaw)}</TableCell><TableCell>{formatCurrency(r.amount)}</TableCell><TableCell><Button type="button" variant="outline" size="sm" asChild><Link to={`/admin/subscribers?search=${encodeURIComponent(r.transactionId || '')}`}><Pencil className="size-4 ms-1" />עריכת לקוח</Link></Button></TableCell></TableRow>)}{!(preview.rows || []).length ? <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">אין רשומות זכאיות</TableCell></TableRow> : null}</TableBody></Table></div>
-            </CardContent></Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>טיוטת עסקאות זכאיות</CardTitle>
+                <CardDescription className="flex flex-wrap items-center gap-2">
+                  <span>{month}</span>
+                  {preview.previewSource === 'cash_billing' ? (
+                    <Badge variant="secondary">חיוב בפועל</Badge>
+                  ) : (
+                    <Badge variant="outline">מנוי (גיבוי)</Badge>
+                  )}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {preview.note ? (
+                  <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-3">
+                    {preview.note}
+                  </p>
+                ) : null}
+                <div className="flex flex-wrap items-end gap-3 mb-3">
+                  <Input
+                    type="month"
+                    value={month}
+                    onChange={(e) => setMonth(e.target.value || currentMonthLabel())}
+                    className="max-w-xs"
+                  />
+                  <Button onClick={lockCommissions} disabled={lockDisabled}>
+                    {busy ? <Spinner className="size-4 me-2" /> : <Lock className="size-4 me-2" />}
+                    סגור דוח והפק דרישת תשלום לסוכן
+                  </Button>
+                </div>
+                <div className="rounded-md border overflow-x-auto">
+                  <Table className="text-right">
+                    <TableHeader>
+                      <TableRow className="[&_th]:text-right">
+                        {lockNeedsSelection ? (
+                          <TableHead className="w-10 text-center">
+                            <input
+                              type="checkbox"
+                              className="size-4 rounded"
+                              checked={
+                                ledgerPreviewRows.length > 0 &&
+                                selectedLedgerEntryIds.length === ledgerPreviewRows.length
+                              }
+                              onChange={(e) => toggleAllLedger(e.target.checked)}
+                              title="בחר הכל"
+                            />
+                          </TableHead>
+                        ) : null}
+                        <TableHead>לקוח</TableHead>
+                        <TableHead>מספר הזמנה</TableHead>
+                        {lockNeedsSelection ? <TableHead className="whitespace-nowrap">תאריך חיוב</TableHead> : null}
+                        {lockNeedsSelection ? <TableHead>חויב בפועל</TableHead> : null}
+                        <TableHead>תחילת מנוי</TableHead>
+                        <TableHead>תאריך ביטול</TableHead>
+                        <TableHead>תאריך סיום מנוי</TableHead>
+                        <TableHead>עמלה שנרשמה</TableHead>
+                        <TableHead>פעולה</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(preview.rows || []).map((r) => (
+                        <TableRow key={`${r.dealId}-${r.ledgerEntryId || 'sub'}`}>
+                          {lockNeedsSelection ? (
+                            <TableCell className="text-center">
+                              {r.ledgerEntryId ? (
+                                <input
+                                  type="checkbox"
+                                  className="size-4 rounded"
+                                  checked={selectedLedgerEntryIds.includes(String(r.ledgerEntryId))}
+                                  onChange={(e) => toggleLedgerEntry(r.ledgerEntryId, e.target.checked)}
+                                />
+                              ) : (
+                                <span className="text-muted-foreground text-xs">—</span>
+                              )}
+                            </TableCell>
+                          ) : null}
+                          <TableCell>{r.employeeName || '—'}</TableCell>
+                          <TableCell>{r.transactionId || '—'}</TableCell>
+                          {lockNeedsSelection ? (
+                            <TableCell dir="ltr" className="font-mono text-xs">
+                              {r.lastBillDate ? formatDate(r.lastBillDate) : '—'}
+                            </TableCell>
+                          ) : null}
+                          {lockNeedsSelection ? (
+                            <TableCell>{formatCurrency(r.actualBillingAmount)}</TableCell>
+                          ) : null}
+                          <TableCell>{formatDate(r.subscriptionStartDate)}</TableCell>
+                          <TableCell>{formatDate(r.cancellationDate)}</TableCell>
+                          <TableCell>{formatDate(r.subscriptionEndDate || r.subscriptionEndDateRaw)}</TableCell>
+                          <TableCell>{formatCurrency(r.amount)}</TableCell>
+                          <TableCell>
+                            <Button type="button" variant="outline" size="sm" asChild>
+                              <Link to={`/admin/subscribers?search=${encodeURIComponent(r.transactionId || '')}`}>
+                                <Pencil className="size-4 ms-1" />
+                                עריכת לקוח
+                              </Link>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {!(preview.rows || []).length ? (
+                        <TableRow>
+                          <TableCell
+                            colSpan={lockNeedsSelection ? 10 : 7}
+                            className="text-center text-muted-foreground"
+                          >
+                            אין רשומות זכאיות
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="commissions" className="mt-4">

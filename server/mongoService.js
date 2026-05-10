@@ -302,6 +302,292 @@ export async function setDealPaymentArrears(parentDealId, recurringId = '', opti
   });
 }
 
+/** שדות webhook DetailRecurring מ-Cardcom */
+function pickDrField(obj, keys) {
+  if (!obj || typeof obj !== 'object') return '';
+  for (const k of keys) {
+    const v = obj[k];
+    if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+  }
+  return '';
+}
+
+function parseDetailNumber(obj, keys, fallback = 0) {
+  const s = pickDrField(obj, keys);
+  if (!s) return fallback;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+const DETAIL_RECURRING_STATUS_LABELS = {
+  1: 'SUCCESSFUL',
+  2: 'PENDINGFORPROCESSING',
+  3: 'DEBTAUTOBILLING',
+  4: 'LOSTDEBT',
+  5: 'PAYBYOTHERE',
+  6: 'ONHOLD',
+  7: 'OTHER',
+};
+
+function mapDetailRecurringStatusCode(raw) {
+  if (raw === undefined || raw === null || raw === '') return 7;
+  const s = String(raw).trim();
+  if (/^\d+$/.test(s)) {
+    const n = Number(s);
+    return n >= 1 && n <= 7 ? n : 7;
+  }
+  const key = s.toUpperCase().replace(/\s+/g, '').replace(/_/g, '');
+  const nameMap = {
+    SUCCESSFUL: 1,
+    PENDINGFORPROCESSING: 2,
+    DEBTAUTOBILLING: 3,
+    LOSTDEBT: 4,
+    PAYBYOTHERE: 5,
+    ONHOLD: 6,
+    OTHER: 7,
+  };
+  return nameMap[key] ?? 7;
+}
+
+/**
+ * עיבוד דוח DetailRecurring מ-Cardcom: שמירה על עסקת האב + יומן עמלות לפי חיוב בפועל.
+ */
+export async function processDetailRecurringWebhook(body = {}, query = {}) {
+  let normalized =
+    typeof body === 'string'
+      ? Object.fromEntries(new URLSearchParams(body))
+      : { ...(body && typeof body === 'object' ? body : {}) };
+  if (query && typeof query === 'object') normalized = { ...query, ...normalized };
+
+  const recordType = String(normalized.RecordType || normalized.recordType || '').trim();
+  if (recordType.toLowerCase() !== 'detailrecurring') {
+    return { ok: true, skipped: true, reason: 'not_detail_recurring' };
+  }
+
+  const secretExpected = String(
+    process.env.CARDCOM_DETAIL_RECURRING_SECRET || process.env.CARDCOM_MASTER_RECURRING_SECRET || ''
+  ).trim();
+  const secretReceived = String(normalized.Secret ?? normalized.secret ?? '').trim();
+  if (secretExpected && secretReceived !== secretExpected) {
+    throw new Error('Invalid DetailRecurring secret');
+  }
+
+  const rowId = pickDrField(normalized, ['RowID', 'rowId', 'RowId']);
+  if (!rowId) throw new Error('DetailRecurring missing RowID');
+
+  const parent = await findDealForRecurringEvent({
+    transactionId: pickDrField(normalized, ['InternalDealNumber', 'internalDealNumber']),
+    lowProfileCode: pickDrField(normalized, ['LowProfileCode', 'lowProfileCode']),
+    cardcomRecurringId: pickDrField(normalized, ['RecurringId', 'recurringId']),
+    cardcomAccountId: pickDrField(normalized, ['AccountId', 'accountId']),
+    cardcomToken: pickDrField(normalized, ['Token', 'CardToken', 'TokenToSave']),
+  });
+  if (!parent) {
+    return { ok: false, error: 'parent_deal_not_found', rowId };
+  }
+
+  const statusRaw = normalized.Status ?? normalized.status;
+  const statusCode = mapDetailRecurringStatusCode(statusRaw);
+  const sum = parseDetailNumber(normalized, ['Sum', 'sum'], 0);
+  const sumNoVat = parseDetailNumber(normalized, ['SumNoVat', 'sumNoVat'], 0);
+
+  const lastBillRaw = pickDrField(normalized, ['LastBillDate', 'lastBillDate']);
+  const lastBillDt = parseFlexibleDate(lastBillRaw) || new Date();
+  const billingMonth = `${lastBillDt.getFullYear()}-${String(lastBillDt.getMonth() + 1).padStart(2, '0')}`;
+
+  const { resolveEconomicsForBillingPayment } = await import('./adminMongooseService.js');
+
+  let vendorCost = 0;
+  let agentCommission = 0;
+  let netProfit = 0;
+
+  if (statusCode === 1 && sum > 0) {
+    const econ = await resolveEconomicsForBillingPayment(parent.formState || {}, sum);
+    vendorCost = Number(econ.resolvedVendorCost ?? 0);
+    agentCommission = Number(econ.resolvedAgentCommission ?? 0);
+    netProfit = Number(econ.resolvedNetProfit ?? 0);
+
+    const aidRaw = parent.agentId || parent.formState?.agentId;
+    if (aidRaw && ObjectId.isValid(String(aidRaw))) {
+      const dbA = await getDb();
+      const agentDoc = await dbA.collection('sales_agents').findOne(
+        { _id: new ObjectId(String(aidRaw)) },
+        { projection: { deactivatedAt: 1 } }
+      );
+      const deactivatedAt = agentDoc?.deactivatedAt ? new Date(agentDoc.deactivatedAt) : null;
+      if (deactivatedAt && lastBillDt > deactivatedAt) {
+        agentCommission = 0;
+        netProfit = sum - vendorCost;
+      }
+    }
+  }
+
+  const statusLabel = DETAIL_RECURRING_STATUS_LABELS[statusCode] || 'OTHER';
+
+  const event = {
+    rowId,
+    recordType: 'DetailRecurring',
+    statusCode,
+    statusLabel,
+    statusRaw: String(statusRaw ?? ''),
+    accountId: pickDrField(normalized, ['AccountId', 'accountId']),
+    recurringId: pickDrField(normalized, ['RecurringId', 'recurringId']),
+    terminalNumber: pickDrField(normalized, ['TerminalNumber', 'terminalNumber']),
+    createDate: pickDrField(normalized, ['CreateDate', 'createDate']),
+    invoiceDescription: pickDrField(normalized, ['InvoiceDescription', 'invoiceDescription']),
+    lastBillDate: lastBillRaw,
+    lastBillDateIso: lastBillDt.toISOString(),
+    billingMonth,
+    originalNextDateToBill: pickDrField(normalized, ['OriginalNextDateToBill', 'originalNextDateToBill']),
+    finalDebitCoinId: pickDrField(normalized, ['FinalDebitCoinId', 'finalDebitCoinId']),
+    departmentId: pickDrField(normalized, ['DepartmentId', 'departmentId']),
+    isInvoiceCreate:
+      normalized.IsInvoiceCreate === true ||
+      normalized.IsInvoiceCreate === 'true' ||
+      String(normalized.IsInvoiceCreate || '').toLowerCase() === 'true',
+    userId: pickDrField(normalized, ['UserId', 'userId']),
+    paymentNum: pickDrField(normalized, ['PaymentNum', 'paymentNum']),
+    isReNewOrder:
+      normalized.IsReNewOrder === true ||
+      normalized.IsReNewOrder === 'true' ||
+      String(normalized.IsReNewOrder || '').toLowerCase() === 'true',
+    productIdField: pickDrField(normalized, ['ProductId', 'productId']),
+    documentType: pickDrField(normalized, ['DocumentType', 'documentType']),
+    documentNumber: pickDrField(normalized, ['DocumentNumber', 'documentNumber']),
+    quantity: parseDetailNumber(normalized, ['Quantity', 'quantity'], 0),
+    isIncludesVAT:
+      normalized.IsIncludesVAT === true ||
+      normalized.IsIncludesVAT === 'true' ||
+      String(normalized.IsIncludesVAT || '').toLowerCase() === 'true',
+    vat: parseDetailNumber(normalized, ['VAT', 'vat'], 0),
+    sum,
+    sumNoVat,
+    internalDealNumber: pickDrField(normalized, ['InternalDealNumber', 'internalDealNumber']),
+    responseCode: pickDrField(normalized, ['ResposeCode', 'ResponseCode', 'responseCode']),
+    processID: pickDrField(normalized, ['ProcessID', 'processID', 'processId']),
+    billingAttempts: pickDrField(normalized, ['BillingAttempts', 'billingAttempts']),
+    actualBillingType: pickDrField(normalized, ['ActualBillingType', 'actualBillingType']),
+    returnValue: pickDrField(normalized, ['ReturnValue', 'returnValue']),
+    uid: pickDrField(normalized, ['UID', 'Uid', 'uid']),
+    vendorCost,
+    agentCommission,
+    netProfit,
+    receivedAt: new Date(),
+  };
+
+  const db = await getDb();
+  const deals = db.collection('deals');
+  const oid = new ObjectId(parent.id);
+  const existing = await deals.findOne({ _id: oid }, { projection: { detailRecurringEvents: 1 } });
+  const arr = Array.isArray(existing?.detailRecurringEvents) ? existing.detailRecurringEvents : [];
+  const idx = arr.findIndex((e) => String(e.rowId) === String(rowId));
+  if (idx >= 0) {
+    await deals.updateOne({ _id: oid }, { $set: { [`detailRecurringEvents.${idx}`]: event, updatedAt: new Date() } });
+  } else {
+    await deals.updateOne({ _id: oid }, { $push: { detailRecurringEvents: event }, $set: { updatedAt: new Date() } });
+  }
+
+  try {
+    await db.collection('agent_commission_ledger').createIndex({ rowId: 1 }, { unique: true });
+  } catch {
+    /* index may exist */
+  }
+
+  const aidStr = String(parent.agentId || parent.formState?.agentId || '').trim();
+  if (statusCode === 1 && sum > 0 && aidStr) {
+    const ledgerDoc = {
+      rowId,
+      agentId: aidStr,
+      dealId: parent.id,
+      transactionId: parent.transactionId,
+      recurringId: event.recurringId,
+      accountId: event.accountId,
+      statusCode,
+      lastBillDate: lastBillDt,
+      billingMonth,
+      actualAmount: sum,
+      sumNoVat,
+      vendorCost,
+      agentCommission,
+      netProfit,
+      locked: false,
+      snapshotId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      source: 'detail_recurring',
+    };
+    const existingLed = await db.collection('agent_commission_ledger').findOne({ rowId });
+    if (existingLed?.locked === true) {
+      await db.collection('agent_commission_ledger').updateOne(
+        { rowId },
+        {
+          $set: {
+            actualAmount: sum,
+            sumNoVat,
+            vendorCost,
+            agentCommission,
+            netProfit,
+            statusCode,
+            lastBillDate: lastBillDt,
+            billingMonth,
+            updatedAt: new Date(),
+          },
+        }
+      );
+    } else {
+      await db.collection('agent_commission_ledger').updateOne({ rowId }, { $set: ledgerDoc }, { upsert: true });
+    }
+  }
+
+  return { ok: true, dealId: parent.id, rowId, statusCode };
+}
+
+/** סיכום כספי לפי אירועי DetailRecurring מוצלחים בחודש */
+export async function getCashFinancialTotalsForMonth(monthStr) {
+  const month = String(monthStr || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(month)) {
+    return {
+      month,
+      eventCount: 0,
+      totalRevenue: 0,
+      totalVendorCost: 0,
+      totalAgentCommission: 0,
+      totalNetProfit: 0,
+    };
+  }
+  const db = await getDb();
+  const pipeline = [
+    { $match: { detailRecurringEvents: { $exists: true, $ne: [] } } },
+    { $unwind: '$detailRecurringEvents' },
+    {
+      $match: {
+        'detailRecurringEvents.billingMonth': month,
+        'detailRecurringEvents.statusCode': 1,
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        eventCount: { $sum: 1 },
+        totalRevenue: { $sum: { $ifNull: ['$detailRecurringEvents.sum', 0] } },
+        totalVendorCost: { $sum: { $ifNull: ['$detailRecurringEvents.vendorCost', 0] } },
+        totalAgentCommission: { $sum: { $ifNull: ['$detailRecurringEvents.agentCommission', 0] } },
+        totalNetProfit: { $sum: { $ifNull: ['$detailRecurringEvents.netProfit', 0] } },
+      },
+    },
+  ];
+  const agg = await db.collection('deals').aggregate(pipeline).toArray();
+  const g = agg[0];
+  return {
+    month,
+    eventCount: g ? Number(g.eventCount || 0) : 0,
+    totalRevenue: g ? Number(g.totalRevenue || 0) : 0,
+    totalVendorCost: g ? Number(g.totalVendorCost || 0) : 0,
+    totalAgentCommission: g ? Number(g.totalAgentCommission || 0) : 0,
+    totalNetProfit: g ? Number(g.totalNetProfit || 0) : 0,
+  };
+}
+
 export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
   const db = await getDb();
   if (!ObjectId.isValid(String(dealId || ''))) return { cardcomRecurringId: '', rows: [] };
@@ -345,13 +631,38 @@ export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
     .sort({ createdAt: 1 })
     .limit(lim)
     .toArray();
-  const rows = docs.map((d) => {
+  const detailEvents = Array.isArray(mainDeal.detailRecurringEvents) ? mainDeal.detailRecurringEvents : [];
+  const detailRows = detailEvents
+    .slice()
+    .sort((a, b) => {
+      const da = parseFlexibleDate(a.lastBillDate || a.lastBillDateIso) || new Date(0);
+      const db = parseFlexibleDate(b.lastBillDate || b.lastBillDateIso) || new Date(0);
+      return db.getTime() - da.getTime();
+    })
+    .map((ev) => ({
+      source: 'detail_recurring',
+      id: String(ev.rowId || ''),
+      rowId: String(ev.rowId || ''),
+      statusCode: ev.statusCode,
+      statusLabel: ev.statusLabel || DETAIL_RECURRING_STATUS_LABELS[ev.statusCode] || '—',
+      sum: Number(ev.sum ?? 0),
+      sumNoVat: Number(ev.sumNoVat ?? 0),
+      lastBillDate: ev.lastBillDateIso || ev.lastBillDate || null,
+      billingMonth: ev.billingMonth || '',
+      status: Number(ev.statusCode) === 1 ? 'הצלחה' : 'אחר',
+      paymentStatus: Number(ev.statusCode) === 1 ? 'paid' : String(ev.statusCode ?? ''),
+      errorReason: '—',
+      createdAt: ev.receivedAt instanceof Date ? ev.receivedAt.toISOString() : ev.receivedAt,
+      isRecurringCycle: false,
+    }));
+  const cycleRows = docs.map((d) => {
     const month =
       String(d.billingMonth || '').trim() ||
       formatBillingMonthFromDate(d.createdAt instanceof Date ? d.createdAt : new Date(d.createdAt));
     const success = /success|paid|test_success|completed/i.test(String(d.paymentStatus || ''));
     const errorReason = String(d?.indicator?.responsdescription || d?.formState?.cardcomResponseDescription || '').trim();
     return {
+      source: 'legacy_cycle_deal',
       id: String(d._id),
       billingMonth: month,
       status: success ? 'הצלחה' : 'כישלון',
@@ -363,7 +674,9 @@ export async function getSubscriberBillingHistoryByDealId(dealId, limit = 120) {
   });
   return {
     cardcomRecurringId: recurringId,
-    rows,
+    detailRecurringRows: detailRows,
+    legacyCycleRows: cycleRows,
+    rows: [...detailRows, ...cycleRows],
   };
 }
 
@@ -2262,6 +2575,24 @@ export async function getSalesDashboardData(filters = {}) {
       .filter(Boolean)
   ).size;
 
+  let revenueOut = totalRevenue;
+  let vendorOut = totalVendorCost;
+  let agentOut = totalAgentCommission;
+  let netOut = totalNetProfitFromDeals;
+  let cashBasedSummary = false;
+  let billingEventCount = 0;
+  if (filters.month && /^\d{4}-\d{2}$/.test(String(filters.month))) {
+    const cash = await getCashFinancialTotalsForMonth(String(filters.month));
+    if (cash && cash.eventCount > 0) {
+      revenueOut = cash.totalRevenue;
+      vendorOut = cash.totalVendorCost;
+      agentOut = cash.totalAgentCommission;
+      netOut = cash.totalNetProfit;
+      cashBasedSummary = true;
+      billingEventCount = cash.eventCount;
+    }
+  }
+
   return {
     summary: {
       all: shown.length,
@@ -2271,20 +2602,22 @@ export async function getSalesDashboardData(filters = {}) {
       private_org: totalPrivateOrg,
       centralized_org: totalCentralizedOrg,
       centralized_canceled: totalCentralizedCanceled,
-      totalRevenue,
+      totalRevenue: revenueOut,
       totalExpenses: amountDue,
       /** legacy: הכנסות פחות "הוצאות ידניות" */
-      totalProfit: totalRevenue - amountDue,
-      totalVendorCost,
-      totalAgentCommission,
+      totalProfit: revenueOut - amountDue,
+      totalVendorCost: vendorOut,
+      totalAgentCommission: agentOut,
       /** רווח אחרי עלות ספק ועמלת סוכן (מומלץ) */
-      totalNetProfit: totalNetProfitFromDeals,
+      totalNetProfit: netOut,
+      cashBasedSummary,
+      billingEventCount,
     },
     searchResults: {
       totalTransactions: shown.length,
       totalPrimary,
       totalSecondary,
-      totalSalesAmount: totalRevenue,
+      totalSalesAmount: revenueOut,
     },
     filterOptions: {
       providers: vendorNames,
@@ -3849,59 +4182,136 @@ export async function getAgentCommissionPreview(agentId, monthStr) {
     ])
   );
 
-  const docs = await db
-    .collection('deals')
-    .find({ $or: or, isRecurringCycle: { $ne: true } })
-    .project({
-      source: 1,
-      transactionId: 1,
-      formState: 1,
-      createdAt: 1,
-      cancellationDate: 1,
-      commissionAmount: 1,
-      subscriptionEndDate: 1,
-      cancelAt: 1,
-      subscriptionStatus: 1,
-      status: 1,
-      paymentStatus: 1,
-      isActive: 1,
+  /** יומן עמלות לפי חיובים בפועל (DetailRecurring) */
+  const ledgerDocs = await db
+    .collection('agent_commission_ledger')
+    .find({
+      agentId: aid,
+      billingMonth: month,
+      $or: [{ locked: false }, { locked: { $exists: false } }],
     })
+    .sort({ lastBillDate: 1 })
     .toArray();
 
-  const rows = [];
-  const now = new Date();
-  for (const d of docs) {
-    const fs = d?.formState && typeof d.formState === 'object' ? d.formState : {};
-    const startDate = parseFlexibleDate(fs.subscriptionStartDate);
-    if (!startDate) continue;
-    const endDateRaw = d.subscriptionEndDate || d.cancelAt || fs.cardcomNextDateToBill || null;
-    const endDate = parseFlexibleDate(endDateRaw);
-    // תנאי כניסה לדוח: start עבר, ו-end עתידי או ריק.
-    const subscriptionEligible = startDate <= now && (!endDate || endDate > now);
-    if (!subscriptionEligible) continue;
-    rows.push({
-      dealId: String(d._id),
-      transactionId: String(d.transactionId || ''),
-      employeeName: String(fs.fullName || '').trim() || '—',
-      idNumber: String(fs.id || '').trim() || '—',
-      provider: String(fs.providerName || fs.vendorName || '').trim(),
-      productName: String(fs.productName || '').trim(),
-      billingType:
-        String(fs.paymentMethod || fs.organizationPaymentMethod || '').toLowerCase() === 'centralized' ||
-        String(d.source || '') === 'org-bulk-import'
-          ? 'Centralized'
-          : 'Private',
-      entitlementStatus: getEntitlementStatus(d).status,
-      subscriptionStartDate: startDate.toISOString(),
-      cancellationDate: d.cancellationDate
-        ? (d.cancellationDate instanceof Date ? d.cancellationDate.toISOString() : String(d.cancellationDate))
-        : null,
-      subscriptionEndDate: endDate ? endDate.toISOString() : null,
-      subscriptionEndDateRaw: endDateRaw,
-      amount: getCommissionAmountForDeal(d, commissionByProduct),
-      paymentStatus: String(d.paymentStatus || ''),
-      billingMonth: month,
+  let rows = [];
+  let previewSource = 'subscription_dates';
+
+  if (ledgerDocs.length > 0) {
+    previewSource = 'cash_billing';
+    const dealIds = [...new Set(ledgerDocs.map((l) => l.dealId).filter(Boolean))];
+    const dealsMap = new Map();
+    if (dealIds.length) {
+      const oids = dealIds.filter((id) => ObjectId.isValid(String(id))).map((id) => new ObjectId(String(id)));
+      if (oids.length) {
+        const drs = await db
+          .collection('deals')
+          .find({ _id: { $in: oids } })
+          .project({
+            formState: 1,
+            transactionId: 1,
+            source: 1,
+            subscriptionEndDate: 1,
+            cancelAt: 1,
+            cancellationDate: 1,
+            paymentStatus: 1,
+          })
+          .toArray();
+        for (const dr of drs) dealsMap.set(String(dr._id), dr);
+      }
+    }
+
+    rows = ledgerDocs.map((L) => {
+      const d = dealsMap.get(String(L.dealId)) || {};
+      const fs = d?.formState && typeof d.formState === 'object' ? d.formState : {};
+      const ent = getEntitlementStatus(d);
+      const lastBill =
+        L.lastBillDate instanceof Date ? L.lastBillDate.toISOString() : L.lastBillDate || '';
+      return {
+        ledgerEntryId: String(L._id),
+        dealId: String(L.dealId),
+        transactionId: String(L.transactionId || d.transactionId || ''),
+        employeeName: String(fs.fullName || '').trim() || '—',
+        idNumber: String(fs.id || '').trim() || '—',
+        provider: String(fs.providerName || fs.vendorName || '').trim(),
+        productName: String(fs.productName || '').trim(),
+        billingType:
+          String(fs.paymentMethod || fs.organizationPaymentMethod || '').toLowerCase() === 'centralized' ||
+          String(d.source || '') === 'org-bulk-import'
+            ? 'Centralized'
+            : 'Private',
+        entitlementStatus: ent.status,
+        subscriptionStartDate: fs.subscriptionStartDate || '',
+        cancellationDate: d.cancellationDate
+          ? (d.cancellationDate instanceof Date ? d.cancellationDate.toISOString() : String(d.cancellationDate))
+          : null,
+        subscriptionEndDate: d.subscriptionEndDate
+          ? (d.subscriptionEndDate instanceof Date ? d.subscriptionEndDate.toISOString() : String(d.subscriptionEndDate))
+          : null,
+        subscriptionEndDateRaw: d.subscriptionEndDate || d.cancelAt || fs.cardcomNextDateToBill || null,
+        amount: Number(L.agentCommission || 0),
+        actualBillingAmount: Number(L.actualAmount || 0),
+        vendorCostSnapshot: Number(L.vendorCost || 0),
+        netProfitSnapshot: Number(L.netProfit || 0),
+        rowId: String(L.rowId || ''),
+        lastBillDate: lastBill,
+        paymentStatus: String(d.paymentStatus || ''),
+        billingMonth: month,
+      };
     });
+  } else {
+    const docs = await db
+      .collection('deals')
+      .find({ $or: or, isRecurringCycle: { $ne: true } })
+      .project({
+        source: 1,
+        transactionId: 1,
+        formState: 1,
+        createdAt: 1,
+        cancellationDate: 1,
+        commissionAmount: 1,
+        subscriptionEndDate: 1,
+        cancelAt: 1,
+        subscriptionStatus: 1,
+        status: 1,
+        paymentStatus: 1,
+        isActive: 1,
+      })
+      .toArray();
+
+    const now = new Date();
+    for (const d of docs) {
+      const fs = d?.formState && typeof d.formState === 'object' ? d.formState : {};
+      const startDate = parseFlexibleDate(fs.subscriptionStartDate);
+      if (!startDate) continue;
+      const endDateRaw = d.subscriptionEndDate || d.cancelAt || fs.cardcomNextDateToBill || null;
+      const endDate = parseFlexibleDate(endDateRaw);
+      const subscriptionEligible = startDate <= now && (!endDate || endDate > now);
+      if (!subscriptionEligible) continue;
+      rows.push({
+        ledgerEntryId: null,
+        dealId: String(d._id),
+        transactionId: String(d.transactionId || ''),
+        employeeName: String(fs.fullName || '').trim() || '—',
+        idNumber: String(fs.id || '').trim() || '—',
+        provider: String(fs.providerName || fs.vendorName || '').trim(),
+        productName: String(fs.productName || '').trim(),
+        billingType:
+          String(fs.paymentMethod || fs.organizationPaymentMethod || '').toLowerCase() === 'centralized' ||
+          String(d.source || '') === 'org-bulk-import'
+            ? 'Centralized'
+            : 'Private',
+        entitlementStatus: getEntitlementStatus(d).status,
+        subscriptionStartDate: startDate.toISOString(),
+        cancellationDate: d.cancellationDate
+          ? (d.cancellationDate instanceof Date ? d.cancellationDate.toISOString() : String(d.cancellationDate))
+          : null,
+        subscriptionEndDate: endDate ? endDate.toISOString() : null,
+        subscriptionEndDateRaw: endDateRaw,
+        amount: getCommissionAmountForDeal(d, commissionByProduct),
+        paymentStatus: String(d.paymentStatus || ''),
+        billingMonth: month,
+      });
+    }
   }
 
   const snapshots = await db
@@ -3915,6 +4325,7 @@ export async function getAgentCommissionPreview(agentId, monthStr) {
 
   return {
     month,
+    previewSource,
     agent: {
       id: String(agent._id),
       agentName: String(agent.agentName || ''),
@@ -3927,33 +4338,69 @@ export async function getAgentCommissionPreview(agentId, monthStr) {
       pendingPayouts,
     },
     rows,
+    ...(previewSource !== 'cash_billing'
+      ? {
+          note:
+            'מצב גיבוי: אין עדיין רשומות חיוב בפועל לסוכן בחודש זה — מוצגות עסקאות לפי מנוי. לאחר חיבור webhook DetailRecurring יוצגו עמלות לפי תשלומים בפועל.',
+        }
+      : {}),
   };
 }
 
-export async function lockAgentCommissionsSnapshot(agentId, monthStr) {
+export async function lockAgentCommissionsSnapshot(agentId, monthStr, entryIds = null) {
   const preview = await getAgentCommissionPreview(agentId, monthStr);
+  let rows = Array.isArray(preview.rows) ? preview.rows : [];
+  if (Array.isArray(entryIds) && entryIds.length > 0) {
+    const idSet = new Set(entryIds.map((x) => String(x)));
+    rows = rows.filter((r) => r.ledgerEntryId && idSet.has(String(r.ledgerEntryId)));
+    if (!rows.length) throw new Error('לא נבחרו רשומות תואמות לנעילה (נדרש ledgerEntryId)');
+  }
+
+  const totalCommissions = rows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
   const db = await getDb();
   const now = new Date();
   const snapshot = {
     agentId: String(preview.agent.id),
     agentName: String(preview.agent.agentName || ''),
     month: preview.month,
-    totalAmount: Number(preview.summary.totalCommissions || 0),
-    totalDeals: Number(preview.summary.activeDeals || 0),
-    rows: preview.rows,
+    totalAmount: Number(totalCommissions || 0),
+    totalDeals: Number(rows.length || 0),
+    rows,
     status: 'Pending',
     invoiceNum: '',
     invoiceAmount: 0,
     creditNoteNum: '',
     creditNoteAmount: 0,
     totalPaid: 0,
-    balance: Number(preview.summary.totalCommissions || 0),
+    balance: Number(totalCommissions || 0),
     notes: '',
+    previewSource: preview.previewSource || '',
     createdAt: now,
     updatedAt: now,
   };
   const result = await db.collection('agent_commission_snapshots').insertOne(snapshot);
-  return { success: true, snapshotId: String(result.insertedId), ...snapshot };
+  const snapId = String(result.insertedId);
+
+  const ledgerOids = rows
+    .map((r) => r.ledgerEntryId)
+    .filter(Boolean)
+    .map((id) => {
+      try {
+        return new ObjectId(String(id));
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+
+  if (ledgerOids.length) {
+    await db.collection('agent_commission_ledger').updateMany(
+      { _id: { $in: ledgerOids } },
+      { $set: { locked: true, snapshotId: snapId, updatedAt: now } }
+    );
+  }
+
+  return { success: true, snapshotId: snapId, ...snapshot };
 }
 
 export async function listAgentCommissionSnapshots(agentId, limit = 100) {
@@ -4065,7 +4512,13 @@ export async function hasUnlockedAgentCommissionsForMonth(agentId, monthStr) {
     { agentId: aid, month, status: { $ne: 'Paid' } },
     { projection: { _id: 1 } }
   );
-  return !!hit;
+  if (hit) return true;
+  const ledgerOpen = await db.collection('agent_commission_ledger').countDocuments({
+    agentId: aid,
+    billingMonth: month,
+    $or: [{ locked: false }, { locked: { $exists: false } }],
+  });
+  return ledgerOpen > 0;
 }
 
 export async function listMonthlyInvoices(limit = 300, monthFilter = null) {
