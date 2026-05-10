@@ -42,6 +42,126 @@ async function ensureDealsIndexes(db) {
   // ]);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Distributed checkout lock + session persistence
+//
+// Why MongoDB instead of in-memory Map:
+//   An in-memory lock only works within a single Node.js process. Under PM2
+//   cluster mode (or any multi-instance deployment) each process has its own
+//   Map, so the lock is invisible to sibling processes. Cardcom fires GET and
+//   POST webhooks concurrently; they may land on different workers, each of
+//   which then calls createRecurringProfileFromLowProfile — producing duplicate
+//   recurring profiles.
+//
+//   MongoDB's insertOne with a unique index is atomic across all connections.
+//   The first process to insert wins; every other insert throws a duplicate-key
+//   error (code 11000), which we treat as "lock already held".
+//
+// Indexes (created once at first getDb() call via ensureCheckoutCollectionIndexes):
+//   checkout_locks.lowProfileCode  — unique, ensures atomic acquisition
+//   checkout_locks.lockedAt        — TTL 30 min, self-cleans stale locks
+//   checkout_sessions.lowProfileCode — unique
+//   checkout_sessions.savedAt      — TTL 2 h, self-cleans old form data
+// ─────────────────────────────────────────────────────────────────────────────
+
+let checkoutIndexesPromise = null;
+
+export async function ensureCheckoutCollectionIndexes() {
+  if (checkoutIndexesPromise) return checkoutIndexesPromise;
+  checkoutIndexesPromise = (async () => {
+    const db = await getDb();
+    await db.collection('checkout_locks').createIndex(
+      { lowProfileCode: 1 },
+      { unique: true, name: 'lpc_unique' }
+    );
+    await db.collection('checkout_locks').createIndex(
+      { lockedAt: 1 },
+      { expireAfterSeconds: 1800, name: 'lpc_ttl_30min' }
+    );
+    await db.collection('checkout_sessions').createIndex(
+      { lowProfileCode: 1 },
+      { unique: true, name: 'cs_lpc_unique' }
+    );
+    await db.collection('checkout_sessions').createIndex(
+      { savedAt: 1 },
+      { expireAfterSeconds: 7200, name: 'cs_ttl_2h' }
+    );
+  })().catch((err) => {
+    checkoutIndexesPromise = null;
+    console.error('[checkout-indexes] Failed to create indexes:', err?.message || err);
+  });
+  return checkoutIndexesPromise;
+}
+
+/**
+ * Atomically acquire a per-lowProfileCode processing lock.
+ * Returns true if the lock was acquired (caller should proceed).
+ * Returns false if another process already holds it (caller should skip).
+ * Throws on unexpected DB errors.
+ */
+export async function tryAcquireCheckoutLock(lowProfileCode) {
+  const db = await getDb();
+  try {
+    await db.collection('checkout_locks').insertOne({
+      lowProfileCode: String(lowProfileCode),
+      lockedAt: new Date(),
+    });
+    return true;
+  } catch (e) {
+    if (e.code === 11000) return false; // duplicate key → another process holds the lock
+    throw e;
+  }
+}
+
+/**
+ * Release the lock (delete the document).
+ * Called after successful processing so that legitimate Cardcom retries can
+ * enter and verify the deal — they will find the deal already saved and skip Step2.
+ * Non-blocking: if the delete fails the TTL index cleans up within 30 minutes.
+ */
+export async function releaseCheckoutLock(lowProfileCode) {
+  try {
+    const db = await getDb();
+    await db.collection('checkout_locks').deleteOne({ lowProfileCode: String(lowProfileCode) });
+  } catch {
+    /* non-critical — TTL index will remove the stale lock automatically */
+  }
+}
+
+/**
+ * Persist the full checkout session (formState + payerAmount) to MongoDB.
+ * This allows any server instance to handle the Cardcom webhook, not just the
+ * instance that originally created the checkout session.
+ */
+export async function persistCheckoutSession(lowProfileCode, { formState, payerAmount }) {
+  const db = await getDb();
+  await db.collection('checkout_sessions').updateOne(
+    { lowProfileCode: String(lowProfileCode) },
+    {
+      $set: {
+        lowProfileCode: String(lowProfileCode),
+        formState,
+        payerAmount: Number(payerAmount || 0),
+        savedAt: new Date(),
+      },
+    },
+    { upsert: true }
+  );
+}
+
+/**
+ * Load a previously-persisted checkout session.
+ * Returns { formState, payerAmount } or null if not found / expired.
+ */
+export async function loadCheckoutSession(lowProfileCode) {
+  const db = await getDb();
+  const doc = await db.collection('checkout_sessions').findOne(
+    { lowProfileCode: String(lowProfileCode) },
+    { projection: { _id: 0, formState: 1, payerAmount: 1 } }
+  );
+  return doc || null;
+}
+
 /** חודש לדוחות בילינג — YYYY-MM */
 export function formatBillingMonthFromDate(d) {
   const dt = d instanceof Date ? d : new Date(d);

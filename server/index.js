@@ -75,6 +75,11 @@ import {
   updateAgentCommissionSnapshot,
   hasUnlockedAgentCommissionsForMonth,
   processDetailRecurringWebhook,
+  tryAcquireCheckoutLock,
+  releaseCheckoutLock,
+  persistCheckoutSession,
+  loadCheckoutSession,
+  ensureCheckoutCollectionIndexes,
   listMonthlyInvoices,
   generateMonthlyInvoicesForMonth,
   updateMonthlyInvoice,
@@ -464,6 +469,12 @@ app.post('/api/create-checkout-session', async (req, res) => {
       createdAt: Date.now(),
     });
 
+    // Persist to MongoDB so any server instance (PM2 worker, separate dyno) can
+    // handle the Cardcom webhook — not only the instance that created this session.
+    persistCheckoutSession(result.lowProfileCode, { formState: enrichedForm, payerAmount }).catch(
+      (e) => console.warn(`[${ts()}] persistCheckoutSession (non-blocking):`, e?.message || e)
+    );
+
     try {
       await upsertPendingCheckoutLead({
         lowProfileCode: result.lowProfileCode,
@@ -574,14 +585,39 @@ app.post('/api/cardcom-detail-recurring-webhook', (req, res) => {
  * Uses fallbacks everywhere so missing metadata does not crash.
  */
 async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQuery = {}) {
+  // ── Distributed lock ────────────────────────────────────────────────────────
+  // Uses MongoDB's unique-key constraint as an atomic mutex that works across
+  // all server processes and instances.  The first request to arrive acquires
+  // the lock; every subsequent concurrent or duplicate webhook skips processing.
+  // The lock is released after the deal is saved so that legitimate Cardcom
+  // retries can enter, verify the saved deal, and exit without calling Step2
+  // again (guarded by the "deal already has RecurringId" check below).
+  let lockAcquired = false;
   try {
-    const pending = pendingDeals.get(lowProfileCode);
+    lockAcquired = await tryAcquireCheckoutLock(lowProfileCode);
+  } catch (lockErr) {
+    console.error(`[${ts()}] Webhook: lock check failed for ${lowProfileCode}:`, lockErr?.message || lockErr);
+    return; // safer to skip than to risk a duplicate profile
+  }
+  if (!lockAcquired) {
+    console.log(`[${ts()}] Webhook: ${lowProfileCode} already being processed — duplicate skipped`);
+    return;
+  }
+  // ────────────────────────────────────────────────────────────────────────────
+
+  try {
+    // Prefer in-memory (fast, same process), fall back to MongoDB (cross-process).
+    let pending = pendingDeals.get(lowProfileCode);
     if (!pending) {
-      console.warn(`[${ts()}] Webhook: no pending deal for LowProfileCode (duplicate or already processed)`, lowProfileCode);
+      pending = await loadCheckoutSession(lowProfileCode);
+      if (pending) {
+        console.log(`[${ts()}] Webhook: session loaded from MongoDB for ${lowProfileCode}`);
+      }
+    }
+    if (!pending) {
+      console.warn(`[${ts()}] Webhook: no session data for ${lowProfileCode} — expired or unknown code`);
       return;
     }
-    // In-memory lock: consume immediately to prevent concurrent handlers from triggering Step2 twice.
-    pendingDeals.delete(lowProfileCode);
 
     const terminal = parseInt(process.env.CARDCOM_TERMINAL, 10) || 0;
     const user = process.env.CARDCOM_USER ?? '';
@@ -764,32 +800,47 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
       webhookQuery?.['ExtShvaParams.CardToken']
     );
 
+    // ── Guard: skip Step2 if a recurring profile already exists for this deal ──
+    // Defense-in-depth: if a previous webhook already ran Step2 and saved the
+    // RecurringId, calling createRecurringProfileFromLowProfile again would
+    // create a second Cardcom profile for the same customer.
+    const existingDealCheck = await findDealByLowProfileCode(lowProfileCode);
+    const alreadyHasRecurringId = !!(
+      existingDealCheck?.cardcomRecurringId ||
+      existingDealCheck?.indicator?.step2CardcomRecurringId
+    );
+    if (alreadyHasRecurringId) {
+      console.log(`[${ts()}] Webhook: deal for ${lowProfileCode} already has RecurringId — skipping Step2 (Cardcom retry handled)`);
+    }
+
     // Step 2 (required): create BillGold recurring profile from successful Low Profile charge.
     let step2Recurring = null;
-    try {
-      step2Recurring = await createRecurringProfileFromLowProfile({
-        terminalNumber: terminalNum,
-        username: user,
-        lowProfileCode,
-        email: String(finalForm?.email || '').trim(),
-        companyName: String(finalForm?.fullName || '').trim() || String(finalForm?.organizationName || '').trim() || 'Customer',
-        phone: String(finalForm?.phone || '').trim(),
-        internalDescription: String(finalForm?.productName || 'Subscription').trim(),
-        invoiceDescription: String(finalForm?.productName || 'Subscription').trim(),
-        monthlyAmount: payerAmount,
-        returnValue: lowProfileCode,
-        cardToken: webhookCardToken,
-      });
-      console.log(`[${ts()}] RecurringPayment Step2 created`, {
-        lowProfileCode,
-        cardcomAccountId: step2Recurring?.cardcomAccountId || null,
-        cardcomRecurringId: step2Recurring?.cardcomRecurringId || null,
-      });
-    } catch (step2Err) {
-      console.error(`[${ts()}] RecurringPayment Step2 failed`, {
-        lowProfileCode,
-        message: step2Err?.message || step2Err,
-      });
+    if (!alreadyHasRecurringId) {
+      try {
+        step2Recurring = await createRecurringProfileFromLowProfile({
+          terminalNumber: terminalNum,
+          username: user,
+          lowProfileCode,
+          email: String(finalForm?.email || '').trim(),
+          companyName: String(finalForm?.fullName || '').trim() || String(finalForm?.organizationName || '').trim() || 'Customer',
+          phone: String(finalForm?.phone || '').trim(),
+          internalDescription: String(finalForm?.productName || 'Subscription').trim(),
+          invoiceDescription: String(finalForm?.productName || 'Subscription').trim(),
+          monthlyAmount: payerAmount,
+          returnValue: lowProfileCode,
+          cardToken: webhookCardToken,
+        });
+        console.log(`[${ts()}] RecurringPayment Step2 created`, {
+          lowProfileCode,
+          cardcomAccountId: step2Recurring?.cardcomAccountId || null,
+          cardcomRecurringId: step2Recurring?.cardcomRecurringId || null,
+        });
+      } catch (step2Err) {
+        console.error(`[${ts()}] RecurringPayment Step2 failed`, {
+          lowProfileCode,
+          message: step2Err?.message || step2Err,
+        });
+      }
     }
     finalForm.cardcomRecurringId = String(
       step2Recurring?.cardcomRecurringId || finalForm.cardcomRecurringId || indicator?.cardcomRecurringId || ''
@@ -928,6 +979,10 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
     const paymentStatus = (Number(process.env.CARDCOM_TERMINAL) === 1000) ? 'TEST' : 'LIVE';
     console.log(`[${ts()}] Payment status: ${paymentStatus} - Result: FAILURE`);
     console.error(`[${ts()}] Webhook: handleWebhookSuccess failed`, err);
+  } finally {
+    // Release lock so legitimate Cardcom retries can re-enter.
+    // They will find the already-saved deal via findDealByLowProfileCode and skip Step2.
+    await releaseCheckoutLock(lowProfileCode);
   }
 }
 
@@ -2925,4 +2980,8 @@ app.listen(PORT, '0.0.0.0', () => {
     console.warn(`[${ts()}] MONGODB_URI/MONGO_URL not set`);
   }
   if (!process.env.CARDCOM_TERMINAL) console.warn(`[${ts()}] CARDCOM_TERMINAL not set`);
+  // Pre-create checkout lock & session indexes so the first webhook doesn't pay the setup cost.
+  ensureCheckoutCollectionIndexes().catch((e) =>
+    console.warn(`[${ts()}] ensureCheckoutCollectionIndexes (non-blocking):`, e?.message || e)
+  );
 });
