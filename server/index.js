@@ -77,6 +77,7 @@ import {
   processDetailRecurringWebhook,
   tryAcquireCheckoutLock,
   releaseCheckoutLock,
+  writeInitialCheckoutCommissionLedger,
   persistCheckoutSession,
   loadCheckoutSession,
   consumeCheckoutSession,
@@ -886,6 +887,22 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
       console.log(`[${ts()}] MongoDB write failed`);
       console.error(`[${ts()}] Payment status: ${paymentStatus} - Result: FAILURE`, dbErr);
       throw dbErr;
+    }
+
+    if (!result.duplicate && agentId) {
+      try {
+        await writeInitialCheckoutCommissionLedger({
+          dealId: result.id,
+          transactionId,
+          agentId,
+          payerAmount,
+          vendorCost: Number(econ.resolvedVendorCost || 0),
+          agentCommission: Number(econ.resolvedAgentCommission || 0),
+          netProfit: Number(econ.resolvedNetProfit || 0),
+        });
+      } catch (ledgerErr) {
+        console.warn(`[${ts()}] writeInitialCheckoutCommissionLedger (non-blocking):`, ledgerErr?.message || ledgerErr);
+      }
     }
 
     try {

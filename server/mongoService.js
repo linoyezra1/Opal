@@ -357,6 +357,67 @@ export async function saveDeal(params) {
   return { duplicate: false, id: String(result.insertedId) };
 }
 
+/**
+ * Write an agent_commission_ledger entry for the initial checkout payment.
+ * Called once after saveDeal for a new (non-duplicate), successfully paid deal.
+ * Uses the same schema as DetailRecurring ledger rows so the commission preview
+ * treats initial + recurring identically.
+ */
+export async function writeInitialCheckoutCommissionLedger({
+  dealId,
+  transactionId,
+  agentId,
+  payerAmount,
+  vendorCost,
+  agentCommission,
+  netProfit,
+  billingMonth,
+}) {
+  const aid = String(agentId ?? '').trim();
+  if (!aid || !dealId) return { ok: false, reason: 'missing agentId or dealId' };
+  const sum = Number(payerAmount || 0);
+  const commission = Number(agentCommission || 0);
+  if (sum <= 0 && commission <= 0) return { ok: false, reason: 'zero amount' };
+
+  const db = await getDb();
+  const col = db.collection('agent_commission_ledger');
+  const rowId = `INITIAL_CHECKOUT_${String(dealId)}`;
+  const now = new Date();
+  const month = String(billingMonth || formatBillingMonthFromDate(now));
+
+  try { await col.createIndex({ rowId: 1 }, { unique: true }); } catch { /* may exist or disk full */ }
+
+  const existing = await col.findOne({ rowId }, { projection: { locked: 1 } });
+  if (existing?.locked === true) return { ok: true, skipped: true, reason: 'locked' };
+
+  await col.updateOne(
+    { rowId },
+    {
+      $set: {
+        agentId: aid,
+        dealId: String(dealId),
+        transactionId: String(transactionId || ''),
+        statusCode: 1,
+        lastBillDate: now,
+        billingMonth: month,
+        actualAmount: sum,
+        sumNoVat: sum,
+        vendorCost: Number(vendorCost || 0),
+        agentCommission: commission,
+        netProfit: Number(netProfit || 0),
+        locked: false,
+        snapshotId: null,
+        updatedAt: now,
+        source: 'initial_checkout',
+      },
+      $setOnInsert: { rowId, createdAt: now },
+    },
+    { upsert: true }
+  );
+  console.log(`[InitialCheckoutLedger] Written for deal ${dealId}, agent ${aid}, commission ${commission}`);
+  return { ok: true, rowId };
+}
+
 export async function findDealForRecurringEvent(params = {}) {
   const db = await getDb();
   const deals = db.collection('deals');
@@ -4611,7 +4672,7 @@ export async function getAgentCommissionPreview(agentId, monthStr) {
     };
   }
 
-  /** יומן עמלות לפי חיובים בפועל (DetailRecurring) */
+  /** יומן עמלות לפי חיובים בפועל (initial_checkout + detail_recurring) */
   const ledgerDocs = await db
     .collection('agent_commission_ledger')
     .find({

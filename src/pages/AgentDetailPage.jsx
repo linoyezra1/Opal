@@ -385,7 +385,119 @@ export default function AgentDetailPage() {
           </TabsContent>
 
           <TabsContent value="distribution" className="mt-4">
-            <Card><CardHeader><CardTitle>קישורי הפצה ודפי נחיתה</CardTitle><CardDescription>עיצוב וערכים זהים לצפייה ממסך המוצרים, מותאם לסוכן</CardDescription></CardHeader><CardContent className="space-y-4">{(agent?.productCommissions || []).flatMap((c) => { const product = products.find((p) => String(p.id) === String(c.productId)); const entries = productSlugMap.get(String(c.productId)) || []; const productId = String(c.productId || ''); const productName = product?.productName || product?.name || c.productName || productId; const totalPurchases = productPurchaseCounts.get(productId) ?? 0; return [{ productId, productName, providerName: product?.provider?.vendorName || '', providerCost: Number(product?.providerCost || 0), entries, totalPurchases }]; }).map((row) => (<div key={row.productId} className="rounded-xl border p-4 space-y-3"><div className="flex items-start justify-between gap-3"><div className="space-y-1"><p className="text-lg font-bold text-foreground">{row.productName}</p><p className="text-xs text-muted-foreground">{row.providerName ? `ספק: ${row.providerName}` : 'ספק: —'}</p></div><Badge className="shrink-0 bg-green-100 text-green-800 border-green-200 hover:bg-green-100">פעיל</Badge></div><div className="grid grid-cols-3 gap-3 rounded-xl border bg-gradient-to-l from-[#D9EAF3]/40 to-[#D9EAF3]/10 p-4"><div className="text-center space-y-0.5"><p className="text-2xl font-bold text-primary">{row.entries.length}</p><p className="text-xs text-muted-foreground">דפי נחיתה פעילים</p></div><div className="text-center space-y-0.5"><p className="text-2xl font-bold text-primary">{row.totalPurchases}</p><p className="text-xs text-muted-foreground">כמות רכישות</p></div><div className="text-center space-y-0.5"><p className="text-2xl font-bold text-[#C9A227]">{row.providerCost > 0 ? `₪${row.providerCost}` : '—'}</p><p className="text-xs text-muted-foreground">עלות ספק</p></div></div>{row.entries.length === 0 ? (<div className="rounded-xl border-2 border-dashed border-slate-200 p-6 text-center"><Globe className="size-8 text-slate-300 mx-auto mb-2" /><p className="text-sm text-muted-foreground">המוצר אינו משויך לדפי נחיתה</p><p className="text-xs text-muted-foreground mt-1">ניתן לשייך דרך הקמת דף מוצר</p></div>) : (<div className="rounded-xl border overflow-hidden"><table className="w-full text-sm"><thead className="bg-slate-50 border-b"><tr><th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600">שם דף</th><th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600 w-28">כמות רכישות</th><th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600">קישור</th></tr></thead><tbody className="divide-y">{row.entries.map(({ slug, pageTitle }) => { const link = `${window.location.origin}/p/${slug}?agentId=${encodeURIComponent(id)}`; const justCopied = copiedLink === link; const slugCount = productSlugPurchaseCounts.get(`${row.productId}::${String(slug || '').toLowerCase()}`) ?? 0; return (<tr key={`${row.productId}-${slug}`} className="hover:bg-slate-50 transition-colors"><td className="px-3 py-3 font-medium text-foreground">{pageTitle || slug}</td><td className="px-3 py-3 text-center font-semibold text-primary">{slugCount}</td><td className="px-3 py-3"><div className="flex items-center gap-1.5"><span className="flex-1 truncate text-xs font-mono text-slate-500 bg-slate-100 rounded px-2 py-1 max-w-[200px]" title={link}>/p/{slug}?agentId={id}</span><Tooltip><TooltipTrigger asChild><button type="button" onClick={async () => { try { await navigator.clipboard.writeText(link); setCopiedLink(link); setTimeout(() => setCopiedLink(''), 2000); } catch {} }} className={`inline-flex items-center gap-1 h-7 px-2 rounded border text-xs transition-all shrink-0 ${justCopied ? 'bg-green-100 border-green-300 text-green-700' : 'bg-white border-slate-200 text-slate-600 hover:border-primary hover:text-primary'}`}>{justCopied ? <Check className="size-3" /> : <Copy className="size-3" />}{justCopied ? 'הועתק' : 'העתק'}</button></TooltipTrigger><TooltipContent>{pageTitle || slug}</TooltipContent></Tooltip><Tooltip><TooltipTrigger asChild><a href={link} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center h-7 w-7 rounded border border-slate-200 bg-white text-slate-500 hover:border-primary hover:text-primary transition-colors shrink-0"><ExternalLink className="size-3" /></a></TooltipTrigger><TooltipContent>פתח קישור</TooltipContent></Tooltip></div></td></tr>); })}</tbody></table></div>)}</div>))}{!(agent?.productCommissions || []).length ? <div className="rounded-md border p-6 text-center text-muted-foreground">אין מוצרים מוגדרים לסוכן</div> : null}</CardContent></Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>קישורי הפצה בדפי נחיתה</CardTitle>
+                <CardDescription>כל הקישורים המשויכים לסוכן — מוצר, עמלה וקישור להעתקה</CardDescription>
+              </CardHeader>
+              <CardContent dir="rtl">
+                {(() => {
+                  const flatRows = (agent?.productCommissions || []).flatMap((c) => {
+                    const product = products.find((p) => String(p.id) === String(c.productId));
+                    const entries = productSlugMap.get(String(c.productId)) || [];
+                    const productId = String(c.productId || '');
+                    const productName = product?.productName || product?.name || c.productName || productId;
+                    const commission = Number(c.commission || 0);
+                    if (!entries.length) {
+                      return [{ key: productId, productId, productName, commission, slug: null, pageTitle: null, link: null, slugCount: 0 }];
+                    }
+                    return entries.map(({ slug, pageTitle }) => {
+                      const link = `${window.location.origin}/p/${slug}?agentId=${encodeURIComponent(id)}`;
+                      const slugCount = productSlugPurchaseCounts.get(`${productId}::${String(slug || '').toLowerCase()}`) ?? 0;
+                      return { key: `${productId}-${slug}`, productId, productName, commission, slug, pageTitle, link, slugCount };
+                    });
+                  });
+                  if (!flatRows.length) {
+                    return (
+                      <div className="rounded-md border-2 border-dashed p-6 text-center text-muted-foreground">
+                        <Globe className="size-8 text-slate-300 mx-auto mb-2" />
+                        אין מוצרים מוגדרים לסוכן
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="rounded-md border overflow-x-auto">
+                      <Table dir="rtl" className="w-full text-sm text-right [&_th]:text-right [&_td]:text-right">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>שם מוצר</TableHead>
+                            <TableHead>שם דף נחיתה</TableHead>
+                            <TableHead className="w-28">עמלה</TableHead>
+                            <TableHead className="w-24">רכישות</TableHead>
+                            <TableHead>קישור הפצה</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {flatRows.map((row) => {
+                            const justCopied = row.link && copiedLink === row.link;
+                            return (
+                              <TableRow key={row.key}>
+                                <TableCell className="font-medium">{row.productName}</TableCell>
+                                <TableCell>{row.pageTitle || row.slug || <span className="text-muted-foreground">—</span>}</TableCell>
+                                <TableCell>
+                                  <Badge variant="secondary" className="font-mono">{formatCurrency(row.commission)}</Badge>
+                                </TableCell>
+                                <TableCell className="text-center font-semibold text-primary">{row.slugCount}</TableCell>
+                                <TableCell>
+                                  {row.link ? (
+                                    <div className="flex items-center gap-1.5">
+                                      <span
+                                        className="flex-1 truncate text-xs font-mono text-slate-500 bg-slate-100 rounded px-2 py-1 max-w-[220px]"
+                                        title={row.link}
+                                      >
+                                        /p/{row.slug}?agentId={id}
+                                      </span>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button
+                                            type="button"
+                                            onClick={async () => {
+                                              try {
+                                                await navigator.clipboard.writeText(row.link);
+                                                setCopiedLink(row.link);
+                                                setTimeout(() => setCopiedLink(''), 2000);
+                                              } catch { /* clipboard blocked */ }
+                                            }}
+                                            className={`inline-flex items-center gap-1 h-7 px-2 rounded border text-xs transition-all shrink-0 ${
+                                              justCopied
+                                                ? 'bg-green-100 border-green-300 text-green-700'
+                                                : 'bg-white border-slate-200 text-slate-600 hover:border-primary hover:text-primary'
+                                            }`}
+                                          >
+                                            {justCopied ? <Check className="size-3" /> : <Copy className="size-3" />}
+                                            {justCopied ? 'הועתק' : 'העתק'}
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>{row.pageTitle || row.slug}</TooltipContent>
+                                      </Tooltip>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <a
+                                            href={row.link}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="inline-flex items-center justify-center h-7 w-7 rounded border border-slate-200 bg-white text-slate-500 hover:border-primary hover:text-primary transition-colors shrink-0"
+                                          >
+                                            <ExternalLink className="size-3" />
+                                          </a>
+                                        </TooltipTrigger>
+                                        <TooltipContent>פתח קישור</TooltipContent>
+                                      </Tooltip>
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">אין דף נחיתה משויך</span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  );
+                })()}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>

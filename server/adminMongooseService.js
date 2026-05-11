@@ -1669,6 +1669,12 @@ export async function listSalesAgentsWithSales(options = {}) {
   return rows;
 }
 
+/**
+ * Forward-only commission update: changes to productCommissions apply ONLY to
+ * future checkouts. This function MUST NOT modify historical deals,
+ * DetailRecurring events, or existing agent_commission_ledger records.
+ * Past commission amounts are snapshotted at deal creation time and remain immutable.
+ */
 export async function updateSalesAgent(id, payload) {
   await ensureConnection();
   if (!mongoose.isValidObjectId(id)) throw new Error('Invalid agent id');
