@@ -146,6 +146,23 @@ export async function loadCheckoutSession(lowProfileCode) {
   return doc || null;
 }
 
+/**
+ * Atomically consume (find + delete) a checkout session.
+ * Returns the session data or null. The document is deleted so no other
+ * process/worker can re-read it — this is the cross-process equivalent of
+ * pendingDeals.get() + pendingDeals.delete() in the in-memory Map.
+ */
+export async function consumeCheckoutSession(lowProfileCode) {
+  const db = await getDb();
+  const doc = await db.collection('checkout_sessions').findOneAndDelete(
+    { lowProfileCode: String(lowProfileCode) },
+    { projection: { formState: 1, payerAmount: 1 } }
+  );
+  if (!doc) return null;
+  const result = doc.value ?? doc;
+  return result?.formState ? { formState: result.formState, payerAmount: result.payerAmount } : null;
+}
+
 /** חודש לדוחות בילינג — YYYY-MM */
 export function formatBillingMonthFromDate(d) {
   const dt = d instanceof Date ? d : new Date(d);

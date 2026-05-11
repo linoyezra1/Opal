@@ -78,6 +78,7 @@ import {
   tryAcquireCheckoutLock,
   persistCheckoutSession,
   loadCheckoutSession,
+  consumeCheckoutSession,
   ensureCheckoutCollectionIndexes,
   listMonthlyInvoices,
   generateMonthlyInvoicesForMonth,
@@ -601,12 +602,16 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
   // ────────────────────────────────────────────────────────────────────────────
 
   try {
-    // Prefer in-memory (fast, same process), fall back to MongoDB (cross-process).
+    // ── Consume-once: first reader wins, all others get nothing ──────────────
+    // In-memory: synchronous get + delete — blocks concurrent calls in same process.
+    // MongoDB: findOneAndDelete — atomic consume across processes / workers.
     let pending = pendingDeals.get(lowProfileCode);
-    if (!pending) {
-      pending = await loadCheckoutSession(lowProfileCode);
+    if (pending) {
+      pendingDeals.delete(lowProfileCode);
+    } else {
+      pending = await consumeCheckoutSession(lowProfileCode);
       if (pending) {
-        console.log(`[${ts()}] Webhook: session loaded from MongoDB for ${lowProfileCode}`);
+        console.log(`[${ts()}] Webhook: session consumed from MongoDB for ${lowProfileCode}`);
       }
     }
     if (!pending) {

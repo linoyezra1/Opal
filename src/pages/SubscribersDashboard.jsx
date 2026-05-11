@@ -862,8 +862,8 @@ export default function SubscribersDashboard() {
     } else if (filters.status === 'not_activated') {
       rows = rows.filter((r) => r.entitlementStatus === 'not_activated');
     } else if (filters.status === 'active') {
-      rows = rows.filter((r) => r.entitlementStatus === 'active');
-    }
+      rows = rows.filter((r) =>  === 'active');
+    }r.entitlementStatus
 
     // Agent filter — AND logic, exact match on agent name
     if (filters.agentFilter) {
@@ -1868,7 +1868,7 @@ export default function SubscribersDashboard() {
                 icon={Hourglass}
                 loading={loading}
               />
-              <StatsCard title="סה״כ מנוי פעיל" value={String(subscriptionWidgetCounts.active)} icon={CheckCircle2} loading={loading} />
+              <StatsCard title="סה״כ מנוי פעיל" value={String(r.entitlementStatus === 'active')} icon={CheckCircle2} loading={loading} />
               <StatsCard
                 title="סה״כ מנוי ממתין לביטול"
                 value={String(subscriptionWidgetCounts.pendingCancel)}
@@ -1938,6 +1938,7 @@ export default function SubscribersDashboard() {
 
               </div>
             </CardHeader>
+            <CardContent className="pt-2" dir="rtl">
             <CardContent className="pt-2" dir="rtl">
               {selectedCount > 0 ? (
                 <div className="fixed bottom-4 inset-x-0 z-40 mx-auto w-[min(96vw,48rem)] rounded-lg border bg-background/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80">
