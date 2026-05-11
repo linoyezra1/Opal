@@ -2702,29 +2702,24 @@ function computeTotalCustomerRevenue(deal) {
   return initial + recurring;
 }
 
-function isSubscriptionStatusActiveLabel(sub) {
-  const s = String(sub ?? '').trim();
-  const sl = s.toLowerCase();
-  return sl === 'active' || sl === 'פעיל' || s === 'פעיל';
-}
-
-function isSubscriptionStatusPendingCancellationLabel(sub) {
-  return String(sub ?? '').trim().toLowerCase() === 'pending cancellation';
-}
-
 /**
- * 4 קטגוריות מנוי לווידג'טים (בלעדיות — עדכון ראשון שמתאים)
+ * 4 קטגוריות מנוי לווידג'טים — מבוסס על מודל 4 התאריכים (getEntitlementStatus).
+ *
+ * not_activated  → pending_org  (כולל ממתין לאישור ארגון)
+ * active         → active
+ * pending_cancellation → pending_cancel
+ * canceled       → cancelled
  */
 function classifySubscriptionWidgetBucket(d) {
   if (!d) return 'other';
-  const wf = String(d.status || '').trim().toLowerCase();
-  const sub = String(d.subscriptionStatus || '').trim();
-  const subL = sub.toLowerCase();
-  if (wf === 'pending_org_approval' || sub === 'ממתין לאישור הארגון') return 'pending_org';
-  if (subL === 'cancelled' || subL === 'canceled' || d.isCanceled === true) return 'cancelled';
-  if (isSubscriptionStatusPendingCancellationLabel(sub)) return 'pending_cancel';
-  if (isSubscriptionStatusActiveLabel(sub)) return 'active';
-  return 'other';
+  const ent = getEntitlementStatus(d);
+  switch (ent.status) {
+    case 'not_activated':        return 'pending_org';
+    case 'active':               return 'active';
+    case 'pending_cancellation': return 'pending_cancel';
+    case 'canceled':             return 'cancelled';
+    default:                     return 'other';
+  }
 }
 
 function economicsFromDeal(d) {

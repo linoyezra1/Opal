@@ -862,8 +862,8 @@ export default function SubscribersDashboard() {
     } else if (filters.status === 'not_activated') {
       rows = rows.filter((r) => r.entitlementStatus === 'not_activated');
     } else if (filters.status === 'active') {
-      rows = rows.filter((r) =>  === 'active');
-    }r.entitlementStatus
+      rows = rows.filter((r) => r.entitlementStatus === 'active');
+    }
 
     // Agent filter — AND logic, exact match on agent name
     if (filters.agentFilter) {
@@ -976,32 +976,6 @@ export default function SubscribersDashboard() {
       }
     }
     return { totalRevenue, active, pendingCancellation, notActivated, canceled };
-  }, [visibleRows]);
-
-  const subscriptionWidgetCounts = useMemo(() => {
-    let pendingOrg = 0;
-    let active = 0;
-    let pendingCancel = 0;
-    let cancelled = 0;
-    for (const r of visibleRows) {
-      switch (r.subscriptionWidgetBucket) {
-        case 'pending_org':
-          pendingOrg += 1;
-          break;
-        case 'active':
-          active += 1;
-          break;
-        case 'pending_cancel':
-          pendingCancel += 1;
-          break;
-        case 'cancelled':
-          cancelled += 1;
-          break;
-        default:
-          break;
-      }
-    }
-    return { pendingOrg, active, pendingCancel, cancelled };
   }, [visibleRows]);
 
   const calculatedCounts = useMemo(() => {
@@ -1864,18 +1838,18 @@ export default function SubscribersDashboard() {
               <StatsCard title="עסקאות בתוצאות" value={visibleRows.length} icon={Users} loading={loading} />
               <StatsCard
                 title="סה״כ מנוי לא הופעל/ממתין לאישור"
-                value={String(subscriptionWidgetCounts.pendingOrg)}
+                value={String(visibleSummary.notActivated)}
                 icon={Hourglass}
                 loading={loading}
               />
-              <StatsCard title="סה״כ מנוי פעיל" value={String(r.entitlementStatus === 'active')} icon={CheckCircle2} loading={loading} />
+              <StatsCard title="סה״כ מנוי פעיל" value={String(visibleSummary.active)} icon={CheckCircle2} loading={loading} />
               <StatsCard
                 title="סה״כ מנוי ממתין לביטול"
-                value={String(subscriptionWidgetCounts.pendingCancel)}
+                value={String(visibleSummary.pendingCancellation)}
                 icon={CalendarClock}
                 loading={loading}
               />
-              <StatsCard title="סה״כ מנוי מבוטלים" value={String(subscriptionWidgetCounts.cancelled)} icon={UserX} loading={loading} />
+              <StatsCard title="סה״כ מנוי מבוטלים" value={String(visibleSummary.canceled)} icon={UserX} loading={loading} />
 
               {/* 2. קוביות הסטטיסטיקה של הקטגוריות */}
               {SUMMARY_ITEMS.map((item) => {
@@ -1938,7 +1912,6 @@ export default function SubscribersDashboard() {
 
               </div>
             </CardHeader>
-            <CardContent className="pt-2" dir="rtl">
             <CardContent className="pt-2" dir="rtl">
               {selectedCount > 0 ? (
                 <div className="fixed bottom-4 inset-x-0 z-40 mx-auto w-[min(96vw,48rem)] rounded-lg border bg-background/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80">
