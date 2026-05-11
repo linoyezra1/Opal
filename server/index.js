@@ -76,6 +76,7 @@ import {
   hasUnlockedAgentCommissionsForMonth,
   processDetailRecurringWebhook,
   tryAcquireCheckoutLock,
+  releaseCheckoutLock,
   persistCheckoutSession,
   loadCheckoutSession,
   consumeCheckoutSession,
@@ -979,6 +980,8 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
     const paymentStatus = (Number(process.env.CARDCOM_TERMINAL) === 1000) ? 'TEST' : 'LIVE';
     console.log(`[${ts()}] Payment status: ${paymentStatus} - Result: FAILURE`);
     console.error(`[${ts()}] Webhook: handleWebhookSuccess failed`, err);
+  } finally {
+    await releaseCheckoutLock(lowProfileCode);
   }
 }
 

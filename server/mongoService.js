@@ -67,49 +67,84 @@ export async function ensureCheckoutCollectionIndexes() {
   if (checkoutIndexesPromise) return checkoutIndexesPromise;
   checkoutIndexesPromise = (async () => {
     const db = await getDb();
-    await db.collection('checkout_sessions').createIndex(
-      { lowProfileCode: 1 },
-      { unique: true, name: 'cs_lpc_unique' }
-    );
-    await db.collection('checkout_sessions').createIndex(
-      { savedAt: 1 },
-      { expireAfterSeconds: 7200, name: 'cs_ttl_2h' }
-    );
-  })().catch((err) => {
-    checkoutIndexesPromise = null;
-    console.error('[checkout-indexes] Failed to create indexes:', err?.message || err);
-  });
+    try {
+      await db.collection('checkout_sessions').createIndex(
+        { lowProfileCode: 1 },
+        { unique: true, name: 'cs_lpc_unique' }
+      );
+      await db.collection('checkout_sessions').createIndex(
+        { savedAt: 1 },
+        { expireAfterSeconds: 7200, name: 'cs_ttl_2h' }
+      );
+    } catch (err) {
+      console.warn('[checkout-indexes] Non-critical: failed to create session indexes (disk space?):', err?.message || err);
+    }
+  })();
   return checkoutIndexesPromise;
 }
 
+const LOCK_STALE_MS = 5 * 60 * 1000; // 5 minutes
+
 /**
- * Atomically acquire a per-lowProfileCode idempotency record (native _id uniqueness).
- * Returns true if this request owns the first insert for this code.
- * Returns false on duplicate key (11000) — another webhook already claimed this LowProfileCode.
+ * Atomically acquire a per-lowProfileCode processing lock (native _id uniqueness).
+ *
+ * - First insert wins → returns true.
+ * - Duplicate key (11000) → check age of existing lock:
+ *     • younger than LOCK_STALE_MS → genuine duplicate, returns false.
+ *     • older than LOCK_STALE_MS   → stale (previous process crashed before
+ *       completing), replace it and return true so the new webhook can proceed.
  */
 export async function tryAcquireCheckoutLock(lowProfileCode) {
   const db = await getDb();
+  const col = db.collection('checkout_locks');
   const id = String(lowProfileCode ?? '').trim();
   if (!id) throw new Error('tryAcquireCheckoutLock: missing lowProfileCode');
+  const now = new Date();
   try {
-    await db.collection('checkout_locks').insertOne({
-      _id: id,
-      createdAt: new Date(),
-      source: 'cardcom_webhook',
-    });
+    await col.insertOne({ _id: id, createdAt: now, source: 'cardcom_webhook' });
     return true;
   } catch (e) {
-    if (e.code === 11000) return false;
-    throw e;
+    if (e.code !== 11000) throw e;
+    const existing = await col.findOne({ _id: id }, { projection: { createdAt: 1 } });
+    if (!existing) {
+      // Deleted between our insert attempt and this read — retry insert once.
+      try {
+        await col.insertOne({ _id: id, createdAt: now, source: 'cardcom_webhook' });
+        return true;
+      } catch (e2) {
+        if (e2.code === 11000) return false;
+        throw e2;
+      }
+    }
+    const age = now.getTime() - new Date(existing.createdAt || 0).getTime();
+    if (age < LOCK_STALE_MS) return false; // fresh lock — genuine duplicate
+    // Stale lock — replace it so this webhook can proceed.
+    await col.deleteOne({ _id: id });
+    try {
+      await col.insertOne({ _id: id, createdAt: now, source: 'cardcom_webhook' });
+      return true;
+    } catch (e3) {
+      if (e3.code === 11000) return false; // another process won the race
+      throw e3;
+    }
   }
 }
 
 /**
- * Legacy no-op: locks are permanent idempotency keys (_id = LowProfileCode) and are not deleted.
- * @deprecated Retained for API compatibility; does nothing.
+ * Release the lock after successful processing.
+ * Keeps the document but stamps it as completed so stale-lock detection
+ * knows the deal was fully handled (won't be re-processed on retry).
  */
-export async function releaseCheckoutLock(_lowProfileCode) {
-  /* permanent lock document — see tryAcquireCheckoutLock */
+export async function releaseCheckoutLock(lowProfileCode) {
+  try {
+    const db = await getDb();
+    await db.collection('checkout_locks').updateOne(
+      { _id: String(lowProfileCode) },
+      { $set: { completedAt: new Date() } }
+    );
+  } catch {
+    /* non-critical */
+  }
 }
 
 /**
@@ -3674,11 +3709,6 @@ export async function getControlPanelOverviewData(filters = {}) {
         label: new Date(date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }),
       };
     });
-
-  console.log('[getControlPanelOverviewData] cancellation totals', {
-    totalCancellations,
-    cancelledCustomerRowsLength: statusFilteredCancelledDeals.length,
-  });
 
   return {
     range: { fromDate: from.toISOString().slice(0, 10), toDate: to.toISOString().slice(0, 10) },
