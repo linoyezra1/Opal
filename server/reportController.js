@@ -3,7 +3,11 @@
  */
 import { Parser } from 'json2csv';
 import ExcelJS from 'exceljs';
-import { passesServiceReportGate, getEntitlementStatus } from './entitlementStatus.js';
+import {
+  passesServiceReportGate,
+  getEntitlementStatus,
+  getReportingServiceWindow,
+} from './entitlementStatus.js';
 
 /**
  * סינון חודשי לדוחות בילינג ארגוני: רק עסקאות שחודש הבילינג שלהן (שדה billingMonth) תואם בדיוק ל־YYYY-MM.
@@ -20,6 +24,50 @@ function firstNonEmpty(...vals) {
     if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
   }
   return '';
+}
+
+/** טווח תאריכים לדוח ספק — תחילת יום / סוף יום כולל */
+export function parseReportServiceRange(fromStr, toStr) {
+  const fromRaw = fromStr ? new Date(String(fromStr)) : null;
+  const toRaw = toStr ? new Date(String(toStr)) : null;
+  if (!fromRaw || !toRaw || Number.isNaN(fromRaw.getTime()) || Number.isNaN(toRaw.getTime())) {
+    return { valid: false };
+  }
+  const fromStart = new Date(fromRaw);
+  fromStart.setHours(0, 0, 0, 0);
+  const toEnd = new Date(toRaw);
+  toEnd.setHours(23, 59, 59, 999);
+  return { valid: true, fromStart, toEnd };
+}
+
+/** חפיפת חלון שירות עם [fromStart, toEnd] — לפי מודל תאריכי זכאות */
+export function dealOverlapsServiceReportPeriod(deal, fromStart, toEnd) {
+  const { serviceStart, serviceEnd } = getReportingServiceWindow(deal);
+  if (!serviceStart || Number.isNaN(serviceStart.getTime())) return false;
+  if (serviceStart.getTime() > toEnd.getTime()) return false;
+  if (!serviceEnd || Number.isNaN(serviceEnd.getTime())) return true;
+  return serviceEnd.getTime() >= fromStart.getTime();
+}
+
+/** מנויים זכאים לספק בחודש שירות: חפיפה + שער פעיל/ממתין לביטול */
+export function filterDealsOverlappingEligibleServicePeriod(deals, fromStr, toStr) {
+  const r = parseReportServiceRange(fromStr, toStr);
+  if (!r.valid) return [];
+  return (Array.isArray(deals) ? deals : []).filter(
+    (d) => passesServiceReportGate(d) && dealOverlapsServiceReportPeriod(d, r.fromStart, r.toEnd)
+  );
+}
+
+/** דוח נגרעים: תאריך סיום שירות מחושב נופל בטווח (כולל) */
+export function filterDealsCancellationsServiceEndInPeriod(deals, fromStr, toStr) {
+  const r = parseReportServiceRange(fromStr, toStr);
+  if (!r.valid) return [];
+  return (Array.isArray(deals) ? deals : []).filter((d) => {
+    const { serviceEnd } = getReportingServiceWindow(d);
+    if (!serviceEnd || Number.isNaN(serviceEnd.getTime())) return false;
+    const t = serviceEnd.getTime();
+    return t >= r.fromStart.getTime() && t <= r.toEnd.getTime();
+  });
 }
 
 function splitFullName(full) {
@@ -67,6 +115,14 @@ export function generateFlattenedSubscriberRows(deals) {
     const transactionId = String(d.transactionId || '');
     const dealId = String(d._id || '');
 
+    const { serviceStart, serviceEnd } = getReportingServiceWindow(d);
+    const subscriptionStartDate =
+      serviceStart && !Number.isNaN(serviceStart.getTime()) ? serviceStart.toISOString().slice(0, 10) : '';
+    const subscriptionEndDisplay =
+      !serviceEnd || Number.isNaN(serviceEnd.getTime()) ? 'פעיל' : serviceEnd.toISOString().slice(0, 10);
+    const subscriptionEndDateRaw =
+      serviceEnd && !Number.isNaN(serviceEnd.getTime()) ? serviceEnd.toISOString().slice(0, 10) : '';
+
     const primaryFirst = firstNonEmpty(primary.firstName, splitFullName(fs.fullName).firstName);
     const primaryLast = firstNonEmpty(primary.lastName, splitFullName(fs.fullName).lastName);
     const primaryId = firstNonEmpty(primary.id, fs.id);
@@ -102,6 +158,9 @@ export function generateFlattenedSubscriberRows(deals) {
       subscriptionStatus: String(d.subscriptionStatus || ''),
       productName,
       createdAt,
+      subscriptionStartDate,
+      subscriptionEndDisplay,
+      subscriptionEndDateRaw,
     });
 
     const extras =
@@ -159,6 +218,9 @@ export function generateFlattenedSubscriberRows(deals) {
         subscriptionStatus: String(d.subscriptionStatus || ''),
         productName,
         createdAt,
+        subscriptionStartDate,
+        subscriptionEndDisplay,
+        subscriptionEndDateRaw,
       });
     }
   }
@@ -185,9 +247,20 @@ export function generateCancellationExportRows(deals) {
         ? fs.beneficiaries.length
         : 0;
 
+    const { serviceStart, serviceEnd } = getReportingServiceWindow(d);
+    const subscriptionStartDate =
+      serviceStart && !Number.isNaN(serviceStart.getTime()) ? serviceStart.toISOString().slice(0, 10) : '';
+    const subscriptionEndDisplay =
+      !serviceEnd || Number.isNaN(serviceEnd.getTime()) ? 'פעיל' : serviceEnd.toISOString().slice(0, 10);
+    const subscriptionEndDateRaw =
+      serviceEnd && !Number.isNaN(serviceEnd.getTime()) ? serviceEnd.toISOString().slice(0, 10) : '';
+
     return {
       dealId: String(d._id || ''),
       transactionId: String(d.transactionId || ''),
+      subscriptionStartDate,
+      subscriptionEndDisplay,
+      subscriptionEndDateRaw,
       cancellationDate: cancelAt,
       primaryFullName: full,
       idNumber: firstNonEmpty(primary.id, fs.id),
@@ -227,12 +300,16 @@ const SUBSCRIBER_FIELDS = [
   { label: 'סטטוס תשלום', value: 'paymentStatus' },
   { label: 'סטטוס מנוי', value: 'subscriptionStatus' },
   { label: 'מוצר', value: 'productName' },
+  { label: 'תאריך תחילת מנוי', value: 'subscriptionStartDate' },
+  { label: 'תאריך סיום מנוי', value: 'subscriptionEndDisplay' },
   { label: 'נוצר בתאריך', value: 'createdAt' },
 ];
 
 const CANCEL_FIELDS = [
   { label: 'מזהה עסקה DB', value: 'dealId' },
   { label: 'מספר הזמנה', value: 'transactionId' },
+  { label: 'תאריך תחילת מנוי', value: 'subscriptionStartDate' },
+  { label: 'תאריך סיום מנוי', value: 'subscriptionEndDisplay' },
   { label: 'תאריך ביטול', value: 'cancellationDate' },
   { label: 'שם מבוטח ראשי', value: 'primaryFullName' },
   { label: 'תעודת זהות', value: 'idNumber' },
@@ -374,6 +451,8 @@ export async function buildSubscribersXlsxBuffer(deals) {
     'סטטוס תשלום',
     'סטטוס מנוי',
     'מוצר',
+    'תאריך תחילת מנוי',
+    'תאריך סיום מנוי',
     'נוצר בתאריך',
   ];
   const workbook = new ExcelJS.Workbook();
@@ -403,6 +482,8 @@ export async function buildSubscribersXlsxBuffer(deals) {
       r.paymentStatus,
       r.subscriptionStatus,
       r.productName,
+      r.subscriptionStartDate,
+      r.subscriptionEndDisplay,
       r.createdAt,
     ]);
     if (r.rowRole === 'primary') {
@@ -425,6 +506,22 @@ export async function buildSubscribersXlsxBuffer(deals) {
 export function buildCancellationsCsv(deals) {
   const rows = generateCancellationExportRows(deals);
   return rowsToCsv(rows, CANCEL_FIELDS);
+}
+
+export async function buildCancellationsXlsxBuffer(deals) {
+  const rows = generateCancellationExportRows(deals);
+  const headers = CANCEL_FIELDS.map((f) => f.label);
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Cancellations', { views: [{ rightToLeft: true }] });
+  sheet.addRow(headers);
+  for (const r of rows) {
+    sheet.addRow(CANCEL_FIELDS.map((f) => r[f.value] ?? ''));
+  }
+  sheet.getRow(1).font = { bold: true };
+  sheet.columns.forEach((col) => {
+    col.width = 18;
+  });
+  return workbook.xlsx.writeBuffer();
 }
 
 export async function buildAgentCommissionPayload(deals) {

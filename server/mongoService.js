@@ -4622,6 +4622,28 @@ export async function findDealsCreatedInRange(fromDate, toDate) {
     .toArray();
 }
 
+/**
+ * מועמדים לדוחות ספק לפי חודש שירות (חפיפת זכאות) — לא מסננים לפי createdAt.
+ * הסינון המדויק נעשה ב־reportController (חלון שירות מול fromDate/toDate).
+ */
+export async function findDealsForServiceReportsCandidates() {
+  const db = await getDb();
+  return db
+    .collection('deals')
+    .find({
+      $or: [
+        { 'formState.subscriptionStartDate': { $exists: true, $nin: ['', null] } },
+        { cancellationDate: { $exists: true, $ne: null } },
+        { cancelAt: { $exists: true, $ne: null } },
+        { subscriptionEndDate: { $exists: true, $ne: null } },
+        { subscriptionStatus: { $regex: /cancel|בוטל/i } },
+      ],
+    })
+    .sort({ updatedAt: -1 })
+    .limit(15000)
+    .toArray();
+}
+
 /** עסקאות מבוטלות — סינון לפי cancellationDate או updatedAt */
 export async function findDealsCancelledInRange(fromDate, toDate) {
   const db = await getDb();

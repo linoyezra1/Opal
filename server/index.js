@@ -66,7 +66,7 @@ import {
   getDealByTransactionId,
   markDealOrderEmailSent,
   findDealsCreatedInRange,
-  findDealsCancelledInRange,
+  findDealsForServiceReportsCandidates,
   findDealsByAgentAndMonth,
   getAgentCommissionPreview,
   lockAgentCommissionsSnapshot,
@@ -145,8 +145,11 @@ import {
   buildAgentCommissionPayload,
   generateFlattenedSubscriberRows,
   filterDealsForSubscriberExport,
+  filterDealsOverlappingEligibleServicePeriod,
+  filterDealsCancellationsServiceEndInPeriod,
   listProviderNamesFromDealsForFilter,
   buildSubscribersXlsxBuffer,
+  buildCancellationsXlsxBuffer,
 } from './reportController.js';
 import multer from 'multer';
 import { parseOrgMemberImportBuffer, buildOrgImportTemplateBuffer } from './orgImportService.js';
@@ -2833,8 +2836,9 @@ app.get('/api/admin/reports/subscribers-export', requireAdmin, async (req, res) 
   try {
     const fromDate = req.query.fromDate || req.query.from || '';
     const toDate = req.query.toDate || req.query.to || '';
-    const allDeals = await findDealsCreatedInRange(fromDate || null, toDate || null);
-    const deals = filterDealsForSubscriberExport(allDeals, {
+    const candidates = await findDealsForServiceReportsCandidates();
+    const inServiceWindow = filterDealsOverlappingEligibleServicePeriod(candidates, fromDate, toDate);
+    const deals = filterDealsForSubscriberExport(inServiceWindow, {
       billingType: req.query.billingType,
       status: req.query.status,
       product: req.query.product,
@@ -2857,8 +2861,9 @@ app.get('/api/admin/reports/subscribers-export-xlsx', requireAdmin, async (req, 
   try {
     const fromDate = req.query.fromDate || req.query.from || '';
     const toDate = req.query.toDate || req.query.to || '';
-    const allDeals = await findDealsCreatedInRange(fromDate || null, toDate || null);
-    const deals = filterDealsForSubscriberExport(allDeals, {
+    const candidates = await findDealsForServiceReportsCandidates();
+    const inServiceWindow = filterDealsOverlappingEligibleServicePeriod(candidates, fromDate, toDate);
+    const deals = filterDealsForSubscriberExport(inServiceWindow, {
       billingType: req.query.billingType,
       status: req.query.status,
       product: req.query.product,
@@ -2887,8 +2892,9 @@ app.get('/api/admin/reports/providers', requireAdmin, async (req, res) => {
   try {
     const fromDate = req.query.fromDate || req.query.from || '';
     const toDate = req.query.toDate || req.query.to || '';
-    const allDeals = await findDealsCreatedInRange(fromDate || null, toDate || null);
-    const fromDeals = listProviderNamesFromDealsForFilter(allDeals);
+    const candidates = await findDealsForServiceReportsCandidates();
+    const inServiceWindow = filterDealsOverlappingEligibleServicePeriod(candidates, fromDate, toDate);
+    const fromDeals = listProviderNamesFromDealsForFilter(inServiceWindow);
     const vendors = await listVendors({ activeOnly: false });
     const vendorNames = (Array.isArray(vendors) ? vendors : [])
       .map((v) => String(v.vendorName || '').trim())
@@ -2905,8 +2911,9 @@ app.get('/api/admin/reports/subscribers-preview', requireAdmin, async (req, res)
   try {
     const fromDate = req.query.fromDate || req.query.from || '';
     const toDate = req.query.toDate || req.query.to || '';
-    const allDeals = await findDealsCreatedInRange(fromDate || null, toDate || null);
-    const deals = filterDealsForSubscriberExport(allDeals, {
+    const candidates = await findDealsForServiceReportsCandidates();
+    const inServiceWindow = filterDealsOverlappingEligibleServicePeriod(candidates, fromDate, toDate);
+    const deals = filterDealsForSubscriberExport(inServiceWindow, {
       billingType: req.query.billingType,
       status: req.query.status,
       product: req.query.product,
@@ -2927,7 +2934,8 @@ app.get('/api/admin/reports/cancellations-export', requireAdmin, async (req, res
   try {
     const fromDate = req.query.fromDate || req.query.from || '';
     const toDate = req.query.toDate || req.query.to || '';
-    const deals = await findDealsCancelledInRange(fromDate || null, toDate || null);
+    const candidates = await findDealsForServiceReportsCandidates();
+    const deals = filterDealsCancellationsServiceEndInPeriod(candidates, fromDate, toDate);
     const csv = buildCancellationsCsv(deals);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="opal-cancellations.csv"');
@@ -2935,6 +2943,25 @@ app.get('/api/admin/reports/cancellations-export', requireAdmin, async (req, res
   } catch (e) {
     console.error(`[${ts()}] reports/cancellations-export error:`, e);
     res.status(500).json({ success: false, error: 'Failed to build export' });
+  }
+});
+
+app.get('/api/admin/reports/cancellations-export-xlsx', requireAdmin, async (req, res) => {
+  try {
+    const fromDate = req.query.fromDate || req.query.from || '';
+    const toDate = req.query.toDate || req.query.to || '';
+    const candidates = await findDealsForServiceReportsCandidates();
+    const deals = filterDealsCancellationsServiceEndInPeriod(candidates, fromDate, toDate);
+    const file = await buildCancellationsXlsxBuffer(deals);
+    res.setHeader('Content-Disposition', 'attachment; filename="opal-cancellations.xlsx"');
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.send(file);
+  } catch (e) {
+    console.error(`[${ts()}] reports/cancellations-export-xlsx error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to build cancellations XLSX export' });
   }
 });
 

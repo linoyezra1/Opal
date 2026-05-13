@@ -28,7 +28,7 @@ import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
 const TOKEN_KEY = 'opal_admin_token';
 
 const REPORT_SERVICE_ENTITLEMENT_NOTICE =
-  'הרשומות המוצגות כוללות אך ורק מנויים שתאריך תחילת המנוי שלהם מופעל (הושלמו פרטי מוטבים) ונמצאים בסטטוס "פעיל" או "ממתין לביטול". לקוחות שטרם השלימו הרשמה, או מנויים מבוטלים, אינם זכאים לשירות ואינם מופיעים בדוח.';
+  'הרשומות מסוננות לפי חפיפת חודש מתן השירות (תאריך תחילת מנוי מול תאריך סיום מחושב). מוצגים מנויים בזכאות פעילה או ממתינים לביטול בחלון שנבחר. לקוחות שטרם הופעל להם מנוי (ללא תאריך תחילה), או שאין להם חפיפה לטווח, לא יופיעו.';
 
 function ReportEntitlementNotice() {
   return (
@@ -313,9 +313,9 @@ export default function ReportsDashboard() {
       if (fromDate) q.set('fromDate', fromDate);
       if (toDate) q.set('toDate', toDate);
       await downloadCsv(
-        `${API_BASE}/api/admin/reports/cancellations-export?${q.toString()}`,
+        `${API_BASE}/api/admin/reports/cancellations-export-xlsx?${q.toString()}`,
         token,
-        'opal-cancellations.csv'
+        'opal-cancellations.xlsx'
       );
     } catch (e) {
       setExportErr(e?.message || 'שגיאה');
@@ -431,7 +431,7 @@ export default function ReportsDashboard() {
             <Card className="text-right" dir="rtl">
               <CardHeader className="text-right">
                 <CardTitle>ייצוא לספק</CardTitle>
-                <CardDescription>בחרו טווח תאריכים לפי תאריך יצירת העסקה במערכת</CardDescription>
+                <CardDescription>בחרו טווח תאריכים לפי חודש מתן השירות (חפיפת זכאות)</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <FieldGroup className="flex flex-col sm:flex-row gap-4 flex-wrap items-end">
@@ -531,6 +531,8 @@ export default function ReportsDashboard() {
                         <TableHead className="text-right">שם פרטי</TableHead>
                         <TableHead className="text-right">שם משפחה</TableHead>
                         <TableHead className="text-right">ת.ז</TableHead>
+                        <TableHead className="text-right">תחילת מנוי</TableHead>
+                        <TableHead className="text-right">סיום מנוי</TableHead>
                         <TableHead className="text-right">מוצר</TableHead>
                         <TableHead className="text-right">סכום</TableHead>
                       </TableRow>
@@ -542,13 +544,17 @@ export default function ReportsDashboard() {
                           <TableCell>{String(r.firstName || '—')}</TableCell>
                           <TableCell>{String(r.lastName || '—')}</TableCell>
                           <TableCell>{String(r.idNumber || '—')}</TableCell>
+                          <TableCell>{String(r.subscriptionStartDate || '—')}</TableCell>
+                          <TableCell>
+                            {String(r.subscriptionEndDisplay || r.subscriptionEndDateRaw || '—')}
+                          </TableCell>
                           <TableCell>{String(r.productName || '—')}</TableCell>
                           <TableCell>{formatCurrency(r.payerAmount || 0)}</TableCell>
                         </TableRow>
                       ))}
                       {!previewRows.length ? (
                         <TableRow>
-                          <TableCell className="text-center text-muted-foreground" colSpan={6}>
+                          <TableCell className="text-center text-muted-foreground" colSpan={8}>
                             אין נתונים לתצוגה מקדימה
                           </TableCell>
                         </TableRow>
@@ -556,7 +562,9 @@ export default function ReportsDashboard() {
                     </TableBody>
                   </Table>
                 </div>
-                <p className="text-xs text-muted-foreground">סה״כ רשומות בטווח: {previewTotal}</p>
+                <p className="text-xs text-muted-foreground">
+                  סה״כ רשומות בטווח חודש השירות: {previewTotal}
+                </p>
               </CardContent>
             </Card>
           </TabsContent>

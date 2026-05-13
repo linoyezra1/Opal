@@ -106,6 +106,54 @@ export function getEntitlementStatus(deal, now = new Date()) {
   return { status: STATUS_CANCELED, label: 'מבוטל' };
 }
 
+/**
+ * חלון מתן שירות לדוחות ספק — תאריך התחלה מתוך formState.subscriptionStartDate
+ * ותאריך סיום מחושב מ־subscriptionEndDate, בקשת ביטול + cancelAt / cardcomNextDateToBill,
+ * או מצב מבוטל במערכת.
+ *
+ * @returns {{ serviceStart: Date|null, serviceEnd: Date|null }}
+ *   serviceEnd === null — אין תאריך סיום ידוע (מנוי פעיל ללא לוח סיום / ללא ביטול מתוכנן).
+ */
+export function getReportingServiceWindow(deal) {
+  const fs = deal?.formState && typeof deal.formState === 'object' ? deal.formState : {};
+  const serviceStart = parseFlexibleDate(fs.subscriptionStartDate);
+
+  const explicitEnd =
+    parseFlexibleDate(deal?.subscriptionEndDate) || parseFlexibleDate(fs.subscriptionEndDate);
+  if (explicitEnd && !Number.isNaN(explicitEnd.getTime())) {
+    return { serviceStart, serviceEnd: explicitEnd };
+  }
+
+  const requestedAt = parseFlexibleDate(deal?.cancellationDate);
+  const hasRequestedCancel = !!requestedAt;
+
+  const isCentralized =
+    deal?.isCentralized === true || resolvePaymentMethod(deal) === 'centralized';
+
+  let computedEnd = null;
+  if (hasRequestedCancel) {
+    if (isCentralized) {
+      computedEnd = parseFlexibleDate(deal?.cancelAt) || requestedAt;
+    } else {
+      computedEnd = parseFlexibleDate(fs.cardcomNextDateToBill);
+      if (!computedEnd && serviceStart) computedEnd = addOneMonth(serviceStart);
+      if (!computedEnd) computedEnd = requestedAt;
+    }
+  }
+
+  if (!computedEnd && /cancel|בוטל/i.test(String(deal?.subscriptionStatus || ''))) {
+    computedEnd =
+      parseFlexibleDate(deal?.cancelAt) ||
+      requestedAt ||
+      parseFlexibleDate(deal?.updatedAt);
+  }
+
+  if (computedEnd && !Number.isNaN(computedEnd.getTime())) {
+    return { serviceStart, serviceEnd: computedEnd };
+  }
+  return { serviceStart, serviceEnd: null };
+}
+
 // ─── שומר הדוחות ────────────────────────────────────────────────────────────
 /**
  * מאפשר מעבר דרך שער הדוח: רק פעיל (B) וממתין לביטול (C).
