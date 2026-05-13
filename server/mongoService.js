@@ -2836,6 +2836,45 @@ function economicsFromDeal(d) {
   };
 }
 
+function parseDateFilterMode(raw) {
+  const v = String(raw || '').trim().toLowerCase();
+  return v === 'join_date' ? 'join_date' : 'billing_date';
+}
+
+function isSuccessfulInitialPayment(deal) {
+  return /success|paid|test_success|completed/i.test(String(deal?.paymentStatus || ''));
+}
+
+function isInDateRange(dt, dateRange) {
+  if (!(dt instanceof Date) || Number.isNaN(dt.getTime()) || !dateRange) return false;
+  if (dateRange.$gte && dt < dateRange.$gte) return false;
+  if (dateRange.$lte && dt > dateRange.$lte) return false;
+  if (dateRange.$lt && dt >= dateRange.$lt) return false;
+  return true;
+}
+
+function dealHasBillingActivityInRange(deal, dateRange, month) {
+  if (!dateRange && !month) return true;
+  const createdAt = parseFlexibleDate(deal?.createdAt);
+  const initialInRange =
+    isSuccessfulInitialPayment(deal) &&
+    (month
+      ? formatBillingMonthFromDate(createdAt) === String(month)
+      : isInDateRange(createdAt, dateRange));
+  if (initialInRange) return true;
+
+  const events = Array.isArray(deal?.detailRecurringEvents) ? deal.detailRecurringEvents : [];
+  for (const ev of events) {
+    if (Number(ev?.statusCode) !== 1) continue;
+    if (month && String(ev?.billingMonth || '') === String(month)) return true;
+    if (!month) {
+      const evDate = parseFlexibleDate(ev?.lastBillDateIso || ev?.lastBillDate || ev?.receivedAt);
+      if (isInDateRange(evDate, dateRange)) return true;
+    }
+  }
+  return false;
+}
+
 export async function getSalesDashboardData(filters = {}) {
   const db = await getDb();
   const dealsCol = db.collection('deals');
@@ -2860,8 +2899,9 @@ export async function getSalesDashboardData(filters = {}) {
       ],
     });
   }
+  const dateFilterMode = parseDateFilterMode(filters.dateFilterMode);
   const dateRange = getDateRange(filters);
-  if (dateRange && statusFilter !== 'cancelled') {
+  if (dateRange && statusFilter !== 'cancelled' && dateFilterMode === 'join_date') {
     match.createdAt = dateRange;
   } else if (dateRange && statusFilter === 'cancelled') {
     andClauses.push({
@@ -3038,6 +3078,9 @@ export async function getSalesDashboardData(filters = {}) {
       return true;
     });
   }
+  if (dateFilterMode === 'billing_date' && statusFilter !== 'cancelled') {
+    shown = shown.filter((d) => dealHasBillingActivityInRange(d, dateRange, filters.month));
+  }
   shown = applyCategoryFilters(shown, filters.summaryCategories);
   if (filters.providerEnabled && filters.providerValue) {
     const pv = String(filters.providerValue).trim();
@@ -3051,11 +3094,14 @@ export async function getSalesDashboardData(filters = {}) {
   }
 
   const amountDue = Number(filters.amountDue || 0);
-  const totalRevenueLtv = shown.reduce((sum, d) => sum + computeTotalCustomerRevenue(d), 0);
+  const totalRevenueNewSales = shown.reduce((sum, d) => {
+    if (!isSuccessfulInitialPayment(d)) return sum;
+    return sum + Number(d?.payerAmount || 0);
+  }, 0);
   const econ = shown.map((d) => economicsFromDeal(d));
-  const totalVendorCost = econ.reduce((s, e) => s + e.vendorCost, 0);
-  const totalAgentCommission = econ.reduce((s, e) => s + e.agentCommission, 0);
-  const totalNetProfitFromDeals = econ.reduce((s, e) => s + e.netProfit, 0);
+  const totalVendorCostNewSales = econ.reduce((s, e) => s + e.vendorCost, 0);
+  const totalAgentCommissionNewSales = econ.reduce((s, e) => s + e.agentCommission, 0);
+  const totalNetProfitNewSales = econ.reduce((s, e) => s + e.netProfit, 0);
   const completedDeals = shown.filter((d) => d.isCompleted);
   const canceledDeals = shown.filter((d) => d.isCanceled);
   const totalPrimary = completedDeals.length;
@@ -3078,18 +3124,31 @@ export async function getSalesDashboardData(filters = {}) {
       .filter(Boolean)
   ).size;
 
-  let revenueOut = totalRevenueLtv;
-  let vendorOut = totalVendorCost;
-  let agentOut = totalAgentCommission;
-  let netOut = totalNetProfitFromDeals;
-  let cashBasedSummary = false;
+  let revenueOut = totalRevenueNewSales;
+  let vendorOut = totalVendorCostNewSales;
+  let agentOut = totalAgentCommissionNewSales;
+  let netOut = totalNetProfitNewSales;
+  let cashBasedSummary = dateFilterMode === 'billing_date';
   let billingEventCount = 0;
-  if (filters.month && /^\d{4}-\d{2}$/.test(String(filters.month))) {
-    const cash = await getCashFinancialTotalsForMonth(String(filters.month));
+  if (dateFilterMode === 'billing_date' && dateRange) {
+    const from = dateRange.$gte instanceof Date ? dateRange.$gte : null;
+    const to = (dateRange.$lt || dateRange.$lte) instanceof Date
+      ? new Date((dateRange.$lt || dateRange.$lte).getTime() - (dateRange.$lt ? 1 : 0))
+      : null;
+    const cash = from && to
+      ? await getCashFinancialTotalsForDateRange(from, to)
+      : { totalRevenue: 0, totalVendorCost: 0, totalAgentCommission: 0, totalNetProfit: 0, eventCount: 0 };
+    revenueOut = Number(cash.totalRevenue || 0);
     vendorOut = Number(cash.totalVendorCost || 0);
     agentOut = Number(cash.totalAgentCommission || 0);
     netOut = Number(cash.totalNetProfit || 0);
-    cashBasedSummary = true;
+    billingEventCount = Number(cash.eventCount || 0);
+  } else if (dateFilterMode === 'billing_date' && filters.month && /^\d{4}-\d{2}$/.test(String(filters.month))) {
+    const cash = await getCashFinancialTotalsForMonth(String(filters.month));
+    revenueOut = Number(cash.totalRevenue || 0);
+    vendorOut = Number(cash.totalVendorCost || 0);
+    agentOut = Number(cash.totalAgentCommission || 0);
+    netOut = Number(cash.totalNetProfit || 0);
     billingEventCount = Number(cash.eventCount || 0);
   }
 
@@ -3117,6 +3176,7 @@ export async function getSalesDashboardData(filters = {}) {
       totalNetProfit: netOut,
       cashBasedSummary,
       billingEventCount,
+      dateFilterMode,
       subscriptionPendingOrgApproval,
       subscriptionActive,
       subscriptionPendingCancellation,
@@ -3349,6 +3409,8 @@ export async function getControlPanelOverviewData(filters = {}) {
   const db = await getDb();
   const { from, to } = parseControlPanelDateRange(filters);
   const activityStatus = parseActivityStatus(filters.status);
+  const dateFilterMode = parseDateFilterMode(filters.dateFilterMode);
+  const controlRange = { $gte: from, $lte: to };
   const deals = await db.collection('deals').aggregate([
     { $match: {} },
     {
@@ -3531,14 +3593,18 @@ export async function getControlPanelOverviewData(filters = {}) {
   const isActiveDeal = (d) => d.isActive !== false && !isCancelledDeal(d) && d.isRecurringCycle !== true;
 
   const createdRangeDeals = deals.filter((d) => isDateInRange(d.createdAt));
+  const billingRangeDeals = deals.filter((d) =>
+    dealHasBillingActivityInRange(d, controlRange, String(filters.month || '').trim())
+  );
+  const selectedRangeDeals = dateFilterMode === 'join_date' ? createdRangeDeals : billingRangeDeals;
   const cancelledByEventDate = deals.filter((d) => isCancelledDeal(d) && isDateInRange(cancellationEventDate(d)));
 
-  const statusFilteredCreatedDeals =
+  const statusFilteredSelectedDeals =
     activityStatus === 'active'
-      ? createdRangeDeals.filter((d) => isActiveDeal(d))
+      ? selectedRangeDeals.filter((d) => isActiveDeal(d))
       : activityStatus === 'cancelled'
         ? []
-      : createdRangeDeals;
+      : selectedRangeDeals;
   const statusFilteredCancelledDeals =
     activityStatus === 'cancelled'
       ? cancelledByEventDate
@@ -3547,7 +3613,7 @@ export async function getControlPanelOverviewData(filters = {}) {
         : cancelledByEventDate;
 
   // Summary cards are always computed from full selected range (independent of status filter).
-  const paidRows = createdRangeDeals.filter((d) => d.isPaidSuccess && !isCancelledDeal(d));
+  const paidRows = selectedRangeDeals.filter((d) => d.isPaidSuccess && !isCancelledDeal(d));
   // ספירות 4-מצבים (מחושב מכלל העסקאות, לא רק הטווח)
   const pendingCancellationRows = deals.filter((d) => {
     const sub = String(d.subscriptionStatus || '').toLowerCase();
@@ -3563,15 +3629,14 @@ export async function getControlPanelOverviewData(filters = {}) {
       wf === 'pending_alllow'
     ) && !isCancelledDeal(d);
   });
-  const cashTotals = await getCashFinancialTotalsForDateRange(from, to);
-  const totalRevenue = Number(cashTotals.totalRevenue || 0);
-  const totalProviderPayments = Number(cashTotals.totalVendorCost || 0);
-  const totalAgentPayments = Number(cashTotals.totalAgentCommission || 0);
-  const totalExpenses = totalProviderPayments + totalAgentPayments;
-  const totalNetProfit = Number(cashTotals.totalNetProfit || 0);
+  let totalRevenue = paidRows.reduce((s, d) => s + Number(d.revenue || 0), 0);
+  let totalProviderPayments = paidRows.reduce((s, d) => s + Number(d.providerCost || 0), 0);
+  let totalAgentPayments = paidRows.reduce((s, d) => s + Number(d.agentCommission || 0), 0);
+  let totalExpenses = totalProviderPayments + totalAgentPayments;
+  let totalNetProfit = paidRows.reduce((s, d) => s + Number(d.netProfit || 0), 0);
   const activeSubscribers = paidRows.reduce((s, d) => s + Number(d.individualsCount || 1), 0);
-  const totalTransactions = Number(cashTotals.eventCount || 0);
-  const failedPaymentRows = createdRangeDeals.filter((d) => {
+  let totalTransactions = paidRows.length;
+  const failedPaymentRows = selectedRangeDeals.filter((d) => {
     const ps = String(d.paymentStatus || '').toLowerCase();
     const isCancelled = ps.includes('cancel') || ps.includes('בוטל') || ps === 'cancelled';
     const isError = /fail|declin|error|denied|נכשל/i.test(String(d.paymentStatus || ''));
@@ -3582,7 +3647,7 @@ export async function getControlPanelOverviewData(filters = {}) {
   });
   const cancelledCustomerRows = cancelledByEventDate;
 
-  const pendingBeneficiaryRows = createdRangeDeals.filter((d) => {
+  const pendingBeneficiaryRows = selectedRangeDeals.filter((d) => {
     if (!d.isPaidSuccess || d.isCancelled) return false;
     const pm = d.formState?.primaryMember || d.beneficiaryUpdate?.primaryMember || {};
     const idNum = String(pm.id || d.formState?.id || '').trim();
@@ -3711,21 +3776,16 @@ export async function getControlPanelOverviewData(filters = {}) {
   ]).toArray();
   const organizationCollectionsDebt = orgDebtRows.reduce((s, r) => s + Number(r.debt || 0), 0);
 
-  const dayMap = new Map();
-  for (const d of paidRows) {
-    const day = new Date(d.createdAt);
-    if (Number.isNaN(day.getTime())) continue;
-    const key = day.toISOString().slice(0, 10);
-    const prev = dayMap.get(key) || { date: key, revenue: 0, netProfit: 0, count: 0 };
-    prev.revenue += Number(d.revenue || 0);
-    prev.netProfit += Number(d.netProfit || 0);
-    prev.count += 1;
-    dayMap.set(key, prev);
+  let cashTotals = { initialDealCount: 0, recurringEventCount: 0, eventCount: paidRows.length };
+  if (dateFilterMode === 'billing_date') {
+    cashTotals = await getCashFinancialTotalsForDateRange(from, to);
+    totalRevenue = Number(cashTotals.totalRevenue || 0);
+    totalProviderPayments = Number(cashTotals.totalVendorCost || 0);
+    totalAgentPayments = Number(cashTotals.totalAgentCommission || 0);
+    totalExpenses = totalProviderPayments + totalAgentPayments;
+    totalNetProfit = Number(cashTotals.totalNetProfit || 0);
+    totalTransactions = Number(cashTotals.eventCount || 0);
   }
-  const chartSeries = [...dayMap.values()].sort((a, b) => a.date.localeCompare(b.date)).map((d) => ({
-    ...d,
-    label: new Date(d.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }),
-  }));
   const cancellationCountByDay = {};
   const cancellationRevenueByDay = {};
   let totalCancellationRevenue = 0;
@@ -3740,7 +3800,7 @@ export async function getControlPanelOverviewData(filters = {}) {
     const amount = Number(d.payerAmount || 0);
     cancellationRevenueByDay[key] = Number(cancellationRevenueByDay[key] || 0) + amount;
   }
-  const baseIncomeChartRows = statusFilteredCreatedDeals.filter((d) => d.isPaidSuccess && !isCancelledDeal(d));
+  const baseIncomeChartRows = statusFilteredSelectedDeals.filter((d) => d.isPaidSuccess && !isCancelledDeal(d));
   const dayMapForChart = new Map();
   for (const d of baseIncomeChartRows) {
     const day = new Date(d.createdAt);
@@ -3787,7 +3847,8 @@ export async function getControlPanelOverviewData(filters = {}) {
       abandonedCarts: abandonedCartRows.length,
       contactTasks: contactTaskRows.length,
       organizationCollectionsDebt,
-      cashBasedSummary: true,
+      cashBasedSummary: dateFilterMode === 'billing_date',
+      dateFilterMode,
       initialDealCashCount: Number(cashTotals.initialDealCount || 0),
       recurringCashEventCount: Number(cashTotals.recurringEventCount || 0),
       cancellationsCount: statusFilteredCancelledDeals.length,

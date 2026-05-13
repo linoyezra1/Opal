@@ -284,6 +284,7 @@ export default function SubscribersDashboard() {
     month: String(searchParams.get('month') || ''),
     fromDate: String(searchParams.get('fromDate') || ''),
     toDate: String(searchParams.get('toDate') || ''),
+    dateFilterMode: String(searchParams.get('dateFilterMode') || 'billing_date'),
     status: String(searchParams.get('status') || 'all'),
     providerEnabled: false,
     providerValue: '',
@@ -338,6 +339,7 @@ export default function SubscribersDashboard() {
       !!filters.month ||
       !!filters.fromDate ||
       !!filters.toDate ||
+      (filters.dateFilterMode && filters.dateFilterMode !== 'billing_date') ||
       (filters.status && filters.status !== 'all') ||
       filters.providerEnabled ||
       !!filters.providerValue ||
@@ -365,9 +367,18 @@ export default function SubscribersDashboard() {
   const unifiedFilterConfig = useMemo(
     () => [
       { key: 'search', label: 'חיפוש', type: 'text', placeholder: 'חיפוש חי: שם לקוח, ת.ז, מס׳ הזמנה…' },
+      {
+        key: 'dateFilterMode',
+        label: 'סוג סינון תאריך',
+        type: 'select',
+        options: [
+          { value: 'billing_date', label: 'סנן לפי תאריך חיוב' },
+          { value: 'join_date', label: 'סנן לפי תאריך הצטרפות' },
+        ],
+      },
       { key: 'month', label: 'חודש', type: 'month', placeholder: 'YYYY-MM' },
-      { key: 'fromDate', label: 'מתאריך(תאריך הצטרפות)', type: 'date' },
-      { key: 'toDate', label: 'עד תאריך(תאריך הצטרפות)', type: 'date' },
+      { key: 'fromDate', label: filters.dateFilterMode === 'join_date' ? 'מתאריך (תאריך הצטרפות)' : 'מתאריך (תאריך חיוב)', type: 'date' },
+      { key: 'toDate', label: filters.dateFilterMode === 'join_date' ? 'עד תאריך (תאריך הצטרפות)' : 'עד תאריך (תאריך חיוב)', type: 'date' },
       {
         key: 'status',
         label: 'סטטוס',
@@ -425,12 +436,13 @@ export default function SubscribersDashboard() {
         ],
       },
     ],
-    [agentOptions, organizationOptions, productOptions]
+    [agentOptions, organizationOptions, productOptions, filters.dateFilterMode]
   );
   const unifiedFilterValues = useMemo(
     () => ({
       search: liveSearch,
       customerSegment: filters.customerSegment || 'all',
+      dateFilterMode: filters.dateFilterMode || 'billing_date',
       month: filters.month || '',
       fromDate: filters.fromDate || '',
       toDate: filters.toDate || '',
@@ -458,6 +470,7 @@ export default function SubscribersDashboard() {
         month: filters.month || '',
         fromDate: filters.fromDate || '',
         toDate: filters.toDate || '',
+        dateFilterMode: filters.dateFilterMode || 'billing_date',
         status: filters.status || 'all',
         providerEnabled: String(!!filters.providerEnabled),
         providerValue: filters.providerValue || '',
@@ -514,13 +527,15 @@ export default function SubscribersDashboard() {
     const month = String(searchParams.get('month') || '').trim();
     const fromDate = String(searchParams.get('fromDate') || '').trim();
     const toDate = String(searchParams.get('toDate') || '').trim();
-    if (!status && !month && !fromDate && !toDate) return;
+    const dateFilterMode = String(searchParams.get('dateFilterMode') || '').trim();
+    if (!status && !month && !fromDate && !toDate && !dateFilterMode) return;
     setFilters((prev) => ({
       ...prev,
       status: status || prev.status || 'all',
       month: month || prev.month,
       fromDate: fromDate || prev.fromDate,
       toDate: toDate || prev.toDate,
+      dateFilterMode: dateFilterMode || prev.dateFilterMode || 'billing_date',
     }));
   }, [searchParams]);
 
@@ -825,6 +840,7 @@ export default function SubscribersDashboard() {
       month: '',
       fromDate: '',
       toDate: '',
+      dateFilterMode: 'billing_date',
       status: 'all',
       providerEnabled: false,
       providerValue: '',
@@ -1637,17 +1653,33 @@ export default function SubscribersDashboard() {
               <DialogDescription>הגדרות סינון</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant={filters.dateFilterMode === 'billing_date' ? 'default' : 'outline'}
+                  onClick={() => setFilters((p) => ({ ...p, dateFilterMode: 'billing_date' }))}
+                >
+                  סנן לפי תאריך חיוב
+                </Button>
+                <Button
+                  type="button"
+                  variant={filters.dateFilterMode === 'join_date' ? 'default' : 'outline'}
+                  onClick={() => setFilters((p) => ({ ...p, dateFilterMode: 'join_date' }))}
+                >
+                  סנן לפי תאריך הצטרפות
+                </Button>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <Field>
                   <FieldLabel>חודש</FieldLabel>
                   <Input type="month" value={filters.month} onChange={(e) => setFilters((p) => ({ ...p, month: e.target.value }))} />
                 </Field>
                 <Field>
-                  <FieldLabel>מתאריך</FieldLabel>
+                  <FieldLabel>{filters.dateFilterMode === 'join_date' ? 'מתאריך הצטרפות' : 'מתאריך חיוב'}</FieldLabel>
                   <Input type="date" value={filters.fromDate} onChange={(e) => setFilters((p) => ({ ...p, fromDate: e.target.value }))} />
                 </Field>
                 <Field>
-                  <FieldLabel>עד תאריך</FieldLabel>
+                  <FieldLabel>{filters.dateFilterMode === 'join_date' ? 'עד תאריך הצטרפות' : 'עד תאריך חיוב'}</FieldLabel>
                   <Input type="date" value={filters.toDate} onChange={(e) => setFilters((p) => ({ ...p, toDate: e.target.value }))} />
                 </Field>
               </div>
@@ -1822,10 +1854,30 @@ export default function SubscribersDashboard() {
               </h1>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <Button type="button" variant="outline" disabled title="בקרוב">
-                <Download className="size-4 me-2" />
-                ייצוא
-              </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0 text-xs h-7 px-2"
+                      disabled={billingHistoryLoading}
+                      onClick={() => {
+                        const dealId = String(selected?.id || selected?._id || '').trim();
+                        if (!token || !dealId) return;
+                        setBillingHistoryLoading(true);
+                        fetch(`${API_BASE}/api/admin/deals/${encodeURIComponent(dealId)}/billing-history?limit=200`, {
+                          headers: { Authorization: `Bearer ${token}` },
+                        })
+                          .then((r) => r.json())
+                          .then((j) => {
+                            if (j.success) setBillingHistory(j);
+                            else setBillingHistory({ rows: [], cardcomRecurringId: '', error: j.error || '' });
+                          })
+                          .catch(() => setBillingHistory({ rows: [], cardcomRecurringId: '', error: 'שגיאת רשת' }))
+                          .finally(() => setBillingHistoryLoading(false));
+                      }}
+                    >
+                      רענן
+                    </Button>
             </div>
           </div>
 
@@ -1836,20 +1888,21 @@ export default function SubscribersDashboard() {
               {/* 1. קוביות סטטיסטיקה כלליות */}
               <StatsCard title="סה״כ הכנסות" value={formatCurrency(visibleSummary.totalRevenue)} icon={TrendingUp} loading={loading} />
               <StatsCard title="עסקאות בתוצאות" value={visibleRows.length} icon={Users} loading={loading} />
+                            <StatsCard
+                              title="לא הופעל/ממתין לאישור"
+                              value={String(visibleSummary.notActivated)}
+                              icon={Hourglass}
+                              loading={loading}
+                            />
+              <StatsCard title="מנויים פעילים" value={String(visibleSummary.active)} icon={CheckCircle2} loading={loading} />
+
               <StatsCard
-                title="סה״כ מנוי לא הופעל/ממתין לאישור"
-                value={String(visibleSummary.notActivated)}
-                icon={Hourglass}
-                loading={loading}
-              />
-              <StatsCard title="סה״כ מנוי פעיל" value={String(visibleSummary.active)} icon={CheckCircle2} loading={loading} />
-              <StatsCard
-                title="סה״כ מנוי ממתין לביטול"
+                title="מנויים ממתינים לביטול"
                 value={String(visibleSummary.pendingCancellation)}
                 icon={CalendarClock}
                 loading={loading}
               />
-              <StatsCard title="סה״כ מנוי מבוטלים" value={String(visibleSummary.canceled)} icon={UserX} loading={loading} />
+              <StatsCard title="מנויים מבוטלים" value={String(visibleSummary.canceled)} icon={UserX} loading={loading} />
 
               {/* 2. קוביות הסטטיסטיקה של הקטגוריות */}
               {SUMMARY_ITEMS.map((item) => {
@@ -1878,6 +1931,7 @@ export default function SubscribersDashboard() {
                   setFilters((p) => ({
                     ...p,
                     customerSegment: String(next.customerSegment || 'all'),
+                    dateFilterMode: String(next.dateFilterMode || 'billing_date'),
                     month: String(next.month || ''),
                     fromDate: String(next.fromDate || ''),
                     toDate: String(next.toDate || ''),

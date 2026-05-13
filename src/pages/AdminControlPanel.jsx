@@ -21,7 +21,12 @@ function toYmd(d) {
 function monthDefaults() {
   const now = new Date();
   const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  return { fromDate: toYmd(from), toDate: toYmd(now), month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}` };
+  return {
+    fromDate: toYmd(from),
+    toDate: toYmd(now),
+    month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
+    dateFilterMode: 'billing_date',
+  };
 }
 function formatCurrency(v) {
   return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(Number(v || 0));
@@ -236,6 +241,22 @@ export default function AdminControlPanel() {
 
         <Card>
           <CardContent className="pt-6">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant={filters.dateFilterMode === 'billing_date' ? 'default' : 'outline'}
+                onClick={() => setFilters((f) => ({ ...f, dateFilterMode: 'billing_date' }))}
+              >
+                סנן לפי תאריך חיוב
+              </Button>
+              <Button
+                type="button"
+                variant={filters.dateFilterMode === 'join_date' ? 'default' : 'outline'}
+                onClick={() => setFilters((f) => ({ ...f, dateFilterMode: 'join_date' }))}
+              >
+                סנן לפי תאריך הצטרפות
+              </Button>
+            </div>
             <div className="grid gap-3 md:grid-cols-4">
               <Input
                 type="month"
@@ -253,8 +274,18 @@ export default function AdminControlPanel() {
                   setFilters((f) => ({ ...f, month: m, fromDate: toYmd(start), toDate: toYmd(end) }));
                 }}
               />
-              <Input type="date" value={filters.fromDate} onChange={(e) => setFilters((f) => ({ ...f, fromDate: e.target.value }))} />
-              <Input type="date" value={filters.toDate} onChange={(e) => setFilters((f) => ({ ...f, toDate: e.target.value }))} />
+              <Input
+                type="date"
+                aria-label={filters.dateFilterMode === 'join_date' ? 'מתאריך הצטרפות' : 'מתאריך חיוב'}
+                value={filters.fromDate}
+                onChange={(e) => setFilters((f) => ({ ...f, fromDate: e.target.value }))}
+              />
+              <Input
+                type="date"
+                aria-label={filters.dateFilterMode === 'join_date' ? 'עד תאריך הצטרפות' : 'עד תאריך חיוב'}
+                value={filters.toDate}
+                onChange={(e) => setFilters((f) => ({ ...f, toDate: e.target.value }))}
+              />
               <div className="text-sm text-muted-foreground flex items-center justify-end">טווח פעיל: {data?.range?.fromDate || filters.fromDate} - {data?.range?.toDate || filters.toDate}</div>
             </div>
           </CardContent>

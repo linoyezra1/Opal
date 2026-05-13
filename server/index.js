@@ -2415,8 +2415,8 @@ app.put('/api/admin/leads/:kind/:id', requireAdmin, async (req, res) => {
 /** Aggregated dashboard: לקוחות ללא טופס מוטבים, פיגור תשלום, פניות, וכו׳ */
 app.get('/api/admin/control-panel', requireAdmin, async (req, res) => {
   try {
-    const { fromDate = '', toDate = '', month = '' } = req.query || {};
-    const dashboard = await getControlPanelOverviewData({ fromDate, toDate, month });
+    const { fromDate = '', toDate = '', month = '', dateFilterMode = 'billing_date' } = req.query || {};
+    const dashboard = await getControlPanelOverviewData({ fromDate, toDate, month, dateFilterMode });
     res.json({
       success: true,
       ...dashboard,
@@ -2792,6 +2792,7 @@ function subscribersDashboardQuery(req) {
     month: req.query.month || '',
     fromDate: req.query.fromDate || '',
     toDate: req.query.toDate || '',
+    dateFilterMode: req.query.dateFilterMode || 'billing_date',
     providerEnabled: String(req.query.providerEnabled || '') === 'true',
     providerValue: req.query.providerValue || '',
     agentEnabled: String(req.query.agentEnabled || '') === 'true',

@@ -251,7 +251,7 @@ export default function AgentDetailPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatsCard title="סהכ מנויים פעילים+ממתינים לביטול" value={String(shownEligibleDealsCount)} icon={Users} />
           <StatsCard title="סה״כ עמלות שנרשמו בטיוטה" value={formatCurrency(preview.summary.totalCommissions)} icon={Wallet} />
-          <StatsCard title="מוצרים עם עמלה" value={String(commissionSummary.products)} icon={Percent} />
+
 
         </div>
 
