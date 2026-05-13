@@ -25,6 +25,7 @@ import {
   shouldShowIsraeliIdChecksumError,
 } from '../utils/israeliId.js';
 import { fmtDateTime } from '../utils/dateUtils.js';
+import { computePeriodRevenueFromDeal } from '../utils/periodRevenue.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { StatsCard } from '../components/admin/stats-card.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
@@ -977,7 +978,10 @@ export default function SubscribersDashboard() {
     let notActivated = 0;
     let canceled = 0;
     for (const r of visibleRows) {
-      totalRevenue += Number(r.totalCustomerRevenue ?? r.amount ?? 0);
+      const deal = r?.raw && typeof r.raw === 'object' ? r.raw : null;
+      totalRevenue += deal
+        ? computePeriodRevenueFromDeal(deal, filters)
+        : Number(r.totalCustomerRevenue ?? r.amount ?? 0);
       const es = r.entitlementStatus;
       if (es === 'not_activated') {
         notActivated += 1;
@@ -992,7 +996,7 @@ export default function SubscribersDashboard() {
       }
     }
     return { totalRevenue, active, pendingCancellation, notActivated, canceled };
-  }, [visibleRows]);
+  }, [visibleRows, filters]);
 
   const calculatedCounts = useMemo(() => {
     const rows = visibleRows || [];

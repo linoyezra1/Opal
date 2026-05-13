@@ -3634,7 +3634,8 @@ export async function getControlPanelOverviewData(filters = {}) {
   let totalAgentPayments = paidRows.reduce((s, d) => s + Number(d.agentCommission || 0), 0);
   let totalExpenses = totalProviderPayments + totalAgentPayments;
   let totalNetProfit = paidRows.reduce((s, d) => s + Number(d.netProfit || 0), 0);
-  const activeSubscribers = paidRows.reduce((s, d) => s + Number(d.individualsCount || 1), 0);
+  /** מנוי פעיל = כרטיסיית לקוח/עסקה אחת, לא סכום מוטבים */
+  const activeSubscribers = paidRows.length;
   let totalTransactions = paidRows.length;
   const failedPaymentRows = selectedRangeDeals.filter((d) => {
     const ps = String(d.paymentStatus || '').toLowerCase();

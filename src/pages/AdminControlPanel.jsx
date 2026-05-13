@@ -41,14 +41,16 @@ const SECTIONS = [
 
 const CARD_META = {
   totalRevenue: { title: 'סה״כ הכנסות', icon: Wallet, money: true, className: 'border-emerald-300 bg-emerald-50/60' },
-  activeSubscribers: { title: 'מנויים פעילים', icon: Users },
+
   totalTransactions: { title: 'סה״כ עסקאות', icon: CreditCard },
   totalExpenses: { title: 'סה״כ הוצאות', icon: AlertCircle, money: true, className: 'border-red-300 bg-red-50/60' },
   totalProviderPayments: { title: 'סה״כ תשלום לספק', icon: Building2, money: true },
   totalAgentPayments: { title: 'סה״כ תשלום לסוכן', icon: UserCheck, money: true },
+  activeSubscribers: { title: 'מנויים פעילים', icon: Users },
+  notActivatedCount: { title: 'לא הופעל', icon: UserX, task: true, className: 'border-gray-300 bg-gray-50/60' },
   pendingCancellationCount: { title: 'ממתין לביטול', icon: Clock, task: true, className: 'border-amber-300 bg-amber-50/60' },
   cancellationsCount: { title: 'מבוטלים', icon: AlertCircle, task: true, className: 'border-red-300 bg-red-50/60' },
-  notActivatedCount: { title: 'לא הופעל', icon: UserX, task: true, className: 'border-gray-300 bg-gray-50/60' },
+
   failedPayments: { title: 'פיגור תשלום', icon: AlertCircle, task: true },
   abandonedCarts: { title: 'עגלות נטושות', icon: CreditCard, task: true },
   pendingBeneficiaries: { title: 'לקוחות להשלמת פרטים', icon: Users, task: true },
