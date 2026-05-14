@@ -26,6 +26,7 @@ import {
 } from '../utils/israeliId.js';
 import { fmtDateTime } from '../utils/dateUtils.js';
 import { computePeriodRevenueFromDeal } from '../utils/periodRevenue.js';
+import { exportVisibleSubscribersToXlsx } from '../utils/subscribersDashboardXlsx.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { StatsCard } from '../components/admin/stats-card.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
@@ -1930,6 +1931,25 @@ export default function SubscribersDashboard() {
               <UnifiedFilterShell
                 filters={unifiedFilterConfig}
                 values={unifiedFilterValues}
+                toolbarTrailing={
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-10 gap-1.5 border-slate-200 bg-white shadow-sm shrink-0"
+                    disabled={loading || visibleRows.length === 0}
+                    onClick={() => {
+                      try {
+                        exportVisibleSubscribersToXlsx(visibleRows);
+                      } catch (e) {
+                        console.error(e);
+                      }
+                    }}
+                  >
+                    <Download className="size-4" aria-hidden />
+                    ייצוא לאקסל
+                  </Button>
+                }
                 onChange={(next) => {
                   setLiveSearch(String(next.search || ''));
                   setFilters((p) => ({

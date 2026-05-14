@@ -132,7 +132,11 @@ export default function AdminControlPanel() {
     setLoading(true);
     setError('');
     try {
-      const q = new URLSearchParams(next);
+      const q = new URLSearchParams();
+      q.set('fromDate', String(next.fromDate || '').trim());
+      q.set('toDate', String(next.toDate || '').trim());
+      q.set('month', String(next.month || '').trim());
+      q.set('dateFilterMode', String(next.dateFilterMode || 'billing_date').trim());
       const res = await fetch(`${API_BASE}/api/admin/control-panel?${q.toString()}`, { headers: { Authorization: `Bearer ${token}` } });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.success) throw new Error(j.error || 'טעינה נכשלה');
@@ -288,7 +292,24 @@ export default function AdminControlPanel() {
                 value={filters.toDate}
                 onChange={(e) => setFilters((f) => ({ ...f, toDate: e.target.value }))}
               />
-              <div className="text-sm text-muted-foreground flex items-center justify-end">טווח פעיל: {data?.range?.fromDate || filters.fromDate} - {data?.range?.toDate || filters.toDate}</div>
+              <div className="text-sm text-muted-foreground flex flex-col items-end gap-0.5">
+                <span>
+                  טווח פעיל: {data?.range?.fromDate || filters.fromDate} - {data?.range?.toDate || filters.toDate}
+                </span>
+                {data?.overview?.subscriptionPoolDealCount != null ? (
+                  <span className="text-xs">
+                    עסקאות ייחודיות בטווח (בריכת זכאות): <strong>{Number(data.overview.subscriptionPoolDealCount)}</strong>
+                    {' · '}
+                    סכום ארבעת סטטוסי המנוי:{' '}
+                    <strong>
+                      {Number(overview.activeSubscribers || 0) +
+                        Number(overview.pendingCancellationCount || 0) +
+                        Number(overview.cancellationsCount || 0) +
+                        Number(overview.notActivatedCount || 0)}
+                    </strong>
+                  </span>
+                ) : null}
+              </div>
             </div>
           </CardContent>
         </Card>

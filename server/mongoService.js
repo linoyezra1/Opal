@@ -1,5 +1,5 @@
 import { MongoClient, ObjectId } from 'mongodb';
-import { getEntitlementStatus, parseFlexibleDate } from './entitlementStatus.js';
+import { getEntitlementStatus, parseFlexibleDate, STATUS_ACTIVE, STATUS_CANCELED, STATUS_NOT_ACTIVATED, STATUS_PENDING_CANCELLATION } from './entitlementStatus.js';
 
 const MONGO_URL = process.env.MONGODB_URI || process.env.MONGO_URL || '';
 const DB_NAME = process.env.MONGO_DB_NAME || 'opal';
@@ -3546,6 +3546,11 @@ export async function getControlPanelOverviewData(filters = {}) {
         createdAt: 1,
         updatedAt: 1,
         cancellationDate: 1,
+        cancelAt: 1,
+        finalBillingMonth: 1,
+        isCentralized: 1,
+        subscriptionEndDate: 1,
+        paymentMethod: 1,
         status: 1,
         subscriptionStatus: 1,
         isActive: 1,
@@ -3599,6 +3604,28 @@ export async function getControlPanelOverviewData(filters = {}) {
   const selectedRangeDeals = dateFilterMode === 'join_date' ? createdRangeDeals : billingRangeDeals;
   const cancelledByEventDate = deals.filter((d) => isCancelledDeal(d) && isDateInRange(cancellationEventDate(d)));
 
+  /** בריכת עסקאות ייחודיות בטווח (לפי מצב תאריך) — עסקת אב בלבד, לסנכרון וידג'טים עם getEntitlementStatus */
+  const periodPool = [];
+  const periodPoolSeen = new Set();
+  for (const d of selectedRangeDeals) {
+    if (d.isRecurringCycle === true) continue;
+    const pid = String(d._id || '');
+    if (!pid || periodPoolSeen.has(pid)) continue;
+    periodPoolSeen.add(pid);
+    periodPool.push(d);
+  }
+  const poolActiveRows = [];
+  const poolPendingCancellationRows = [];
+  const poolCanceledRows = [];
+  const poolNotActivatedRows = [];
+  for (const d of periodPool) {
+    const ent = getEntitlementStatus(d);
+    if (ent.status === STATUS_ACTIVE) poolActiveRows.push(d);
+    else if (ent.status === STATUS_PENDING_CANCELLATION) poolPendingCancellationRows.push(d);
+    else if (ent.status === STATUS_CANCELED) poolCanceledRows.push(d);
+    else if (ent.status === STATUS_NOT_ACTIVATED) poolNotActivatedRows.push(d);
+  }
+
   const statusFilteredSelectedDeals =
     activityStatus === 'active'
       ? selectedRangeDeals.filter((d) => isActiveDeal(d))
@@ -3614,28 +3641,17 @@ export async function getControlPanelOverviewData(filters = {}) {
 
   // Summary cards are always computed from full selected range (independent of status filter).
   const paidRows = selectedRangeDeals.filter((d) => d.isPaidSuccess && !isCancelledDeal(d));
-  // ספירות 4-מצבים (מחושב מכלל העסקאות, לא רק הטווח)
-  const pendingCancellationRows = deals.filter((d) => {
-    const sub = String(d.subscriptionStatus || '').toLowerCase();
-    return (sub.includes('pending') && sub.includes('cancel')) && !isCancelledDeal(d);
-  });
-  const notActivatedRows = deals.filter((d) => {
-    const sub = String(d.subscriptionStatus || '');
-    const wf = String(d.status || '').toLowerCase();
-    return (
-      sub === 'ממתין לאישור הארגון' ||
-      wf === 'pending_org_approval' ||
-      wf === 'pending_allow' ||
-      wf === 'pending_alllow'
-    ) && !isCancelledDeal(d);
-  });
+  const subscriptionPoolDealCount = periodPool.length;
   let totalRevenue = paidRows.reduce((s, d) => s + Number(d.revenue || 0), 0);
   let totalProviderPayments = paidRows.reduce((s, d) => s + Number(d.providerCost || 0), 0);
   let totalAgentPayments = paidRows.reduce((s, d) => s + Number(d.agentCommission || 0), 0);
   let totalExpenses = totalProviderPayments + totalAgentPayments;
   let totalNetProfit = paidRows.reduce((s, d) => s + Number(d.netProfit || 0), 0);
-  /** מנוי פעיל = כרטיסיית לקוח/עסקה אחת, לא סכום מוטבים */
-  const activeSubscribers = paidRows.length;
+  /** מנוי פעיל = עסקאות בבריכת התקופה עם זכאות active (לא ספירת מוטבים) */
+  const activeSubscribers = poolActiveRows.length;
+  const pendingCancellationCount = poolPendingCancellationRows.length;
+  const cancellationsCount = poolCanceledRows.length;
+  const notActivatedCount = poolNotActivatedRows.length;
   let totalTransactions = paidRows.length;
   const failedPaymentRows = selectedRangeDeals.filter((d) => {
     const ps = String(d.paymentStatus || '').toLowerCase();
@@ -3646,7 +3662,6 @@ export async function getControlPanelOverviewData(filters = {}) {
       (d.cardcomRecurringId != null && String(d.cardcomRecurringId).trim() !== '');
     return hasCardcom && isError && !isCancelled;
   });
-  const cancelledCustomerRows = cancelledByEventDate;
 
   const pendingBeneficiaryRows = selectedRangeDeals.filter((d) => {
     if (!d.isPaidSuccess || d.isCancelled) return false;
@@ -3790,10 +3805,12 @@ export async function getControlPanelOverviewData(filters = {}) {
   const cancellationCountByDay = {};
   const cancellationRevenueByDay = {};
   let totalCancellationRevenue = 0;
-  const totalCancellations = statusFilteredCancelledDeals.length;
-  for (const d of statusFilteredCancelledDeals) {
+  const totalCancellations = poolCanceledRows.length;
+  for (const d of poolCanceledRows) {
     totalCancellationRevenue += Number(d.payerAmount || 0);
-    const eventDateRaw = d.cancellationDate || d.updatedAt || d.createdAt;
+    const ent = getEntitlementStatus(d);
+    const eventDateRaw =
+      (ent.cancelAt && new Date(ent.cancelAt)) || d.cancellationDate || d.updatedAt || d.createdAt;
     const dt = new Date(eventDateRaw);
     if (Number.isNaN(dt.getTime())) continue;
     const key = dt.toISOString().slice(0, 10);
@@ -3852,15 +3869,16 @@ export async function getControlPanelOverviewData(filters = {}) {
       dateFilterMode,
       initialDealCashCount: Number(cashTotals.initialDealCount || 0),
       recurringCashEventCount: Number(cashTotals.recurringEventCount || 0),
-      cancellationsCount: statusFilteredCancelledDeals.length,
-      pendingCancellationCount: pendingCancellationRows.length,
-      notActivatedCount: notActivatedRows.length,
+      cancellationsCount,
+      pendingCancellationCount,
+      notActivatedCount,
+      subscriptionPoolDealCount,
       chartSeries: chartSeriesWithCancellations,
       totalCancellationRevenue,
       totalCancellations,
     },
     drilldowns: {
-      activeSubscribers: paidRows.map((d) => ({
+      activeSubscribers: poolActiveRows.map((d) => ({
         id: String(d._id || ''),
         transactionId: d.transactionId || '',
         fullName: d.formState?.fullName || '—',
@@ -3908,7 +3926,7 @@ export async function getControlPanelOverviewData(filters = {}) {
           comments: String(d.formState?.failedPaymentComment || ''),
         };
       }),
-      pendingCancellationCount: pendingCancellationRows.map((d) => ({
+      pendingCancellationCount: poolPendingCancellationRows.map((d) => ({
         id: String(d._id || ''),
         transactionId: d.transactionId || '',
         fullName: d.formState?.fullName || '—',
@@ -3917,7 +3935,7 @@ export async function getControlPanelOverviewData(filters = {}) {
         finalBillingMonth: String(d.finalBillingMonth || '').trim(),
         subscriptionStatus: String(d.subscriptionStatus || ''),
       })),
-      notActivatedCount: notActivatedRows.map((d) => ({
+      notActivatedCount: poolNotActivatedRows.map((d) => ({
         id: String(d._id || ''),
         transactionId: d.transactionId || '',
         fullName: d.formState?.fullName || '—',
@@ -3926,7 +3944,7 @@ export async function getControlPanelOverviewData(filters = {}) {
         subscriptionStatus: String(d.subscriptionStatus || ''),
         createdAt: d.createdAt,
       })),
-      cancelledCustomers: statusFilteredCancelledDeals.map((d) => ({
+      cancelledCustomers: poolCanceledRows.map((d) => ({
         id: String(d._id || ''),
         orderId: d.transactionId || '',
         customerName: d.formState?.fullName || '—',

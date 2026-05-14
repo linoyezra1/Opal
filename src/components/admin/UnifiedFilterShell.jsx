@@ -17,6 +17,7 @@ export default function UnifiedFilterShell(props) {
     searchPlaceholder = 'חיפוש...',
     basicControls = null,
     advancedContent = null,
+    toolbarTrailing = null,
     hideSearchBar = false,
   } = props;
   const [expanded, setExpanded] = React.useState(false);
@@ -82,6 +83,8 @@ export default function UnifiedFilterShell(props) {
             {isLoading ? 'מחפש...' : resultsCount === totalCount ? `${totalCount} תוצאות` : `${resultsCount} מתוך ${totalCount}`}
           </div>
         ) : null}
+
+        {toolbarTrailing ? <div className="flex shrink-0 items-center gap-2">{toolbarTrailing}</div> : null}
       </div>
 
       {(hasNewApi ? otherFilters.length > 0 : !!advancedContent) && expanded ? (
