@@ -6,6 +6,7 @@ const DASH = '—';
 /** עמודות בעברית — סדר לוגי כמו ב־UI */
 const HEADER_ROW = [
   'שם מלא',
+  'שם ארגון',
   'ת.ז',
   'תאריך לידה',
   'מין',
@@ -18,10 +19,14 @@ const HEADER_ROW = [
   'סטטוס תשלום',
   'סטטוס מנוי',
   'סוג תשלום',
-  'מוצר',
-  'סכום עסקה (בטופס)',
-  'עלות ספק',
+  'שם סוכן',
   'עמלת סוכן',
+  'עמלת סוכן סה״כ',
+  'שם המוצר',
+  'שם ספק',
+  'עלות ספק',
+  'עלות ספק סה״כ',
+  'סכום עסקה (בטופס)',
   'רווח נקי',
   "מס' הזמנה",
   'היסטוריית חיובים (Recurring ID)',
@@ -35,12 +40,14 @@ const HEADER_ROW = [
 ];
 
 const COL = {
-  payerAmount: 14,
-  vendorCost: 15,
-  agentCommission: 16,
-  netProfit: 17,
-  totalCashRevenue: 24,
-  beneficiariesCount: 25,
+  agentCommission: 15,
+  agentCommissionTotal: 16,
+  vendorCost: 19,
+  vendorCostTotal: 20,
+  payerAmount: 21,
+  netProfit: 22,
+  totalCashRevenue: 29,
+  beneficiariesCount: 30,
 };
 
 const ENTITLEMENT_HE = {
@@ -128,11 +135,27 @@ function beneficiariesCount(r, raw) {
 }
 
 function paymentTypeLabel(r, raw) {
-  if (r?.isCentralized === true || raw?.isCentralized === true) return 'מרוכז';
   const fs = raw?.formState || {};
-  const pm = String(raw?.paymentMethod || fs.paymentMethod || fs.organizationPaymentMethod || '').toLowerCase();
-  if (pm === 'centralized') return 'מרוכז';
-  return 'פרטי';
+  const pm = String(raw?.paymentMethod || fs.paymentMethod || fs.organizationPaymentMethod || '')
+    .trim()
+    .toLowerCase();
+  const centralized =
+    r?.isCentralized === true || raw?.isCentralized === true || pm === 'centralized';
+  if (centralized) return 'מרוכז (ארגון משלם)';
+  return 'פרטי (כרטיס אשראי)';
+}
+
+/** סדר כמו ב־SubscribersDashboard (formState → שורה → raw) */
+function organizationNameCell(r, raw) {
+  const fs = raw?.formState && typeof raw.formState === 'object' ? raw.formState : {};
+  const bu = raw?.beneficiaryUpdate;
+  return dashStr(
+    fs.organizationName ||
+      r?.organizationName ||
+      r?.organizationBadge ||
+      raw?.organizationName ||
+      bu?.organizationName
+  );
 }
 
 function subscriptionStatusWithSub(r, raw, ent) {
@@ -142,6 +165,49 @@ function subscriptionStatusWithSub(r, raw, ent) {
   const cs = String(r?.completionStatus || '').trim();
   if (cs && cs !== 'הושלם' && !r?.pendingBeneficiaryCompletion) parts.push(cs);
   return parts.join(' · ');
+}
+
+function isSuccessfulInitialPayment(r, raw) {
+  return /success|paid|test_success|completed/i.test(String(r?.paymentStatus ?? raw?.paymentStatus ?? ''));
+}
+
+function sumSuccessfulRecurringField(raw, field) {
+  const events = Array.isArray(raw?.detailRecurringEvents) ? raw.detailRecurringEvents : [];
+  let s = 0;
+  for (const ev of events) {
+    if (Number(ev?.statusCode) !== 1) continue;
+    s += numCell(ev?.[field]);
+  }
+  return s;
+}
+
+/** עלות/עמלה מהצילום בטופס + חיובים חוזרים מוצלחים (ללא כפילות עם מכפלת מוטבים) */
+function cumulativeVendorCost(r, raw, unit) {
+  const initial = isSuccessfulInitialPayment(r, raw) ? unit : 0;
+  return initial + sumSuccessfulRecurringField(raw, 'vendorCost');
+}
+
+function cumulativeAgentCommission(r, raw, unit) {
+  const initial = isSuccessfulInitialPayment(r, raw) ? unit : 0;
+  return initial + sumSuccessfulRecurringField(raw, 'agentCommission');
+}
+
+/** כמו dealTxnProviderName ב־SubscribersDashboard */
+function providerNameCell(r, raw, fs) {
+  return dashStr(
+    raw?.vendorName ||
+      r?.provider ||
+      fs.providerName ||
+      fs.vendorName ||
+      fs.resolvedVendorName ||
+      raw?.providerName
+  );
+}
+
+function agentNameCell(r, raw, fs) {
+  return dashStr(
+    raw?.beneficiaryUpdate?.agentName || fs.agentName || r?.agentName || raw?.agentName
+  );
 }
 
 function buildDataRow(r) {
@@ -168,8 +234,12 @@ function buildDataRow(r) {
   const joinDate = r?.createdAt || raw?.createdAt ? formatYmd(r?.createdAt ?? raw?.createdAt) : DASH;
 
   const payerAmount = numCell(r?.amount ?? raw?.payerAmount ?? 0);
-  const resolvedVendor = numCell(fs.resolvedVendorCost ?? r?.vendorCost ?? 0);
-  const resolvedAgent = numCell(fs.resolvedAgentCommission ?? r?.agentCommission ?? 0);
+  const vendorUnit = numCell(fs.resolvedVendorCost ?? r?.vendorCost ?? 0);
+  const agentUnit = numCell(
+    fs.resolvedAgentCommission ?? r?.agentCommission ?? raw?.commissionAmount ?? 0
+  );
+  const vendorTotal = cumulativeVendorCost(r, raw, vendorUnit);
+  const agentTotal = cumulativeAgentCommission(r, raw, agentUnit);
   const resolvedNet = numCell(fs.resolvedNetProfit ?? r?.netProfit ?? 0);
   const totalCash = raw ? computeDealTotalCollectedRevenue(raw) : numCell(r?.totalCustomerRevenue ?? r?.amount ?? 0);
 
@@ -186,15 +256,20 @@ function buildDataRow(r) {
   const marital = dashStr(pm.maritalStatus || fs.maritalStatus);
   const hmo = dashStr(pm.healthFund || fs.healthFund);
   const supp = dashStr(pm.supplementalInsurance || fs.supplementalInsurance);
-  const product = dashStr(r?.productName || fs.productName);
+  const productName = dashStr(r?.productName || fs.productName);
+  const providerName = providerNameCell(r, raw, fs);
+  const agentName = agentNameCell(r, raw, fs);
   const orderId = dashStr(r?.transactionId || raw?.transactionId);
   const recurringId = dashStr(r?.cardcomRecurringId || raw?.cardcomRecurringId);
 
   const benList = additionalBeneficiaryNames(raw);
   const benListOut = benList.trim() === '' ? DASH : benList;
 
+  const orgName = organizationNameCell(r, raw);
+
   const row = [
     fullName,
+    orgName,
     idNum,
     birth,
     gender,
@@ -207,10 +282,14 @@ function buildDataRow(r) {
     paymentStatus,
     subscriptionStatusWithSub(r, raw, ent),
     paymentTypeLabel(r, raw),
-    product,
+    agentName,
+    moneyCell(agentUnit),
+    moneyCell(agentTotal),
+    productName,
+    providerName,
+    moneyCell(vendorUnit),
+    moneyCell(vendorTotal),
     moneyCell(payerAmount),
-    moneyCell(resolvedVendor),
-    moneyCell(resolvedAgent),
     moneyCell(resolvedNet),
     orderId,
     recurringId,
@@ -236,7 +315,9 @@ function applyZebraAndFormats(ws) {
   const moneyCols = new Set([
     COL.payerAmount,
     COL.vendorCost,
+    COL.vendorCostTotal,
     COL.agentCommission,
+    COL.agentCommissionTotal,
     COL.netProfit,
     COL.totalCashRevenue,
   ]);

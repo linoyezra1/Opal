@@ -385,19 +385,21 @@ function AgentFormTabs({ data, setData, tab, setTab, products }) {
     setData((p) => ({ ...p, bankDetails: { ...p.bankDetails, [field]: value } }));
 
   return (
-    <Tabs value={tab} onValueChange={setTab} className="mt-0">
+    <Tabs value={tab} onValueChange={setTab} className="mt-0" dir="rtl">
       <TabsList className="grid w-full grid-cols-3">
         <TabsTrigger value="details">פרטים אישיים</TabsTrigger>
         <TabsTrigger value="bank">פרטי בנק</TabsTrigger>
         <TabsTrigger value="commissions">עמלות</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="details" className="space-y-4 mt-4">
-        <FieldGroup>
+      <TabsContent value="details" className="space-y-4 mt-4 text-right">
+        <FieldGroup className="items-stretch">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
-              <FieldLabel>שם סוכן *</FieldLabel>
+              <FieldLabel className="text-right w-full">שם סוכן *</FieldLabel>
               <Input
+                dir="rtl"
+                className="text-right"
                 value={data.agentName}
                 onChange={(e) => setField('agentName', e.target.value)}
                 placeholder="שם מלא"
@@ -405,12 +407,13 @@ function AgentFormTabs({ data, setData, tab, setTab, products }) {
               />
             </Field>
             <Field>
-              <FieldLabel>תעודת זהות / ח.פ *</FieldLabel>
+              <FieldLabel className="text-right w-full">תעודת זהות / ח.פ *</FieldLabel>
               <Input
                 value={data.idNum}
                 onChange={(e) => setField('idNum', e.target.value)}
                 placeholder="מספר זיהוי"
                 dir="ltr"
+                className="text-end font-mono"
                 required
               />
               {agentIsraeliIdHint(data.idNum)
@@ -420,28 +423,32 @@ function AgentFormTabs({ data, setData, tab, setTab, products }) {
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
-              <FieldLabel>טלפון</FieldLabel>
+              <FieldLabel className="text-right w-full">טלפון</FieldLabel>
               <Input
                 value={data.phone}
                 onChange={(e) => setField('phone', e.target.value)}
                 placeholder="05X-XXXXXXX"
                 dir="ltr"
+                className="text-end"
               />
             </Field>
             <Field>
-              <FieldLabel>אימייל</FieldLabel>
+              <FieldLabel className="text-right w-full">אימייל</FieldLabel>
               <Input
                 type="email"
                 value={data.email}
                 onChange={(e) => setField('email', e.target.value)}
                 placeholder="agent@example.com"
                 dir="ltr"
+                className="text-end"
               />
             </Field>
           </div>
           <Field>
-            <FieldLabel>כתובת</FieldLabel>
+            <FieldLabel className="text-right w-full">כתובת</FieldLabel>
             <Input
+              dir="rtl"
+              className="text-right"
               value={data.address}
               onChange={(e) => setField('address', e.target.value)}
               placeholder="רחוב, עיר"
@@ -450,50 +457,57 @@ function AgentFormTabs({ data, setData, tab, setTab, products }) {
         </FieldGroup>
       </TabsContent>
 
-      <TabsContent value="bank" className="space-y-4 mt-4">
-        <FieldGroup>
+      <TabsContent value="bank" className="space-y-4 mt-4 text-right">
+        <FieldGroup className="items-stretch">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
-              <FieldLabel>שם בנק</FieldLabel>
+              <FieldLabel className="text-right w-full">שם בנק</FieldLabel>
               <Input
+                dir="rtl"
+                className="text-right"
                 value={data.bankDetails?.bankName || ''}
                 onChange={(e) => setBankField('bankName', e.target.value)}
                 placeholder="לדוגמה: בנק הפועלים"
               />
             </Field>
             <Field>
-              <FieldLabel>מספר בנק</FieldLabel>
+              <FieldLabel className="text-right w-full">מספר בנק</FieldLabel>
               <Input
                 value={data.bankDetails?.bankNum || ''}
                 onChange={(e) => setBankField('bankNum', e.target.value)}
                 placeholder="12"
                 dir="ltr"
+                className="text-end font-mono"
               />
             </Field>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
-              <FieldLabel>מספר סניף</FieldLabel>
+              <FieldLabel className="text-right w-full">מספר סניף</FieldLabel>
               <Input
                 value={data.bankDetails?.branchNum || ''}
                 onChange={(e) => setBankField('branchNum', e.target.value)}
                 placeholder="123"
                 dir="ltr"
+                className="text-end font-mono"
               />
             </Field>
             <Field>
-              <FieldLabel>מספר חשבון</FieldLabel>
+              <FieldLabel className="text-right w-full">מספר חשבון</FieldLabel>
               <Input
                 value={data.bankDetails?.accountNum || ''}
                 onChange={(e) => setBankField('accountNum', e.target.value)}
                 placeholder="123456"
                 dir="ltr"
+                className="text-end font-mono"
               />
             </Field>
           </div>
           <Field>
-            <FieldLabel>שם בעל החשבון</FieldLabel>
+            <FieldLabel className="text-right w-full">שם בעל החשבון</FieldLabel>
             <Input
+              dir="rtl"
+              className="text-right"
               value={data.bankDetails?.accountHolder || ''}
               onChange={(e) => setBankField('accountHolder', e.target.value)}
               placeholder="שם מלא"

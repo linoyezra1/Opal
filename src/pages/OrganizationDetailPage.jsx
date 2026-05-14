@@ -311,6 +311,11 @@ export default function OrganizationDetailPage() {
   const summaryStats = useMemo(() => {
     const rows = Array.isArray(deals) ? deals : [];
     let openDebt = 0;
+    const snapList = Array.isArray(snapshots) ? snapshots : [];
+    for (const s of snapList) {
+      if (String(s.status || '').trim() !== 'Pending') continue;
+      openDebt += Number(s.totalAmount || 0);
+    }
     let activeEmployees = 0;
     let pendingApprovalEmployees = 0;
     let pendingCancellationEmployees = 0;
@@ -324,12 +329,6 @@ export default function OrganizationDetailPage() {
 
     for (const row of rows) {
       const entitlement = normalizeStatus(row?.entitlementStatus);
-      const paymentStatus = normalizeStatus(row?.paymentStatus);
-      const payerAmount = Number(row?.payerAmount || row?.amount || 0);
-
-      if (paymentStatus && paymentStatus !== 'paid' && Number.isFinite(payerAmount)) {
-        openDebt += payerAmount;
-      }
 
       if (entitlement === 'active') activeEmployees += 1;
       if (entitlement === 'not_activated') pendingApprovalEmployees += 1;
@@ -344,7 +343,7 @@ export default function OrganizationDetailPage() {
       pendingCancellationEmployees,
       canceledEmployees,
     };
-  }, [deals]);
+  }, [deals, snapshots]);
 
   async function lockSnapshot() {
     if (!id || !token) return;
@@ -714,9 +713,10 @@ export default function OrganizationDetailPage() {
           </DialogHeader>
           <FieldGroup className="gap-3">
             <Field>
-              <FieldLabel>סטטוס</FieldLabel>
+              <FieldLabel className="text-right w-full">סטטוס</FieldLabel>
               <select
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm text-right"
+                dir="rtl"
                 value={snapEditForm.status}
                 onChange={(e) => setSnapEditForm((p) => ({ ...p, status: e.target.value }))}
               >
@@ -725,16 +725,16 @@ export default function OrganizationDetailPage() {
               </select>
             </Field>
             <Field>
-              <FieldLabel>מספר חשבונית</FieldLabel>
-              <Input value={snapEditForm.invoiceNum} onChange={(e) => setSnapEditForm((p) => ({ ...p, invoiceNum: e.target.value }))} />
+              <FieldLabel className="text-right w-full">מספר חשבונית</FieldLabel>
+              <Input dir="rtl" className="text-right" value={snapEditForm.invoiceNum} onChange={(e) => setSnapEditForm((p) => ({ ...p, invoiceNum: e.target.value }))} />
             </Field>
             <Field>
-              <FieldLabel>מספר קבלה</FieldLabel>
-              <Input value={snapEditForm.receiptNum} onChange={(e) => setSnapEditForm((p) => ({ ...p, receiptNum: e.target.value }))} />
+              <FieldLabel className="text-right w-full">מספר קבלה</FieldLabel>
+              <Input dir="rtl" className="text-right" value={snapEditForm.receiptNum} onChange={(e) => setSnapEditForm((p) => ({ ...p, receiptNum: e.target.value }))} />
             </Field>
             <Field>
-              <FieldLabel>הערות</FieldLabel>
-              <Textarea rows={2} value={snapEditForm.notes} onChange={(e) => setSnapEditForm((p) => ({ ...p, notes: e.target.value }))} />
+              <FieldLabel className="text-right w-full">הערות</FieldLabel>
+              <Textarea dir="rtl" className="text-right min-h-[72px]" rows={2} value={snapEditForm.notes} onChange={(e) => setSnapEditForm((p) => ({ ...p, notes: e.target.value }))} />
             </Field>
           </FieldGroup>
           <DialogFooter className="flex-row-reverse gap-2">

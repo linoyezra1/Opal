@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowRight, Check, Copy, Edit2, ExternalLink, Globe, Lock, Pencil, Percent, RefreshCw, Users, Wallet } from 'lucide-react';
+import { ArrowRight, Check, Copy, Download, Edit2, ExternalLink, Eye, Globe, Lock, Pencil, Percent, RefreshCw, Users, Wallet } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
+import * as XLSX from 'xlsx';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { StatsCard } from '../components/admin/stats-card.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -9,6 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs.jsx';
 import { Input } from '../components/ui/input.jsx';
+import { Textarea } from '../components/ui/textarea.jsx';
+import { Field, FieldGroup, FieldLabel } from '../components/ui/field.jsx';
 import { Badge } from '../components/ui/badge.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
@@ -57,6 +60,8 @@ export default function AgentDetailPage() {
   const [snapEditOpen, setSnapEditOpen] = useState(false);
   const [snapEditTarget, setSnapEditTarget] = useState(null);
   const [snapEditForm, setSnapEditForm] = useState({ status: 'Pending', invoiceNum: '', invoiceAmount: 0, creditNoteNum: '', creditNoteAmount: 0, totalPaid: 0, notes: '' });
+  const [snapRowsOpen, setSnapRowsOpen] = useState(false);
+  const [snapRowsTarget, setSnapRowsTarget] = useState(null);
 
   const productSlugMap = useMemo(() => {
     const map = new Map();
@@ -128,8 +133,26 @@ export default function AgentDetailPage() {
     });
   }
   function toggleAllLedger(checked) {
-    const ids = (preview.rows || []).filter((r) => r.ledgerEntryId).map((r) => String(r.ledgerEntryId));
+    const ids = (preview.rows || [])
+      .filter((r) => r.ledgerEntryId && !r.ledgerLocked)
+      .map((r) => String(r.ledgerEntryId));
     setSelectedLedgerEntryIds(checked ? ids : []);
+  }
+
+  function downloadAgentSnapshotXlsx(snap) {
+    const rows = (snap?.rows || []).map((r) => ({
+      לקוח: r.employeeName || '—',
+      'מספר הזמנה': r.transactionId || '—',
+      'תחילת מנוי': r.subscriptionStartDate || '—',
+      עמלה: Number(r.amount || 0),
+      'חויב בפועל': Number(r.actualBillingAmount || 0),
+      'תאריך חיוב': r.lastBillDate ? formatDate(r.lastBillDate) : '—',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ הודעה: 'אין שורות בעסקה' }]);
+    ws['!views'] = [{ RTL: true }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'עסקאות');
+    XLSX.writeFile(wb, `opal-agent-commission-${snap?.month || 'snapshot'}.xlsx`);
   }
 
   const load = useCallback(async () => {
@@ -160,7 +183,7 @@ export default function AgentDetailPage() {
         },
         rows: previewRows,
       });
-      const cashIds = previewRows.filter((r) => r.ledgerEntryId).map((r) => String(r.ledgerEntryId));
+      const cashIds = previewRows.filter((r) => r.ledgerEntryId && !r.ledgerLocked).map((r) => String(r.ledgerEntryId));
       setSelectedLedgerEntryIds(previewRes?.previewSource === 'cash_billing' ? cashIds : []);
       setSnapshots(Array.isArray(snapsRes?.snapshots) ? snapsRes.snapshots : []);
       setProducts(Array.isArray(prRes?.products) ? prRes.products : []);
@@ -225,16 +248,156 @@ export default function AgentDetailPage() {
       <ConfirmDialog open={archiveOpen} title="העברה לארכיון" message='⚠️ לא ניתן לייצר עמלה לסוכנים שאינם פעילים. לפני העברת סוכן לארכיון, יש לוודא כי כל הדוחות והתשלומים המגיעים לו עבור החודש הנוכחי ננעלו ושולמו. לאחר הארכוב, המערכת תפסיק לשייך עסקאות וחשבונות לסוכן זה.' confirmLabel="העבר לארכיון" danger onConfirm={() => archiveAgent(false)} onCancel={() => setArchiveOpen(false)} isLoading={busy} />
       <ConfirmDialog open={!!archiveWarn} title="אזהרת ארכוב" message={archiveWarn} confirmLabel="המשך בכל זאת" onConfirm={() => archiveAgent(true)} onCancel={() => setArchiveWarn('')} isLoading={busy} />
       <Dialog open={snapEditOpen} onOpenChange={(o) => !o && setSnapEditOpen(false)}>
-        <DialogContent className="max-w-md text-right" dir="rtl">
-          <DialogHeader><DialogTitle>עריכת פרטי תשלום</DialogTitle><DialogDescription>{snapEditTarget ? `${snapEditTarget.month} · ${snapEditTarget.agentName}` : ''}</DialogDescription></DialogHeader>
-          <div className="space-y-2">
-            <Input placeholder="מספר חשבונית" value={snapEditForm.invoiceNum} onChange={(e) => setSnapEditForm((p) => ({ ...p, invoiceNum: e.target.value }))} />
-            <Input type="number" placeholder="סכום חשבונית" value={snapEditForm.invoiceAmount} onChange={(e) => setSnapEditForm((p) => ({ ...p, invoiceAmount: Number(e.target.value || 0) }))} />
-            <Input placeholder="מספר זיכוי" value={snapEditForm.creditNoteNum} onChange={(e) => setSnapEditForm((p) => ({ ...p, creditNoteNum: e.target.value }))} />
-            <Input type="number" placeholder="סכום זיכוי" value={snapEditForm.creditNoteAmount} onChange={(e) => setSnapEditForm((p) => ({ ...p, creditNoteAmount: Number(e.target.value || 0) }))} />
-            <Input type="number" placeholder="סכום ששולם" value={snapEditForm.totalPaid} onChange={(e) => setSnapEditForm((p) => ({ ...p, totalPaid: Number(e.target.value || 0) }))} />
+        <DialogContent className="sm:max-w-md text-right" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>עריכת דרישת תשלום</DialogTitle>
+            <DialogDescription>
+              {snapEditTarget ? `${snapEditTarget.month} · ${snapEditTarget.agentName || ''}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <FieldGroup className="gap-3">
+            <Field>
+              <FieldLabel className="text-right w-full">סטטוס</FieldLabel>
+              <select
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm text-right"
+                dir="rtl"
+                value={snapEditForm.status}
+                onChange={(e) => setSnapEditForm((p) => ({ ...p, status: e.target.value }))}
+              >
+                <option value="Pending">ממתין לתשלום</option>
+                <option value="Paid">שולם</option>
+              </select>
+            </Field>
+            <Field>
+              <FieldLabel className="text-right w-full">מספר חשבונית</FieldLabel>
+              <Input
+                dir="rtl"
+                className="text-right"
+                value={snapEditForm.invoiceNum}
+                onChange={(e) => setSnapEditForm((p) => ({ ...p, invoiceNum: e.target.value }))}
+              />
+            </Field>
+            <Field>
+              <FieldLabel className="text-right w-full">סכום חשבונית</FieldLabel>
+              <Input
+                type="number"
+                dir="ltr"
+                className="text-end tabular-nums"
+                value={snapEditForm.invoiceAmount}
+                onChange={(e) => setSnapEditForm((p) => ({ ...p, invoiceAmount: Number(e.target.value || 0) }))}
+              />
+            </Field>
+            <Field>
+              <FieldLabel className="text-right w-full">מספר זיכוי</FieldLabel>
+              <Input
+                dir="rtl"
+                className="text-right"
+                value={snapEditForm.creditNoteNum}
+                onChange={(e) => setSnapEditForm((p) => ({ ...p, creditNoteNum: e.target.value }))}
+              />
+            </Field>
+            <Field>
+              <FieldLabel className="text-right w-full">סכום זיכוי</FieldLabel>
+              <Input
+                type="number"
+                dir="ltr"
+                className="text-end tabular-nums"
+                value={snapEditForm.creditNoteAmount}
+                onChange={(e) => setSnapEditForm((p) => ({ ...p, creditNoteAmount: Number(e.target.value || 0) }))}
+              />
+            </Field>
+            <Field>
+              <FieldLabel className="text-right w-full">סכום ששולם</FieldLabel>
+              <Input
+                type="number"
+                dir="ltr"
+                className="text-end tabular-nums"
+                value={snapEditForm.totalPaid}
+                onChange={(e) => setSnapEditForm((p) => ({ ...p, totalPaid: Number(e.target.value || 0) }))}
+              />
+            </Field>
+            <Field>
+              <FieldLabel className="text-right w-full">יתרה לתשלום (מחושב)</FieldLabel>
+              <Input
+                readOnly
+                dir="ltr"
+                className="text-end tabular-nums bg-muted"
+                value={formatCurrency(
+                  Number(snapEditTarget?.totalAmount || 0) - Number(snapEditForm.totalPaid || 0)
+                )}
+              />
+            </Field>
+            <Field>
+              <FieldLabel className="text-right w-full">הערות</FieldLabel>
+              <Textarea
+                dir="rtl"
+                className="text-right min-h-[72px]"
+                rows={2}
+                value={snapEditForm.notes}
+                onChange={(e) => setSnapEditForm((p) => ({ ...p, notes: e.target.value }))}
+              />
+            </Field>
+          </FieldGroup>
+          <DialogFooter className="flex-row-reverse gap-2">
+            <Button variant="outline" onClick={() => setSnapEditOpen(false)}>ביטול</Button>
+            <Button onClick={saveSnapshotEdit} disabled={busy}>שמור</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={snapRowsOpen} onOpenChange={(o) => !o && setSnapRowsOpen(false)}>
+        <DialogContent className="max-w-3xl text-right max-h-[85vh] overflow-y-auto" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>עסקאות בדרישת תשלום</DialogTitle>
+            <DialogDescription>
+              {snapRowsTarget ? `${snapRowsTarget.month} · נעול · ${Number(snapRowsTarget.totalDeals || 0)} עסקאות` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md border overflow-x-auto">
+            <Table className="text-sm text-right [&_th]:text-right">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>לקוח</TableHead>
+                  <TableHead>הזמנה</TableHead>
+                  <TableHead>תחילת מנוי</TableHead>
+                  <TableHead>עמלה</TableHead>
+                  <TableHead>חויב בפועל</TableHead>
+                  <TableHead>תאריך חיוב</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(snapRowsTarget?.rows || []).length ? (
+                  snapRowsTarget.rows.map((r, i) => (
+                    <TableRow key={`${r.dealId}-${r.ledgerEntryId || i}`}>
+                      <TableCell>{r.employeeName || '—'}</TableCell>
+                      <TableCell className="font-mono text-xs">{r.transactionId || '—'}</TableCell>
+                      <TableCell>{formatDate(r.subscriptionStartDate)}</TableCell>
+                      <TableCell>{formatCurrency(r.amount)}</TableCell>
+                      <TableCell>{formatCurrency(r.actualBillingAmount)}</TableCell>
+                      <TableCell>{r.lastBillDate ? formatDate(r.lastBillDate) : '—'}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-6">
+                      אין שורות שנשמרו בצילום
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
           </div>
-          <DialogFooter className="flex-row-reverse gap-2"><Button variant="outline" onClick={() => setSnapEditOpen(false)}>ביטול</Button><Button onClick={saveSnapshotEdit} disabled={busy}>שמור</Button></DialogFooter>
+          <DialogFooter className="flex-row-reverse gap-2 sm:justify-between">
+            <Button type="button" variant="outline" onClick={() => setSnapRowsOpen(false)}>סגור</Button>
+            <Button
+              type="button"
+              onClick={() => snapRowsTarget && downloadAgentSnapshotXlsx(snapRowsTarget)}
+              disabled={!(snapRowsTarget?.rows || []).length}
+            >
+              <Download className="size-4 me-2" />
+              הורדת אקסל
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -265,7 +428,7 @@ export default function AgentDetailPage() {
           <TabsContent value="deals" className="mt-4">
             <Card>
               <CardHeader>
-                <CardTitle>טיוטת עסקאות זכאיות</CardTitle>
+                <CardTitle>עסקאות זכאיות</CardTitle>
                 <CardDescription className="flex flex-wrap items-center gap-2">
                   <span>{month}</span>
                   {preview.previewSource === 'cash_billing' ? (
@@ -303,8 +466,9 @@ export default function AgentDetailPage() {
                               type="checkbox"
                               className="size-4 rounded"
                               checked={
-                                ledgerPreviewRows.length > 0 &&
-                                selectedLedgerEntryIds.length === ledgerPreviewRows.length
+                                ledgerPreviewRows.filter((r) => !r.ledgerLocked).length > 0 &&
+                                selectedLedgerEntryIds.length ===
+                                  ledgerPreviewRows.filter((r) => !r.ledgerLocked).length
                               }
                               onChange={(e) => toggleAllLedger(e.target.checked)}
                               title="בחר הכל"
@@ -324,13 +488,17 @@ export default function AgentDetailPage() {
                     </TableHeader>
                     <TableBody>
                       {(preview.rows || []).map((r) => (
-                        <TableRow key={`${r.dealId}-${r.ledgerEntryId || 'sub'}`}>
+                        <TableRow
+                          key={`${r.dealId}-${r.ledgerEntryId || 'sub'}`}
+                          className={r.ledgerLocked ? 'opacity-50 bg-muted/40' : undefined}
+                        >
                           {lockNeedsSelection ? (
                             <TableCell className="text-center">
                               {r.ledgerEntryId ? (
                                 <input
                                   type="checkbox"
                                   className="size-4 rounded"
+                                  disabled={!!r.ledgerLocked}
                                   checked={selectedLedgerEntryIds.includes(String(r.ledgerEntryId))}
                                   onChange={(e) => toggleLedgerEntry(r.ledgerEntryId, e.target.checked)}
                                 />
@@ -381,7 +549,107 @@ export default function AgentDetailPage() {
           </TabsContent>
 
           <TabsContent value="commissions" className="mt-4">
-            <Card><CardHeader><CardTitle>היסטוריית עמלות</CardTitle></CardHeader><CardContent><div className="rounded-md border overflow-x-auto"><Table className="text-right"><TableHeader><TableRow className="[&_th]:text-right"><TableHead>חודש</TableHead><TableHead>מספר חשבונית</TableHead><TableHead>סכום חשבונית</TableHead><TableHead>מספר זיכוי</TableHead><TableHead>סכום זיכוי</TableHead><TableHead>סה״כ לתשלום</TableHead><TableHead>שולם</TableHead><TableHead>יתרה לתשלום</TableHead><TableHead>עסקאות</TableHead><TableHead>סטטוס</TableHead><TableHead>פעולות</TableHead></TableRow></TableHeader><TableBody>{snapshots.map((s) => <TableRow key={s.id}><TableCell>{s.month}</TableCell><TableCell>{s.invoiceNum || '—'}</TableCell><TableCell>{formatCurrency(s.invoiceAmount)}</TableCell><TableCell>{s.creditNoteNum || '—'}</TableCell><TableCell>{formatCurrency(s.creditNoteAmount)}</TableCell><TableCell>{formatCurrency(s.totalAmount)}</TableCell><TableCell>{formatCurrency(s.totalPaid)}</TableCell><TableCell>{formatCurrency(s.balance)}</TableCell><TableCell>{Number(s.totalDeals || 0)}</TableCell><TableCell><Badge variant={s.status === 'Paid' ? 'default' : 'secondary'}>{s.status === 'Paid' ? 'שולם' : 'ממתין'}</Badge></TableCell><TableCell><Button size="icon" variant="ghost" onClick={() => { setSnapEditTarget(s); setSnapEditForm({ status: String(s.status || 'Pending'), invoiceNum: String(s.invoiceNum || ''), invoiceAmount: Number(s.invoiceAmount || 0), creditNoteNum: String(s.creditNoteNum || ''), creditNoteAmount: Number(s.creditNoteAmount || 0), totalPaid: Number(s.totalPaid || 0), notes: String(s.notes || '') }); setSnapEditOpen(true); }}><Edit2 className="size-4" /></Button></TableCell></TableRow>)}{!snapshots.length ? <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground">אין דוחות נעולים</TableCell></TableRow> : null}</TableBody></Table></div></CardContent></Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>היסטוריית עמלות</CardTitle>
+                <CardDescription>דרישות תשלום נעולות — צפייה בעסקאות, עריכה והורדה כמו בגביית ארגונים</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-md border overflow-x-auto" dir="rtl">
+                  <Table className="text-right w-full text-sm [&_th]:text-right">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>חודש</TableHead>
+                        <TableHead>מספר חשבונית</TableHead>
+                        <TableHead>סכום חשבונית</TableHead>
+                        <TableHead>מספר זיכוי</TableHead>
+                        <TableHead>סכום זיכוי</TableHead>
+                        <TableHead>סה״כ לתשלום</TableHead>
+                        <TableHead>שולם</TableHead>
+                        <TableHead>יתרה</TableHead>
+                        <TableHead>עסקאות</TableHead>
+                        <TableHead>סטטוס</TableHead>
+                        <TableHead className="whitespace-nowrap">פעולות</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {snapshots.map((s) => (
+                        <TableRow key={s.id}>
+                          <TableCell>{s.month}</TableCell>
+                          <TableCell>{s.invoiceNum || '—'}</TableCell>
+                          <TableCell>{formatCurrency(s.invoiceAmount)}</TableCell>
+                          <TableCell>{s.creditNoteNum || '—'}</TableCell>
+                          <TableCell>{formatCurrency(s.creditNoteAmount)}</TableCell>
+                          <TableCell>{formatCurrency(s.totalAmount)}</TableCell>
+                          <TableCell>{formatCurrency(s.totalPaid)}</TableCell>
+                          <TableCell>{formatCurrency(s.balance)}</TableCell>
+                          <TableCell>{Number(s.totalDeals || 0)}</TableCell>
+                          <TableCell>
+                            <Badge variant={s.status === 'Paid' ? 'default' : 'secondary'}>
+                              {s.status === 'Paid' ? 'שולם' : 'ממתין לתשלום'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                type="button"
+                                title="צפייה בעסקאות"
+                                onClick={() => {
+                                  setSnapRowsTarget(s);
+                                  setSnapRowsOpen(true);
+                                }}
+                              >
+                                <Eye className="size-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                type="button"
+                                title="הורדת אקסל"
+                                disabled={!(s.rows || []).length}
+                                onClick={() => downloadAgentSnapshotXlsx(s)}
+                              >
+                                <Download className="size-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                type="button"
+                                title="עריכת דרישה"
+                                onClick={() => {
+                                  setSnapEditTarget(s);
+                                  setSnapEditForm({
+                                    status: String(s.status || 'Pending'),
+                                    invoiceNum: String(s.invoiceNum || ''),
+                                    invoiceAmount: Number(s.invoiceAmount || 0),
+                                    creditNoteNum: String(s.creditNoteNum || ''),
+                                    creditNoteAmount: Number(s.creditNoteAmount || 0),
+                                    totalPaid: Number(s.totalPaid || 0),
+                                    notes: String(s.notes || ''),
+                                  });
+                                  setSnapEditOpen(true);
+                                }}
+                              >
+                                <Edit2 className="size-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {!snapshots.length ? (
+                        <TableRow>
+                          <TableCell colSpan={11} className="text-center text-muted-foreground py-6">
+                            אין דוחות נעולים
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="distribution" className="mt-4">

@@ -56,6 +56,16 @@ function monthStartEndIso() {
   return { from: toYmd(start), to: toYmd(end) };
 }
 
+/** חודש בילינג YYYY-MM → טווח תאריכים לחפיפת חלון מתן שירות בדוח ספק */
+function billingMonthToServiceDateRange(ym) {
+  const t = String(ym || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(t)) return null;
+  const [y, m] = t.split('-').map(Number);
+  const start = new Date(y, m - 1, 1);
+  const end = new Date(y, m, 0);
+  return { from: start.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10) };
+}
+
 function formatCurrency(value) {
   const n = Number(value || 0);
   return new Intl.NumberFormat('he-IL', {
@@ -383,14 +393,20 @@ export default function ReportsDashboard() {
     setProvMonth('');
   }
 
-  function setProvExportFilters(next) {
+  function applyProvExportFilters(next) {
     setProvBillingType(String(next.billingType || ''));
     setProvStatusFilter(String(next.status ?? 'all'));
     setProvProductFilter(String(next.product || ''));
     setProvProviderFilter(String(next.provider || ''));
     setProvAgentId(String(next.agentId || ''));
     setProvOrgId(String(next.organizationId || ''));
-    setProvMonth(String(next.month || ''));
+    const m = String(next.month || '').trim();
+    setProvMonth(m);
+    const range = billingMonthToServiceDateRange(m);
+    if (range) {
+      setFromDate(range.from);
+      setToDate(range.to);
+    }
   }
 
   return (
@@ -423,7 +439,7 @@ export default function ReportsDashboard() {
             </TabsTrigger>
             <TabsTrigger value="snapshots" className="gap-1">
               <Lock className="size-4" />
-              כל דרישות התשלום
+              דוח ארגונים תש' מרוכז
             </TabsTrigger>
           </TabsList>
 
@@ -470,12 +486,14 @@ export default function ReportsDashboard() {
                       },
                       {
                         key: 'status',
-                        label: 'סטטוס',
+                        label: 'סטטוס זכאות',
                         type: 'select',
                         options: [
                           { value: 'all', label: 'הכל' },
-                          { value: 'active', label: 'פעילים' },
-                          { value: 'cancelled', label: 'מבוטלים' },
+                          { value: 'active', label: 'פעיל' },
+                          { value: 'pending_cancellation', label: 'ממתין לביטול' },
+                          { value: 'canceled', label: 'מבוטל' },
+                          { value: 'not_activated', label: 'מנוי לא הופעל' },
                         ],
                       },
                       {
@@ -504,7 +522,7 @@ export default function ReportsDashboard() {
                       },
                     ]}
                     values={provExportFilterValues}
-                    onChange={setProvExportFilters}
+                    onChange={applyProvExportFilters}
                     onClear={clearProvExportFilters}
                     resultsCount={previewRows.length}
                     totalCount={previewTotal}
@@ -531,8 +549,8 @@ export default function ReportsDashboard() {
                         <TableHead className="text-right">שם פרטי</TableHead>
                         <TableHead className="text-right">שם משפחה</TableHead>
                         <TableHead className="text-right">ת.ז</TableHead>
-                        <TableHead className="text-right">תחילת מנוי</TableHead>
-                        <TableHead className="text-right">סיום מנוי</TableHead>
+                        <TableHead className="text-right">תאריך תחילת מנוי</TableHead>
+                        <TableHead className="text-right">תאריך סיום מנוי</TableHead>
                         <TableHead className="text-right">מוצר</TableHead>
                         <TableHead className="text-right">סכום</TableHead>
                       </TableRow>

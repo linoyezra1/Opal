@@ -1710,7 +1710,7 @@ export async function countOpenBillingSnapshotsForOrganization(orgId) {
   if (!oid) return 0;
   return db.collection('billing_snapshots').countDocuments({
     orgId: oid,
-    status: { $ne: 'Paid' },
+    status: 'Pending',
   });
 }
 
@@ -4641,12 +4641,46 @@ export async function findDealsCreatedInRange(fromDate, toDate) {
 }
 
 /**
+ * משלים שם ספק לעסקאות דוח (כמו בדשבורד מכירות) — כדי שסינון "ספק" יתאים לשמות במסנן.
+ */
+export async function enrichDealsWithReportVendorNames(deals) {
+  const list = Array.isArray(deals) ? deals : [];
+  if (!list.length) return list;
+  const db = await getDb();
+  const vendors = await db
+    .collection('vendors')
+    .find({})
+    .project({ vendorName: 1, productLinks: 1 })
+    .toArray();
+  const productVendorMap = new Map();
+  for (const v of vendors) {
+    const vn = String(v.vendorName || '').trim();
+    if (!vn) continue;
+    const links = Array.isArray(v.productLinks) ? v.productLinks : [];
+    for (const l of links) {
+      const pid = String(l?.productId || '').trim();
+      if (!pid || productVendorMap.has(pid)) continue;
+      productVendorMap.set(pid, vn);
+    }
+  }
+  return list.map((d) => {
+    const pid = String(d?.formState?.productId || '').trim();
+    const fromProduct = pid ? productVendorMap.get(pid) : '';
+    const resolved = firstNonEmpty(String(d?.provider || '').trim(), fromProduct, '');
+    if (resolved && !String(d?.vendorName || '').trim()) {
+      return { ...d, vendorName: resolved };
+    }
+    return d;
+  });
+}
+
+/**
  * מועמדים לדוחות ספק לפי חודש שירות (חפיפת זכאות) — לא מסננים לפי createdAt.
  * הסינון המדויק נעשה ב־reportController (חלון שירות מול fromDate/toDate).
  */
 export async function findDealsForServiceReportsCandidates() {
   const db = await getDb();
-  return db
+  const docs = await db
     .collection('deals')
     .find({
       $or: [
@@ -4660,6 +4694,7 @@ export async function findDealsForServiceReportsCandidates() {
     .sort({ updatedAt: -1 })
     .limit(15000)
     .toArray();
+  return enrichDealsWithReportVendorNames(docs);
 }
 
 /** עסקאות מבוטלות — סינון לפי cancellationDate או updatedAt */
@@ -4774,13 +4809,12 @@ export async function getAgentCommissionPreview(agentId, monthStr) {
     };
   }
 
-  /** יומן עמלות לפי חיובים בפועל (initial_checkout + detail_recurring) */
+  /** יומן עמלות לפי חיובים בפועל — כולל שורות נעולות (מוצגות ב־UI באפור, ללא בחירה לנעילה חוזרת) */
   const ledgerDocs = await db
     .collection('agent_commission_ledger')
     .find({
       agentId: aid,
       billingMonth: month,
-      $or: [{ locked: false }, { locked: { $exists: false } }],
     })
     .sort({ lastBillDate: 1 })
     .toArray();
@@ -4847,6 +4881,7 @@ export async function getAgentCommissionPreview(agentId, monthStr) {
         lastBillDate: lastBill,
         paymentStatus: String(d.paymentStatus || ''),
         billingMonth: month,
+        ledgerLocked: L.locked === true,
       };
     });
   }
@@ -4870,8 +4905,10 @@ export async function getAgentCommissionPreview(agentId, monthStr) {
       deactivatedAt: agent.deactivatedAt instanceof Date ? agent.deactivatedAt.toISOString() : null,
     },
     summary: {
-      totalCommissions: rows.reduce((sum, r) => sum + Number(r.amount || 0), 0),
-      activeDeals: rows.length,
+      totalCommissions: rows
+        .filter((r) => !r.ledgerLocked)
+        .reduce((sum, r) => sum + Number(r.amount || 0), 0),
+      activeDeals: rows.filter((r) => !r.ledgerLocked).length,
       pendingPayouts,
     },
     rows,
@@ -5019,7 +5056,7 @@ export async function updateAgentCommissionSnapshot(agentId, snapshotId, patch =
   const aid = String(agentId || '').trim();
   const existing = await db.collection('agent_commission_snapshots').findOne(
     { _id: sid, agentId: aid },
-    { projection: { totalAmount: 1 } }
+    { projection: { totalAmount: 1, totalPaid: 1 } }
   );
   if (!existing) throw new Error('Snapshot לא נמצא');
 
@@ -5032,7 +5069,8 @@ export async function updateAgentCommissionSnapshot(agentId, snapshotId, patch =
   if (patch.creditNoteAmount != null) set.creditNoteAmount = Number(patch.creditNoteAmount || 0);
   if (patch.totalPaid != null) set.totalPaid = Math.max(0, Number(patch.totalPaid || 0));
 
-  const totalPaidNext = set.totalPaid != null ? Number(set.totalPaid || 0) : 0;
+  const paidBase = Number(existing.totalPaid || 0);
+  const totalPaidNext = set.totalPaid != null ? Number(set.totalPaid || 0) : paidBase;
   set.balance = Number(existing.totalAmount || 0) - totalPaidNext;
 
   const r = await db.collection('agent_commission_snapshots').updateOne({ _id: sid, agentId: aid }, { $set: set });

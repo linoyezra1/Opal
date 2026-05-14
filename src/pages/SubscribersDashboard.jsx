@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   CalendarClock,
   UserX,
+  RefreshCw,
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import {
@@ -1859,30 +1860,6 @@ export default function SubscribersDashboard() {
               </h1>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="shrink-0 text-xs h-7 px-2"
-                      disabled={billingHistoryLoading}
-                      onClick={() => {
-                        const dealId = String(selected?.id || selected?._id || '').trim();
-                        if (!token || !dealId) return;
-                        setBillingHistoryLoading(true);
-                        fetch(`${API_BASE}/api/admin/deals/${encodeURIComponent(dealId)}/billing-history?limit=200`, {
-                          headers: { Authorization: `Bearer ${token}` },
-                        })
-                          .then((r) => r.json())
-                          .then((j) => {
-                            if (j.success) setBillingHistory(j);
-                            else setBillingHistory({ rows: [], cardcomRecurringId: '', error: j.error || '' });
-                          })
-                          .catch(() => setBillingHistory({ rows: [], cardcomRecurringId: '', error: 'שגיאת רשת' }))
-                          .finally(() => setBillingHistoryLoading(false));
-                      }}
-                    >
-                      רענן
-                    </Button>
             </div>
           </div>
 
@@ -1932,23 +1909,36 @@ export default function SubscribersDashboard() {
                 filters={unifiedFilterConfig}
                 values={unifiedFilterValues}
                 toolbarTrailing={
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-10 gap-1.5 border-slate-200 bg-white shadow-sm shrink-0"
-                    disabled={loading || visibleRows.length === 0}
-                    onClick={() => {
-                      try {
-                        exportVisibleSubscribersToXlsx(visibleRows);
-                      } catch (e) {
-                        console.error(e);
-                      }
-                    }}
-                  >
-                    <Download className="size-4" aria-hidden />
-                    ייצוא לאקסל
-                  </Button>
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-10 gap-1.5 border-slate-200 bg-white shadow-sm shrink-0"
+                      disabled={loading}
+                      onClick={() => loadDashboard()}
+                    >
+                      <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} aria-hidden />
+                      רענן נתונים
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-10 gap-1.5 border-slate-200 bg-white shadow-sm shrink-0"
+                      disabled={loading || visibleRows.length === 0}
+                      onClick={() => {
+                        try {
+                          exportVisibleSubscribersToXlsx(visibleRows);
+                        } catch (e) {
+                          console.error(e);
+                        }
+                      }}
+                    >
+                      <Download className="size-4" aria-hidden />
+                      ייצוא לאקסל
+                    </Button>
+                  </>
                 }
                 onChange={(next) => {
                   setLiveSearch(String(next.search || ''));

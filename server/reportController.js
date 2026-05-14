@@ -341,6 +341,7 @@ export function buildSubscribersCsv(deals) {
 function normalizeProviderName(deal) {
   const fs = deal?.formState && typeof deal.formState === 'object' ? deal.formState : {};
   const raw = firstNonEmpty(
+    deal?.vendorName,
     deal?.provider,
     fs.provider,
     fs.providerName,
@@ -381,12 +382,7 @@ export function filterDealsForSubscriberExport(deals, filters = {}) {
 
     const ent = getEntitlementStatus(d);
     if (status && status !== 'all') {
-      if (status === 'active') {
-        if (ent.status !== 'active' && ent.status !== 'pending_cancellation') return false;
-      }
-      if (status === 'cancelled') {
-        if (ent.status !== 'canceled') return false;
-      }
+      if (ent.status !== status) return false;
     }
 
     const pn = subscriberExportProductName(d, fs);

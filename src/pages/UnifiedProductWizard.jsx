@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, Archive, Check, ChevronDown, ChevronUp, Clock, Copy, ExternalLink, Eye, EyeOff,
   Heart, Info, Pencil, Phone, Plus, Shield, Star, Users, Pill, Stethoscope, Syringe, FileText, X,
-  Loader2,
+  Loader2, RefreshCw,
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import { isExpired, parseLocalStartOfDay, parseLocalEndOfDay } from '../utils/dateUtils.js';
@@ -715,6 +715,7 @@ export default function UnifiedProductWizard() {
       setFinalizeDone(true);
       sessionStorage.removeItem(DRAFT_KEY);
       await loadRef();
+      await loadLandingPages();
 
     } catch (e) {
       setFinalizeError(friendlyError(e.message));
@@ -824,10 +825,24 @@ export default function UnifiedProductWizard() {
                   <h1 className="text-2xl font-bold tracking-tight">הקמת דף מוצר</h1>
                   <p className="text-muted-foreground">ניהול דפי נחיתה, תוקף והפצה</p>
                 </div>
-                <Button type="button" onClick={startNewWizard}>
-                  <Plus className="size-4 me-2" />
-                  הקמת דף חדש
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={loadingRef || hubLoading}
+                    onClick={() => {
+                      loadRef();
+                      loadLandingPages();
+                    }}
+                  >
+                    <RefreshCw className={`size-4 me-2 ${loadingRef || hubLoading ? 'animate-spin' : ''}`} />
+                    רענן רשימות
+                  </Button>
+                  <Button type="button" onClick={startNewWizard}>
+                    <Plus className="size-4 me-2" />
+                    הקמת דף חדש
+                  </Button>
+                </div>
               </div>
 
               <Card>
