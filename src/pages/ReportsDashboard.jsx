@@ -366,13 +366,12 @@ export default function ReportsDashboard() {
   };
 
   const toggleAllAgentSnapshots = () => {
-    const payable = agentSnaps.filter((r) => Number(r.balance || 0) > 0);
-    if (!payable.length) return;
-    const allSelected = payable.every((r) => selectedAgentSnapshots.has(r.id));
+    if (!agentSnaps.length) return;
+    const allSelected = agentSnaps.every((r) => selectedAgentSnapshots.has(r.id));
     if (allSelected) {
       setSelectedAgentSnapshots(new Set());
     } else {
-      setSelectedAgentSnapshots(new Set(payable.map((r) => r.id)));
+      setSelectedAgentSnapshots(new Set(agentSnaps.map((r) => r.id)));
     }
   };
 
@@ -701,10 +700,8 @@ export default function ReportsDashboard() {
                                 className="size-4"
                                 aria-label="בחר הכל"
                                 checked={
-                                  agentSnaps.filter((r) => Number(r.balance || 0) > 0).length > 0 &&
-                                  agentSnaps
-                                    .filter((r) => Number(r.balance || 0) > 0)
-                                    .every((r) => selectedAgentSnapshots.has(r.id))
+                                  agentSnaps.length > 0 &&
+                                  agentSnaps.every((r) => selectedAgentSnapshots.has(r.id))
                                 }
                                 onChange={toggleAllAgentSnapshots}
                               />
@@ -726,7 +723,6 @@ export default function ReportsDashboard() {
                                   type="checkbox"
                                   className="size-4"
                                   checked={selectedAgentSnapshots.has(r.id)}
-                                  disabled={Number(r.balance || 0) <= 0}
                                   aria-label={`בחר ${r.agentName || ''} ${r.month || ''}`}
                                   onChange={() => toggleAgentSnapshot(r.id)}
                                 />

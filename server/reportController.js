@@ -14,6 +14,9 @@ import {
   WidthType,
   AlignmentType,
   Footer,
+  BorderStyle,
+  VerticalAlign,
+  ShadingType,
 } from 'docx';
 import {
   passesServiceReportGate,
@@ -570,16 +573,6 @@ export async function buildAgentCommissionPayload(deals) {
   };
 }
 
-const AGENT_PAYMENT_COLS = [
-  { key: 'agentName', label: 'שם סוכן' },
-  { key: 'bankAccountName', label: 'שם בעל חשבון' },
-  { key: 'bankName', label: 'בנק' },
-  { key: 'bankNumber', label: 'מספר בנק' },
-  { key: 'branchNumber', label: 'מספר סניף' },
-  { key: 'accountNumber', label: 'מספר חשבון' },
-  { key: 'balance', label: 'סכום לתשלום' },
-];
-
 const HEBREW_MONTHS = [
   'ינואר',
   'פברואר',
@@ -605,43 +598,71 @@ function formatHebrewMonthTitle(ym) {
   return `${HEBREW_MONTHS[mo - 1]} ${y}`;
 }
 
-function formatPaymentAmount(n) {
-  const v = Number(n || 0);
-  return new Intl.NumberFormat('he-IL', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(v);
+// A4 עם שוליים 720 DXA מכל צד → רוחב תוכן 10466 DXA
+const AGENT_PAY_COLS = [
+  { key: 'agentName', label: 'שם המוטב', width: 2200 },
+  { key: 'bankName', label: 'בנק', width: 1400 },
+  { key: 'bankNumber', label: 'מס׳ בנק', width: 1066 },
+  { key: 'branchNumber', label: 'מס׳ סניף', width: 1200 },
+  { key: 'accountNumber', label: 'מס׳ חשבון', width: 1800 },
+  { key: 'balance', label: 'סכום לתשלום', width: 1800 },
+];
+const AGENT_PAY_TABLE_W = AGENT_PAY_COLS.reduce((s, c) => s + c.width, 0);
+
+const AP_THIN = { style: BorderStyle.SINGLE, size: 4, color: '444444' };
+const AP_NONE = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+const apAllBorders = { top: AP_THIN, bottom: AP_THIN, left: AP_THIN, right: AP_THIN };
+const apNoBorders = { top: AP_NONE, bottom: AP_NONE, left: AP_NONE, right: AP_NONE };
+
+function apCellVal(r, key) {
+  if (key === 'balance') {
+    return `₪ ${new Intl.NumberFormat('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(r[key]) || 0)}`;
+  }
+  if (key === 'agentName') {
+    const name = [r.bankAccountName, r.agentName].map((v) => String(v || '').trim()).find(Boolean);
+    return name || '—';
+  }
+  const v = r[key];
+  return v !== undefined && v !== null && String(v).trim() ? String(v).trim() : '—';
 }
 
-function cellDisplay(val, key) {
-  if (key === 'balance') return formatPaymentAmount(val);
-  const s = val !== undefined && val !== null ? String(val).trim() : '';
-  return s || '—';
-}
-
-function rtlParagraph(text, opts = {}) {
-  return new Paragraph({
-    bidirectional: true,
-    alignment: AlignmentType.RIGHT,
-    spacing: opts.spacing,
+function apMakeCell(text, { bold = false, header = false, width, shading } = {}) {
+  const fill = shading || (header ? 'D8D8D8' : 'FFFFFF');
+  return new TableCell({
+    width: { size: width, type: WidthType.DXA },
+    borders: apAllBorders,
+    margins: { top: 80, bottom: 80, left: 120, right: 120 },
+    shading: { fill, type: ShadingType.CLEAR },
+    verticalAlign: VerticalAlign.CENTER,
     children: [
-      new TextRun({
-        text: String(text ?? ''),
-        rightToLeft: true,
-        bold: opts.bold,
-        size: opts.size,
+      new Paragraph({
+        bidirectional: true,
+        alignment: AlignmentType.CENTER,
+        children: [
+          new TextRun({
+            text: String(text ?? ''),
+            rightToLeft: true,
+            bold,
+            size: header ? 22 : 20,
+          }),
+        ],
       }),
     ],
   });
 }
 
-function paymentTableCell(text, bold = false) {
-  return new TableCell({
+function apRtl(text, { bold = false, size = 22, spacing = {}, color } = {}) {
+  return new Paragraph({
+    bidirectional: true,
+    alignment: AlignmentType.RIGHT,
+    spacing,
     children: [
-      new Paragraph({
-        bidirectional: true,
-        alignment: AlignmentType.RIGHT,
-        children: [new TextRun({ text: String(text ?? ''), rightToLeft: true, bold })],
+      new TextRun({
+        text: String(text ?? ''),
+        rightToLeft: true,
+        bold,
+        size,
+        ...(color ? { color } : {}),
       }),
     ],
   });
@@ -655,7 +676,7 @@ export async function buildAgentPaymentTransferDocxBuffer(rows = [], options = {
     months.length === 1
       ? formatHebrewMonthTitle(months[0])
       : months.length > 1
-        ? 'מספר חודשים'
+        ? months.map(formatHebrewMonthTitle).join(', ')
         : formatHebrewMonthTitle(options.month || '');
 
   const downloadedAt = options.downloadedAt instanceof Date ? options.downloadedAt : new Date();
@@ -664,22 +685,84 @@ export async function buildAgentPaymentTransferDocxBuffer(rows = [], options = {
     month: '2-digit',
     year: 'numeric',
   });
-  const companyName = String(options.companyName || 'אופאל בע״מ').trim();
+  const companyName = String(options.companyName || 'אופאל עסקים תקשורת שיווקית בע"מ').trim();
+  const companyAcct = String(
+    options.companyAcct || 'מחשבון אופאל ח.פ 512413188  מס׳ חשי׳ 996351'
+  ).trim();
 
   const headerRow = new TableRow({
-    children: AGENT_PAYMENT_COLS.map((c) => paymentTableCell(c.label, true)),
+    tableHeader: true,
+    children: AGENT_PAY_COLS.map((c) => apMakeCell(c.label, { bold: true, header: true, width: c.width })),
   });
+
   const dataRows = list.map(
-    (r) =>
+    (r, i) =>
       new TableRow({
-        children: AGENT_PAYMENT_COLS.map((c) => paymentTableCell(cellDisplay(r[c.key], c.key))),
+        children: AGENT_PAY_COLS.map((c) =>
+          apMakeCell(apCellVal(r, c.key), {
+            width: c.width,
+            shading: i % 2 === 0 ? 'FFFFFF' : 'F2F2F2',
+          })
+        ),
       })
   );
 
-  const table = new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+  const totalBalance = list.reduce((s, r) => s + (Number(r.balance) || 0), 0);
+  const totalRow = new TableRow({
+    children: AGENT_PAY_COLS.map((c, idx) => {
+      const isLast = idx === AGENT_PAY_COLS.length - 1;
+      const isLabel = idx === AGENT_PAY_COLS.length - 2;
+      const text = isLast
+        ? `₪ ${new Intl.NumberFormat('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalBalance)}`
+        : isLabel
+          ? 'סה״כ'
+          : '';
+      return apMakeCell(text, { bold: true, width: c.width, shading: 'DDEEFF' });
+    }),
+  });
+
+  const paymentTable = new Table({
+    width: { size: AGENT_PAY_TABLE_W, type: WidthType.DXA },
+    columnWidths: AGENT_PAY_COLS.map((c) => c.width),
     visuallyRightToLeft: true,
-    rows: [headerRow, ...dataRows],
+    rows: [headerRow, ...dataRows, totalRow],
+  });
+
+  const monthBox = new Table({
+    width: { size: AGENT_PAY_TABLE_W, type: WidthType.DXA },
+    columnWidths: [AGENT_PAY_TABLE_W - 1800, 1800],
+    visuallyRightToLeft: true,
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: AGENT_PAY_TABLE_W - 1800, type: WidthType.DXA },
+            borders: apNoBorders,
+            children: [new Paragraph({ children: [new TextRun('')] })],
+          }),
+          new TableCell({
+            width: { size: 1800, type: WidthType.DXA },
+            borders: apAllBorders,
+            margins: { top: 60, bottom: 60, left: 120, right: 120 },
+            shading: { fill: 'FFFFFF', type: ShadingType.CLEAR },
+            children: [
+              new Paragraph({
+                bidirectional: true,
+                alignment: AlignmentType.RIGHT,
+                children: [
+                  new TextRun({ text: 'חודש תשלום', rightToLeft: true, bold: true, size: 20 }),
+                ],
+              }),
+              new Paragraph({
+                bidirectional: true,
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: monthTitle, rightToLeft: true, size: 24, bold: true })],
+              }),
+            ],
+          }),
+        ],
+      }),
+    ],
   });
 
   const doc = new Document({
@@ -687,26 +770,36 @@ export async function buildAgentPaymentTransferDocxBuffer(rows = [], options = {
       {
         properties: {
           page: {
-            margin: { top: 720, right: 720, bottom: 720, left: 720 },
+            size: { width: 11906, height: 16838 },
+            margin: { top: 720, right: 720, bottom: 1440, left: 720 },
           },
         },
         footers: {
           default: new Footer({
             children: [
-              rtlParagraph(`תאריך הורדה: ${dateStr}`, { spacing: { before: 120 } }),
-              rtlParagraph('חתימה: _________________________', { spacing: { before: 80 } }),
-              rtlParagraph(companyName, { spacing: { before: 80 } }),
+              apRtl(`תאריך הורדת קובץ לתשלום: ${dateStr}`, {
+                size: 18,
+                color: '555555',
+                spacing: { before: 60 },
+              }),
             ],
           }),
         },
         children: [
-          rtlParagraph(`הוראת תשלום — עמלות סוכנים — ${monthTitle}`, { bold: true, size: 32 }),
-          rtlParagraph('', { spacing: { after: 120 } }),
-          rtlParagraph(
-            'הנני מאשר/ת כי פרטי החשבונות והסכומים שלהלן נכונים, וכי יש להעביר את התשלומים בהתאם לפרטי הבנק המפורטים.',
-            { spacing: { after: 200 } }
-          ),
-          table,
+          monthBox,
+          new Paragraph({ spacing: { after: 160 }, children: [new TextRun('')] }),
+          apRtl('אני דני ירקוני מנכ"ל בעלים ת.ז 059304535 הנני מאשר לשלם את העברות הנ"ל', {
+            bold: true,
+            size: 22,
+          }),
+          apRtl(companyAcct, { bold: true, size: 22, spacing: { after: 280 } }),
+          paymentTable,
+          new Paragraph({ spacing: { after: 600 }, children: [new TextRun('')] }),
+          apRtl('דני ירקוני – מנכ"ל', { size: 22, bold: true }),
+          apRtl(companyName, { size: 20, spacing: { after: 200 } }),
+          new Paragraph({ spacing: { after: 80 }, children: [new TextRun('')] }),
+          apRtl('_________________________', { size: 22 }),
+          apRtl('חתימה', { size: 18, color: '666666' }),
         ],
       },
     ],

@@ -5086,9 +5086,12 @@ export async function getAgentPaymentExportRows(snapshotIds = []) {
     const aid = String(d.agentId || '').trim();
     const agent = agentById.get(aid) || null;
     const bd = agent?.bankDetails && typeof agent.bankDetails === 'object' ? agent.bankDetails : {};
-    const balance = Number(
+    const balanceRaw = Number(
       d.balance != null ? d.balance : Number(d.totalAmount || 0) - Number(d.totalPaid || 0)
     );
+    const totalAmount = Number(d.totalAmount || 0);
+    // ייצוא תשלום: סכום לתשלום = יתרה; אם כבר שולם (יתרה 0) — סכום הדרישה המקורי
+    const balance = balanceRaw > 0 ? balanceRaw : totalAmount;
     return {
       snapshotId: String(d._id),
       agentId: aid,
