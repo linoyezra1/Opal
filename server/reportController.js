@@ -651,6 +651,7 @@ function apMakeCell(text, { bold = false, header = false, width, shading } = {})
   });
 }
 
+/** פסקה בעברית — כיוון RTL אמיתי (bidi + יישור ימין + שפה) */
 function apRtl(text, { bold = false, size = 22, spacing = {}, color } = {}) {
   return new Paragraph({
     bidirectional: true,
@@ -662,6 +663,7 @@ function apRtl(text, { bold = false, size = 22, spacing = {}, color } = {}) {
         rightToLeft: true,
         bold,
         size,
+        language: { value: 'he-IL', bidirectional: 'he-IL' },
         ...(color ? { color } : {}),
       }),
     ],
@@ -713,7 +715,7 @@ export async function buildAgentPaymentTransferDocxBuffer(rows = [], options = {
     width: { size: AGENT_PAY_TABLE_W, type: WidthType.DXA },
     columnWidths: AGENT_PAY_COLS.map((c) => c.width),
     visuallyRightToLeft: true,
-    rows: [headerRow, ...dataRows, totalRow],
+    rows: [headerRow, ...dataRows],
   });
 
   const monthBox = new Table({
@@ -776,18 +778,18 @@ export async function buildAgentPaymentTransferDocxBuffer(rows = [], options = {
         children: [
           monthBox,
           new Paragraph({ spacing: { after: 160 }, children: [new TextRun('')] }),
-          apLtr('אני דני ירקוני מנכ"ל בעלים ת.ז 059304535 הנני מאשר לשלם את העברות הנ"ל', {
+          apRtl('אני דני ירקוני מנכ"ל בעלים ת.ז 059304535 הנני מאשר לשלם את העברות הנ"ל', {
             bold: true,
             size: 22,
           }),
           apRtl(companyAcct, { bold: true, size: 22, spacing: { after: 280 } }),
           paymentTable,
           new Paragraph({ spacing: { after: 600 }, children: [new TextRun('')] }),
-          apLtr('דני ירקוני – מנכ"ל', { size: 22, bold: true }),
-          apLtr(companyName, { size: 20, spacing: { after: 200 } }),
+          apRtl('דני ירקוני – מנכ"ל', { size: 22, bold: true }),
+          apRtl(companyName, { size: 20, spacing: { after: 200 } }),
           new Paragraph({ spacing: { after: 80 }, children: [new TextRun('')] }),
-          apLtr('_________________________', { size: 22 }),
-          apLtr('חתימה', { size: 18, color: '666666' }),
+          apRtl('_________________________', { size: 22 }),
+          apRtl('חתימה', { size: 18, color: '666666' }),
         ],
       },
     ],
