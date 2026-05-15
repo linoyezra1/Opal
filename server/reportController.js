@@ -4,6 +4,18 @@
 import { Parser } from 'json2csv';
 import ExcelJS from 'exceljs';
 import {
+  Document,
+  Packer,
+  Paragraph,
+  TextRun,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
+  AlignmentType,
+  Footer,
+} from 'docx';
+import {
   passesServiceReportGate,
   getEntitlementStatus,
   getReportingServiceWindow,
@@ -556,4 +568,149 @@ export async function buildAgentCommissionPayload(deals) {
     totalSales,
     dealCount: rows.length,
   };
+}
+
+const AGENT_PAYMENT_COLS = [
+  { key: 'agentName', label: 'שם סוכן' },
+  { key: 'bankAccountName', label: 'שם בעל חשבון' },
+  { key: 'bankName', label: 'בנק' },
+  { key: 'bankNumber', label: 'מספר בנק' },
+  { key: 'branchNumber', label: 'מספר סניף' },
+  { key: 'accountNumber', label: 'מספר חשבון' },
+  { key: 'balance', label: 'סכום לתשלום' },
+];
+
+const HEBREW_MONTHS = [
+  'ינואר',
+  'פברואר',
+  'מרץ',
+  'אפריל',
+  'מאי',
+  'יוני',
+  'יולי',
+  'אוגוסט',
+  'ספטמבר',
+  'אוקטובר',
+  'נובמבר',
+  'דצמבר',
+];
+
+function formatHebrewMonthTitle(ym) {
+  const t = String(ym || '').trim();
+  const m = /^(\d{4})-(\d{2})$/.exec(t);
+  if (!m) return t || '—';
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  if (mo < 1 || mo > 12) return t;
+  return `${HEBREW_MONTHS[mo - 1]} ${y}`;
+}
+
+function formatPaymentAmount(n) {
+  const v = Number(n || 0);
+  return new Intl.NumberFormat('he-IL', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(v);
+}
+
+function cellDisplay(val, key) {
+  if (key === 'balance') return formatPaymentAmount(val);
+  const s = val !== undefined && val !== null ? String(val).trim() : '';
+  return s || '—';
+}
+
+function rtlParagraph(text, opts = {}) {
+  return new Paragraph({
+    bidirectional: true,
+    alignment: AlignmentType.RIGHT,
+    spacing: opts.spacing,
+    children: [
+      new TextRun({
+        text: String(text ?? ''),
+        rightToLeft: true,
+        bold: opts.bold,
+        size: opts.size,
+      }),
+    ],
+  });
+}
+
+function paymentTableCell(text, bold = false) {
+  return new TableCell({
+    children: [
+      new Paragraph({
+        bidirectional: true,
+        alignment: AlignmentType.RIGHT,
+        children: [new TextRun({ text: String(text ?? ''), rightToLeft: true, bold })],
+      }),
+    ],
+  });
+}
+
+/** מסמך Word להעברת תשלומי עמלות לסוכנים */
+export async function buildAgentPaymentTransferDocxBuffer(rows = [], options = {}) {
+  const list = Array.isArray(rows) ? rows : [];
+  const months = [...new Set(list.map((r) => String(r.month || '').trim()).filter(Boolean))];
+  const monthTitle =
+    months.length === 1
+      ? formatHebrewMonthTitle(months[0])
+      : months.length > 1
+        ? 'מספר חודשים'
+        : formatHebrewMonthTitle(options.month || '');
+
+  const downloadedAt = options.downloadedAt instanceof Date ? options.downloadedAt : new Date();
+  const dateStr = downloadedAt.toLocaleDateString('he-IL', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  const companyName = String(options.companyName || 'אופאל בע״מ').trim();
+
+  const headerRow = new TableRow({
+    children: AGENT_PAYMENT_COLS.map((c) => paymentTableCell(c.label, true)),
+  });
+  const dataRows = list.map(
+    (r) =>
+      new TableRow({
+        children: AGENT_PAYMENT_COLS.map((c) => paymentTableCell(cellDisplay(r[c.key], c.key))),
+      })
+  );
+
+  const table = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    visuallyRightToLeft: true,
+    rows: [headerRow, ...dataRows],
+  });
+
+  const doc = new Document({
+    sections: [
+      {
+        properties: {
+          page: {
+            margin: { top: 720, right: 720, bottom: 720, left: 720 },
+          },
+        },
+        footers: {
+          default: new Footer({
+            children: [
+              rtlParagraph(`תאריך הורדה: ${dateStr}`, { spacing: { before: 120 } }),
+              rtlParagraph('חתימה: _________________________', { spacing: { before: 80 } }),
+              rtlParagraph(companyName, { spacing: { before: 80 } }),
+            ],
+          }),
+        },
+        children: [
+          rtlParagraph(`הוראת תשלום — עמלות סוכנים — ${monthTitle}`, { bold: true, size: 32 }),
+          rtlParagraph('', { spacing: { after: 120 } }),
+          rtlParagraph(
+            'הנני מאשר/ת כי פרטי החשבונות והסכומים שלהלן נכונים, וכי יש להעביר את התשלומים בהתאם לפרטי הבנק המפורטים.',
+            { spacing: { after: 200 } }
+          ),
+          table,
+        ],
+      },
+    ],
+  });
+
+  return Packer.toBuffer(doc);
 }

@@ -126,6 +126,8 @@ export default function ReportsDashboard() {
   const [agentSnaps, setAgentSnaps] = useState([]);
   const [agentLoading, setAgentLoading] = useState(false);
   const [agentErr, setAgentErr] = useState('');
+  const [selectedAgentSnapshots, setSelectedAgentSnapshots] = useState(() => new Set());
+  const [agentPaymentExportBusy, setAgentPaymentExportBusy] = useState(false);
 
   const [tab, setTab] = useState(() => String(searchParams.get('tab') || 'provider'));
   useEffect(() => {
@@ -346,10 +348,66 @@ export default function ReportsDashboard() {
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error || 'שגיאה');
       setAgentSnaps(Array.isArray(j.snapshots) ? j.snapshots : []);
+      setSelectedAgentSnapshots(new Set());
     } catch (e) {
       setAgentErr(e?.message || 'שגיאה');
     } finally {
       setAgentLoading(false);
+    }
+  };
+
+  const toggleAgentSnapshot = (id) => {
+    setSelectedAgentSnapshots((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllAgentSnapshots = () => {
+    const payable = agentSnaps.filter((r) => Number(r.balance || 0) > 0);
+    if (!payable.length) return;
+    const allSelected = payable.every((r) => selectedAgentSnapshots.has(r.id));
+    if (allSelected) {
+      setSelectedAgentSnapshots(new Set());
+    } else {
+      setSelectedAgentSnapshots(new Set(payable.map((r) => r.id)));
+    }
+  };
+
+  const runAgentPaymentExport = async () => {
+    const ids = [...selectedAgentSnapshots];
+    if (!ids.length) {
+      setAgentErr('נא לבחור לפחות דרישת תשלום אחת');
+      return;
+    }
+    setAgentErr('');
+    setAgentPaymentExportBusy(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/reports/agent-payment-export-docx`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ snapshotIds: ids }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || 'הורדה נכשלה');
+      }
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = 'opal-agent-payments.docx';
+      a.click();
+      URL.revokeObjectURL(href);
+    } catch (e) {
+      setAgentErr(e?.message || 'שגיאה');
+    } finally {
+      setAgentPaymentExportBusy(false);
     }
   };
 
@@ -618,10 +676,39 @@ export default function ReportsDashboard() {
                 {agentErr ? <p className="text-sm text-destructive">{agentErr}</p> : null}
                 {agentSnaps && (
                   <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2 justify-between">
+                      <Button
+                        type="button"
+                        disabled={agentPaymentExportBusy || selectedAgentSnapshots.size === 0}
+                        onClick={runAgentPaymentExport}
+                      >
+                        <Download className="size-4 me-2" />
+                        {agentPaymentExportBusy ? 'מוריד…' : 'הורדת קובץ לתשלום'}
+                      </Button>
+                      {selectedAgentSnapshots.size > 0 ? (
+                        <span className="text-sm text-muted-foreground">
+                          נבחרו {selectedAgentSnapshots.size} דרישות
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="rounded-md border overflow-x-auto" dir="rtl">
                       <Table className="text-right">
                         <TableHeader>
                           <TableRow className="[&_th]:text-right">
+                            <TableHead className="text-right w-10">
+                              <input
+                                type="checkbox"
+                                className="size-4"
+                                aria-label="בחר הכל"
+                                checked={
+                                  agentSnaps.filter((r) => Number(r.balance || 0) > 0).length > 0 &&
+                                  agentSnaps
+                                    .filter((r) => Number(r.balance || 0) > 0)
+                                    .every((r) => selectedAgentSnapshots.has(r.id))
+                                }
+                                onChange={toggleAllAgentSnapshots}
+                              />
+                            </TableHead>
                             <TableHead className="text-right">סוכן</TableHead>
                             <TableHead className="text-right">חודש</TableHead>
                             <TableHead className="text-right">עסקאות</TableHead>
@@ -634,6 +721,16 @@ export default function ReportsDashboard() {
                         <TableBody>
                           {agentSnaps.map((r) => (
                             <TableRow key={r.id}>
+                              <TableCell>
+                                <input
+                                  type="checkbox"
+                                  className="size-4"
+                                  checked={selectedAgentSnapshots.has(r.id)}
+                                  disabled={Number(r.balance || 0) <= 0}
+                                  aria-label={`בחר ${r.agentName || ''} ${r.month || ''}`}
+                                  onChange={() => toggleAgentSnapshot(r.id)}
+                                />
+                              </TableCell>
                               <TableCell>{r.agentName || '—'}</TableCell>
                               <TableCell>{r.month}</TableCell>
                               <TableCell>{Number(r.totalDeals || 0)}</TableCell>
@@ -645,7 +742,7 @@ export default function ReportsDashboard() {
                           ))}
                           {!agentSnaps.length ? (
                             <TableRow>
-                              <TableCell colSpan={7} className="text-center text-muted-foreground py-6">
+                              <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
                                 אין snapshots נעולים להצגה
                               </TableCell>
                             </TableRow>

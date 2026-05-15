@@ -1915,17 +1915,6 @@ export default function SubscribersDashboard() {
                       variant="outline"
                       size="sm"
                       className="h-10 gap-1.5 border-slate-200 bg-white shadow-sm shrink-0"
-                      disabled={loading}
-                      onClick={() => loadDashboard()}
-                    >
-                      <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} aria-hidden />
-                      רענן נתונים
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-10 gap-1.5 border-slate-200 bg-white shadow-sm shrink-0"
                       disabled={loading || visibleRows.length === 0}
                       onClick={() => {
                         try {
@@ -1972,12 +1961,21 @@ export default function SubscribersDashboard() {
           </Card>
 
           <Card>
-            <CardHeader className="space-y-4 pb-2">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between gap-3 w-full">
                 <div className="text-right">
                   <CardTitle>עסקאות</CardTitle>
                 </div>
-
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto shrink-0 gap-1 px-0 text-xs font-normal text-muted-foreground hover:text-foreground"
+                  disabled={loading}
+                  onClick={() => loadDashboard()}
+                >
+                  <RefreshCw className={`size-3.5 ${loading ? 'animate-spin' : ''}`} aria-hidden />
+                  רענון
+                </Button>
               </div>
             </CardHeader>
             <CardContent className="pt-2" dir="rtl">

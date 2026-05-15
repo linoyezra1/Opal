@@ -5045,6 +5045,65 @@ export async function listAllAgentCommissionSnapshots(limit = 500, agentId = '')
   }));
 }
 
+/** שורות לייצוא תשלום סוכנים (Word) — snapshots לפי מזהים + פרטי בנק מ־sales_agents */
+export async function getAgentPaymentExportRows(snapshotIds = []) {
+  const db = await getDb();
+  const ids = [...new Set((Array.isArray(snapshotIds) ? snapshotIds : []).map((id) => String(id || '').trim()).filter(Boolean))];
+  if (!ids.length) return [];
+
+  const oids = ids
+    .map((id) => {
+      try {
+        return new ObjectId(id);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+  if (!oids.length) return [];
+
+  const snaps = await db
+    .collection('agent_commission_snapshots')
+    .find({ _id: { $in: oids } })
+    .toArray();
+  if (!snaps.length) return [];
+
+  const agentIds = [...new Set(snaps.map((s) => String(s.agentId || '').trim()).filter(Boolean))];
+  const agentOids = agentIds.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id));
+  const agents = agentOids.length
+    ? await db
+        .collection('sales_agents')
+        .find({ _id: { $in: agentOids } })
+        .project({ agentName: 1, bankDetails: 1, bankName: 1, bankNum: 1, branchNum: 1, accountNum: 1, accountHolder: 1 })
+        .toArray()
+    : [];
+  const agentById = new Map(agents.map((a) => [String(a._id), a]));
+
+  const order = new Map(ids.map((id, i) => [id, i]));
+  const sorted = [...snaps].sort((a, b) => (order.get(String(a._id)) ?? 0) - (order.get(String(b._id)) ?? 0));
+
+  return sorted.map((d) => {
+    const aid = String(d.agentId || '').trim();
+    const agent = agentById.get(aid) || null;
+    const bd = agent?.bankDetails && typeof agent.bankDetails === 'object' ? agent.bankDetails : {};
+    const balance = Number(
+      d.balance != null ? d.balance : Number(d.totalAmount || 0) - Number(d.totalPaid || 0)
+    );
+    return {
+      snapshotId: String(d._id),
+      agentId: aid,
+      agentName: String(d.agentName || agent?.agentName || ''),
+      month: String(d.month || ''),
+      balance,
+      bankAccountName: firstNonEmpty(bd.accountHolder, agent?.accountHolder),
+      bankName: firstNonEmpty(bd.bankName, agent?.bankName),
+      bankNumber: firstNonEmpty(bd.bankNum, agent?.bankNum),
+      branchNumber: firstNonEmpty(bd.branchNum, agent?.branchNum),
+      accountNumber: firstNonEmpty(bd.accountNum, agent?.accountNum),
+    };
+  });
+}
+
 export async function updateAgentCommissionSnapshot(agentId, snapshotId, patch = {}) {
   const db = await getDb();
   let sid;

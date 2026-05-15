@@ -72,6 +72,7 @@ import {
   lockAgentCommissionsSnapshot,
   listAgentCommissionSnapshots,
   listAllAgentCommissionSnapshots,
+  getAgentPaymentExportRows,
   updateAgentCommissionSnapshot,
   hasUnlockedAgentCommissionsForMonth,
   processDetailRecurringWebhook,
@@ -150,6 +151,7 @@ import {
   listProviderNamesFromDealsForFilter,
   buildSubscribersXlsxBuffer,
   buildCancellationsXlsxBuffer,
+  buildAgentPaymentTransferDocxBuffer,
 } from './reportController.js';
 import multer from 'multer';
 import { parseOrgMemberImportBuffer, buildOrgImportTemplateBuffer } from './orgImportService.js';
@@ -2978,6 +2980,29 @@ app.get('/api/admin/reports/agent-commissions', requireAdmin, async (req, res) =
   } catch (e) {
     console.error(`[${ts()}] reports/agent-commissions error:`, e);
     res.status(500).json({ success: false, error: 'Failed to load agent commissions' });
+  }
+});
+
+app.post('/api/admin/reports/agent-payment-export-docx', requireAdmin, async (req, res) => {
+  try {
+    const snapshotIds = Array.isArray(req.body?.snapshotIds) ? req.body.snapshotIds : [];
+    if (!snapshotIds.length) {
+      return res.status(400).json({ success: false, error: 'נדרש לבחור לפחות דרישת תשלום אחת' });
+    }
+    const rows = await getAgentPaymentExportRows(snapshotIds);
+    if (!rows.length) {
+      return res.status(404).json({ success: false, error: 'לא נמצאו דרישות תשלום לייצוא' });
+    }
+    const file = await buildAgentPaymentTransferDocxBuffer(rows);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    );
+    res.setHeader('Content-Disposition', 'attachment; filename="opal-agent-payments.docx"');
+    res.send(Buffer.from(file));
+  } catch (e) {
+    console.error(`[${ts()}] reports/agent-payment-export-docx error:`, e);
+    res.status(500).json({ success: false, error: 'יצירת קובץ Word נכשלה' });
   }
 });
 
