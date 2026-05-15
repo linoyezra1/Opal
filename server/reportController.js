@@ -707,19 +707,7 @@ export async function buildAgentPaymentTransferDocxBuffer(rows = [], options = {
       })
   );
 
-  const totalBalance = list.reduce((s, r) => s + (Number(r.balance) || 0), 0);
-  const totalRow = new TableRow({
-    children: AGENT_PAY_COLS.map((c, idx) => {
-      const isLast = idx === AGENT_PAY_COLS.length - 1;
-      const isLabel = idx === AGENT_PAY_COLS.length - 2;
-      const text = isLast
-        ? `₪ ${new Intl.NumberFormat('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalBalance)}`
-        : isLabel
-          ? 'סה״כ'
-          : '';
-      return apMakeCell(text, { bold: true, width: c.width, shading: 'DDEEFF' });
-    }),
-  });
+
 
   const paymentTable = new Table({
     width: { size: AGENT_PAY_TABLE_W, type: WidthType.DXA },
@@ -788,18 +776,18 @@ export async function buildAgentPaymentTransferDocxBuffer(rows = [], options = {
         children: [
           monthBox,
           new Paragraph({ spacing: { after: 160 }, children: [new TextRun('')] }),
-          apRtl('אני דני ירקוני מנכ"ל בעלים ת.ז 059304535 הנני מאשר לשלם את העברות הנ"ל', {
+          apLtr('אני דני ירקוני מנכ"ל בעלים ת.ז 059304535 הנני מאשר לשלם את העברות הנ"ל', {
             bold: true,
             size: 22,
           }),
           apRtl(companyAcct, { bold: true, size: 22, spacing: { after: 280 } }),
           paymentTable,
           new Paragraph({ spacing: { after: 600 }, children: [new TextRun('')] }),
-          apRtl('דני ירקוני – מנכ"ל', { size: 22, bold: true }),
-          apRtl(companyName, { size: 20, spacing: { after: 200 } }),
+          apLtr('דני ירקוני – מנכ"ל', { size: 22, bold: true }),
+          apLtr(companyName, { size: 20, spacing: { after: 200 } }),
           new Paragraph({ spacing: { after: 80 }, children: [new TextRun('')] }),
-          apRtl('_________________________', { size: 22 }),
-          apRtl('חתימה', { size: 18, color: '666666' }),
+          apLtr('_________________________', { size: 22 }),
+          apLtr('חתימה', { size: 18, color: '666666' }),
         ],
       },
     ],

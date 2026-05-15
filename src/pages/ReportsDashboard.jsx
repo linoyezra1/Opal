@@ -648,7 +648,7 @@ export default function ReportsDashboard() {
             <Card className="text-right" dir="rtl">
               <CardHeader className="text-right">
                 <CardTitle>עמלות סוכנים</CardTitle>
-                <CardDescription>מציג רק דוחות עמלות נעולים (Approved Debts) מתוך snapshots</CardDescription>
+                <CardDescription>מציג רק דוחות עמלות נעולים מתוך דשבורד הסוכן</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <FieldGroup className="flex flex-col sm:flex-row gap-4 items-end">
