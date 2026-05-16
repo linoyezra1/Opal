@@ -5376,3 +5376,215 @@ export async function approveProviderApplication(id) {
   if (!r.matchedCount) throw new Error('ספק לא נמצא');
   return { ok: true };
 }
+
+let providerPayoutIndexesPromise = null;
+
+async function ensureProviderPayoutIndexes(db) {
+  if (!providerPayoutIndexesPromise) {
+    providerPayoutIndexesPromise = db
+      .collection('provider_payouts')
+      .createIndex({ providerId: 1, month: 1 }, { unique: true })
+      .catch((err) => {
+        providerPayoutIndexesPromise = null;
+        throw err;
+      });
+  }
+  await providerPayoutIndexesPromise;
+}
+
+function calcProviderPayoutAmounts({ invoiceAmount = 0, creditNoteAmount = 0, totalPaid = 0 } = {}) {
+  const inv = Math.max(0, Number(invoiceAmount || 0));
+  const credit = Math.max(0, Number(creditNoteAmount || 0));
+  const paid = Math.max(0, Number(totalPaid || 0));
+  const totalAmount = inv - credit;
+  const balance = totalAmount - paid;
+  return { invoiceAmount: inv, creditNoteAmount: credit, totalAmount, totalPaid: paid, balance };
+}
+
+function mapProviderPayoutDoc(d) {
+  const amounts = calcProviderPayoutAmounts({
+    invoiceAmount: d.invoiceAmount,
+    creditNoteAmount: d.creditNoteAmount,
+    totalPaid: d.totalPaid,
+  });
+  return {
+    id: String(d._id),
+    providerId: String(d.providerId || ''),
+    month: String(d.month || ''),
+    invoiceNum: String(d.invoiceNum || ''),
+    invoiceAmount: amounts.invoiceAmount,
+    creditNoteNum: String(d.creditNoteNum || ''),
+    creditNoteAmount: amounts.creditNoteAmount,
+    totalAmount: amounts.totalAmount,
+    totalPaid: amounts.totalPaid,
+    balance: d.balance != null ? Number(d.balance) : amounts.balance,
+    status: String(d.status || 'Pending') === 'Paid' ? 'Paid' : 'Pending',
+    notes: String(d.notes || ''),
+    createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+    updatedAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : d.updatedAt,
+  };
+}
+
+export async function listProviderPayouts(providerId, limit = 200) {
+  const db = await getDb();
+  await ensureProviderPayoutIndexes(db);
+  const pid = String(providerId || '').trim();
+  if (!pid) return [];
+  const docs = await db
+    .collection('provider_payouts')
+    .find({ providerId: pid })
+    .sort({ month: -1, createdAt: -1 })
+    .limit(Math.max(1, Math.min(Number(limit) || 200, 500)))
+    .toArray();
+  return docs.map(mapProviderPayoutDoc);
+}
+
+export async function createProviderPayout(providerId, body = {}) {
+  const db = await getDb();
+  await ensureProviderPayoutIndexes(db);
+  const pid = String(providerId || '').trim();
+  if (!pid) throw new Error('מזהה ספק חסר');
+  const month = String(body.month || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('חודש לא תקין (נדרש YYYY-MM)');
+
+  const amounts = calcProviderPayoutAmounts({
+    invoiceAmount: body.invoiceAmount,
+    creditNoteAmount: body.creditNoteAmount,
+    totalPaid: body.totalPaid ?? 0,
+  });
+  const now = new Date();
+  const doc = {
+    providerId: pid,
+    month,
+    invoiceNum: String(body.invoiceNum || '').trim(),
+    invoiceAmount: amounts.invoiceAmount,
+    creditNoteNum: String(body.creditNoteNum || '').trim(),
+    creditNoteAmount: amounts.creditNoteAmount,
+    totalAmount: amounts.totalAmount,
+    totalPaid: amounts.totalPaid,
+    balance: amounts.balance,
+    status: String(body.status || 'Pending') === 'Paid' ? 'Paid' : 'Pending',
+    notes: String(body.notes || '').trim(),
+    createdAt: now,
+    updatedAt: now,
+  };
+  try {
+    const result = await db.collection('provider_payouts').insertOne(doc);
+    return { success: true, payout: mapProviderPayoutDoc({ _id: result.insertedId, ...doc }) };
+  } catch (e) {
+    if (e?.code === 11000) throw new Error('כבר קיימת רשומת תשלום לחודש זה עבור הספק');
+    throw e;
+  }
+}
+
+export async function updateProviderPayout(providerId, payoutId, patch = {}) {
+  const db = await getDb();
+  await ensureProviderPayoutIndexes(db);
+  const pid = String(providerId || '').trim();
+  let oid;
+  try {
+    oid = new ObjectId(String(payoutId));
+  } catch {
+    throw new Error('מזהה רשומת תשלום לא תקין');
+  }
+  const existing = await db.collection('provider_payouts').findOne({ _id: oid, providerId: pid });
+  if (!existing) throw new Error('רשומת תשלום לא נמצאה');
+
+  const set = { updatedAt: new Date() };
+  if (patch.month != null) {
+    const month = String(patch.month || '').trim();
+    if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('חודש לא תקין (נדרש YYYY-MM)');
+    set.month = month;
+  }
+  if (patch.invoiceNum != null) set.invoiceNum = String(patch.invoiceNum || '').trim();
+  if (patch.invoiceAmount != null) set.invoiceAmount = Math.max(0, Number(patch.invoiceAmount || 0));
+  if (patch.creditNoteNum != null) set.creditNoteNum = String(patch.creditNoteNum || '').trim();
+  if (patch.creditNoteAmount != null) set.creditNoteAmount = Math.max(0, Number(patch.creditNoteAmount || 0));
+  if (patch.totalPaid != null) set.totalPaid = Math.max(0, Number(patch.totalPaid || 0));
+  if (patch.notes != null) set.notes = String(patch.notes || '').trim();
+  if (patch.status != null) set.status = String(patch.status || 'Pending') === 'Paid' ? 'Paid' : 'Pending';
+
+  const merged = {
+    invoiceAmount: set.invoiceAmount != null ? set.invoiceAmount : Number(existing.invoiceAmount || 0),
+    creditNoteAmount:
+      set.creditNoteAmount != null ? set.creditNoteAmount : Number(existing.creditNoteAmount || 0),
+    totalPaid: set.totalPaid != null ? set.totalPaid : Number(existing.totalPaid || 0),
+  };
+  const amounts = calcProviderPayoutAmounts(merged);
+  set.totalAmount = amounts.totalAmount;
+  set.balance = amounts.balance;
+  if (set.invoiceAmount == null) set.invoiceAmount = amounts.invoiceAmount;
+  if (set.creditNoteAmount == null) set.creditNoteAmount = amounts.creditNoteAmount;
+  if (set.totalPaid == null) set.totalPaid = amounts.totalPaid;
+
+  try {
+    const r = await db.collection('provider_payouts').updateOne({ _id: oid, providerId: pid }, { $set: set });
+    if (!r.matchedCount) throw new Error('רשומת תשלום לא נמצאה');
+    const updated = await db.collection('provider_payouts').findOne({ _id: oid });
+    return { success: true, payout: mapProviderPayoutDoc(updated) };
+  } catch (e) {
+    if (e?.code === 11000) throw new Error('כבר קיימת רשומת תשלום לחודש זה עבור הספק');
+    throw e;
+  }
+}
+
+/** נתונים לייצוא תשלום ספק — שורה אחת מרוכזת + פרטי בנק */
+export async function getProviderPaymentExportRow(providerId, payoutIds = []) {
+  const db = await getDb();
+  const pid = String(providerId || '').trim();
+  if (!pid) throw new Error('מזהה ספק חסר');
+  const ids = [...new Set((Array.isArray(payoutIds) ? payoutIds : []).map((id) => String(id || '').trim()).filter(Boolean))];
+  if (!ids.length) throw new Error('נדרש לבחור לפחות רשומת תשלום אחת');
+
+  const oids = ids
+    .map((id) => {
+      try {
+        return new ObjectId(id);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+  if (!oids.length) throw new Error('מזהה רשומת תשלום לא תקין');
+
+  const payouts = await db
+    .collection('provider_payouts')
+    .find({ _id: { $in: oids }, providerId: pid })
+    .toArray();
+  if (!payouts.length) throw new Error('לא נמצאו רשומות תשלום לייצוא');
+  if (payouts.length !== oids.length) throw new Error('חלק מרשומות התשלום לא שייכות לספק זה');
+
+  let vendor = null;
+  if (ObjectId.isValid(pid)) {
+    vendor = await db
+      .collection('vendors')
+      .findOne({ _id: new ObjectId(pid) })
+      .catch(() => null);
+  }
+  if (!vendor) {
+    vendor = await db.collection('vendors').findOne({ _id: pid }).catch(() => null);
+  }
+
+  const months = [...new Set(payouts.map((p) => String(p.month || '').trim()).filter(Boolean))];
+  let consolidatedBalance = 0;
+  for (const p of payouts) {
+    const balanceRaw = Number(
+      p.balance != null ? p.balance : Number(p.totalAmount || 0) - Number(p.totalPaid || 0)
+    );
+    const totalAmount = Number(p.totalAmount || 0);
+    consolidatedBalance += balanceRaw > 0 ? balanceRaw : totalAmount;
+  }
+
+  return {
+    providerId: pid,
+    providerName: String(vendor?.vendorName || ''),
+    months,
+    balance: consolidatedBalance,
+    bankAccountName: firstNonEmpty(vendor?.accountHolder),
+    bankName: firstNonEmpty(vendor?.bankName),
+    bankNumber: firstNonEmpty(vendor?.bankNum),
+    branchNumber: firstNonEmpty(vendor?.branchNum),
+    accountNumber: firstNonEmpty(vendor?.accountNum),
+    agentName: firstNonEmpty(vendor?.accountHolder, vendor?.vendorName),
+  };
+}

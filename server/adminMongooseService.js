@@ -703,6 +703,15 @@ export async function listVendors(options = {}) {
   }));
 }
 
+export async function getVendorById(id) {
+  await ensureConnection();
+  if (!mongoose.isValidObjectId(id)) throw new Error('Invalid vendor id');
+  const list = await listVendors({ activeOnly: false });
+  const hit = list.find((v) => String(v.id) === String(id));
+  if (!hit) throw new Error('ספק לא נמצא');
+  return hit;
+}
+
 export async function updateVendor(id, payload) {
   await ensureConnection();
   if (!mongoose.isValidObjectId(id)) throw new Error('Invalid vendor id');

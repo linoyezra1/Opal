@@ -713,7 +713,11 @@ export default function VendorDashboard() {
                               {expandedVendor === v.id ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
                             </Button>
                           </TableCell>
-                          <TableCell className="font-medium">{v.vendorName}</TableCell>
+                          <TableCell className="font-medium">
+                            <Link to={`/admin/vendors/${v.id}`} className="text-primary hover:underline">
+                              {v.vendorName}
+                            </Link>
+                          </TableCell>
                           <TableCell className="text-right font-mono text-sm">
                             <span dir="ltr">{v.idNum}</span>
                           </TableCell>

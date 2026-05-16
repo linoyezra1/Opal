@@ -73,6 +73,10 @@ import {
   listAgentCommissionSnapshots,
   listAllAgentCommissionSnapshots,
   getAgentPaymentExportRows,
+  listProviderPayouts,
+  createProviderPayout,
+  updateProviderPayout,
+  getProviderPaymentExportRow,
   updateAgentCommissionSnapshot,
   hasUnlockedAgentCommissionsForMonth,
   processDetailRecurringWebhook,
@@ -128,6 +132,7 @@ import {
   listPublicSalesAgents,
   listSalesAgentsWithSales,
   listVendors,
+  getVendorById,
   getArchiveSnapshot,
   restoreArchiveItem,
   resolveAgentIdFromFormState,
@@ -152,6 +157,7 @@ import {
   buildSubscribersXlsxBuffer,
   buildCancellationsXlsxBuffer,
   buildAgentPaymentTransferDocxBuffer,
+  buildProviderPaymentTransferDocxBuffer,
 } from './reportController.js';
 import multer from 'multer';
 import { parseOrgMemberImportBuffer, buildOrgImportTemplateBuffer } from './orgImportService.js';
@@ -1679,6 +1685,46 @@ app.get('/api/admin/vendors', requireAdmin, async (req, res) => {
   }
 });
 
+app.get('/api/admin/vendors/:id', requireAdmin, async (req, res) => {
+  try {
+    const vendor = await getVendorById(req.params.id);
+    res.json({ success: true, vendor });
+  } catch (e) {
+    console.error(`[${ts()}] admin/vendors/:id get error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to load vendor' });
+  }
+});
+
+app.get('/api/admin/vendors/:id/payouts', requireAdmin, async (req, res) => {
+  try {
+    const payouts = await listProviderPayouts(req.params.id, Number(req.query.limit) || 200);
+    res.json({ success: true, payouts });
+  } catch (e) {
+    console.error(`[${ts()}] admin/vendors/:id/payouts list error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to list payouts' });
+  }
+});
+
+app.post('/api/admin/vendors/:id/payouts', requireAdmin, async (req, res) => {
+  try {
+    const result = await createProviderPayout(req.params.id, req.body || {});
+    res.json(result);
+  } catch (e) {
+    console.error(`[${ts()}] admin/vendors/:id/payouts create error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to create payout' });
+  }
+});
+
+app.patch('/api/admin/vendors/:id/payouts/:payoutId', requireAdmin, async (req, res) => {
+  try {
+    const result = await updateProviderPayout(req.params.id, req.params.payoutId, req.body || {});
+    res.json(result);
+  } catch (e) {
+    console.error(`[${ts()}] admin/vendors/:id/payouts patch error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to update payout' });
+  }
+});
+
 app.put('/api/admin/vendors/:id', requireAdmin, async (req, res) => {
   try {
     const result = await updateVendor(req.params.id, req.body || {});
@@ -3003,6 +3049,30 @@ app.post('/api/admin/reports/agent-payment-export-docx', requireAdmin, async (re
   } catch (e) {
     console.error(`[${ts()}] reports/agent-payment-export-docx error:`, e);
     res.status(500).json({ success: false, error: 'יצירת קובץ Word נכשלה' });
+  }
+});
+
+app.post('/api/admin/reports/provider-payment-export-docx', requireAdmin, async (req, res) => {
+  try {
+    const providerId = String(req.body?.providerId || '').trim();
+    const payoutIds = Array.isArray(req.body?.payoutIds) ? req.body.payoutIds : [];
+    if (!providerId) {
+      return res.status(400).json({ success: false, error: 'נדרש מזהה ספק' });
+    }
+    if (!payoutIds.length) {
+      return res.status(400).json({ success: false, error: 'נדרש לבחור לפחות רשומת תשלום אחת' });
+    }
+    const exportRow = await getProviderPaymentExportRow(providerId, payoutIds);
+    const file = await buildProviderPaymentTransferDocxBuffer(exportRow);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    );
+    res.setHeader('Content-Disposition', 'attachment; filename="opal-provider-payment.docx"');
+    res.send(Buffer.from(file));
+  } catch (e) {
+    console.error(`[${ts()}] reports/provider-payment-export-docx error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'יצירת קובץ Word נכשלה' });
   }
 });
 

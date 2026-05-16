@@ -13,6 +13,7 @@ import AgentDetailPage from './pages/AgentDetailPage.jsx';
 import ProductManagement from './pages/ProductManagement.jsx';
 import AdminControlPanel from './pages/AdminControlPanel.jsx';
 import VendorDashboard from './pages/VendorDashboard.jsx';
+import VendorDetailPage from './pages/VendorDetailPage.jsx';
 import PricingDashboard from './pages/PricingDashboard.jsx';
 import UnifiedProductWizard from './pages/UnifiedProductWizard.jsx';
 import ReportsDashboard from './pages/ReportsDashboard.jsx';
@@ -47,6 +48,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/admin/sales-dashboard" element={<Navigate to="/admin/subscribers" replace />} />
         <Route path="/admin/products" element={<ProductManagement />} />
         <Route path="/admin/vendors" element={<VendorDashboard />} />
+        <Route path="/admin/vendors/:id" element={<VendorDetailPage />} />
         <Route path="/admin/price-list" element={<PricingDashboard />} />
         <Route path="/admin/control-panel" element={<AdminControlPanel />} />
         <Route path="/admin/contacts" element={<ContactManagement />} />

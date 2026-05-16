@@ -670,16 +670,18 @@ function apRtl(text, { bold = false, size = 22, spacing = {}, color } = {}) {
   });
 }
 
-/** מסמך Word להעברת תשלומי עמלות לסוכנים */
-export async function buildAgentPaymentTransferDocxBuffer(rows = [], options = {}) {
+/** מסמך Word להעברת תשלום (סוכנים / ספק מרוכז) */
+export async function buildPaymentTransferDocxBuffer(rows = [], options = {}) {
   const list = Array.isArray(rows) ? rows : [];
   const months = [...new Set(list.map((r) => String(r.month || '').trim()).filter(Boolean))];
   const monthTitle =
-    months.length === 1
-      ? formatHebrewMonthTitle(months[0])
-      : months.length > 1
-        ? months.map(formatHebrewMonthTitle).join(', ')
-        : formatHebrewMonthTitle(options.month || '');
+    options.monthTitleOverride != null
+      ? String(options.monthTitleOverride)
+      : months.length === 1
+        ? formatHebrewMonthTitle(months[0])
+        : months.length > 1
+          ? months.map(formatHebrewMonthTitle).join(', ')
+          : formatHebrewMonthTitle(options.month || '');
 
   const downloadedAt = options.downloadedAt instanceof Date ? options.downloadedAt : new Date();
   const dateStr = downloadedAt.toLocaleDateString('he-IL', {
@@ -796,4 +798,33 @@ export async function buildAgentPaymentTransferDocxBuffer(rows = [], options = {
   });
 
   return Packer.toBuffer(doc);
+}
+
+/** מסמך Word — עמלות סוכנים (שורה לכל snapshot) */
+export async function buildAgentPaymentTransferDocxBuffer(rows = [], options = {}) {
+  return buildPaymentTransferDocxBuffer(rows, options);
+}
+
+/** מסמך Word — תשלום ספק מרוכז (שורה אחת בטבלה) */
+export async function buildProviderPaymentTransferDocxBuffer(exportRow = {}, options = {}) {
+  const months = Array.isArray(exportRow.months) ? exportRow.months.filter(Boolean) : [];
+  const monthTitleOverride =
+    months.length === 1
+      ? formatHebrewMonthTitle(months[0])
+      : months.length > 1
+        ? months.map(formatHebrewMonthTitle).join(', ')
+        : formatHebrewMonthTitle(options.month || '');
+
+  const row = {
+    agentName: String(exportRow.agentName || exportRow.providerName || ''),
+    bankAccountName: String(exportRow.bankAccountName || ''),
+    bankName: String(exportRow.bankName || ''),
+    bankNumber: String(exportRow.bankNumber || ''),
+    branchNumber: String(exportRow.branchNumber || ''),
+    accountNumber: String(exportRow.accountNumber || ''),
+    balance: Number(exportRow.balance || 0),
+    month: months[0] || '',
+  };
+
+  return buildPaymentTransferDocxBuffer([row], { ...options, monthTitleOverride });
 }
