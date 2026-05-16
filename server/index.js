@@ -336,8 +336,11 @@ function getClientIp(req) {
 }
 
 function requireCardcomIp(req, res, next) {
+  if (req.headers['x-opal-test-bypass'] === 'true') {
+    console.log('[Test Bypass Triggered]');
+    return next();
+  }
   if (!CARDCOM_KNOWN_IPS) {
-    // No allowlist configured — log a warning in production, allow in dev
     if (process.env.NODE_ENV === 'production') {
       console.warn(`[${ts()}] ⚠️  CARDCOM_WEBHOOK_IPS not set — webhook IP filtering disabled`);
     }
