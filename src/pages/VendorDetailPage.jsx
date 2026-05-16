@@ -1,12 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowRight, Download, Edit2, Plus, RefreshCw, Wallet } from 'lucide-react';
+import { ArrowRight, Download, Edit2, Plus, RefreshCw } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { Button } from '../components/ui/button.jsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs.jsx';
 import { Input } from '../components/ui/input.jsx';
 import { Textarea } from '../components/ui/textarea.jsx';
 import { Field, FieldGroup, FieldLabel } from '../components/ui/field.jsx';
@@ -49,10 +48,15 @@ const emptyPayoutForm = () => ({
   invoiceAmount: '',
   creditNoteNum: '',
   creditNoteAmount: '',
-  totalPaid: '',
+  totalPaid: '0',
   status: 'Pending',
   notes: '',
 });
+
+/** אפור ומושבת רק כששולם במלואו */
+function isPayoutFullyPaid(p) {
+  return Number(p.balance || 0) === 0 && String(p.status || '') === 'Paid';
+}
 
 const ltrInputClass = 'text-left font-mono tabular-nums';
 
@@ -113,7 +117,7 @@ export default function VendorDetailPage() {
   };
 
   const toggleAllPayable = () => {
-    const selectable = payouts.filter((p) => Number(p.balance || 0) !== 0);
+    const selectable = payouts.filter((p) => !isPayoutFullyPaid(p));
     if (!selectable.length) return;
     const allSelected = selectable.every((p) => selectedPayoutIds.has(p.id));
     if (allSelected) setSelectedPayoutIds(new Set());
@@ -151,7 +155,7 @@ export default function VendorDetailPage() {
         invoiceAmount: Number(payoutForm.invoiceAmount || 0),
         creditNoteNum: payoutForm.creditNoteNum,
         creditNoteAmount: Number(payoutForm.creditNoteAmount || 0),
-        totalPaid: Number(payoutForm.totalPaid || 0),
+        totalPaid: Number(payoutForm.totalPaid ?? 0) || 0,
         status: payoutForm.status,
         notes: payoutForm.notes,
       };
@@ -206,7 +210,7 @@ export default function VendorDetailPage() {
     }
   };
 
-  const selectablePayouts = payouts.filter((p) => Number(p.balance || 0) !== 0);
+  const selectablePayouts = payouts.filter((p) => !isPayoutFullyPaid(p));
 
   if (!token) {
     return (
@@ -245,60 +249,7 @@ export default function VendorDetailPage() {
             <Spinner className="size-8" />
           </div>
         ) : (
-          <Tabs defaultValue="payouts" dir="rtl">
-            <TabsList>
-              <TabsTrigger value="payouts" className="gap-1">
-                <Wallet className="size-4" />
-                תשלומים לספק
-              </TabsTrigger>
-              <TabsTrigger value="details">פרטי ספק</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="details" className="mt-4">
-              <Card dir="rtl" className="text-right">
-                <CardHeader>
-                  <CardTitle>פרטי ספק</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-3 sm:grid-cols-2 text-sm">
-                  <p>
-                    <span className="text-muted-foreground">ח.פ:</span>{' '}
-                    <span dir="ltr" className="inline-block text-left font-mono">
-                      {vendor?.idNum || '—'}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="text-muted-foreground">טלפון:</span>{' '}
-                    <span dir="ltr" className="inline-block text-left font-mono">
-                      {vendor?.phone || '—'}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="text-muted-foreground">אימייל:</span> {vendor?.email || '—'}
-                  </p>
-                  <p>
-                    <span className="text-muted-foreground">בנק:</span> {vendor?.bankName || '—'}
-                  </p>
-                  <p>
-                    <span className="text-muted-foreground">מס׳ בנק / סניף:</span>{' '}
-                    <span dir="ltr" className="inline-block text-left font-mono">
-                      {[vendor?.bankNum, vendor?.branchNum].filter(Boolean).join(' / ') || '—'}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="text-muted-foreground">חשבון:</span>{' '}
-                    <span dir="ltr" className="inline-block text-left font-mono">
-                      {vendor?.accountNum || '—'}
-                    </span>
-                  </p>
-                  <p className="sm:col-span-2">
-                    <span className="text-muted-foreground">בעל חשבון:</span> {vendor?.accountHolder || '—'}
-                  </p>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="payouts" className="mt-4">
-              <Card dir="rtl" className="text-right">
+          <Card dir="rtl" className="text-right">
                 <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <CardTitle>תשלומים לספק</CardTitle>
@@ -355,15 +306,15 @@ export default function VendorDetailPage() {
                       </TableHeader>
                       <TableBody>
                         {payouts.map((p) => {
-                          const paidOff = Number(p.balance || 0) === 0;
+                          const fullyPaid = isPayoutFullyPaid(p);
                           return (
-                            <TableRow key={p.id} className={paidOff ? 'opacity-50' : undefined}>
+                            <TableRow key={p.id} className={fullyPaid ? 'opacity-50' : undefined}>
                               <TableCell>
                                 <input
                                   type="checkbox"
                                   className="size-4"
                                   checked={selectedPayoutIds.has(p.id)}
-                                  disabled={paidOff}
+                                  disabled={fullyPaid}
                                   aria-label={`בחר ${p.month}`}
                                   onChange={() => togglePayout(p.id)}
                                 />
@@ -406,8 +357,6 @@ export default function VendorDetailPage() {
                   </div>
                 </CardContent>
               </Card>
-            </TabsContent>
-          </Tabs>
         )}
       </div>
 

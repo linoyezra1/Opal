@@ -313,8 +313,9 @@ function requireAdmin(req, res, next) {
 }
 
 app.use(cors());
+// Cardcom webhooks POST as application/x-www-form-urlencoded — register before JSON and before routes
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' })); // Cardcom may POST as form-urlencoded
 
 const orgImportUpload = multer({
   storage: multer.memoryStorage(),
@@ -1052,7 +1053,12 @@ async function handleMasterRecurringWebhook(body = {}, query = {}) {
       ? String(normalizedBody.RecurringId).trim()
       : '';
   const cardcomToken = pickFirstValue(normalizedBody, ['Token', 'CardToken', 'TokenToSave']);
-  const responseCodeRaw = pickFirstValue(normalizedBody, ['responsecode', 'ResponseCode']);
+  const responseCodeRaw = pickFirstValue(normalizedBody, [
+    'ResposeCode',
+    'responsecode',
+    'ResponseCode',
+    'responseCode',
+  ]);
   const responseDescription = pickFirstValue(normalizedBody, [
     'responsdescription',
     'ResponsDescription',
@@ -1184,9 +1190,35 @@ async function handleMasterRecurringWebhook(body = {}, query = {}) {
   );
 }
 
+/** Cardcom BillGold / DetailRecurring — normalize form-urlencoded or raw string body */
+function normalizeCardcomWebhookBody(body = {}, query = {}) {
+  let normalized = body;
+  if (typeof normalized === 'string') {
+    normalized = Object.fromEntries(new URLSearchParams(normalized));
+  }
+  if (!normalized || typeof normalized !== 'object') {
+    normalized = {};
+  }
+  if (query && typeof query === 'object') {
+    normalized = { ...query, ...normalized };
+  }
+  return normalized;
+}
+
 async function handleDetailRecurringWebhook(body = {}, query = {}) {
+  const normalized = normalizeCardcomWebhookBody(body, query);
+  const responseCode = String(
+    normalized.ResposeCode ?? normalized.ResponseCode ?? normalized.responseCode ?? ''
+  ).trim();
+  const statusStr = String(normalized.Status ?? normalized.status ?? '').trim();
+  const paymentSuccess = statusStr === 'SUCCESSFUL' && responseCode === '0';
+
+  console.log(
+    `[${ts()}] DetailRecurring webhook: Status=${statusStr || '(empty)'}, ResposeCode=${responseCode || '(empty)'}, paymentSuccess=${paymentSuccess}`
+  );
+
   try {
-    await processDetailRecurringWebhook(body, query);
+    await processDetailRecurringWebhook(normalized, {});
   } catch (e) {
     console.error(`[${ts()}] handleDetailRecurringWebhook`, e?.message || e);
     throw e;

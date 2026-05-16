@@ -583,6 +583,13 @@ function mapDetailRecurringStatusCode(raw) {
   return nameMap[key] ?? 7;
 }
 
+/** Cardcom runtime: Status === 'SUCCESSFUL' (string) and ResposeCode typo + value '0' */
+function isDetailRecurringPaymentSuccess(normalized = {}) {
+  const statusStr = String(normalized.Status ?? normalized.status ?? '').trim();
+  const responseCode = pickDrField(normalized, ['ResposeCode', 'ResponseCode', 'responseCode']);
+  return statusStr === 'SUCCESSFUL' && String(responseCode).trim() === '0';
+}
+
 /**
  * עיבוד דוח DetailRecurring מ-Cardcom: שמירה על עסקת האב + יומן עמלות לפי חיוב בפועל.
  */
@@ -636,12 +643,19 @@ export async function processDetailRecurringWebhook(body = {}, query = {}) {
   console.log(`DetailRecurring: Parent deal FOUND: ${parent.id}`);
 
   const statusRaw = normalized.Status ?? normalized.status;
-  const statusCode = mapDetailRecurringStatusCode(statusRaw);
+  const responseCode = pickDrField(normalized, ['ResposeCode', 'ResponseCode', 'responseCode']);
+  const paymentSuccess = isDetailRecurringPaymentSuccess(normalized);
+  const statusCode = paymentSuccess ? 1 : mapDetailRecurringStatusCode(statusRaw);
   const sum = parseDetailNumber(normalized, ['Sum', 'sum'], 0);
   const sumNoVat = parseDetailNumber(normalized, ['SumNoVat', 'sumNoVat'], 0);
 
-  const lastBillRaw = pickDrField(normalized, ['LastBillDate', 'lastBillDate']);
-  const lastBillDt = parseFlexibleDate(lastBillRaw) || new Date();
+  const actualBillingRaw = pickDrField(normalized, [
+    'ActualBillingDate',
+    'actualBillingDate',
+    'LastBillDate',
+    'lastBillDate',
+  ]);
+  const lastBillDt = parseFlexibleDate(actualBillingRaw) || new Date();
   const billingMonth = `${lastBillDt.getFullYear()}-${String(lastBillDt.getMonth() + 1).padStart(2, '0')}`;
 
   let vendorCost = 0;
@@ -687,7 +701,9 @@ export async function processDetailRecurringWebhook(body = {}, query = {}) {
     terminalNumber: pickDrField(normalized, ['TerminalNumber', 'terminalNumber']),
     createDate: pickDrField(normalized, ['CreateDate', 'createDate']),
     invoiceDescription: pickDrField(normalized, ['InvoiceDescription', 'invoiceDescription']),
-    lastBillDate: lastBillRaw,
+    actualBillingDate: actualBillingRaw,
+    actualBillingDateIso: lastBillDt.toISOString(),
+    lastBillDate: actualBillingRaw,
     lastBillDateIso: lastBillDt.toISOString(),
     billingMonth,
     originalNextDateToBill: pickDrField(normalized, ['OriginalNextDateToBill', 'originalNextDateToBill']),
@@ -715,7 +731,8 @@ export async function processDetailRecurringWebhook(body = {}, query = {}) {
     sum,
     sumNoVat,
     internalDealNumber: pickDrField(normalized, ['InternalDealNumber', 'internalDealNumber']),
-    responseCode: pickDrField(normalized, ['ResposeCode', 'ResponseCode', 'responseCode']),
+    responseCode,
+    paymentSuccess,
     processID: pickDrField(normalized, ['ProcessID', 'processID', 'processId']),
     billingAttempts: pickDrField(normalized, ['BillingAttempts', 'billingAttempts']),
     actualBillingType: pickDrField(normalized, ['ActualBillingType', 'actualBillingType']),
@@ -5417,7 +5434,7 @@ function mapProviderPayoutDoc(d) {
     creditNoteAmount: amounts.creditNoteAmount,
     totalAmount: amounts.totalAmount,
     totalPaid: amounts.totalPaid,
-    balance: d.balance != null ? Number(d.balance) : amounts.balance,
+    balance: amounts.balance,
     status: String(d.status || 'Pending') === 'Paid' ? 'Paid' : 'Pending',
     notes: String(d.notes || ''),
     createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,

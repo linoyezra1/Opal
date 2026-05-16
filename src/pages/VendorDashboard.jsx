@@ -713,11 +713,7 @@ export default function VendorDashboard() {
                               {expandedVendor === v.id ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
                             </Button>
                           </TableCell>
-                          <TableCell className="font-medium">
-                            <Link to={`/admin/vendors/${v.id}`} className="text-primary hover:underline">
-                              {v.vendorName}
-                            </Link>
-                          </TableCell>
+                          <TableCell className="font-medium">{v.vendorName}</TableCell>
                           <TableCell className="text-right font-mono text-sm">
                             <span dir="ltr">{v.idNum}</span>
                           </TableCell>
@@ -729,6 +725,16 @@ export default function VendorDashboard() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button variant="ghost" size="icon" type="button" asChild>
+                                    <Link to={`/admin/vendors/${v.id}`} aria-label="תשלומים לספק">
+                                      <CreditCard className="size-4" />
+                                    </Link>
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>תשלומים לספק</TooltipContent>
+                              </Tooltip>
                               <Button variant="ghost" size="icon" type="button" onClick={() => setEditVendor(vendorToEditForm(v))}>
                                 <Edit2 className="size-4" />
                               </Button>

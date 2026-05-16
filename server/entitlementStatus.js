@@ -19,7 +19,8 @@ export function parseFlexibleDate(input) {
   if (!s) return null;
   const direct = new Date(s);
   if (!Number.isNaN(direct.getTime())) return direct;
-  const m = /^(\d{1,2})[/.](\d{1,2})[/.](\d{4})(?:\s+(\d{1,2}):(\d{1,2}))?/.exec(s);
+  // Cardcom BillGold: "DD/MM/YYYY HH/mm" (minutes separator is often '/' not ':')
+  const m = /^(\d{1,2})[/.](\d{1,2})[/.](\d{4})(?:\s+(\d{1,2})[/:](\d{1,2}))?/.exec(s);
   if (m) {
     const dd = Number(m[1]);
     const mm = Number(m[2]);
