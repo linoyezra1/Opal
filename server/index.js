@@ -317,6 +317,41 @@ app.use(cors());
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(express.json({ limit: '1mb' }));
 
+// ─── Cardcom webhook IP allowlist ────────────────────────────────────────────
+// Cardcom sends webhooks only from a known set of IPs. Requests from any other
+// source are rejected with 403 before any processing occurs.
+// Set CARDCOM_WEBHOOK_IPS in .env as a comma-separated list, or leave empty to
+// bypass the check (development mode — logs a warning).
+const CARDCOM_KNOWN_IPS = (() => {
+  const raw = String(process.env.CARDCOM_WEBHOOK_IPS || '').trim();
+  if (!raw) return null; // null = allowlist disabled
+  return new Set(raw.split(',').map((ip) => ip.trim()).filter(Boolean));
+})();
+
+function getClientIp(req) {
+  // Support reverse-proxy headers (Nginx, Railway, Heroku, Render)
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) return String(forwarded).split(',')[0].trim();
+  return req.socket?.remoteAddress || '';
+}
+
+function requireCardcomIp(req, res, next) {
+  if (!CARDCOM_KNOWN_IPS) {
+    // No allowlist configured — log a warning in production, allow in dev
+    if (process.env.NODE_ENV === 'production') {
+      console.warn(`[${ts()}] ⚠️  CARDCOM_WEBHOOK_IPS not set — webhook IP filtering disabled`);
+    }
+    return next();
+  }
+  const ip = getClientIp(req);
+  if (!CARDCOM_KNOWN_IPS.has(ip)) {
+    console.warn(`[${ts()}] Cardcom webhook rejected: unexpected source IP ${ip}`);
+    return res.status(403).send('Forbidden');
+  }
+  next();
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 const orgImportUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 6 * 1024 * 1024 },
@@ -529,7 +564,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
  * user redirect: Cardcom redirects the user to SuccessRedirectUrl in the browser,
  * and in parallel calls this webhook. We respond 200 immediately, then process in background.
  */
-app.post('/api/cardcom-webhook', (req, res) => {
+app.post('/api/cardcom-webhook', requireCardcomIp, (req, res) => {
   console.log(`[${ts()}] Webhook received from Cardcom`);
   console.log(`[${ts()}] FULL WEBHOOK BODY:`, req.body);
   console.log(`[${ts()}] FULL WEBHOOK QUERY:`, req.query);
@@ -555,7 +590,7 @@ app.post('/api/cardcom-webhook', (req, res) => {
 });
 
 /** GET webhook (some gateways call with GET + query params) */
-app.get('/api/cardcom-webhook', (req, res) => {
+app.get('/api/cardcom-webhook', requireCardcomIp, (req, res) => {
   console.log(`[${ts()}] Webhook received from Cardcom (GET)`);
   console.log(`[${ts()}] FULL WEBHOOK QUERY (GET):`, req.query);
 
@@ -585,7 +620,7 @@ app.post('/api/cardcom-master-recurring-webhook', (req, res) => {
 });
 
 /** Cardcom DetailRecurring — שורת חיוב בפועל (BillGold). */
-app.post('/api/cardcom-detail-recurring-webhook', (req, res) => {
+app.post('/api/cardcom-detail-recurring-webhook', requireCardcomIp, (req, res) => {
   res.status(200).send('OK');
   setImmediate(() =>
     handleDetailRecurringWebhook(req.body, req.query).catch((err) =>

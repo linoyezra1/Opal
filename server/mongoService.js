@@ -608,14 +608,22 @@ export async function processDetailRecurringWebhook(body = {}, query = {}) {
   const secretExpected = String(
     process.env.CARDCOM_DETAIL_RECURRING_SECRET || process.env.CARDCOM_MASTER_RECURRING_SECRET || ''
   ).trim();
+  // Security: warn loudly in production if no secret is configured.
+  // Without a secret, ANY external party who knows the URL can forge billing events.
+  if (!secretExpected) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[DetailRecurring] ⛔ CARDCOM_DETAIL_RECURRING_SECRET is not set — all webhook requests are unauthenticated!');
+    } else {
+      console.warn('[DetailRecurring] Secret not configured — skipping validation (dev mode)');
+    }
+  }
   const secretReceived = String(normalized.Secret ?? normalized.secret ?? '').trim();
-  const secretValidated = !secretExpected || secretReceived === secretExpected;
-  console.log(
-    `[DetailRecurring] Secret validation: ${secretValidated ? 'PASSED' : 'FAILED'} (hasExpectedSecret=${secretExpected ? 'yes' : 'no'})`
-  );
   if (secretExpected && secretReceived !== secretExpected) {
+    console.warn(`[DetailRecurring] Secret mismatch — rejecting webhook (rowId=${pickDrField(normalized, ['RowID', 'rowId'])})`);
     throw new Error('Invalid DetailRecurring secret');
   }
+  console.log(`[DetailRecurring] Secret validation: ${secretExpected ? 'PASSED' : 'SKIPPED (no secret configured)'}`);
+
 
   const rowId = pickDrField(normalized, ['RowID', 'rowId', 'RowId']);
   console.log(`[DetailRecurring] rowId received: ${rowId || '(empty)'}`);
@@ -655,7 +663,12 @@ export async function processDetailRecurringWebhook(body = {}, query = {}) {
     'LastBillDate',
     'lastBillDate',
   ]);
-  const lastBillDt = parseFlexibleDate(actualBillingRaw) || new Date();
+  const parsedBillDt = parseFlexibleDate(actualBillingRaw);
+  if (actualBillingRaw && !parsedBillDt) {
+    // Cardcom sent an unrecognised date string — log it so we can update the parser
+    console.warn(`[DetailRecurring] Could not parse LastBillDate: ${JSON.stringify(actualBillingRaw)} — falling back to server time`);
+  }
+  const lastBillDt = parsedBillDt || new Date();
   const billingMonth = `${lastBillDt.getFullYear()}-${String(lastBillDt.getMonth() + 1).padStart(2, '0')}`;
 
   let vendorCost = 0;

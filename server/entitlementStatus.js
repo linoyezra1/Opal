@@ -19,15 +19,26 @@ export function parseFlexibleDate(input) {
   if (!s) return null;
   const direct = new Date(s);
   if (!Number.isNaN(direct.getTime())) return direct;
-  // Cardcom BillGold: "DD/MM/YYYY HH/mm" (minutes separator is often '/' not ':')
-  const m = /^(\d{1,2})[/.](\d{1,2})[/.](\d{4})(?:\s+(\d{1,2})[/:](\d{1,2}))?/.exec(s);
+  // Cardcom BillGold: "DD/MM/YYYY HH/mm" or "DD/MM/YYYY HH:mm" (slash or colon for time)
+  // Also handles optional seconds: "DD/MM/YYYY HH/mm/ss"
+  const m = /^(\d{1,2})[/.](\d{1,2})[/.](\d{4})(?:\s+(\d{1,2})[/:](\d{1,2})(?:[/:](\d{1,2}))?)?/.exec(s);
   if (m) {
     const dd = Number(m[1]);
     const mm = Number(m[2]);
     const yyyy = Number(m[3]);
     const hh = m[4] != null ? Number(m[4]) : 0;
     const mi = m[5] != null ? Number(m[5]) : 0;
-    const dt = new Date(yyyy, mm - 1, dd, hh, mi, 0, 0);
+    const ss = m[6] != null ? Number(m[6]) : 0;
+    // Guard against JavaScript's silent date-overflow (e.g. month 13 → Jan next year,
+    // day 0 → last day of previous month). These would produce wrong billingMonth values.
+    if (mm < 1 || mm > 12 || dd < 1 || dd > 31 || hh > 23 || mi > 59 || ss > 59) return null;
+    const dt = new Date(yyyy, mm - 1, dd, hh, mi, ss, 0);
+    // Cross-check: Date rolls over on impossible combos like Feb 30 → reject those too
+    if (
+      dt.getFullYear() !== yyyy ||
+      dt.getMonth() !== mm - 1 ||
+      dt.getDate() !== dd
+    ) return null;
     return Number.isNaN(dt.getTime()) ? null : dt;
   }
   return null;
