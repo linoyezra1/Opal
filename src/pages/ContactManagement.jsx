@@ -132,11 +132,18 @@ export default function ContactManagement() {
 
   React.useEffect(() => { load(); }, [token]);
 
-  // Sync search from URL param
+  // Sync search from URL param (one-way: URL → state)
   React.useEffect(() => {
-    const search = String(searchParams.get('search') || '').trim();
-    if (search && search !== searchQuery) setSearchQuery(search);
-  }, [searchParams, searchQuery]);
+    setSearchQuery(String(searchParams.get('search') || '').trim());
+  }, [searchParams]);
+
+  function syncSearchToUrl(search) {
+    const q = String(search || '').trim();
+    const next = new URLSearchParams(searchParams);
+    if (q) next.set('search', q);
+    else next.delete('search');
+    setSearchParams(next, { replace: true });
+  }
 
   // Auto-open edit from URL param
   React.useEffect(() => {
@@ -176,7 +183,7 @@ export default function ContactManagement() {
     setSavingKey(`${kind}:${leadId}`);
     setError('');
     try {
-      const endpointKind = kind === 'corporate' ? 'corporate' : kind === 'private' ? 'private' : 'abandoned';
+      const endpointKind = kind === 'corporate' ? 'corporate' : 'private';
       const res = await fetch(
         `${API_BASE}/api/admin/contact-hub/${endpointKind}/${encodeURIComponent(leadId)}`,
         {
@@ -377,6 +384,7 @@ export default function ContactManagement() {
 
   function clearAllFilters() {
     setSearchQuery('');
+    syncSearchToUrl('');
     setFilterCategory('all');
     setFilterStatus('all');
     setFilterMonth('');
@@ -532,12 +540,14 @@ export default function ContactManagement() {
                     dateTo:   filterDateTo,
                   }}
                   onChange={(next) => {
-                    setSearchQuery(String(next.search   || ''));
+                    const nextSearch = String(next.search || '');
+                    setSearchQuery(nextSearch);
+                    syncSearchToUrl(nextSearch);
                     setFilterCategory(String(next.category || 'all'));
-                    setFilterStatus(String(next.status  || 'all'));
-                    setFilterMonth(String(next.month    || ''));
+                    setFilterStatus(String(next.status || 'all'));
+                    setFilterMonth(String(next.month || ''));
                     setFilterDateFrom(String(next.dateFrom || ''));
-                    setFilterDateTo(String(next.dateTo  || ''));
+                    setFilterDateTo(String(next.dateTo || ''));
                   }}
                   onClear={clearAllFilters}
                   resultsCount={filteredLeads.length}

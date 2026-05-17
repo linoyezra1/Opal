@@ -4162,47 +4162,23 @@ export async function getContactHubAdminList() {
     .sort({ createdAt: -1 })
     .limit(500)
     .toArray();
-  const abandonedCartRowsAll = await db
-    .collection('pending_checkout_leads')
-    .find({ status: 'awaiting_payment', isActive: { $ne: false } })
-    .sort({ updatedAt: -1 })
-    .limit(500)
-    .toArray();
-
-  const privateLeads = [
-    ...contactLeadsAll.map((d) => ({
-      id: String(d._id || ''),
-      name: d.name || '',
-      phone: d.phone || '',
-      email: d.email || '',
-      message: d.message || '',
-      source: d.source || '',
-      landingSlug: d.landingSlug || '',
-      landingPageTitle: d.landingPageTitle || '',
-      isLandingActive: d.isLandingActive ?? null,
-      createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
-      leadStatus: d.leadStatus || 'חדש',
-      adminNotes: d.adminNotes || '',
-      systemNote: d.systemNote || d.adminNotes || '',
-      isHandled: !!d.isHandled,
-    })),
-    ...abandonedCartRowsAll.map((d) => ({
-      id: String(d._id || ''),
-      name: d.name || d.customerName || '',
-      phone: d.phone || '',
-      email: d.email || '',
-      message: d.message || '',
-      source: 'abandoned_checkout',
-      landingSlug: d.landingSlug || '',
-      landingPageTitle: d.landingPageTitle || '',
-      productName: d.productName || '',
-      createdAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : d.updatedAt,
-      leadStatus: d.leadStatus || 'חדש',
-      adminNotes: d.adminNotes || '',
-      systemNote: d.systemNote || d.adminNotes || '',
-      isHandled: !!d.isHandled,
-    })),
-  ];
+  const privateLeads = contactLeadsAll.map((d) => ({
+    id: String(d._id || ''),
+    name: d.name || '',
+    phone: d.phone || '',
+    email: d.email || '',
+    message: d.message || '',
+    source: d.source || '',
+    landingSlug: d.landingSlug || '',
+    landingPageTitle: d.landingPageTitle || '',
+    isLandingActive: d.isLandingActive ?? null,
+    productName: d.productName || '',
+    createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+    leadStatus: d.leadStatus || 'חדש',
+    adminNotes: d.adminNotes || '',
+    systemNote: d.systemNote || d.adminNotes || '',
+    isHandled: !!d.isHandled,
+  }));
 
   const corporateLeads = orgLeadsAll.map((d) => ({
     id: String(d._id || ''),
@@ -4245,7 +4221,7 @@ export async function updateContactHubItem(kind, id, params = {}) {
     else if (!params.leadStatus) set.status = 'New';
   }
   if (params.isActive != null) set.isActive = !!params.isActive;
-  if (k === 'private') {
+  if (k === 'private' || k === 'abandoned') {
     const r = await db.collection('contactLeads').updateOne({ _id: oid }, { $set: set });
     if (!r.matchedCount) throw new Error('ליד לא נמצא');
     return { ok: true };
@@ -4253,11 +4229,6 @@ export async function updateContactHubItem(kind, id, params = {}) {
   if (k === 'corporate') {
     const r = await db.collection('organizationLeads').updateOne({ _id: oid }, { $set: set });
     if (!r.matchedCount) throw new Error('ליד לא נמצא');
-    return { ok: true };
-  }
-  if (k === 'abandoned') {
-    const r = await db.collection('pending_checkout_leads').updateOne({ _id: oid }, { $set: set });
-    if (!r.matchedCount) throw new Error('עגלה לא נמצאה');
     return { ok: true };
   }
   throw new Error('סוג רשומה לא נתמך');
