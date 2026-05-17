@@ -321,19 +321,73 @@ app.use(express.json({ limit: '1mb' }));
 // ─── Cardcom webhook IP allowlist ────────────────────────────────────────────
 // Cardcom sends webhooks only from a known set of IPs. Requests from any other
 // source are rejected with 403 before any processing occurs.
-// Set CARDCOM_WEBHOOK_IPS in .env as a comma-separated list, or leave empty to
-// bypass the check (development mode — logs a warning).
+// Set CARDCOM_WEBHOOK_IPS in .env as a comma-separated list of IPv4 hosts or
+// CIDR blocks (e.g. 82.80.227.16/29), or leave empty to bypass (dev — logs a warning).
 const CARDCOM_KNOWN_IPS = (() => {
   const raw = String(process.env.CARDCOM_WEBHOOK_IPS || '').trim();
   if (!raw) return null; // null = allowlist disabled
-  return new Set(raw.split(',').map((ip) => ip.trim()).filter(Boolean));
+  return raw.split(',').map((ip) => ip.trim()).filter(Boolean);
 })();
+
+function normalizeIpv4(ip) {
+  const s = String(ip || '').trim();
+  if (!s) return '';
+  if (s.startsWith('::ffff:')) return s.slice(7);
+  return s;
+}
+
+function ipv4ToInt(ip) {
+  const normalized = normalizeIpv4(ip);
+  const parts = normalized.split('.');
+  if (parts.length !== 4) return null;
+  let num = 0;
+  for (let i = 0; i < 4; i += 1) {
+    const octet = Number(parts[i]);
+    if (!Number.isInteger(octet) || octet < 0 || octet > 255) return null;
+    num = (num << 8) + octet;
+  }
+  return num >>> 0;
+}
+
+/** Returns true when `ip` is inside `cidr` (e.g. 82.80.227.16/29) or equals a bare IPv4 host. */
+function isIpv4InCidr(ip, cidr) {
+  const entry = String(cidr || '').trim();
+  if (!entry) return false;
+  const slash = entry.indexOf('/');
+  const base = slash === -1 ? entry : entry.slice(0, slash);
+  const prefixRaw = slash === -1 ? '32' : entry.slice(slash + 1);
+
+  const ipInt = ipv4ToInt(ip);
+  const baseInt = ipv4ToInt(base);
+  if (ipInt == null || baseInt == null) return false;
+
+  const prefixLen = Number(prefixRaw);
+  if (!Number.isInteger(prefixLen) || prefixLen < 0 || prefixLen > 32) return false;
+
+  const mask = prefixLen === 0 ? 0 : ((0xffffffff << (32 - prefixLen)) >>> 0);
+  return (ipInt & mask) === (baseInt & mask);
+}
+
+function isIpAllowedByCardcomRules(clientIp, rules) {
+  const ip = normalizeIpv4(clientIp);
+  if (!ip || !Array.isArray(rules) || !rules.length) return false;
+  for (const rule of rules) {
+    const entry = String(rule || '').trim();
+    if (!entry) continue;
+    if (entry.includes('/')) {
+      if (isIpv4InCidr(ip, entry)) return true;
+    } else if (ip === entry) {
+      return true;
+    }
+  }
+  return false;
+}
 
 function getClientIp(req) {
   // Support reverse-proxy headers (Nginx, Railway, Heroku, Render)
   const forwarded = req.headers['x-forwarded-for'];
-  if (forwarded) return String(forwarded).split(',')[0].trim();
-  return req.socket?.remoteAddress || '';
+  if (forwarded) return normalizeIpv4(String(forwarded).split(',')[0].trim());
+  return normalizeIpv4(req.socket?.remoteAddress || '');
 }
 
 function requireCardcomIp(req, res, next) {
@@ -348,7 +402,7 @@ function requireCardcomIp(req, res, next) {
     return next();
   }
   const ip = getClientIp(req);
-  if (!CARDCOM_KNOWN_IPS.has(ip)) {
+  if (!isIpAllowedByCardcomRules(ip, CARDCOM_KNOWN_IPS)) {
     console.warn(`[${ts()}] Cardcom webhook rejected: unexpected source IP ${ip}`);
     return res.status(403).send('Forbidden');
   }
