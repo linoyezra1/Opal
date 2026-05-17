@@ -30,7 +30,12 @@ import {
 import { fmtDateTime } from '../utils/dateUtils.js';
 import { computePeriodRevenueFromDeal } from '../utils/periodRevenue.js';
 import { exportVisibleSubscribersToXlsx } from '../utils/subscribersDashboardXlsx.js';
-import { countPaymentTypeDeals, dealFromSubscriberRow } from '../../lib/paymentTypeMetrics.js';
+import {
+  countPaymentTypeDeals,
+  dealFromSubscriberRow,
+  isCentralizedPaymentDeal,
+  isPrivatePaymentDeal,
+} from '../../lib/paymentTypeMetrics.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { StatsCard } from '../components/admin/stats-card.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
@@ -909,30 +914,20 @@ export default function SubscribersDashboard() {
       rows = rows.filter((r) => !r.pendingBeneficiaryCompletion);
     }
 
-    if (filters.paymentTypeFilter || filters.customerSegmentFilter) {
+    if (filters.customerSegmentFilter) {
       rows = rows.filter((r) => {
-        // Segment (ground truth) — isOrganizationDeal is the authoritative boolean
         const isOrgDeal = r.isOrganizationDeal === true && !!String(r.organizationId || '').trim();
-
-        // Payment context — derived only from authoritative fields, never from dealSource
-        const isCentralized = r.isCentralized === true || r.paymentMethod === 'centralized';
-
-        // ── Segment filter (enforced first — establishes mutual exclusion) ──
         if (filters.customerSegmentFilter === 'org' && !isOrgDeal) return false;
         if (filters.customerSegmentFilter === 'b2c' && isOrgDeal) return false;
+        return true;
+      });
+    }
 
-        // ── Payment type filter ──
-        // Centralized billing is structurally impossible for B2C customers.
-        // Combining paymentType=centralized + segment=b2c always yields an empty set.
-        if (filters.paymentTypeFilter === 'centralized') {
-          if (!isOrgDeal) return false;    // B2C can never be centralized
-          if (!isCentralized) return false; // Org deal but pays via private credit card
-        }
-        // Private = not centralized (B2C is always private; org is private only when !isCentralized)
-        if (filters.paymentTypeFilter === 'private') {
-          if (isOrgDeal && isCentralized) return false; // Org centralized ≠ private
-        }
-
+    if (filters.paymentTypeFilter) {
+      rows = rows.filter((r) => {
+        const deal = dealFromSubscriberRow(r);
+        if (filters.paymentTypeFilter === 'centralized') return isCentralizedPaymentDeal(deal);
+        if (filters.paymentTypeFilter === 'private') return isPrivatePaymentDeal(deal);
         return true;
       });
     }
@@ -1003,10 +998,10 @@ export default function SubscribersDashboard() {
     return { totalRevenue, active, pendingCancellation, notActivated, canceled };
   }, [visibleRows, filters]);
 
-  const paymentTypeCounts = useMemo(() => {
-    const deals = visibleRows.map(dealFromSubscriberRow);
-    return countPaymentTypeDeals(deals);
-  }, [visibleRows]);
+  const paymentTypeCounts = useMemo(
+    () => countPaymentTypeDeals(visibleRows),
+    [visibleRows],
+  );
 
   const calculatedCounts = useMemo(() => {
     const rows = visibleRows || [];

@@ -299,19 +299,7 @@ export default function AdminControlPanel() {
                 <span>
                   טווח פעיל: {data?.range?.fromDate || filters.fromDate} - {data?.range?.toDate || filters.toDate}
                 </span>
-                {data?.overview?.subscriptionPoolDealCount != null ? (
-                  <span className="text-xs">
-                    עסקאות ייחודיות בטווח (בריכת זכאות): <strong>{Number(data.overview.subscriptionPoolDealCount)}</strong>
-                    {' · '}
-                    סכום ארבעת סטטוסי המנוי:{' '}
-                    <strong>
-                      {Number(overview.activeSubscribers || 0) +
-                        Number(overview.pendingCancellationCount || 0) +
-                        Number(overview.cancellationsCount || 0) +
-                        Number(overview.notActivatedCount || 0)}
-                    </strong>
-                  </span>
-                ) : null}
+
               </div>
             </div>
           </CardContent>
