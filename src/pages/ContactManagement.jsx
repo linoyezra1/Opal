@@ -2,7 +2,7 @@ import React from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Phone, RefreshCw, MessageSquare, ShoppingCart, Pencil, Archive,
-  Clock, Building2, User, ChevronDown, ChevronUp, ExternalLink,
+  Clock, Building2, User, ChevronDown, ExternalLink,
 } from 'lucide-react';
 import { fmtDateTime } from '../utils/dateUtils.js';
 import { API_BASE } from '../apiBase.js';
@@ -23,8 +23,20 @@ import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs.jsx';
 import { cn } from '../lib/cn.js';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
+import { dispatchContactLeadsChanged } from '../../lib/contactLeadTasks.js';
 
 const TOKEN_KEY = 'opal_admin_token';
+
+function buildLeadStatusPatch(leadStatus) {
+  const patch = { leadStatus };
+  if (leadStatus === 'טופל') patch.isHandled = true;
+  else if (leadStatus === 'חדש') patch.isHandled = false;
+  return patch;
+}
+
+function leadRowKey(lead) {
+  return `${lead.kind}:${lead.id}`;
+}
 
 const CATEGORY_BADGE = {
   abandoned_checkout: { icon: ShoppingCart, cls: 'text-amber-700 border-amber-300 bg-amber-50' },
@@ -58,8 +70,9 @@ export default function ContactManagement() {
   const [editStatus, setEditStatus] = React.useState('חדש');
   const [editNotes, setEditNotes] = React.useState('');
 
-  // ── Expandable message rows ───────────────────────────────────────────────────
+  // ── Expandable detail rows ────────────────────────────────────────────────────
   const [expandedRows, setExpandedRows] = React.useState(new Set());
+  const [expandedNotes, setExpandedNotes] = React.useState({});
 
   // ── Data loading ──────────────────────────────────────────────────────────────
   async function load() {
@@ -67,65 +80,48 @@ export default function ContactManagement() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${API_BASE}/api/admin/control-panel`, {
+      const res = await fetch(`${API_BASE}/api/admin/contact-hub`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.success) throw new Error(j.error || 'טעינה נכשלה');
 
-      const contactRows = Array.isArray(j?.drilldowns?.contactTasks) ? j.drilldowns.contactTasks : [];
-      const abandonedRows = Array.isArray(j?.drilldowns?.abandonedCarts) ? j.drilldowns.abandonedCarts : [];
-
-      setPrivateLeads([
-        ...contactRows
-          .filter((x) => x.kind === 'private')
-          .map((x) => ({
-            id: x.id,
-            name: x.fullName,
-            phone: x.phone,
-            email: x.email,
-            message: x.message || '',
-            source: x.source || '',
-            landingSlug: x.landingSlug || '',
-            landingPageTitle: x.landingPageTitle || '',
-            isLandingActive: x.isLandingActive ?? null,
-            createdAt: x.createdAt,
-            leadStatus: x.leadStatus || 'חדש',
-            adminNotes: x.adminNotes || '',
-            isHandled: !!x.isHandled,
-          })),
-        ...abandonedRows.map((x) => ({
-          id: x.id,
-          name: x.name,
-          phone: x.phone,
-          email: x.email,
-          message: x.message || '',
-          source: 'abandoned_checkout',
-          landingSlug: x.landingSlug || '',
-          landingPageTitle: x.landingPageTitle || '',
-          productName: x.productName || '',
-          createdAt: x.updatedAt,
-          leadStatus: x.leadStatus || 'חדש',
-          adminNotes: x.adminNotes || '',
-          isHandled: !!x.isHandled,
-        })),
-      ]);
+      setPrivateLeads(
+        Array.isArray(j.privateLeads)
+          ? j.privateLeads.map((x) => ({
+              id: x.id,
+              name: x.name || '',
+              phone: x.phone || '',
+              email: x.email || '',
+              message: x.message || '',
+              source: x.source || '',
+              landingSlug: x.landingSlug || '',
+              landingPageTitle: x.landingPageTitle || '',
+              isLandingActive: x.isLandingActive ?? null,
+              productName: x.productName || '',
+              createdAt: x.createdAt,
+              leadStatus: x.leadStatus || 'חדש',
+              adminNotes: x.adminNotes || x.systemNote || '',
+              isHandled: !!x.isHandled,
+            }))
+          : []
+      );
 
       setCorporateLeads(
-        contactRows
-          .filter((x) => x.kind === 'corporate')
-          .map((x) => ({
-            id: x.id,
-            contactName: x.fullName,
-            organizationName: x.organizationName || x.company?.companyName || '',
-            phone: x.phone,
-            email: x.email,
-            message: x.message || '',
-            createdAt: x.createdAt,
-            leadStatus: x.leadStatus || 'חדש',
-            adminNotes: x.adminNotes || '',
-            isHandled: !!x.isHandled,
-          }))
+        Array.isArray(j.corporateLeads)
+          ? j.corporateLeads.map((x) => ({
+              id: x.id,
+              contactName: x.contactName || '',
+              organizationName: x.organizationName || '',
+              phone: x.phone || '',
+              email: x.email || '',
+              message: x.message || '',
+              createdAt: x.createdAt,
+              leadStatus: x.leadStatus || 'חדש',
+              adminNotes: x.adminNotes || x.systemNote || '',
+              isHandled: !!x.isHandled,
+            }))
+          : []
       );
     } catch (e) {
       setError(e.message || 'שגיאה');
@@ -195,8 +191,19 @@ export default function ContactManagement() {
       setter((prev) =>
         patch.isActive === false
           ? prev.filter((x) => x.id !== leadId)
-          : prev.map((x) => (x.id === leadId ? { ...x, ...patch } : x))
+          : prev.map((x) => {
+              if (x.id !== leadId) return x;
+              const notes = patch.systemNote ?? patch.adminNotes ?? x.adminNotes;
+              return {
+                ...x,
+                ...patch,
+                adminNotes: notes,
+                leadStatus: patch.leadStatus ?? x.leadStatus,
+                isHandled: patch.isHandled ?? x.isHandled,
+              };
+            })
       );
+      dispatchContactLeadsChanged();
     } catch (e) {
       setError(e.message || 'שגיאה');
     } finally {
@@ -332,17 +339,40 @@ export default function ContactManagement() {
 
   async function saveEdit() {
     if (!editingLead?.id) return;
-    await updateLead(editingLead.kind, editingLead.id, { leadStatus: editStatus, adminNotes: editNotes });
+    await updateLead(editingLead.kind, editingLead.id, {
+      ...buildLeadStatusPatch(editStatus),
+      systemNote: editNotes,
+      adminNotes: editNotes,
+    });
     setEditOpen(false);
     setEditingLead(null);
   }
 
-  function toggleRow(id) {
+  function toggleRow(lead) {
+    const key = leadRowKey(lead);
     setExpandedRows((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+        setExpandedNotes((notes) => ({
+          ...notes,
+          [key]: notes[key] ?? lead.adminNotes ?? '',
+        }));
+      }
       return next;
     });
+  }
+
+  async function saveExpandedNote(lead) {
+    const key = leadRowKey(lead);
+    const note = expandedNotes[key] ?? '';
+    await updateLead(lead.kind, lead.id, { systemNote: note, adminNotes: note });
+  }
+
+  function onStatusChange(lead, nextStatus) {
+    updateLead(lead.kind, lead.id, buildLeadStatusPatch(nextStatus));
   }
 
   function clearAllFilters() {
@@ -521,13 +551,14 @@ export default function ContactManagement() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/40 hover:bg-muted/40">
+                      <TableHead className="w-10" />
                       <TableHead>שם</TableHead>
                       <TableHead>טלפון</TableHead>
                       <TableHead>מייל</TableHead>
                       <TableHead>שם המוצר</TableHead>
                       <TableHead>שם הדף</TableHead>
                       <TableHead className="w-16 text-center">קישור</TableHead>
-                      <TableHead>הודעה</TableHead>
+                      <TableHead className="max-w-[140px]">הודעה</TableHead>
                       <TableHead>סטטוס</TableHead>
                       <TableHead className="w-24 text-center">פעולות</TableHead>
                       <TableHead>תאריך</TableHead>
@@ -535,11 +566,31 @@ export default function ContactManagement() {
                   </TableHeader>
                   <TableBody>
                     {filteredLeads.map((lead) => {
-                      const isExpanded = expandedRows.has(lead.id);
+                      const rowKey = leadRowKey(lead);
+                      const isExpanded = expandedRows.has(rowKey);
                       const landingUrl = lead.landingSlug ? `/p/${lead.landingSlug}` : '';
+                      const noteDraft = expandedNotes[rowKey] ?? lead.adminNotes ?? '';
                       return (
-                        <React.Fragment key={`${lead.kind}:${lead.id}`}>
+                        <React.Fragment key={rowKey}>
                           <TableRow className="hover:bg-muted/30 transition-colors">
+
+                            <TableCell className="w-10 p-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                type="button"
+                                className="size-8 shrink-0"
+                                onClick={() => toggleRow(lead)}
+                                aria-expanded={isExpanded}
+                                aria-label={isExpanded ? 'כווץ פרטים' : 'הרחב פרטים'}
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown className="size-4" />
+                                ) : (
+                                  <ChevronDown className="size-4 -rotate-90 transition-transform duration-200" />
+                                )}
+                              </Button>
+                            </TableCell>
 
                             {/* Name */}
                             <TableCell className="font-medium">
@@ -585,25 +636,10 @@ export default function ContactManagement() {
                               )}
                             </TableCell>
 
-                            {/* Message — expandable */}
-                            <TableCell className="max-w-[220px]">
-                              {lead.message ? (
-                                <button
-                                  type="button"
-                                  onClick={() => toggleRow(lead.id)}
-                                  className="flex items-start gap-1 text-right w-full group cursor-pointer"
-                                >
-                                  <span className="text-xs text-muted-foreground line-clamp-2 flex-1 leading-relaxed">
-                                    {lead.message}
-                                  </span>
-                                  {isExpanded
-                                    ? <ChevronUp className="size-3 shrink-0 mt-0.5 text-muted-foreground" />
-                                    : <ChevronDown className="size-3 shrink-0 mt-0.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                                  }
-                                </button>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">—</span>
-                              )}
+                            <TableCell className="max-w-[140px]">
+                              <span className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                                {lead.message || '—'}
+                              </span>
                             </TableCell>
 
                             {/* Status select */}
@@ -614,7 +650,7 @@ export default function ContactManagement() {
                               <select
                                 className={cn('flex h-8 min-w-[110px] rounded-md border px-2 text-xs', getStatusClasses(lead.leadStatus))}
                                 value={lead.leadStatus}
-                                onChange={(e) => updateLead(lead.kind, lead.id, { leadStatus: e.target.value })}
+                                onChange={(e) => onStatusChange(lead, e.target.value)}
                                 disabled={savingKey === `${lead.kind}:${lead.id}`}
                               >
                                 <option value="חדש">חדש</option>
@@ -669,25 +705,73 @@ export default function ContactManagement() {
                           </TableRow>
 
                           {/* Expanded message row */}
-                          {isExpanded && lead.message ? (
-                            <TableRow className="bg-muted/20 hover:bg-muted/20">
-                              <TableCell colSpan={10} className="py-2 px-8">
-                                <div className="text-sm text-foreground bg-background rounded-md border px-3 py-2 leading-relaxed">
-                                  <span className="text-xs font-semibold text-muted-foreground block mb-1">
-                                    הודעה מלאה:
-                                  </span>
-                                  {lead.message}
+                          <TableRow className="bg-muted/20 hover:bg-muted/20 border-0">
+                            <TableCell colSpan={11} className="p-0">
+                              <div
+                                className={cn(
+                                  'overflow-hidden transition-all duration-300 ease-in-out',
+                                  isExpanded ? 'max-h-[960px] opacity-100' : 'max-h-0 opacity-0',
+                                )}
+                              >
+                                <div className="px-4 py-4 sm:px-6 border-t bg-muted/10">
+                                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 text-right">
+                                    <div>
+                                      <p className="text-xs font-medium text-muted-foreground mb-1">שם</p>
+                                      <p className="text-sm font-medium">{lead.fullName || '—'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-medium text-muted-foreground mb-1">טלפון</p>
+                                      <p className="text-sm" dir="ltr">{lead.phone || '—'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-medium text-muted-foreground mb-1">אימייל</p>
+                                      <p className="text-sm break-all" dir="ltr">{lead.email || '—'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-medium text-muted-foreground mb-1">תאריך שליחה</p>
+                                      <p className="text-sm">{fmtDateTime(lead.createdAt)}</p>
+                                    </div>
+                                    <div className="sm:col-span-2 lg:col-span-3">
+                                      <p className="text-xs font-medium text-muted-foreground mb-1">הודעה מלאה</p>
+                                      <p className="text-sm bg-background rounded-md border px-3 py-2 leading-relaxed whitespace-pre-wrap">
+                                        {lead.message || '—'}
+                                      </p>
+                                    </div>
+                                    <div className="sm:col-span-2 lg:col-span-3">
+                                      <p className="text-xs font-medium text-muted-foreground mb-1">הערת מערכת</p>
+                                      <Textarea
+                                        rows={3}
+                                        value={noteDraft}
+                                        onChange={(e) =>
+                                          setExpandedNotes((prev) => ({ ...prev, [rowKey]: e.target.value }))
+                                        }
+                                        placeholder="הערות פנימיות לצוות..."
+                                        className="text-sm"
+                                      />
+                                      <div className="mt-2 flex justify-end">
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="secondary"
+                                          disabled={savingKey === `${lead.kind}:${lead.id}`}
+                                          onClick={() => saveExpandedNote(lead)}
+                                        >
+                                          שמירת הערה
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
                                 </div>
-                              </TableCell>
-                            </TableRow>
-                          ) : null}
+                              </div>
+                            </TableCell>
+                          </TableRow>
                         </React.Fragment>
                       );
                     })}
 
                     {!filteredLeads.length ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="h-28 text-center text-muted-foreground">
+                        <TableCell colSpan={11} className="h-28 text-center text-muted-foreground">
                           אין רשומות להצגה
                         </TableCell>
                       </TableRow>

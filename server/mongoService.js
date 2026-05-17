@@ -1,6 +1,7 @@
 import { MongoClient, ObjectId } from 'mongodb';
 import { getEntitlementStatus, parseFlexibleDate, STATUS_ACTIVE, STATUS_CANCELED, STATUS_NOT_ACTIVATED, STATUS_PENDING_CANCELLATION } from './entitlementStatus.js';
 import { countPaymentTypeDeals } from '../lib/paymentTypeMetrics.js';
+import { isActiveContactTaskLead } from '../lib/contactLeadTasks.js';
 
 const MONGO_URL = process.env.MONGODB_URI || process.env.MONGO_URL || '';
 const DB_NAME = process.env.MONGO_DB_NAME || 'opal';
@@ -3436,6 +3437,58 @@ function parseActivityStatus(statusRaw) {
   return 'all';
 }
 
+function mapContactLeadToTaskRow(d, kind) {
+  if (kind === 'corporate') {
+    return {
+      id: String(d._id || ''),
+      kind: 'corporate',
+      fullName: d.contactName || d.organizationName || '—',
+      organizationName: d.organizationName || '',
+      organizationId: String(d.organizationId || ''),
+      phone: d.phone || '—',
+      email: d.email || '—',
+      message: d.message || d.notes || '',
+      createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+      leadStatus: d.leadStatus || 'חדש',
+      adminNotes: d.adminNotes || '',
+      systemNote: d.systemNote || d.adminNotes || '',
+      isHandled: !!d.isHandled,
+    };
+  }
+  return {
+    id: String(d._id || ''),
+    kind: 'private',
+    fullName: d.name || '—',
+    phone: d.phone || '—',
+    email: d.email || '—',
+    message: d.message || '',
+    source: d.source || '',
+    landingSlug: d.landingSlug || '',
+    landingPageTitle: d.landingPageTitle || '',
+    isLandingActive: d.isLandingActive ?? null,
+    createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+    leadStatus: d.leadStatus || 'חדש',
+    adminNotes: d.adminNotes || '',
+    systemNote: d.systemNote || d.adminNotes || '',
+    isHandled: !!d.isHandled,
+  };
+}
+
+function applyContactLeadStatusSideEffects(set, leadStatus) {
+  const status = String(leadStatus || '').trim();
+  set.leadStatus = status;
+  if (status === 'טופל') {
+    set.isHandled = true;
+    set.status = 'Handled';
+  } else if (status === 'בטיפול') {
+    set.isHandled = false;
+    set.status = 'InProgress';
+  } else if (status === 'חדש' || status === 'New') {
+    set.isHandled = false;
+    set.status = 'New';
+  }
+}
+
 export async function getControlPanelOverviewData(filters = {}) {
   const db = await getDb();
   const { from, to } = parseControlPanelDateRange(filters);
@@ -3747,40 +3800,8 @@ export async function getControlPanelOverviewData(filters = {}) {
     .limit(500)
     .toArray();
   const contactTaskRows = [
-    ...contactLeadsAll
-      .filter((d) => d.isHandled !== true)
-      .map((d) => ({
-        id: String(d._id || ''),
-        kind: 'private',
-        fullName: d.name || '—',
-        phone: d.phone || '—',
-        email: d.email || '—',
-        message: d.message || '',
-        source: d.source || '',
-        landingSlug: d.landingSlug || '',
-        landingPageTitle: d.landingPageTitle || '',
-        isLandingActive: d.isLandingActive ?? null,
-        createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
-        leadStatus: d.leadStatus || 'חדש',
-        adminNotes: d.adminNotes || '',
-        isHandled: !!d.isHandled,
-      })),
-    ...orgLeadsAll
-      .filter((d) => d.isHandled !== true)
-      .map((d) => ({
-        id: String(d._id || ''),
-        kind: 'corporate',
-        fullName: d.contactName || d.organizationName || '—',
-        organizationName: d.organizationName || '',
-        organizationId: String(d.organizationId || ''),
-        phone: d.phone || '—',
-        email: d.email || '—',
-        message: d.message || d.notes || '',
-        createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
-        leadStatus: d.leadStatus || 'חדש',
-        adminNotes: d.adminNotes || '',
-        isHandled: !!d.isHandled,
-      })),
+    ...contactLeadsAll.filter(isActiveContactTaskLead).map((d) => mapContactLeadToTaskRow(d, 'private')),
+    ...orgLeadsAll.filter(isActiveContactTaskLead).map((d) => mapContactLeadToTaskRow(d, 'corporate')),
   ];
 
   const orgDebtRows = await db.collection('organizations').aggregate([
@@ -4105,6 +4126,101 @@ export async function markControlPanelItemHandled(type, id, handled = true) {
   throw new Error('סוג טיפול לא נתמך');
 }
 
+/** Full contact-hub list for ContactManagement (all statuses). */
+export async function getContactHubAdminList() {
+  const db = await getDb();
+  const contactLeadsAll = await db
+    .collection('contactLeads')
+    .aggregate([
+      { $match: { isActive: { $ne: false } } },
+      { $sort: { createdAt: -1 } },
+      { $limit: 500 },
+      {
+        $lookup: {
+          from: 'landing_pages',
+          let: { ls: { $toLower: { $trim: { input: { $ifNull: ['$landingSlug', ''] } } } } },
+          pipeline: [
+            { $match: { $expr: { $and: [{ $ne: ['$$ls', ''] }, { $eq: [{ $toLower: '$slug' }, '$$ls'] }] } } },
+            { $project: { _id: 0, pageTitle: 1, isActive: 1 } },
+            { $limit: 1 },
+          ],
+          as: '_lp',
+        },
+      },
+      {
+        $set: {
+          landingPageTitle: { $ifNull: [{ $arrayElemAt: ['$_lp.pageTitle', 0] }, ''] },
+          isLandingActive: { $arrayElemAt: ['$_lp.isActive', 0] },
+        },
+      },
+      { $project: { _lp: 0 } },
+    ])
+    .toArray();
+  const orgLeadsAll = await db
+    .collection('organizationLeads')
+    .find({ isActive: { $ne: false } })
+    .sort({ createdAt: -1 })
+    .limit(500)
+    .toArray();
+  const abandonedCartRowsAll = await db
+    .collection('pending_checkout_leads')
+    .find({ status: 'awaiting_payment', isActive: { $ne: false } })
+    .sort({ updatedAt: -1 })
+    .limit(500)
+    .toArray();
+
+  const privateLeads = [
+    ...contactLeadsAll.map((d) => ({
+      id: String(d._id || ''),
+      name: d.name || '',
+      phone: d.phone || '',
+      email: d.email || '',
+      message: d.message || '',
+      source: d.source || '',
+      landingSlug: d.landingSlug || '',
+      landingPageTitle: d.landingPageTitle || '',
+      isLandingActive: d.isLandingActive ?? null,
+      createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+      leadStatus: d.leadStatus || 'חדש',
+      adminNotes: d.adminNotes || '',
+      systemNote: d.systemNote || d.adminNotes || '',
+      isHandled: !!d.isHandled,
+    })),
+    ...abandonedCartRowsAll.map((d) => ({
+      id: String(d._id || ''),
+      name: d.name || d.customerName || '',
+      phone: d.phone || '',
+      email: d.email || '',
+      message: d.message || '',
+      source: 'abandoned_checkout',
+      landingSlug: d.landingSlug || '',
+      landingPageTitle: d.landingPageTitle || '',
+      productName: d.productName || '',
+      createdAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : d.updatedAt,
+      leadStatus: d.leadStatus || 'חדש',
+      adminNotes: d.adminNotes || '',
+      systemNote: d.systemNote || d.adminNotes || '',
+      isHandled: !!d.isHandled,
+    })),
+  ];
+
+  const corporateLeads = orgLeadsAll.map((d) => ({
+    id: String(d._id || ''),
+    contactName: d.contactName || d.organizationName || '',
+    organizationName: d.organizationName || '',
+    phone: d.phone || '',
+    email: d.email || '',
+    message: d.message || d.notes || '',
+    createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+    leadStatus: d.leadStatus || 'חדש',
+    adminNotes: d.adminNotes || '',
+    systemNote: d.systemNote || d.adminNotes || '',
+    isHandled: !!d.isHandled,
+  }));
+
+  return { privateLeads, corporateLeads };
+}
+
 export async function updateContactHubItem(kind, id, params = {}) {
   const db = await getDb();
   let oid;
@@ -4115,9 +4231,19 @@ export async function updateContactHubItem(kind, id, params = {}) {
   }
   const k = String(kind || '').trim();
   const set = { updatedAt: new Date() };
-  if (params.leadStatus != null) set.leadStatus = String(params.leadStatus || '').trim();
-  if (params.adminNotes != null) set.adminNotes = String(params.adminNotes || '');
-  if (params.isHandled != null) set.isHandled = !!params.isHandled;
+  if (params.leadStatus != null) applyContactLeadStatusSideEffects(set, params.leadStatus);
+  const noteVal =
+    params.systemNote != null ? params.systemNote : params.adminNotes != null ? params.adminNotes : null;
+  if (noteVal != null) {
+    const notes = String(noteVal || '');
+    set.adminNotes = notes;
+    set.systemNote = notes;
+  }
+  if (params.isHandled != null) {
+    set.isHandled = !!params.isHandled;
+    if (set.isHandled) set.status = 'Handled';
+    else if (!params.leadStatus) set.status = 'New';
+  }
   if (params.isActive != null) set.isActive = !!params.isActive;
   if (k === 'private') {
     const r = await db.collection('contactLeads').updateOne({ _id: oid }, { $set: set });

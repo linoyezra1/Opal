@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
 import { Input } from '../components/ui/input.jsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
+import { CONTACT_LEADS_CHANGED_EVENT } from '../../lib/contactLeadTasks.js';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -166,13 +167,19 @@ export default function AdminControlPanel() {
         /* ignore */
       }
     };
+    const refreshDashboard = () => {
+      loadAlerts();
+      load(filters);
+    };
     loadAlerts();
+    window.addEventListener(CONTACT_LEADS_CHANGED_EVENT, refreshDashboard);
     const timer = setInterval(loadAlerts, 30000);
     return () => {
       cancelled = true;
       clearInterval(timer);
+      window.removeEventListener(CONTACT_LEADS_CHANGED_EVENT, refreshDashboard);
     };
-  }, [token]);
+  }, [token, load, filters]);
 
   const overview = data?.overview || {};
   const grossProfit = Number(overview.totalRevenue || 0) - Number(overview.totalExpenses || 0);

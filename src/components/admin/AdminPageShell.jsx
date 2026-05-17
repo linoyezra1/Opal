@@ -21,6 +21,7 @@ import {
 import { cn } from '../../lib/cn.js';
 import { Button } from '../ui/button.jsx';
 import { API_BASE } from '../../apiBase.js';
+import { CONTACT_LEADS_CHANGED_EVENT } from '../../../lib/contactLeadTasks.js';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -77,10 +78,15 @@ export default function AdminPageShell({ children }) {
       }
     };
     load();
+    const onContactLeadsChanged = () => {
+      load();
+    };
+    window.addEventListener(CONTACT_LEADS_CHANGED_EVENT, onContactLeadsChanged);
     const timer = setInterval(load, 30000);
     return () => {
       cancelled = true;
       clearInterval(timer);
+      window.removeEventListener(CONTACT_LEADS_CHANGED_EVENT, onContactLeadsChanged);
     };
   }, []);
 

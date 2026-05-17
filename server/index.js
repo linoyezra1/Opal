@@ -53,6 +53,7 @@ import {
   getAlertsSummary,
   markControlPanelItemHandled,
   updateContactHubItem,
+  getContactHubAdminList,
   updateDealAdmin,
   deleteDealAdmin,
   bulkDeleteDealsAdmin,
@@ -2556,6 +2557,16 @@ app.post('/api/admin/control-panel/handle', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(`[${ts()}] admin/control-panel/handle error:`, e);
     res.status(400).json({ success: false, error: e.message || 'Failed to mark item' });
+  }
+});
+
+app.get('/api/admin/contact-hub', requireAdmin, async (req, res) => {
+  try {
+    const data = await getContactHubAdminList();
+    res.json({ success: true, ...data });
+  } catch (e) {
+    console.error(`[${ts()}] admin/contact-hub list error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to load contact hub' });
   }
 });
 
