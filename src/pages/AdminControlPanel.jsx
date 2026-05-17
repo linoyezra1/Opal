@@ -33,9 +33,9 @@ function formatCurrency(v) {
 }
 
 const SECTIONS = [
-  { title: 'הכנסות', keys: ['totalRevenue', 'activeSubscribers', 'totalTransactions'] },
+  { title: 'הכנסות', keys: ['totalRevenue', 'privatePaymentCustomers', 'centralizedPaymentCustomers', 'totalTransactions'] },
   { title: 'הוצאות', keys: ['totalExpenses', 'totalProviderPayments', 'totalAgentPayments'] },
-  { title: 'סטטוס מנויים', keys: ['pendingCancellationCount', 'cancellationsCount', 'notActivatedCount'] },
+  { title: 'סטטוס מנוי', keys: ['activeSubscribers', 'pendingCancellationCount', 'cancellationsCount', 'notActivatedCount'] },
   { title: 'משימות לטיפול', keys: ['failedPayments', 'abandonedCarts', 'pendingBeneficiaries', 'contactTasks'] },
 ];
 
@@ -43,6 +43,8 @@ const CARD_META = {
   totalRevenue: { title: 'סה״כ הכנסות', icon: Wallet, money: true, className: 'border-emerald-300 bg-emerald-50/60' },
 
   totalTransactions: { title: 'סה״כ עסקאות', icon: CreditCard },
+  privatePaymentCustomers: { title: 'לקוחות בתשלום פרטי (אשראי)', icon: CreditCard },
+  centralizedPaymentCustomers: { title: 'לקוחות בתשלום מרוכז', icon: Building2 },
   totalExpenses: { title: 'סה״כ הוצאות', icon: AlertCircle, money: true, className: 'border-red-300 bg-red-50/60' },
   totalProviderPayments: { title: 'סה״כ תשלום לספק', icon: Building2, money: true },
   totalAgentPayments: { title: 'סה״כ תשלום לסוכן', icon: UserCheck, money: true },
@@ -217,7 +219,8 @@ export default function AdminControlPanel() {
 
   if (!token) return <div dir="rtl" className="p-6">יש להתחבר דרך מסך המנהל.</div>;
 
-  const cardClickable = (key) => !['totalRevenue', 'totalExpenses'].includes(key);
+  const cardClickable = (key) =>
+    !['totalRevenue', 'totalExpenses', 'privatePaymentCustomers', 'centralizedPaymentCustomers'].includes(key);
   const readOnlyDrilldown = ['totalProviderPayments', 'totalAgentPayments'].includes(modalKey);
   const totalActiveAlerts =
     Number(alertsSummary?.contactTasks || 0)

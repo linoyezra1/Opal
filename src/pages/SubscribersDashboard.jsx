@@ -17,6 +17,8 @@ import {
   CalendarClock,
   UserX,
   RefreshCw,
+  Building2,
+  CreditCard,
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import {
@@ -28,6 +30,7 @@ import {
 import { fmtDateTime } from '../utils/dateUtils.js';
 import { computePeriodRevenueFromDeal } from '../utils/periodRevenue.js';
 import { exportVisibleSubscribersToXlsx } from '../utils/subscribersDashboardXlsx.js';
+import { countPaymentTypeDeals, dealFromSubscriberRow } from '../../lib/paymentTypeMetrics.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { StatsCard } from '../components/admin/stats-card.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
@@ -1000,6 +1003,11 @@ export default function SubscribersDashboard() {
     return { totalRevenue, active, pendingCancellation, notActivated, canceled };
   }, [visibleRows, filters]);
 
+  const paymentTypeCounts = useMemo(() => {
+    const deals = visibleRows.map(dealFromSubscriberRow);
+    return countPaymentTypeDeals(deals);
+  }, [visibleRows]);
+
   const calculatedCounts = useMemo(() => {
     const rows = visibleRows || [];
     const primary = rows.length;
@@ -1870,7 +1878,19 @@ export default function SubscribersDashboard() {
               {/* 1. קוביות סטטיסטיקה כלליות */}
               <StatsCard title="סה״כ הכנסות" value={formatCurrency(visibleSummary.totalRevenue)} icon={TrendingUp} loading={loading} />
               <StatsCard title="עסקאות בתוצאות" value={visibleRows.length} icon={Users} loading={loading} />
-                            <StatsCard
+              <StatsCard
+                title="לקוחות בתשלום פרטי (אשראי)"
+                value={String(paymentTypeCounts.privatePaymentCustomers)}
+                icon={CreditCard}
+                loading={loading}
+              />
+              <StatsCard
+                title="לקוחות בתשלום מרוכז"
+                value={String(paymentTypeCounts.centralizedPaymentCustomers)}
+                icon={Building2}
+                loading={loading}
+              />
+              <StatsCard
                               title="לא הופעל/ממתין לאישור"
                               value={String(visibleSummary.notActivated)}
                               icon={Hourglass}

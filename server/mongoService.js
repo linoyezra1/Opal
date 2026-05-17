@@ -1,5 +1,6 @@
 import { MongoClient, ObjectId } from 'mongodb';
 import { getEntitlementStatus, parseFlexibleDate, STATUS_ACTIVE, STATUS_CANCELED, STATUS_NOT_ACTIVATED, STATUS_PENDING_CANCELLATION } from './entitlementStatus.js';
+import { countPaymentTypeDeals } from '../lib/paymentTypeMetrics.js';
 
 const MONGO_URL = process.env.MONGODB_URI || process.env.MONGO_URL || '';
 const DB_NAME = process.env.MONGO_DB_NAME || 'opal';
@@ -3682,6 +3683,7 @@ export async function getControlPanelOverviewData(filters = {}) {
   const pendingCancellationCount = poolPendingCancellationRows.length;
   const cancellationsCount = poolCanceledRows.length;
   const notActivatedCount = poolNotActivatedRows.length;
+  const { privatePaymentCustomers, centralizedPaymentCustomers } = countPaymentTypeDeals(periodPool);
   let totalTransactions = paidRows.length;
   const failedPaymentRows = selectedRangeDeals.filter((d) => {
     const ps = String(d.paymentStatus || '').toLowerCase();
@@ -3887,6 +3889,8 @@ export async function getControlPanelOverviewData(filters = {}) {
       totalExpenses,
       totalNetProfit,
       activeSubscribers,
+      privatePaymentCustomers,
+      centralizedPaymentCustomers,
       totalTransactions,
       totalProviderPayments,
       totalAgentPayments,
