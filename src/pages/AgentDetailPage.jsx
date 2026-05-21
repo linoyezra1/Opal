@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowRight, Check, Copy, Download, Edit2, ExternalLink, Eye, Globe, Lock, Pencil, Percent, RefreshCw, Users, Wallet } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import * as XLSX from 'xlsx';
@@ -34,8 +34,16 @@ function formatDate(v) {
   return d.toLocaleDateString('he-IL');
 }
 
+function isSnapshotPayable(s) {
+  const balance = Number(
+    s?.balance != null ? s.balance : Number(s?.totalAmount || 0) - Number(s?.totalPaid || 0)
+  );
+  return balance > 0 && String(s?.status || '') !== 'Paid';
+}
+
 export default function AgentDetailPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const token = localStorage.getItem(TOKEN_KEY) || '';
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -62,6 +70,9 @@ export default function AgentDetailPage() {
   const [snapEditForm, setSnapEditForm] = useState({ status: 'Pending', invoiceNum: '', invoiceAmount: 0, creditNoteNum: '', creditNoteAmount: 0, totalPaid: 0, notes: '' });
   const [snapRowsOpen, setSnapRowsOpen] = useState(false);
   const [snapRowsTarget, setSnapRowsTarget] = useState(null);
+  const [mainTab, setMainTab] = useState('deals');
+  const [selectedSnapshotIds, setSelectedSnapshotIds] = useState(() => new Set());
+  const [paymentExportBusy, setPaymentExportBusy] = useState(false);
 
   const productSlugMap = useMemo(() => {
     const map = new Map();
@@ -196,7 +207,76 @@ export default function AgentDetailPage() {
       setLoading(false);
     }
   }, [id, month, token]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    const tabParam = String(searchParams.get('tab') || '').trim();
+    if (tabParam === 'commissions') setMainTab('commissions');
+  }, [searchParams]);
+
+  useEffect(() => {
+    const highlightId = String(searchParams.get('highlightSnapshotId') || '').trim();
+    if (!highlightId || loading) return;
+    const match = snapshots.find((s) => String(s.id) === highlightId);
+    if (match && isSnapshotPayable(match)) {
+      setSelectedSnapshotIds(new Set([highlightId]));
+    }
+  }, [searchParams, snapshots, loading]);
+
+  const payableSnapshots = useMemo(
+    () => (snapshots || []).filter((s) => isSnapshotPayable(s)),
+    [snapshots]
+  );
+
+  const toggleSnapshotSelection = (snapshotId) => {
+    setSelectedSnapshotIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(snapshotId)) next.delete(snapshotId);
+      else next.add(snapshotId);
+      return next;
+    });
+  };
+
+  const toggleAllPayableSnapshots = () => {
+    if (!payableSnapshots.length) return;
+    const allSelected = payableSnapshots.every((s) => selectedSnapshotIds.has(s.id));
+    if (allSelected) setSelectedSnapshotIds(new Set());
+    else setSelectedSnapshotIds(new Set(payableSnapshots.map((s) => s.id)));
+  };
+
+  const runAgentPaymentExport = async () => {
+    const snapshotIds = [...selectedSnapshotIds];
+    if (!snapshotIds.length) {
+      setErr('נא לבחור לפחות דרישת תשלום אחת');
+      return;
+    }
+    setErr('');
+    setPaymentExportBusy(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/reports/agent-payment-export-docx`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ snapshotIds }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || 'הורדה נכשלה');
+      }
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = 'opal-agent-payments.docx';
+      a.click();
+      URL.revokeObjectURL(href);
+    } catch (e) {
+      setErr(e?.message || 'שגיאה');
+    } finally {
+      setPaymentExportBusy(false);
+    }
+  };
 
   async function lockCommissions() {
     setBusy(true);
@@ -418,7 +498,7 @@ export default function AgentDetailPage() {
 
         </div>
 
-        <Tabs defaultValue="deals">
+        <Tabs value={mainTab} onValueChange={setMainTab}>
           <TabsList className="flex flex-wrap h-auto gap-1">
             <TabsTrigger value="deals">עסקאות סוכן</TabsTrigger>
             <TabsTrigger value="commissions">תשלומים לסוכן</TabsTrigger>
@@ -552,13 +632,40 @@ export default function AgentDetailPage() {
             <Card>
               <CardHeader>
                 <CardTitle>היסטוריית עמלות</CardTitle>
-                <CardDescription>דרישות תשלום נעולות — צפייה בעסקאות, עריכה והורדה כמו בגביית ארגונים</CardDescription>
+                <CardDescription>דרישות תשלום נעולות — צפייה בעסקאות, עריכה והורדת קובץ לתשלום כמו בספקים</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap items-center gap-2 justify-between">
+                  <Button
+                    type="button"
+                    disabled={paymentExportBusy || selectedSnapshotIds.size === 0}
+                    onClick={runAgentPaymentExport}
+                  >
+                    <Download className="size-4 me-2" />
+                    {paymentExportBusy ? 'מוריד…' : 'הורדת קובץ לתשלום'}
+                  </Button>
+                  {selectedSnapshotIds.size > 0 ? (
+                    <span className="text-sm text-muted-foreground">
+                      נבחרו {selectedSnapshotIds.size} דרישות
+                    </span>
+                  ) : null}
+                </div>
                 <div className="rounded-md border overflow-x-auto" dir="rtl">
                   <Table className="text-right w-full text-sm [&_th]:text-right">
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-10">
+                          <input
+                            type="checkbox"
+                            className="size-4"
+                            aria-label="בחר הכל"
+                            checked={
+                              payableSnapshots.length > 0 &&
+                              payableSnapshots.every((s) => selectedSnapshotIds.has(s.id))
+                            }
+                            onChange={toggleAllPayableSnapshots}
+                          />
+                        </TableHead>
                         <TableHead>חודש</TableHead>
                         <TableHead>מספר חשבונית</TableHead>
                         <TableHead>סכום חשבונית</TableHead>
@@ -573,8 +680,20 @@ export default function AgentDetailPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {snapshots.map((s) => (
-                        <TableRow key={s.id}>
+                      {snapshots.map((s) => {
+                        const payable = isSnapshotPayable(s);
+                        return (
+                        <TableRow key={s.id} className={!payable ? 'opacity-50' : undefined}>
+                          <TableCell>
+                            <input
+                              type="checkbox"
+                              className="size-4"
+                              checked={selectedSnapshotIds.has(s.id)}
+                              disabled={!payable}
+                              aria-label={`בחר ${s.month}`}
+                              onChange={() => toggleSnapshotSelection(s.id)}
+                            />
+                          </TableCell>
                           <TableCell>{s.month}</TableCell>
                           <TableCell>{s.invoiceNum || '—'}</TableCell>
                           <TableCell>{formatCurrency(s.invoiceAmount)}</TableCell>
@@ -637,10 +756,11 @@ export default function AgentDetailPage() {
                             </div>
                           </TableCell>
                         </TableRow>
-                      ))}
+                      );
+                      })}
                       {!snapshots.length ? (
                         <TableRow>
-                          <TableCell colSpan={11} className="text-center text-muted-foreground py-6">
+                          <TableCell colSpan={12} className="text-center text-muted-foreground py-6">
                             אין דוחות נעולים
                           </TableCell>
                         </TableRow>

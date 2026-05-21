@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Input } from '../components/ui/input.jsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 import { CONTACT_LEADS_CHANGED_EVENT } from '../../lib/contactLeadTasks.js';
+import { ADMIN_ALERTS_CHANGED_EVENT } from '../../lib/adminAlertsEvents.js';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -173,11 +174,13 @@ export default function AdminControlPanel() {
     };
     loadAlerts();
     window.addEventListener(CONTACT_LEADS_CHANGED_EVENT, refreshDashboard);
+    window.addEventListener(ADMIN_ALERTS_CHANGED_EVENT, refreshDashboard);
     const timer = setInterval(loadAlerts, 30000);
     return () => {
       cancelled = true;
       clearInterval(timer);
       window.removeEventListener(CONTACT_LEADS_CHANGED_EVENT, refreshDashboard);
+      window.removeEventListener(ADMIN_ALERTS_CHANGED_EVENT, refreshDashboard);
     };
   }, [token, load, filters]);
 
@@ -234,7 +237,9 @@ export default function AdminControlPanel() {
     + Number(alertsSummary?.orgPendingApproval || 0)
     + Number(alertsSummary?.pendingBeneficiaries || 0)
     + Number(alertsSummary?.paymentArrears || 0)
-    + Number(alertsSummary?.organizationsToBill || 0);
+    + Number(alertsSummary?.organizationsToBill || 0)
+    + Number(alertsSummary?.providerPaymentsDue || 0)
+    + Number(alertsSummary?.agentPaymentsDue || 0);
 
   return (
     <TooltipProvider delayDuration={250}>

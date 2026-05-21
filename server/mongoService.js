@@ -3489,6 +3489,101 @@ function applyContactLeadStatusSideEffects(set, leadStatus) {
   }
 }
 
+async function listPendingOrganizationsForAlerts(db) {
+  const docs = await db
+    .collection('organizations')
+    .find({
+      isActive: { $ne: false },
+      status: { $in: ['pending', 'Pending'] },
+    })
+    .sort({ createdAt: -1 })
+    .limit(500)
+    .toArray();
+  return docs.map((d) => ({
+    id: String(d._id),
+    organizationId: String(d._id),
+    organizationName: String(d.companyName || '—'),
+    companyId: String(d.companyId || '—'),
+    billingType:
+      String(d.billingType || '') === 'Centralized'
+        ? 'מרוכז'
+        : String(d.billingType || '') === 'Private'
+          ? 'פרטי'
+          : String(d.billingType || '—'),
+    email: String(d.contactEmail || d.companyEmail || '—'),
+    createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+  }));
+}
+
+async function listOpenProviderPaymentAlertRows(db) {
+  await ensureProviderPayoutIndexes(db);
+  const docs = await db
+    .collection('provider_payouts')
+    .find({})
+    .sort({ month: -1, createdAt: -1 })
+    .limit(2000)
+    .toArray();
+  const rows = [];
+  const vendorIdSet = new Set();
+  for (const d of docs) {
+    const mapped = mapProviderPayoutDoc(d);
+    if (Number(mapped.balance || 0) <= 0) continue;
+    vendorIdSet.add(String(mapped.providerId || ''));
+    rows.push({
+      id: mapped.id,
+      payoutId: mapped.id,
+      vendorId: mapped.providerId,
+      vendorName: '',
+      month: mapped.month,
+      balance: mapped.balance,
+      totalAmount: mapped.totalAmount,
+      status: mapped.status === 'Paid' ? 'שולם' : 'ממתין',
+    });
+  }
+  const vendorsById = new Map();
+  for (const vid of vendorIdSet) {
+    if (!vid) continue;
+    let vendor = null;
+    if (ObjectId.isValid(vid)) {
+      vendor = await db.collection('vendors').findOne({ _id: new ObjectId(vid) }).catch(() => null);
+    }
+    if (!vendor) vendor = await db.collection('vendors').findOne({ _id: vid }).catch(() => null);
+    if (vendor) vendorsById.set(vid, String(vendor.vendorName || ''));
+  }
+  return rows
+    .map((r) => ({ ...r, vendorName: vendorsById.get(r.vendorId) || '—' }))
+    .sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0));
+}
+
+async function listOpenAgentPaymentAlertRows(db) {
+  const docs = await db
+    .collection('agent_commission_snapshots')
+    .find({})
+    .sort({ month: -1, createdAt: -1 })
+    .limit(2000)
+    .toArray();
+  return docs
+    .map((d) => {
+      const balance = Number(
+        d.balance != null
+          ? d.balance
+          : Number(d.totalAmount || 0) - Number(d.totalPaid || 0)
+      );
+      return {
+        id: String(d._id),
+        snapshotId: String(d._id),
+        agentId: String(d.agentId || ''),
+        agentName: String(d.agentName || '—'),
+        month: String(d.month || ''),
+        balance,
+        totalAmount: Number(d.totalAmount || 0),
+        status: String(d.status || 'Pending') === 'Paid' ? 'שולם' : 'ממתין לתשלום',
+      };
+    })
+    .filter((r) => r.balance > 0)
+    .sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0));
+}
+
 export async function getControlPanelOverviewData(filters = {}) {
   const db = await getDb();
   const { from, to } = parseControlPanelDateRange(filters);
@@ -3831,6 +3926,27 @@ export async function getControlPanelOverviewData(filters = {}) {
       },
     },
     {
+      $lookup: {
+        from: 'billing_snapshots',
+        let: { oid: { $toString: '$_id' } },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ['$orgId', '$$oid'] },
+              status: { $ne: 'Paid' },
+            },
+          },
+          { $group: { _id: null, totalDueLocked: { $sum: '$totalAmount' } } },
+        ],
+        as: '_lockedDue',
+      },
+    },
+    {
+      $addFields: {
+        totalDueLocked: { $ifNull: [{ $arrayElemAt: ['$_lockedDue.totalDueLocked', 0] }, 0] },
+      },
+    },
+    {
       $project: {
         organizationId: { $toString: '$_id' },
         organizationName: '$companyName',
@@ -3838,12 +3954,24 @@ export async function getControlPanelOverviewData(filters = {}) {
         memberPrice: 1,
         collectionStatus: { $ifNull: ['$collectionStatus', 'open'] },
         debt: { $multiply: ['$activeEmployees', '$memberPrice'] },
+        totalDueLocked: 1,
       },
     },
-    { $match: { debt: { $gt: 0 } } },
-    { $sort: { debt: -1 } },
+    {
+      $match: {
+        $or: [{ debt: { $gt: 0 } }, { totalDueLocked: { $gt: 0 } }],
+      },
+    },
+    { $sort: { totalDueLocked: -1, debt: -1 } },
   ]).toArray();
-  const organizationCollectionsDebt = orgDebtRows.reduce((s, r) => s + Number(r.debt || 0), 0);
+  const organizationCollectionsDebt = orgDebtRows.reduce(
+    (s, r) => s + Number(r.totalDueLocked > 0 ? r.totalDueLocked : r.debt || 0),
+    0
+  );
+
+  const orgPendingApprovalRows = await listPendingOrganizationsForAlerts(db);
+  const providerPaymentsDueRows = await listOpenProviderPaymentAlertRows(db);
+  const agentPaymentsDueRows = await listOpenAgentPaymentAlertRows(db);
 
   let cashTotals = { initialDealCount: 0, recurringEventCount: 0, eventCount: paidRows.length };
   if (dateFilterMode === 'billing_date') {
@@ -4031,6 +4159,9 @@ export async function getControlPanelOverviewData(filters = {}) {
         updatedAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : d.updatedAt,
       })),
       contactTasks: contactTaskRows,
+      orgPendingApproval: orgPendingApprovalRows,
+      providerPaymentsDue: providerPaymentsDueRows,
+      agentPaymentsDue: agentPaymentsDueRows,
       organizationCollectionsDebt: orgDebtRows.map((r) => ({
         organizationId: r.organizationId || '',
         organizationName: r.organizationName || '—',
@@ -4038,6 +4169,7 @@ export async function getControlPanelOverviewData(filters = {}) {
         memberPrice: Number(r.memberPrice || 0),
         collectionStatus: r.collectionStatus || 'open',
         debt: Number(r.debt || 0),
+        totalDueLocked: Number(r.totalDueLocked || 0),
       })),
       totalNetProfit: paidRows.map((d) => ({
         transactionId: d.transactionId || '',
@@ -4061,13 +4193,23 @@ export async function getAlertsSummary(filters = {}) {
     ? data.drilldowns.organizationCollectionsDebt
     : [];
   const contactTasks = Array.isArray(data?.drilldowns?.contactTasks) ? data.drilldowns.contactTasks : [];
-  const orgPending = contactTasks.filter((x) => String(x.kind || '').toLowerCase() === 'corporate');
+  const orgPending = Array.isArray(data?.drilldowns?.orgPendingApproval)
+    ? data.drilldowns.orgPendingApproval
+    : [];
+  const providerDue = Array.isArray(data?.drilldowns?.providerPaymentsDue)
+    ? data.drilldowns.providerPaymentsDue
+    : [];
+  const agentDue = Array.isArray(data?.drilldowns?.agentPaymentsDue)
+    ? data.drilldowns.agentPaymentsDue
+    : [];
   return {
     contactTasks: contactTasks.length,
     orgPendingApproval: orgPending.length,
     pendingBeneficiaries: pendingBeneficiaries.length,
     paymentArrears: failed.length,
     organizationsToBill: orgDebt.length,
+    providerPaymentsDue: providerDue.length,
+    agentPaymentsDue: agentDue.length,
   };
 }
 

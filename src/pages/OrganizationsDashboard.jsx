@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Building2, Plus, Archive, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
+import { dispatchAdminAlertsChanged } from '../../lib/adminAlertsEvents.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -116,6 +117,8 @@ export default function OrganizationsDashboard() {
   useEffect(() => {
     const deepSearch = String(searchParams.get('search') || '').trim();
     if (deepSearch) setSearch(deepSearch);
+    const tabParam = String(searchParams.get('tab') || '').trim();
+    if (tabParam === 'applications') setActiveMainTab('applications');
   }, [searchParams]);
 
   function openAdd() {
@@ -276,7 +279,8 @@ export default function OrganizationsDashboard() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.error || 'אישור נכשל');
-      setRows((prev) => prev.map((r) => r.id === id ? { ...r, status: 'active' } : r));
+      setRows((prev) => prev.map((r) => (r.id === id ? { ...r, status: 'active' } : r)));
+      dispatchAdminAlertsChanged();
     } catch (e) {
       setError(e.message || 'שגיאה');
     } finally {

@@ -3,267 +3,201 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Opal / Cardcom Payment Page Mock</title>
+  <title>תצוגה מקדימה — דף תשלום Opal / Cardcom</title>
   <style>
     :root {
-      --opal-blue: #0464a0;
-      --opal-blue-dark: #034f7e;
-      --opal-gold: #c9a227;
-      --bg: #eef3f8;
-      --card: #ffffff;
-      --text: #1f2a37;
+      --border: #d1d5db;
+      --text: #111827;
+      --muted: #6b7280;
+      --blue: #2563eb;
+      --red: #dc2626;
+      --green: #16a34a;
     }
-    * { box-sizing: border-box; font-family: Arial, sans-serif; }
-    body { margin: 0; background: linear-gradient(180deg, #dfeaf4, #f8fbff); color: var(--text); }
-
-    .desktop {
-      min-height: 100vh;
-      padding: 28px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    /* Fake browser frame */
-    .browser {
-      width: min(1200px, 96vw);
-      background: #f6f8fb;
-      border: 1px solid #d4dce6;
-      border-radius: 14px;
-      box-shadow: 0 20px 60px rgba(0,0,0,.16);
-      overflow: hidden;
-    }
-    .browser-top {
-      background: #ecf1f7;
-      border-bottom: 1px solid #d4dce6;
-      padding: 10px 14px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      direction: ltr;
-    }
-    .dots { display: flex; gap: 7px; }
-    .dot { width: 11px; height: 11px; border-radius: 50%; }
-    .dot.red { background: #ff5f57; }
-    .dot.yellow { background: #febc2e; }
-    .dot.green { background: #28c840; }
-    .address {
-      flex: 1;
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Arial, sans-serif;
       background: #fff;
-      border: 1px solid #d4dce6;
-      border-radius: 10px;
-      padding: 7px 12px;
-      color: #4c5b6b;
-      font-size: 13px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      color: var(--text);
+      direction: rtl;
     }
-
-    /* Payment page content */
-    .page {
-      background: #fff;
-      min-height: 760px;
-    }
-    .header {
-      background: var(--opal-blue);
-      color: #fff;
-      padding: 20px 28px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 20px;
-    }
-    .logo-wrap {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      min-width: 260px;
-    }
-    .logo {
-      width: 68px;
-      height: 68px;
-      border-radius: 12px;
-      background: #fff;
-      border: 2px solid var(--opal-gold);
-      object-fit: contain;
-      padding: 6px;
-    }
-    .logo-fallback {
-      width: 68px;
-      height: 68px;
-      border-radius: 12px;
-      background: #fff;
-      color: var(--opal-blue);
-      border: 2px solid var(--opal-gold);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      font-weight: 800;
-      font-size: 13px;
-    }
-    .company {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      text-align: right;
-    }
-    .company b { font-size: 20px; }
-    .company small { opacity: .9; }
-
-    .content {
-      max-width: 980px;
+    .wrap {
+      max-width: 720px;
       margin: 0 auto;
-      padding: 24px 16px 28px;
+      padding: 24px 16px 40px;
     }
-
-    .summary-card {
-      border: 1px solid #d7e4ef;
-      border-right: 5px solid var(--opal-gold);
-      border-radius: 12px;
-      background: linear-gradient(180deg, #ffffff, #f5f9fc);
-      box-shadow: 0 6px 20px rgba(4, 100, 160, 0.09);
-      padding: 18px;
-      margin-bottom: 18px;
-    }
-    .summary-title {
-      color: var(--opal-blue);
-      font-size: 24px;
-      font-weight: 800;
-      margin-bottom: 10px;
-    }
-    .row {
-      display: flex;
-      justify-content: space-between;
-      border-bottom: 1px dashed #d8e6f1;
-      padding: 9px 0;
-      gap: 12px;
-    }
-    .row:last-of-type { border-bottom: 0; }
-    .label { color: #324355; font-weight: 700; }
-    .val { font-weight: 700; color: #1e2d3a; }
-    .price { color: var(--opal-blue); font-size: 22px; }
-
-    .note {
-      margin-top: 10px;
-      padding: 10px 12px;
-      border-radius: 8px;
-      border: 1px solid #d5e7f6;
-      background: #eef5fb;
-      font-weight: 600;
-      color: #233748;
-    }
-    .contact {
-      margin-top: 10px;
+    .intro {
       font-size: 14px;
+      color: #374151;
+      margin-bottom: 20px;
+      line-height: 1.5;
     }
-    .contact a { color: var(--opal-blue-dark); text-decoration: none; font-weight: 700; }
-
-    .form {
-      border: 1px solid #e4e9ef;
-      border-radius: 12px;
+    .field {
+      margin-bottom: 14px;
+    }
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+    .field label.required::after {
+      content: " *";
+      color: var(--red);
+    }
+    .input-wrap {
+      position: relative;
+    }
+    .input-wrap input,
+    .input-wrap select {
+      width: 100%;
+      padding: 11px 40px 11px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 15px;
       background: #fff;
-      padding: 16px;
     }
-    .form h3 { margin: 0 0 14px; color: var(--opal-blue); }
-    .grid {
+    .input-wrap input:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+    .input-wrap.error input { border-color: var(--red); }
+    .input-wrap.ok input { border-color: var(--green); }
+    .status {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .status.err { color: var(--red); }
+    .status.ok { color: var(--green); }
+    .icon-r {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      opacity: 0.45;
+      font-size: 12px;
+    }
+    .grid-2 {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 12px;
+      gap: 16px;
     }
-    .field { display: flex; flex-direction: column; gap: 6px; }
-    .field input {
-      border: 1px solid #cfd8e3;
-      border-radius: 8px;
-      padding: 10px;
-      font-size: 14px;
+    .full { grid-column: 1 / -1; }
+    .footer-pay {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 28px;
+      padding-top: 20px;
+      border-top: 1px solid #e5e7eb;
+    }
+    .trust {
+      font-size: 12px;
+      color: var(--muted);
     }
     .pay-btn {
-      margin-top: 14px;
-      width: 100%;
-      border: 0;
+      min-width: 200px;
+      padding: 14px 28px;
+      border: none;
       border-radius: 10px;
-      background: var(--opal-blue);
+      background: linear-gradient(180deg, #3b82f6, #2563eb);
       color: #fff;
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 700;
-      padding: 12px;
       cursor: pointer;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
     }
-    .pay-btn:hover { background: var(--opal-blue-dark); }
-
-    .footer {
-      margin-top: 18px;
-      border-top: 1px solid #e5eaf0;
-      padding-top: 12px;
-      text-align: center;
-      color: #4f6172;
-      font-size: 13px;
+    .hint {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--red);
     }
-    .must-keep { font-weight: 800; color: #24384c; }
+    @media (max-width: 560px) {
+      .grid-2 { grid-template-columns: 1fr; }
+      .footer-pay { flex-direction: column-reverse; align-items: stretch; }
+      .pay-btn { width: 100%; }
+    }
   </style>
 </head>
 <body>
-  <div class="desktop">
-    <div class="browser">
-      <div class="browser-top">
-        <div class="dots">
-          <span class="dot red"></span>
-          <span class="dot yellow"></span>
-          <span class="dot green"></span>
+  <div class="wrap">
+    <p class="intro">
+      תצוגה מקדימה של עיצוב Opal לדף Cardcom. בפועל הדביקי את
+      <code>server/assets/cardcom/opal-low-profile.css</code> בממשק Cardcom.
+    </p>
+
+    <form novalidate>
+      <div class="field full">
+        <label class="required" for="card">מספר כרטיס אשראי</label>
+        <div class="input-wrap error">
+          <span class="icon-r">💳</span>
+          <span class="status err" aria-hidden="true">✕</span>
+          <input id="card" type="text" inputmode="numeric" placeholder="•••• •••• •••• ••••" dir="ltr" />
         </div>
-        <div class="address">https://secure.cardcom.solutions/LowProfile/....</div>
+        <p class="hint">שדה חובה</p>
       </div>
 
-      <div class="page">
-        <div class="header">
-          <div class="company">
-            <b>אופאל - בית ליזמות רפואית</b>
-            <small>טופס תשלום מאובטח</small>
-          </div>
-          <div class="logo-wrap">
-            <!-- החליפי לקישור הלוגו שלך -->
-            <img class="logo" src="/branding/opal-logo.jpeg" alt="Opal Logo" onerror="this.style.display='none';document.getElementById('logoFallback').style.display='flex';" />
-            <div id="logoFallback" class="logo-fallback">OPAL</div>
+      <div class="grid-2">
+        <div class="field">
+          <label class="required" for="cvv">קוד CVV</label>
+          <div class="input-wrap">
+            <span class="icon-r">🔒</span>
+            <input id="cvv" type="text" inputmode="numeric" maxlength="4" dir="ltr" />
           </div>
         </div>
-
-        <div class="content">
-          <div class="summary-card">
-            <div class="summary-title">סיכום עסקה</div>
-            <div class="row"><span class="label">שם המוצר:</span><span class="val">רופא עד הבית</span></div>
-            <div class="row"><span class="label">סה״כ לחודש:</span><span class="val price">₪99</span></div>
-            <div class="row"><span class="label">מספר הזמנה:</span><span class="val" dir="ltr">OPL-2026-000184</span></div>
-            <div class="row"><span class="label">ת״ז:</span><span class="val" dir="ltr">123456789</span></div>
-            <div class="row"><span class="label">מייל:</span><span class="val" dir="ltr">customer@example.com</span></div>
-
-            <div class="note">החיוב החודשי של המנוי מתבצע דרך חברת אופאל תקשורת בע״מ</div>
-            <div class="contact">
-              לפניות וברורים:
-              <a href="tel:0544261369">054-4261369</a>
-              &nbsp; | &nbsp;
-              דוא״ל:
-              <a href="mailto:opal2000@zahav.net.il">opal2000@zahav.net.il</a>
-            </div>
+        <div class="field">
+          <label class="required" for="exp">תוקף כרטיס</label>
+          <div class="input-wrap">
+            <span class="icon-r">📅</span>
+            <input id="exp" type="text" placeholder="MM / YY" dir="ltr" />
           </div>
-
-          <div class="form">
-            <h3>פרטי תשלום</h3>
-            <div class="grid">
-              <label class="field">שם בעל הכרטיס<input type="text" placeholder="ישראל ישראלי" /></label>
-              <label class="field">ת״ז בעל הכרטיס<input type="text" placeholder="123456789" /></label>
-              <label class="field">טלפון בעל הכרטיס (3D)<input type="tel" placeholder="0501234567" /></label>
-              <label class="field">מייל בעל הכרטיס (3D)<input type="email" placeholder="name@mail.com" /></label>
-            </div>
-            <button class="pay-btn">המשך לתשלום</button>
+        </div>
+        <div class="field">
+          <label class="required" for="phone">טלפון נייד</label>
+          <div class="input-wrap ok">
+            <span class="icon-r">📞</span>
+            <span class="status ok">✓</span>
+            <input id="phone" type="tel" value="0501234567" dir="ltr" />
           </div>
-
-          <div class="footer">
-            <span class="must-keep">הסליקה מתבצעת דרך קארדקום</span>
+        </div>
+        <div class="field">
+          <label for="id">תעודת זהות</label>
+          <div class="input-wrap">
+            <input id="id" type="text" inputmode="numeric" dir="ltr" />
           </div>
         </div>
       </div>
-    </div>
+
+      <div class="field full">
+        <label class="required" for="name">שם מלא (בעל הכרטיס)</label>
+        <div class="input-wrap ok">
+          <span class="icon-r">👤</span>
+          <span class="status ok">✓</span>
+          <input id="name" type="text" value="ישראל ישראלי" />
+        </div>
+      </div>
+
+      <div class="field full">
+        <label class="required" for="email">דואר אלקטרוני</label>
+        <div class="input-wrap">
+          <span class="icon-r">✉</span>
+          <input id="email" type="email" placeholder="name@example.com" dir="ltr" />
+        </div>
+      </div>
+
+      <div class="footer-pay">
+        <div class="trust">PCI · Verified by Visa · Mastercard SecureCode</div>
+        <button type="button" class="pay-btn">לתשלום 10.00 ₪</button>
+      </div>
+    </form>
   </div>
 </body>
 </html>

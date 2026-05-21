@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowRight, Download, Edit2, Plus, RefreshCw } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -62,6 +62,7 @@ const ltrInputClass = 'text-left font-mono tabular-nums';
 
 export default function VendorDetailPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const token = localStorage.getItem(TOKEN_KEY) || '';
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
@@ -106,6 +107,15 @@ export default function VendorDetailPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const highlightId = String(searchParams.get('highlightPayoutId') || '').trim();
+    if (!highlightId || loading) return;
+    const match = payouts.find((p) => String(p.id) === highlightId);
+    if (match && !isPayoutFullyPaid(match)) {
+      setSelectedPayoutIds(new Set([highlightId]));
+    }
+  }, [searchParams, payouts, loading]);
 
   const togglePayout = (payoutId) => {
     setSelectedPayoutIds((prev) => {

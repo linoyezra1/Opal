@@ -1,0 +1,613 @@
+/**
+ * Opal — Cardcom Low Profile custom theme (RTL)
+ * Paste this entire file into Cardcom admin → Low Profile → Custom CSS.
+ * Works with the default Cardcom HTML template (data-bind fields unchanged).
+ *
+ * Required in Cardcom field settings (not CSS): full name, mobile phone, email.
+ */
+
+/* ── Base ─────────────────────────────────────────────────────────────────── */
+body {
+  background: #ffffff !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  text-align: right;
+  direction: rtl;
+  color: #1f2937;
+}
+
+body * {
+  font-family: "Segoe UI", Tahoma, Arial, sans-serif !important;
+}
+
+h1 {
+  display: none !important;
+}
+
+.clear {
+  clear: both;
+}
+
+/* ── Header: minimal white bar (optional — hide blue banner) ─────────────── */
+.header.user-header {
+  background: #ffffff !important;
+  padding: 20px 16px 12px !important;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.header .headerIn {
+  width: min(720px, 96%) !important;
+  margin: 0 auto !important;
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.header .headerIn .logoDiv {
+  float: none !important;
+  max-width: 200px;
+}
+
+.header .headerIn .logoDiv img {
+  max-height: 56px;
+  width: auto;
+  display: block;
+}
+
+.header .headerIn .detailsDiv.user-detailsDiv {
+  float: none !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  color: #4b5563 !important;
+  font-size: 14px !important;
+  min-width: 0;
+}
+
+/* ── Product summary: compact card ───────────────────────────────────────── */
+.productsDetails {
+  padding: 12px 0 !important;
+  background: #fff !important;
+}
+
+.productsDetails .productsDetailsIn,
+.blockDetails .blockDetailsIn {
+  width: min(720px, 96%) !important;
+  margin: 0 auto !important;
+}
+
+.productsTbl {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb !important;
+}
+
+.productsTbl td,
+.productsTbl th {
+  background: #f9fafb !important;
+  font-size: 14px !important;
+}
+
+.productsTbl .total .num {
+  color: #2563eb !important;
+  font-weight: 700 !important;
+}
+
+.totalProducts .num {
+  color: #2563eb !important;
+}
+
+/* ── Payment shell ───────────────────────────────────────────────────────── */
+.paymentDetails {
+  padding: 8px 0 32px !important;
+  background: #fff !important;
+}
+
+.paymentDetails .blockDetailsIn {
+  background: none !important;
+  background-image: none !important;
+  padding: 0 16px 24px !important;
+}
+
+.paymentDetails .blockDetailsIn > .title:first-of-type {
+  display: none !important;
+}
+
+.blockDetails.OrderDetails .blockDetailsIn,
+.customDetails {
+  background: none !important;
+  background-image: none !important;
+}
+
+.blockDetails {
+  padding: 8px 0 !important;
+}
+
+/* Section titles */
+.blockDetailsIn .title {
+  font-size: 1.125rem !important;
+  font-weight: 600 !important;
+  color: #111827 !important;
+  padding: 16px 0 12px !important;
+  margin: 0 !important;
+}
+
+/* Prevent Cardcom floats / fixed widths from collapsing fields */
+.paymentDetails,
+.paymentDetails .blockDetailsIn,
+#CreditCardDiv,
+.OrderDetails,
+.blockDetails {
+  box-sizing: border-box !important;
+  overflow: visible !important;
+}
+
+.paymentDetails .blockDetailsIn::before,
+.paymentDetails .blockDetailsIn::after,
+#CreditCardDiv::before,
+#CreditCardDiv::after {
+  display: none !important;
+}
+
+/* ── Form rows: label above input (like reference UI) ────────────────────── */
+.blockDetailsIn .formRow {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  align-self: stretch !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  float: none !important;
+  clear: none !important;
+  position: static !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.blockDetailsIn .formRow .fieldName {
+  width: 100% !important;
+  display: block !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: #374151 !important;
+}
+
+.blockDetailsIn .formRow .fieldInput {
+  width: 100% !important;
+  display: block !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.blockDetailsIn .formRow .fieldInput select,
+.blockDetailsIn .formRow .fieldInput input {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 11px 40px 11px 12px !important;
+  font-size: 15px !important;
+  line-height: 1.4 !important;
+  color: #111827 !important;
+  background: #fff !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 8px !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.blockDetailsIn .formRow .fieldInput input:focus,
+.blockDetailsIn .formRow .fieldInput select:focus {
+  outline: none !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2) !important;
+}
+
+.blockDetailsIn .formRow .fieldInput input.directionLTR {
+  direction: ltr;
+  text-align: left;
+}
+
+/* Required markers (3DS: name, phone, email) */
+label[for="txtCardOwnerName"]::after,
+label[for="txtCardOwnerPhone"]::after,
+label[for="txtCardOwnerEmail"]::after,
+label[for="txtCustName"]::after,
+label[for="txtCustMobilePH"]::after,
+label[for="txtEmail"]::after {
+  content: " *";
+  color: #dc2626;
+  font-weight: 700;
+}
+
+/* Validation states */
+.blockDetailsIn .formRow.errorRow .fieldInput input,
+.blockDetailsIn .formRow.errorRow .fieldInput select {
+  border-color: #dc2626 !important;
+  color: #991b1b !important;
+}
+
+.blockDetailsIn .formRow.success .fieldInput input,
+.blockDetailsIn .formRow.success .fieldInput select {
+  border-color: #16a34a !important;
+}
+
+.blockDetailsIn .formRow.errorRow .fieldName::before {
+  content: "✕" !important;
+  color: #dc2626 !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  margin: 0 0 0 6px !important;
+  display: inline-block !important;
+  vertical-align: middle !important;
+}
+
+.blockDetailsIn .formRow.success .fieldName::before {
+  content: "✓" !important;
+  color: #16a34a !important;
+  font-size: 14px !important;
+  margin: 0 0 0 6px !important;
+  display: inline-block !important;
+  background: none !important;
+  padding: 0 !important;
+}
+
+.blockDetailsIn .formRow.errorRow .fieldName,
+.blockDetailsIn .formRow.success .fieldName {
+  margin-right: 0 !important;
+}
+
+/* ── Credit card: flex (avoids grid cell overlap) ─────────────────────────── */
+.CreditCardDiv {
+  margin-right: 0 !important;
+}
+
+#CreditCardDiv {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 0 8px !important;
+  padding: 0 !important;
+  float: none !important;
+  clear: both !important;
+  box-sizing: border-box !important;
+}
+
+/* Default: every row full width — mobile-first, no stacking overlap */
+#CreditCardDiv > .formRow,
+#CreditCardDiv .formRow.cardRow,
+#CreditCardDiv .formRow.cvvRow {
+  flex: 1 1 100% !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+#CreditCardDiv > .formRow:has(#txtopenSum) {
+  flex: 1 1 100% !important;
+  max-width: 100% !important;
+}
+
+#CreditCardDiv > .formRow:has(.validityDate) .fieldName {
+  margin-bottom: 4px;
+}
+
+.validityDate {
+  width: 100% !important;
+  max-width: 100% !important;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  gap: 8px !important;
+  align-items: center !important;
+  box-sizing: border-box !important;
+}
+
+.validityDate select.mini,
+.validityDate select.tiny {
+  flex: 1 1 0 !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: 48% !important;
+}
+
+/* Desktop: two columns — unique flex-basis per row (no shared grid cell) */
+@media screen and (min-width: 600px) {
+  /* 1 = card number */
+  #CreditCardDiv > .formRow:nth-child(1) {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* 2 = expiry, 3 = CVV */
+  #CreditCardDiv > .formRow:nth-child(2),
+  #CreditCardDiv > .formRow:nth-child(3) {
+    flex: 1 1 calc(50% - 8px) !important;
+    max-width: calc(50% - 8px) !important;
+  }
+
+  /* 4 = ID, 6 = phone (5 = name stays full width on next rule) */
+  #CreditCardDiv > .formRow:nth-child(4),
+  #CreditCardDiv > .formRow:nth-child(6) {
+    flex: 1 1 calc(50% - 8px) !important;
+    max-width: calc(50% - 8px) !important;
+  }
+
+  /* 5 = name, 7 = email, 8+ = payments / AVS / checkbox */
+  #CreditCardDiv > .formRow:nth-child(5),
+  #CreditCardDiv > .formRow:nth-child(7),
+  #CreditCardDiv > .formRow:nth-child(n + 8) {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* :has() refinement when order differs (hidden rows removed from flow) */
+  #CreditCardDiv > .formRow:has(#txtCardNumber),
+  #CreditCardDiv > .formRow:has(#txtCardNumber-number),
+  #CreditCardDiv > .formRow:has(#txtCardOwnerName),
+  #CreditCardDiv > .formRow:has(#txtCardOwnerEmail),
+  #CreditCardDiv > .formRow:has(#numberOfPaymentsselect),
+  #CreditCardDiv > .formRow:has(input.checkbox),
+  #CreditCardDiv > .formRow:has(#txtAvsCity),
+  #CreditCardDiv > .formRow:has(#txtAvsAddress),
+  #CreditCardDiv > .formRow:has(#txtAvsZip) {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+  }
+
+  #CreditCardDiv > .formRow:has(.validityDate),
+  #CreditCardDiv > .formRow.cvvRow,
+  #CreditCardDiv > .formRow:has(#txtTZ),
+  #CreditCardDiv > .formRow:has(#txtCardOwnerPhone) {
+    flex: 1 1 calc(50% - 8px) !important;
+    max-width: calc(50% - 8px) !important;
+  }
+}
+
+/* Card brand icon spacing */
+.formRow.cardRow .fieldInput input#txtCardNumber,
+.formRow.cardRow .fieldInput input#txtCardNumber-number {
+  background-position: center left 12px !important;
+  background-size: 36px auto !important;
+  padding-left: 52px !important;
+}
+
+/* CVV help link */
+.cvvRow .WhatIsCvvLightBox {
+  margin-inline-start: 6px;
+  vertical-align: middle;
+}
+
+.cvvRow .WhatIsCvvLightBox img {
+  width: 18px;
+  height: 18px;
+}
+
+/* ── Invoice / 3DS contact block — flex, full width rows (no grid overlap) ─ */
+.OrderDetails .blockDetailsIn {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 16px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.OrderDetails .blockDetailsIn > .title {
+  flex: 1 1 100% !important;
+  width: 100% !important;
+}
+
+.OrderDetails .blockDetailsIn > .formRow {
+  flex: 1 1 100% !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+@media screen and (min-width: 600px) {
+  .OrderDetails .formRow:has(#txtCustMobilePH),
+  .OrderDetails .formRow:has(#txtEmail) {
+    flex: 1 1 calc(50% - 8px) !important;
+    max-width: calc(50% - 8px) !important;
+  }
+}
+
+/* ── Wallet buttons (Apple Pay / Bit) ────────────────────────────────────── */
+.paypalDiv,
+.ApplePayDiv,
+.GooglePayDiv,
+#uPayBitDiv,
+#PayMeBitDiv,
+#CardcomBitDiv,
+.masterPassDiv {
+  max-width: 100%;
+  margin-bottom: 12px;
+}
+
+/* ── Submit area ─────────────────────────────────────────────────────────── */
+.submitDiv,
+.submitDiv.target-element,
+#captcha_div {
+  width: min(720px, 96%) !important;
+  max-width: 100% !important;
+  margin: 20px auto 0 !important;
+  padding: 16px 0 8px !important;
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between !important;
+  gap: 12px;
+  background: transparent !important;
+  border-top: 1px solid #e5e7eb;
+  position: static !important;
+  z-index: auto !important;
+  float: none !important;
+  clear: both !important;
+}
+
+.submitDiv .homeLink {
+  float: none !important;
+  order: 2;
+}
+
+.submitDiv .buttonDiv {
+  float: none !important;
+  margin: 0 !important;
+  flex: 1 1 100%;
+  order: 1;
+}
+
+.submitDiv .buttonDiv input {
+  width: 100% !important;
+  max-width: 100% !important;
+  padding: 14px 20px !important;
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  border: none !important;
+  border-radius: 10px !important;
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
+  color: #fff !important;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.submitDiv .buttonDiv input:hover {
+  background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%) !important;
+}
+
+.submitDiv .buttonDiv input:active {
+  transform: scale(0.99);
+}
+
+/* Trust strip (add class opal-trust-strip in HtmlComments if desired) */
+.opal-trust-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.opal-trust-strip img {
+  height: 28px;
+  width: auto;
+}
+
+/* Errors */
+.errorDiv {
+  width: min(720px, 96%) !important;
+  margin: 12px auto 0 !important;
+  border-radius: 8px !important;
+  background: #fef2f2 !important;
+  color: #991b1b !important;
+  border: 1px solid #fecaca !important;
+}
+
+.errorDiv .message {
+  color: #991b1b !important;
+}
+
+/* Footer: light gray */
+.footer {
+  background: #f9fafb !important;
+  border-top: 1px solid #e5e7eb;
+  padding: 16px 0 !important;
+  margin-top: 24px;
+}
+
+.footer .footerIn {
+  width: min(720px, 96%) !important;
+  flex-direction: column;
+  gap: 8px;
+  text-align: center;
+}
+
+.footer .footer-text {
+  font-size: 13px !important;
+  color: #6b7280 !important;
+}
+
+/* Hide Cardcom heavy footer logo clutter on mobile */
+.footer .footer-logo img {
+  max-height: 32px;
+  opacity: 0.7;
+}
+
+/* Captcha — merged into submit row rules above */
+#captcha_div {
+  justify-content: flex-start !important;
+}
+
+/* ── Responsive: force single column on narrow screens ─────────────────── */
+@media screen and (max-width: 599px) {
+  #CreditCardDiv > .formRow,
+  .OrderDetails .blockDetailsIn > .formRow {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .validityDate {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .validityDate select.mini,
+  .validityDate select.tiny {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  .submitDiv .buttonDiv input {
+    font-size: 16px !important;
+  }
+
+  .header .headerIn,
+  .productsDetails .productsDetailsIn,
+  .blockDetails .blockDetailsIn,
+  .footer .footerIn {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .header .headerIn .detailsDiv div:before {
+    content: "" !important;
+  }
+
+  .blockDetailsIn .formRow .fieldInput input,
+  .blockDetailsIn .formRow .fieldInput select {
+    width: 100% !important;
+  }
+
+  .blockDetailsIn .formRow.errorRow .fieldInput,
+  .blockDetailsIn .formRow.success .fieldInput {
+    width: 100% !important;
+  }
+}
+
+/* Tables: horizontal scroll on small screens */
+@media screen and (max-width: 599px) {
+  .productsDetailsIn {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .productsTbl {
+    min-width: 480px;
+  }
+}
