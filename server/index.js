@@ -202,6 +202,25 @@ function firstDefined(...vals) {
   return '';
 }
 
+/** Cardcom production: DealResponse 0 = charge OK + token created (ignore ProssesEndOK). */
+function readDealResponseValue(...sources) {
+  for (const src of sources) {
+    if (!src || typeof src !== 'object') continue;
+    for (const key of ['DealResponse', 'dealResponse', 'DealRespone']) {
+      if (Object.prototype.hasOwnProperty.call(src, key)) {
+        const v = src[key];
+        if (v !== undefined && v !== null && String(v).trim() !== '') return v;
+      }
+    }
+  }
+  return undefined;
+}
+
+function isCardcomDealResponseSuccess(webhookPayload = {}, indicator = null) {
+  const dr = readDealResponseValue(webhookPayload, indicator);
+  return dr === 0 || dr === '0';
+}
+
 function buildBeneficiaryPdfModelFromDeal({ transactionId, deal, primaryMember, additionalMembers, payerAmount }) {
   const fsState = deal?.formState || {};
   const beneficiaryUpdate = deal?.beneficiaryUpdate && typeof deal.beneficiaryUpdate === 'object'
@@ -743,9 +762,8 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
 
     const terminalNum = Number(terminal);
     const isTestTerminal = terminalNum === 1000;
-    const responseCode = Number(indicator?.responseCode ?? NaN);
-    const processEndOk = indicator?.processEndOk === true || indicator?.processEndOk === 1 || indicator?.processEndOk === '1';
-    const dealResponse = indicator?.dealResponse;
+    const webhookPayload = { ...webhookQuery, ...webhookBody };
+    const dealResponse = readDealResponseValue(webhookPayload, indicator);
     const responseDescription = String(indicator?.responseDescription || indicator?.description || '').trim();
     const webhookInternalDeal = firstDefined(
       webhookBody?.internaldealnumber,
@@ -776,18 +794,16 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
       webhookQuery?.CardBrand
     );
 
-    console.log(`[${ts()}] Checking terminal: ${terminalNum} with DealResponse: ${dealResponse} (ProcessEndOK: ${indicator?.processEndOk})`);
+    console.log(`[${ts()}] Checking terminal: ${terminalNum} with DealResponse: ${dealResponse ?? '(missing)'}`);
 
     let paymentValid = false;
-    if (responseCode !== 0) {
-      paymentValid = false;
-    } else if (isTestTerminal) {
+    if (isTestTerminal) {
       paymentValid = true;
       console.log(`[${ts()}] Validation passed for TEST terminal (bypass: terminal 1000 always proceeds)`);
     } else {
-      paymentValid = responseCode === 0 && (dealResponse === 1 || dealResponse === '1') && processEndOk;
+      paymentValid = isCardcomDealResponseSuccess(webhookPayload, indicator);
       if (paymentValid) {
-        console.log(`[${ts()}] Validation passed for LIVE terminal`);
+        console.log(`[${ts()}] Validation passed for LIVE terminal (DealResponse=0)`);
       }
     }
 
@@ -798,8 +814,8 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
         terminal: terminalNum,
         responseCode: indicator?.responseCode,
         responseDescription,
-        processEndOk: indicator?.processEndOk,
-        dealResponse: indicator?.dealResponse,
+        dealResponse,
+        webhookDealResponse: webhookPayload?.DealResponse ?? webhookPayload?.dealResponse,
       });
       if (pending) {
         try {

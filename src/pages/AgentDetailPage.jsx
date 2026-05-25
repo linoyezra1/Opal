@@ -34,13 +34,6 @@ function formatDate(v) {
   return d.toLocaleDateString('he-IL');
 }
 
-function isSnapshotPayable(s) {
-  const balance = Number(
-    s?.balance != null ? s.balance : Number(s?.totalAmount || 0) - Number(s?.totalPaid || 0)
-  );
-  return balance > 0 && String(s?.status || '') !== 'Paid';
-}
-
 export default function AgentDetailPage() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
@@ -220,15 +213,8 @@ export default function AgentDetailPage() {
     const highlightId = String(searchParams.get('highlightSnapshotId') || '').trim();
     if (!highlightId || loading) return;
     const match = snapshots.find((s) => String(s.id) === highlightId);
-    if (match && isSnapshotPayable(match)) {
-      setSelectedSnapshotIds(new Set([highlightId]));
-    }
+    if (match) setSelectedSnapshotIds(new Set([highlightId]));
   }, [searchParams, snapshots, loading]);
-
-  const payableSnapshots = useMemo(
-    () => (snapshots || []).filter((s) => isSnapshotPayable(s)),
-    [snapshots]
-  );
 
   const toggleSnapshotSelection = (snapshotId) => {
     setSelectedSnapshotIds((prev) => {
@@ -239,11 +225,11 @@ export default function AgentDetailPage() {
     });
   };
 
-  const toggleAllPayableSnapshots = () => {
-    if (!payableSnapshots.length) return;
-    const allSelected = payableSnapshots.every((s) => selectedSnapshotIds.has(s.id));
+  const toggleAllSnapshots = () => {
+    if (!snapshots.length) return;
+    const allSelected = snapshots.every((s) => selectedSnapshotIds.has(s.id));
     if (allSelected) setSelectedSnapshotIds(new Set());
-    else setSelectedSnapshotIds(new Set(payableSnapshots.map((s) => s.id)));
+    else setSelectedSnapshotIds(new Set(snapshots.map((s) => s.id)));
   };
 
   const runAgentPaymentExport = async () => {
@@ -660,10 +646,10 @@ export default function AgentDetailPage() {
                             className="size-4"
                             aria-label="בחר הכל"
                             checked={
-                              payableSnapshots.length > 0 &&
-                              payableSnapshots.every((s) => selectedSnapshotIds.has(s.id))
+                              snapshots.length > 0 &&
+                              snapshots.every((s) => selectedSnapshotIds.has(s.id))
                             }
-                            onChange={toggleAllPayableSnapshots}
+                            onChange={toggleAllSnapshots}
                           />
                         </TableHead>
                         <TableHead>חודש</TableHead>
@@ -680,16 +666,13 @@ export default function AgentDetailPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {snapshots.map((s) => {
-                        const payable = isSnapshotPayable(s);
-                        return (
-                        <TableRow key={s.id} className={!payable ? 'opacity-50' : undefined}>
+                      {snapshots.map((s) => (
+                        <TableRow key={s.id}>
                           <TableCell>
                             <input
                               type="checkbox"
                               className="size-4"
                               checked={selectedSnapshotIds.has(s.id)}
-                              disabled={!payable}
                               aria-label={`בחר ${s.month}`}
                               onChange={() => toggleSnapshotSelection(s.id)}
                             />
@@ -756,8 +739,7 @@ export default function AgentDetailPage() {
                             </div>
                           </TableCell>
                         </TableRow>
-                      );
-                      })}
+                      ))}
                       {!snapshots.length ? (
                         <TableRow>
                           <TableCell colSpan={12} className="text-center text-muted-foreground py-6">

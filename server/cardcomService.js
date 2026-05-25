@@ -279,7 +279,8 @@ export function parseLowProfileIndicatorXml(xml) {
     firstTagValue(block, 'CardToken') ||
     firstTagValue(block, 'TokenToSave');
   const processEndOkRaw = firstTagValue(block, 'ProssesEndOK');
-  const dealResponseRaw = firstTagValue(block, 'DealRespone');
+  const dealResponseRaw =
+    firstTagValue(block, 'DealResponse') || firstTagValue(block, 'DealRespone');
   const responseDescription =
     firstTagValue(block, 'ResponsDescription') ||
     firstTagValue(block, 'ResponseDescription') ||
@@ -349,7 +350,8 @@ export async function getLowProfileIndicator(terminalNumber, username, lowProfil
   const parsed = parseLowProfileIndicatorXml(xml);
   const rootInternal = getVal('InternalDealNumber');
   const rootOk = parseInt(getVal('ProssesEndOK'), 10) === 1;
-  const rootDeal = parseInt(getVal('DealRespone'), 10);
+  const rootDealRaw = getVal('DealResponse') || getVal('DealRespone');
+  const rootDeal = rootDealRaw != null ? parseInt(rootDealRaw, 10) : NaN;
   const rootAccountId = getVal('AccountId');
   const rootRecurringId = getVal('RecurringId') || getVal('RowID');
   const rootToken = getVal('Token') || getVal('CardToken') || getVal('TokenToSave');
