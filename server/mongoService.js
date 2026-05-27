@@ -235,6 +235,12 @@ export async function saveDeal(params) {
     if (params.cardcomRecurringId != null) set.cardcomRecurringId = String(params.cardcomRecurringId || '').trim();
     if (params.cardcomToken != null) set.cardcomToken = String(params.cardcomToken || '').trim();
     if (params.lastFourDigits != null) set.lastFourDigits = String(params.lastFourDigits || '').trim();
+    if (params.cardExpirationMonth != null) {
+      set.cardExpirationMonth = String(params.cardExpirationMonth || '').trim();
+    }
+    if (params.cardExpirationYear != null) {
+      set.cardExpirationYear = String(params.cardExpirationYear || '').trim();
+    }
     if (params.payerAmount != null) set.payerAmount = Number(params.payerAmount || 0);
     if (params.formState && typeof params.formState === 'object') set.formState = params.formState;
     if (params.indicator && typeof params.indicator === 'object') set.indicator = params.indicator;
@@ -328,6 +334,14 @@ export async function saveDeal(params) {
       params.lastFourDigits != null && String(params.lastFourDigits).trim() !== ''
         ? String(params.lastFourDigits).trim()
         : String(mergedFormState?.lastFourDigits || '').trim(),
+    cardExpirationMonth:
+      params.cardExpirationMonth != null && String(params.cardExpirationMonth).trim() !== ''
+        ? String(params.cardExpirationMonth).trim()
+        : String(mergedFormState?.cardExpirationMonth || '').trim(),
+    cardExpirationYear:
+      params.cardExpirationYear != null && String(params.cardExpirationYear).trim() !== ''
+        ? String(params.cardExpirationYear).trim()
+        : String(mergedFormState?.cardExpirationYear || '').trim(),
     payerAmount: Number(params.payerAmount || 0),
     formState: mergedFormState,
     /** מזהה סוכן (מנוי) — לספירת מכירות לפי סוכן */

@@ -11,6 +11,7 @@ import {
   getLowProfileIndicator,
   stopRecurringProfile,
   createRecurringProfileFromLowProfile,
+  extractCardExpirationFromSources,
 } from './cardcomService.js';
 import { sendOrderConfirmationEmail, sendBeneficiaryCompletionEmail, sendEmployeeApprovalRequestEmail } from './emailService.js';
 import { generateBeneficiarySummaryPdfBuffer, saveBeneficiarySummaryPdfToDisk } from './beneficiaryPdfService.js';
@@ -763,6 +764,7 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
     const terminalNum = Number(terminal);
     const isTestTerminal = terminalNum === 1000;
     const webhookPayload = { ...webhookQuery, ...webhookBody };
+    const cardExpiration = extractCardExpirationFromSources(webhookPayload, indicator);
     const dealResponse = readDealResponseValue(webhookPayload, indicator);
     const responseDescription = String(indicator?.responseDescription || indicator?.description || '').trim();
     const webhookInternalDeal = firstDefined(
@@ -830,6 +832,8 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
             cardcomResponseDescription: webhookResponseDescription || responseDescription,
             lastFourDigits: webhookLast4 || String(indicator?.Lest4Numbers || '').trim(),
             cardBrand: webhookBrand || String(indicator?.MutagName || '').trim(),
+            cardExpirationMonth: cardExpiration.cardExpirationMonth,
+            cardExpirationYear: cardExpiration.cardExpirationYear,
           };
           await saveDeal({
             transactionId: transactionIdFail,
@@ -838,6 +842,8 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
             cardcomRecurringId: String(indicator?.cardcomRecurringId || '').trim(),
             cardcomToken: String(indicator?.cardcomToken || '').trim(),
             lastFourDigits: webhookLast4 || String(indicator?.Lest4Numbers || '').trim(),
+            cardExpirationMonth: cardExpiration.cardExpirationMonth,
+            cardExpirationYear: cardExpiration.cardExpirationYear,
             payerAmount: Number(pending?.payerAmount || 0),
             formState: mergedFailedForm,
             agentId: pending?.agentId || null,
@@ -855,6 +861,8 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
               cardcomAccountId: indicator?.cardcomAccountId ?? null,
               cardcomRecurringId: indicator?.cardcomRecurringId ?? null,
               cardcomToken: indicator?.cardcomToken ?? null,
+              cardExpirationMonth: cardExpiration.cardExpirationMonth || null,
+              cardExpirationYear: cardExpiration.cardExpirationYear || null,
             },
             normalizedPayload: buildDealPayloadFromFormState(mergedFailedForm),
           });
@@ -910,6 +918,8 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
       cardcomResponseDescription: responseDescription,
       lastFourDigits: String(indicator?.Lest4Numbers || '').trim(),
       cardBrand: String(indicator?.MutagName || '').trim(),
+      cardExpirationMonth: cardExpiration.cardExpirationMonth,
+      cardExpirationYear: cardExpiration.cardExpirationYear,
     };
 
     const dealPayload = buildDealPayloadFromFormState(finalForm);
@@ -982,6 +992,8 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
         cardcomRecurringId: step2Recurring?.cardcomRecurringId || indicator?.cardcomRecurringId || '',
         cardcomToken: indicator?.cardcomToken || '',
         lastFourDigits: String(finalForm.lastFourDigits || '').trim(),
+        cardExpirationMonth: cardExpiration.cardExpirationMonth,
+        cardExpirationYear: cardExpiration.cardExpirationYear,
         payerAmount,
         formState: finalForm,
         agentId,
@@ -1001,6 +1013,8 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
           step2CardcomAccountId: step2Recurring?.cardcomAccountId ?? null,
           step2CardcomRecurringId: step2Recurring?.cardcomRecurringId ?? null,
           cardcomToken: indicator?.cardcomToken ?? null,
+          cardExpirationMonth: cardExpiration.cardExpirationMonth || null,
+          cardExpirationYear: cardExpiration.cardExpirationYear || null,
         },
         normalizedPayload: dealPayload,
       });

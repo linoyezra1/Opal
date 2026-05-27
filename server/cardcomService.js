@@ -75,7 +75,7 @@ function buildCreateLowProfileDealSoap(opts) {
   <username>${escape(username)}</username>
   <password>${escape(password)}</password>
   <lowprofileParams>
-    <Operation>BillOnly</Operation>
+    <Operation>ChargeAndCreateToken</Operation>
     <LpMode>1</LpMode>
     <ReturnValue>${escape(returnValue)}</ReturnValue>
     <SumToBill>${Number(sumToBill)}</SumToBill>
@@ -200,12 +200,20 @@ function parseNameValueResponse(raw) {
  * Response is Name=Value format.
  */
 export async function createRecurringProfileFromLowProfile(opts = {}) {
+  const terminalNumber = Number(opts.terminalNumber || 0);
+  if (!terminalNumber) throw new Error('RecurringPayment: missing TerminalNumber');
+  const username = String(opts.username || '').trim();
+  if (!username) throw new Error('RecurringPayment: missing UserName');
+  const lowProfileCode = String(opts.lowProfileCode || '').trim();
+  if (!lowProfileCode) throw new Error('RecurringPayment: missing LowProfileDealGuid');
+
   const form = new URLSearchParams();
-  form.set('TerminalNumber', String(Number(opts.terminalNumber || 0)));
-  form.set('UserName', String(opts.username || ''));
+  form.set('TerminalNumber', String(terminalNumber));
+  form.set('RecurringPayments.ChargeInTerminal', String(terminalNumber));
+  form.set('UserName', username);
   form.set('codepage', '65001');
   form.set('Operation', 'NewAndUpdate');
-  form.set('LowProfileDealGuid', String(opts.lowProfileCode || '').trim());
+  form.set('LowProfileDealGuid', lowProfileCode);
   form.set('Account.Email', String(opts.email || '').trim());
   form.set('Account.CompanyName', String(opts.companyName || '').trim());
   form.set('Account.PhMobile', String(opts.phone || '').trim());
@@ -262,6 +270,38 @@ function firstTagValue(xml, tag) {
   return m ? m[1].trim() : null;
 }
 
+function normalizeCardExpirationMonth(raw) {
+  const digits = String(raw ?? '').trim().replace(/\D/g, '');
+  if (!digits) return '';
+  const n = parseInt(digits, 10);
+  if (!Number.isFinite(n) || n < 1 || n > 12) return '';
+  return String(n).padStart(2, '0');
+}
+
+function normalizeCardExpirationYear(raw) {
+  const digits = String(raw ?? '').trim().replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length === 2) return `20${digits}`;
+  if (digits.length === 4) return digits;
+  return '';
+}
+
+/** Merge CardMonth/CardYear from indicator XML and optional webhook/query payload. */
+export function extractCardExpirationFromSources(...sources) {
+  let cardExpirationMonth = '';
+  let cardExpirationYear = '';
+  for (const src of sources) {
+    if (!src || typeof src !== 'object') continue;
+    const monthRaw = src.CardMonth ?? src.cardMonth ?? src.cardExpirationMonth;
+    const yearRaw = src.CardYear ?? src.cardYear ?? src.cardExpirationYear;
+    const month = normalizeCardExpirationMonth(monthRaw);
+    const year = normalizeCardExpirationYear(yearRaw);
+    if (month) cardExpirationMonth = month;
+    if (year) cardExpirationYear = year;
+  }
+  return { cardExpirationMonth, cardExpirationYear };
+}
+
 /**
  * Parse nested &lt;Indicator&gt;…&lt;/Indicator&gt; from GetLowProfileIndicator response.
  * Recurring id: RecurringId if present, else RowID (Cardcom docs expose RowID on indicator).
@@ -290,6 +330,12 @@ export function parseLowProfileIndicatorXml(xml) {
     firstTagValue(block, 'Last4Numbers') ||
     firstTagValue(block, 'CardNum');
   const cardBrand = firstTagValue(block, 'MutagName') || firstTagValue(block, 'CardName');
+  const cardMonthRaw = firstTagValue(block, 'CardMonth');
+  const cardYearRaw = firstTagValue(block, 'CardYear');
+  const { cardExpirationMonth, cardExpirationYear } = extractCardExpirationFromSources({
+    CardMonth: cardMonthRaw,
+    CardYear: cardYearRaw,
+  });
 
   return {
     internalDealNumber: internalDealNumber != null ? String(internalDealNumber) : null,
@@ -301,6 +347,8 @@ export function parseLowProfileIndicatorXml(xml) {
     responseDescription: responseDescription != null ? String(responseDescription).trim() : '',
     Lest4Numbers: last4 != null ? String(last4).trim() : '',
     MutagName: cardBrand != null ? String(cardBrand).trim() : '',
+    cardExpirationMonth,
+    cardExpirationYear,
   };
 }
 
@@ -358,6 +406,10 @@ export async function getLowProfileIndicator(terminalNumber, username, lowProfil
   const rootResponseDescription = getVal('ResponsDescription') || getVal('ResponseDescription') || getVal('Description');
   const rootLast4 = getVal('Lest4Numbers') || getVal('Last4Numbers') || getVal('CardNum');
   const rootCardBrand = getVal('MutagName') || getVal('CardName');
+  const rootExpiration = extractCardExpirationFromSources(
+    { CardMonth: getVal('CardMonth'), CardYear: getVal('CardYear') },
+    parsed
+  );
 
   return {
     responseCode,
@@ -371,6 +423,8 @@ export async function getLowProfileIndicator(terminalNumber, username, lowProfil
     responseDescription: parsed.responseDescription || (rootResponseDescription != null ? String(rootResponseDescription).trim() : ''),
     Lest4Numbers: parsed.Lest4Numbers || (rootLast4 != null ? String(rootLast4).trim() : ''),
     MutagName: parsed.MutagName || (rootCardBrand != null ? String(rootCardBrand).trim() : ''),
+    cardExpirationMonth: rootExpiration.cardExpirationMonth,
+    cardExpirationYear: rootExpiration.cardExpirationYear,
     responseXml: xml,
   };
 }
