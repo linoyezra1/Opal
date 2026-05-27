@@ -1,122 +1,78 @@
 /**
- * Cardcom Low Profile API – create payment link (SOAP).
- * Test terminal credentials from .env: CARDCOM_TERMINAL, CARDCOM_USER, CARDCOM_PASS.
- *
- * Payment page styling: do not inject custom CSS (e.g. ConCss) from this codebase.
- * Cardcom renders `<style id="conCss">` from terminal / merchant back-office settings;
- * rules like `display: none` on `.fieldName`, `label`, or payment UI break dropdowns and buttons.
- * To restore the default Low Profile look, clear or fix custom CSS in the Cardcom terminal, not here.
+ * Cardcom — API 10 Name-to-Value (step 1 LowProfile.aspx, step 2 RecurringPayment.aspx).
+ * GetLowProfileIndicator / stop recurring still use legacy SOAP where required.
+ * Credentials: CARDCOM_TERMINAL, CARDCOM_USER, CARDCOM_PASS.
  */
 
 import axios from 'axios';
 
 const CARDCOM_SOAP_URL = 'https://secure.cardcom.co.il/service.asmx';
 const CARDCOM_RECURRING_SOAP_URL = 'https://secure.cardcom.co.il/Interface/BillGoldService.asmx';
+const CARDCOM_LOW_PROFILE_NTV_URL = 'https://secure.cardcom.solutions/Interface/LowProfile.aspx';
 const CARDCOM_RECURRING_NTV_URL = 'https://secure.cardcom.solutions/interface/RecurringPayment.aspx';
 
-/**
- * Build SOAP envelope for CreateLowProfileDeal.
- * @param {Object} opts
- * @param {number} opts.terminalNumber
- * @param {string} opts.username - API name
- * @param {string} opts.password - API password (some flows use it)
- * @param {number} opts.sumToBill - amount in ILS
- * @param {string} opts.successRedirectUrl
- * @param {string} opts.errorRedirectUrl
- * @param {string} opts.cancelRedirectUrl
- * @param {string} opts.indicatorUrl - webhook URL Cardcom will call on payment end
- * @param {string} [opts.returnValue] - optional custom data returned in indicator
- * @param {string} [opts.language=he]
- */
-function buildCreateLowProfileDealSoap(opts) {
-  const {
-    terminalNumber,
-    username,
-    password = '',
-    sumToBill,
-    successRedirectUrl,
-    errorRedirectUrl,
-    cancelRedirectUrl,
-    indicatorUrl,
-    returnValue = '',
-    language = 'he',
-    /** When true, ask Cardcom to create a BillGold recurring profile (subscription). */
-    createRecurring = true,
-    recurringType = 1,
-    recurringTotalCount = 0,
-    recurringOperation = 1,
-    recurringAmount = Number(sumToBill || 0),
-    isCreateToken = true,
-    isAutoCreateUpdateAccount = true,
-  } = opts;
-
-  const escape = (s) => (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-  const recurringXml =
-    createRecurring === false
-      ? ''
-      : `
-      <CreateRecurring>true</CreateRecurring>
-      <Recurring>
-        <Operation>${Number(recurringOperation)}</Operation>
-        <RecurringType>${Number(recurringType)}</RecurringType>
-        <RecurringTotalCount>${Number(recurringTotalCount)}</RecurringTotalCount>
-        <RecurringAmount>${Number(recurringAmount)}</RecurringAmount>
-        <ReturnValue>${escape(returnValue)}</ReturnValue>
-      </Recurring>`;
-
-  const tokenAndAccountXml = `
-      <IsCreateToken>${isCreateToken ? 'true' : 'false'}</IsCreateToken>
-      <IsAutoCreateUpdateAccount>${isAutoCreateUpdateAccount ? 'true' : 'false'}</IsAutoCreateUpdateAccount>`;
-
-  const body = `
-<CreateLowProfileDeal xmlns="http://cardcom.co.il/">
-  <terminalnumber>${Number(terminalNumber)}</terminalnumber>
-  <username>${escape(username)}</username>
-  <password>${escape(password)}</password>
-  <lowprofileParams>
-    <Operation>ChargeAndCreateToken</Operation>
-    <LpMode>1</LpMode>
-    <ReturnValue>${escape(returnValue)}</ReturnValue>
-    <SumToBill>${Number(sumToBill)}</SumToBill>
-    <Language>${escape(language)}</Language>
-    <SuccessRedirectUrl>${escape(successRedirectUrl)}</SuccessRedirectUrl>
-    <ErrorRedirectUrl>${escape(errorRedirectUrl)}</ErrorRedirectUrl>
-    <CancelRedirectUrl>${escape(cancelRedirectUrl)}</CancelRedirectUrl>
-    <IndicatorUrl>${escape(indicatorUrl)}</IndicatorUrl>${tokenAndAccountXml}${recurringXml}
-  </lowprofileParams>
-</CreateLowProfileDeal>`;
-
-  return `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-  <soap:Body>
-    ${body.trim()}
-  </soap:Body>
-</soap:Envelope>`;
+function parseNameValueResponse(raw) {
+  const pairs = new URLSearchParams(String(raw || ''));
+  const data = {};
+  for (const [k, v] of pairs.entries()) data[k] = v;
+  return data;
 }
 
-/**
- * Parse Cardcom CreateLowProfileDeal SOAP response to get payment URL and LowProfileCode.
- */
-function parseCreateLowProfileDealResponse(xml) {
-  const urlMatch = xml.match(/<(?:\w+:)?url[^>]*>([^<]*)<\/(?:\w+:)?url>/i) || xml.match(/<url>([^<]*)<\/url>/i);
-  const codeMatch = xml.match(/<(?:\w+:)?LowProfileCode[^>]*>([^<]*)<\/(?:\w+:)?LowProfileCode>/i) || xml.match(/<LowProfileCode>([^<]*)<\/LowProfileCode>/i);
-  const responseCodeMatch = xml.match(/<(?:\w+:)?ResponseCode[^>]*>([^<]*)<\/(?:\w+:)?ResponseCode>/i) || xml.match(/<ResponseCode>([^<]*)<\/ResponseCode>/i);
-  const descMatch = xml.match(/<(?:\w+:)?Description[^>]*>([^<]*)<\/(?:\w+:)?Description>/i) || xml.match(/<Description>([^<]*)<\/Description>/i);
-  const baseUrlMatch = xml.match(/<(?:\w+:)?BaseUrl[^>]*>([^<]*)<\/(?:\w+:)?BaseUrl>/i) || xml.match(/<BaseUrl>([^<]*)<\/BaseUrl>/i);
+function isCardcomLowProfileResponseSuccess(responseCodeRaw) {
+  const code = String(responseCodeRaw ?? '').trim();
+  return code === '0' || code === '00';
+}
 
-  const responseCode = responseCodeMatch ? parseInt(responseCodeMatch[1], 10) : null;
-  const url = urlMatch ? urlMatch[1].trim() : null;
-  const lowProfileCode = codeMatch ? codeMatch[1].trim() : null;
-  const baseUrl = baseUrlMatch ? baseUrlMatch[1].trim() : null;
-  const description = descMatch ? descMatch[1].trim() : '';
+function isLikelyHtmlResponse(raw) {
+  const s = String(raw ?? '').trimStart().toLowerCase();
+  return (
+    s.startsWith('<!doctype') ||
+    s.startsWith('<html') ||
+    s.includes('<script') ||
+    s.includes('<body')
+  );
+}
 
+/** Compact error digest — avoids logging full HTML pages to Railway. */
+function summarizeCardcomResponseForLog(raw) {
+  const text = typeof raw === 'string' ? raw : JSON.stringify(raw ?? '');
+  if (isLikelyHtmlResponse(text)) {
+    const titleMatch = text.match(/<title[^>]*>([^<]*)<\/title>/i);
+    return {
+      format: 'html',
+      byteLength: text.length,
+      title: titleMatch ? titleMatch[1].trim() : undefined,
+    };
+  }
+  const parsed = parseNameValueResponse(text);
+  if (Object.keys(parsed).length > 0) {
+    return {
+      format: 'name-value',
+      ResponseCode: parsed.ResponseCode,
+      Description: parsed.Description,
+      LowProfileCode: parsed.LowProfileCode,
+      url: parsed.url || parsed.Url,
+    };
+  }
+  return { format: 'text', byteLength: text.length, preview: text.slice(0, 300) };
+}
+
+function parseLowProfileNtvResponse(raw) {
+  const parsed = parseNameValueResponse(raw);
+  const responseCodeRaw = parsed.ResponseCode;
+  const responseCode =
+    responseCodeRaw != null && String(responseCodeRaw).trim() !== ''
+      ? parseInt(String(responseCodeRaw).trim(), 10)
+      : null;
+  const description = String(parsed.Description ?? '').trim();
+  const lowProfileCode = String(parsed.LowProfileCode ?? '').trim() || null;
+  const url = String(parsed.url ?? parsed.Url ?? '').trim();
+  const baseUrl = String(parsed.BaseUrl ?? '').trim();
   return {
     responseCode,
     description,
-    url: url || (baseUrl && lowProfileCode ? `${baseUrl}?LowProfileCode=${lowProfileCode}` : null),
     lowProfileCode,
-    baseUrl,
+    url: url || (baseUrl && lowProfileCode ? `${baseUrl}?LowProfileCode=${lowProfileCode}` : null),
   };
 }
 
@@ -135,63 +91,69 @@ function isCardcomAuthErrorText(text) {
 }
 
 /**
- * Create a Low Profile payment link.
- * @param {Object} opts - Same as buildCreateLowProfileDealSoap; terminalNumber, username, password (for auth if needed), sumToBill, redirect URLs, indicatorUrl.
- * @returns {Promise<{ url: string, lowProfileCode: string, responseCode: number, description: string }>}
- *
- * Styling: the SOAP body must not include ConCss, css, Style, or any custom-design fields—only
- * `lowprofileParams` below. Payment page look comes from Cardcom defaults + terminal dashboard.
+ * Step 1 — LowProfile.aspx (API 10 Name-to-Value). Operation 2 = charge + internal token.
+ * @returns {Promise<{ responseCode: number|null, description: string, url: string, lowProfileCode: string|null }>}
  */
-export async function createLowProfileDeal(opts) {
-  const soap = buildCreateLowProfileDealSoap(opts);
+export async function createLowProfileDeal(opts = {}) {
+  const terminalNumber = Number(opts.terminalNumber || 0);
+  const username = String(opts.username || '').trim();
+  const password = String(opts.password ?? '').trim();
+  const sumToBill = Number(opts.sumToBill ?? 0);
+  const language = String(opts.language || 'he').trim();
+  const returnValue = String(opts.returnValue ?? '').trim();
 
-  const auth =
-    opts.password != null && opts.password !== ''
-      ? { username: opts.username, password: opts.password }
-      : undefined;
+  const form = new URLSearchParams();
+  form.set('codepage', '65001');
+  form.set('Operation', '2');
+  form.set('TerminalNumber', String(terminalNumber));
+  form.set('UserName', username);
+  form.set('Password', password);
+  form.set('SumToBill', String(sumToBill));
+  form.set('CoinID', '1');
+  form.set('Language', language);
+  form.set('APILevel', '10');
+  form.set('SuccessRedirectUrl', String(opts.successRedirectUrl || ''));
+  form.set('ErrorRedirectUrl', String(opts.errorRedirectUrl || ''));
+  form.set('CancelRedirectUrl', String(opts.cancelRedirectUrl || ''));
+  form.set('IndicatorUrl', String(opts.indicatorUrl || ''));
+  form.set('ReturnValue', returnValue);
+  form.set('AutoRedirect', 'true');
 
-  const response = await axios.post(CARDCOM_SOAP_URL, soap, {
+  const response = await axios.post(CARDCOM_LOW_PROFILE_NTV_URL, form.toString(), {
     headers: {
-      'Content-Type': 'text/xml; charset=utf-8',
-      SOAPAction: 'http://cardcom.co.il/CreateLowProfileDeal',
+      'Content-Type': 'application/x-www-form-urlencoded',
     },
-    auth,
     timeout: 15000,
     validateStatus: () => true,
   });
 
-  const data = parseCreateLowProfileDealResponse(response.data);
+  const rawResponse = response.data;
+  const data = parseLowProfileNtvResponse(rawResponse);
+
   if (isCardcomAuthErrorText(data.description)) {
+    console.warn('[Cardcom Step1 error]', summarizeCardcomResponseForLog(rawResponse));
     throw new Error('שגיאת הזדהות מול Cardcom. נדרשת בדיקת משתמש/סיסמה מול חברת הסליקה.');
   }
-  if (data.responseCode !== 0 && data.responseCode !== 200) {
-    throw new Error(data.description || `Cardcom error ${data.responseCode}`);
+  if (!isCardcomLowProfileResponseSuccess(parseNameValueResponse(rawResponse).ResponseCode)) {
+    console.warn('[Cardcom Step1 error]', summarizeCardcomResponseForLog(rawResponse));
+    throw new Error(data.description || `Cardcom error ${data.responseCode ?? 'unknown'}`);
   }
   if (!data.url) {
+    console.warn('[Cardcom Step1 error]', summarizeCardcomResponseForLog(rawResponse));
     throw new Error('Cardcom did not return a payment URL');
   }
-  return data;
+
+  return {
+    responseCode: data.responseCode,
+    description: data.description,
+    url: data.url,
+    lowProfileCode: data.lowProfileCode,
+  };
 }
 
-/**
- * Create Low Profile checkout page for subscriptions — same as {@link createLowProfileDeal}
- * with recurring defaults (CreateRecurring, monthly, unlimited count).
- */
+/** Checkout entry — step 1 via LowProfile.aspx; step 2 via RecurringPayment.aspx. */
 export async function createLowProfilePage(opts) {
-  return createLowProfileDeal({
-    isCreateToken: true,
-    isAutoCreateUpdateAccount: true,
-    // Two-step flow: charge first, then create BillGold recurring via RecurringPayment.aspx
-    createRecurring: false,
-    ...opts,
-  });
-}
-
-function parseNameValueResponse(raw) {
-  const pairs = new URLSearchParams(String(raw || ''));
-  const data = {};
-  for (const [k, v] of pairs.entries()) data[k] = v;
-  return data;
+  return createLowProfileDeal(opts);
 }
 
 /**
