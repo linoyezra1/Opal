@@ -103,13 +103,13 @@ export async function createLowProfileDeal(opts = {}) {
   const returnValue = String(opts.returnValue ?? '').trim();
 
   const form = new URLSearchParams();
-  form.set('codepage', '65001');
+  form.set('Codepage', '65001');
   form.set('Operation', '2');
   form.set('TerminalNumber', String(terminalNumber));
   form.set('UserName', username);
   form.set('Password', password);
   form.set('SumToBill', String(sumToBill));
-  form.set('CoinID', '1');
+  form.set('CoinId', '1');
   form.set('Language', language);
   form.set('APILevel', '10');
   form.set('SuccessRedirectUrl', String(opts.successRedirectUrl || ''));
@@ -117,7 +117,7 @@ export async function createLowProfileDeal(opts = {}) {
   form.set('CancelRedirectUrl', String(opts.cancelRedirectUrl || ''));
   form.set('IndicatorUrl', String(opts.indicatorUrl || ''));
   form.set('ReturnValue', returnValue);
-  form.set('AutoRedirect', 'true');
+  form.set('AutoRedirect', 'false');
 
   const response = await axios.post(CARDCOM_LOW_PROFILE_NTV_URL, form.toString(), {
     headers: {
@@ -248,14 +248,20 @@ function normalizeCardExpirationYear(raw) {
   return '';
 }
 
-/** Merge CardMonth/CardYear from indicator XML and optional webhook/query payload. */
+/** Card expiry from CardMonth/CardYear only (webhook + GetLowProfileIndicator). */
 export function extractCardExpirationFromSources(...sources) {
   let cardExpirationMonth = '';
   let cardExpirationYear = '';
   for (const src of sources) {
     if (!src || typeof src !== 'object') continue;
-    const monthRaw = src.CardMonth ?? src.cardMonth ?? src.cardExpirationMonth;
-    const yearRaw = src.CardYear ?? src.cardYear ?? src.cardExpirationYear;
+    const monthRaw =
+      src.CardMonth ??
+      src.cardMonth ??
+      src.cardExpirationMonth;
+    const yearRaw =
+      src.CardYear ??
+      src.cardYear ??
+      src.cardExpirationYear;
     const month = normalizeCardExpirationMonth(monthRaw);
     const year = normalizeCardExpirationYear(yearRaw);
     if (month) cardExpirationMonth = month;
@@ -292,11 +298,9 @@ export function parseLowProfileIndicatorXml(xml) {
     firstTagValue(block, 'Last4Numbers') ||
     firstTagValue(block, 'CardNum');
   const cardBrand = firstTagValue(block, 'MutagName') || firstTagValue(block, 'CardName');
-  const cardMonthRaw = firstTagValue(block, 'CardMonth');
-  const cardYearRaw = firstTagValue(block, 'CardYear');
   const { cardExpirationMonth, cardExpirationYear } = extractCardExpirationFromSources({
-    CardMonth: cardMonthRaw,
-    CardYear: cardYearRaw,
+    CardMonth: firstTagValue(block, 'CardMonth'),
+    CardYear: firstTagValue(block, 'CardYear'),
   });
 
   return {
@@ -369,7 +373,10 @@ export async function getLowProfileIndicator(terminalNumber, username, lowProfil
   const rootLast4 = getVal('Lest4Numbers') || getVal('Last4Numbers') || getVal('CardNum');
   const rootCardBrand = getVal('MutagName') || getVal('CardName');
   const rootExpiration = extractCardExpirationFromSources(
-    { CardMonth: getVal('CardMonth'), CardYear: getVal('CardYear') },
+    {
+      CardMonth: getVal('CardMonth'),
+      CardYear: getVal('CardYear'),
+    },
     parsed
   );
 
