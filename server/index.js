@@ -821,53 +821,44 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
       });
       if (pending) {
         try {
-          const transactionIdFail =
-            webhookInternalDeal ||
-            (indicator?.internalDealNumber != null && String(indicator.internalDealNumber).trim() !== ''
-              ? String(indicator.internalDealNumber).trim()
-              : lowProfileCode);
-          const mergedFailedForm = {
-            ...(pending.formState || {}),
-            cardcomRecurringId: String(indicator?.cardcomRecurringId || '').trim(),
-            cardcomResponseDescription: webhookResponseDescription || responseDescription,
-            lastFourDigits: webhookLast4 || String(indicator?.Lest4Numbers || '').trim(),
-            cardBrand: webhookBrand || String(indicator?.MutagName || '').trim(),
-            cardExpirationMonth: cardExpiration.cardExpirationMonth,
-            cardExpirationYear: cardExpiration.cardExpirationYear,
-          };
-          await saveDeal({
-            transactionId: transactionIdFail,
-            lowProfileCode,
-            cardcomAccountId: String(indicator?.cardcomAccountId || '').trim(),
-            cardcomRecurringId: String(indicator?.cardcomRecurringId || '').trim(),
-            cardcomToken: String(indicator?.cardcomToken || '').trim(),
-            lastFourDigits: webhookLast4 || String(indicator?.Lest4Numbers || '').trim(),
-            cardExpirationMonth: cardExpiration.cardExpirationMonth,
-            cardExpirationYear: cardExpiration.cardExpirationYear,
-            payerAmount: Number(pending?.payerAmount || 0),
-            formState: mergedFailedForm,
-            agentId: pending?.agentId || null,
-            paymentStatus: 'failed',
-            terminalNumber: terminalNum,
-            source: 'cardcom-webhook',
-            indicator: {
-              responseCode: indicator?.responseCode ?? null,
-              responsdescription: webhookResponseDescription || responseDescription || null,
-              processEndOk: indicator?.processEndOk ?? null,
-              dealResponse: indicator?.dealResponse ?? null,
-              internalDealNumber: webhookInternalDeal || indicator?.internalDealNumber || null,
-              Lest4Numbers: webhookLast4 || indicator?.Lest4Numbers || null,
-              MutagName: webhookBrand || indicator?.MutagName || null,
-              cardcomAccountId: indicator?.cardcomAccountId ?? null,
-              cardcomRecurringId: indicator?.cardcomRecurringId ?? null,
-              cardcomToken: indicator?.cardcomToken ?? null,
-              cardExpirationMonth: cardExpiration.cardExpirationMonth || null,
-              cardExpirationYear: cardExpiration.cardExpirationYear || null,
-            },
-            normalizedPayload: buildDealPayloadFromFormState(mergedFailedForm),
-          });
-        } catch (failPersistErr) {
-          console.warn(`[${ts()}] failed deal persistence (non-blocking):`, failPersistErr?.message || failPersistErr);
+          const failedFs = pending.formState && typeof pending.formState === 'object' ? pending.formState : {};
+          const isCorporateLead =
+            failedFs.orgPrivateEnrollment === true ||
+            !!String(failedFs.organizationId || '').trim() ||
+            !!String(failedFs.organizationName || '').trim();
+          const leadStatus = 'לא עבר אשראי';
+          const leadMessage = [
+            String(failedFs.productName || '').trim(),
+            webhookResponseDescription || responseDescription || 'כשל חיוב ראשוני בהרשמה',
+          ]
+            .filter(Boolean)
+            .join(' | ');
+
+          if (isCorporateLead) {
+            await saveOrganizationLead({
+              organizationName: String(failedFs.organizationName || '').trim(),
+              contactName: String(failedFs.fullName || '').trim(),
+              phone: String(failedFs.phone || '').trim(),
+              email: String(failedFs.email || '').trim(),
+              message: leadMessage,
+              source: 'checkout_payment_failed',
+              leadStatus,
+              requestType: 'payment_failed',
+            });
+          } else {
+            await saveContactLead({
+              name: String(failedFs.fullName || '').trim(),
+              email: String(failedFs.email || '').trim(),
+              phone: String(failedFs.phone || '').trim(),
+              message: leadMessage,
+              source: 'checkout_payment_failed',
+              landingSlug: String(failedFs.landingPageSlug || '').trim().toLowerCase(),
+              category: 'כשל תשלום בהרשמה',
+              leadStatus,
+            });
+          }
+        } catch (leadErr) {
+          console.warn(`[${ts()}] failed checkout lead persistence (non-blocking):`, leadErr?.message || leadErr);
         }
       }
       return;

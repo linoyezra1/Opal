@@ -2622,7 +2622,22 @@ export default function SubscribersDashboard() {
                                   : row.source === 'detail_recurring'
                                     ? 'חיוב חוזר (Cardcom)'
                                     : 'מחזור ישן');
-                              const statusText = (row) => row.statusLabel || row.status || '—';
+                              const statusText = (row) => {
+                                const key = String(row.statusLabel || row.status || '')
+                                  .trim()
+                                  .toUpperCase();
+                                const map = {
+                                  SUCCESSFUL: 'חויב בהצלחה',
+                                  PENDINGFORPROCESSING: 'ממתין לחיוב אשראי',
+                                  DEBTAUTOBILLING: 'ממתין לחיוב אוטומטי',
+                                  LOSTDEBT: 'סומן ידני כחוב אבוד',
+                                  PAYBYOTHER: 'סומן ידני כשולם באמצעי תשלום אחר',
+                                  PAYBYOTHERE: 'סומן ידני כשולם באמצעי תשלום אחר',
+                                  ONHOLD: 'הוקפא ידני',
+                                  OTHER: 'אחר',
+                                };
+                                return map[key] || row.statusLabel || row.status || '—';
+                              };
                               return [...rawRows]
                                 .sort((a, b) => {
                                   const ta = new Date(a.lastBillDate || a.createdAt || 0).getTime();

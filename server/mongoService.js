@@ -574,7 +574,7 @@ const DETAIL_RECURRING_STATUS_LABELS = {
   2: 'PENDINGFORPROCESSING',
   3: 'DEBTAUTOBILLING',
   4: 'LOSTDEBT',
-  5: 'PAYBYOTHERE',
+  5: 'PAYBYOTHER',
   6: 'ONHOLD',
   7: 'OTHER',
 };
@@ -592,7 +592,7 @@ function mapDetailRecurringStatusCode(raw) {
     PENDINGFORPROCESSING: 2,
     DEBTAUTOBILLING: 3,
     LOSTDEBT: 4,
-    PAYBYOTHERE: 5,
+    PAYBYOTHER: 5,
     ONHOLD: 6,
     OTHER: 7,
   };
@@ -668,6 +668,13 @@ export async function processDetailRecurringWebhook(body = {}, query = {}) {
 
   const statusRaw = normalized.Status ?? normalized.status;
   const responseCode = pickDrField(normalized, ['ResposeCode', 'ResponseCode', 'responseCode']);
+  const responseDescription = pickDrField(normalized, [
+    'responsdescription',
+    'ResponsDescription',
+    'ResponseDescription',
+    'description',
+    'Description',
+  ]);
   const paymentSuccess = isDetailRecurringPaymentSuccess(normalized);
   const statusCode = paymentSuccess ? 1 : mapDetailRecurringStatusCode(statusRaw);
   const sum = parseDetailNumber(normalized, ['Sum', 'sum'], 0);
@@ -839,6 +846,19 @@ export async function processDetailRecurringWebhook(body = {}, query = {}) {
     await db.collection('agent_commission_ledger').updateOne(
       { rowId },
       { $set: { statusCode, agentCommission: 0, netProfit: 0, updatedAt: new Date(), reversedAt: new Date() } }
+    );
+  }
+
+  try {
+    await syncParentFutureBillingAfterRecurringWebhook(
+      parent.id,
+      event.recurringId || recurringIdRaw || '',
+      { paymentSuccess, responseDescription }
+    );
+  } catch (syncErr) {
+    console.warn(
+      `[DetailRecurring] syncParentFutureBillingAfterRecurringWebhook failed for rowId=${rowId}:`,
+      syncErr?.message || syncErr
     );
   }
 
@@ -1573,6 +1593,7 @@ export async function saveOrganizationLead(params) {
     source: params.source || 'site',
     isActive: true,
     isHandled: false,
+    leadStatus: params.leadStatus || 'חדש',
     requestType: params.requestType || '',
     company: params.company || null,
     contactPerson: params.contactPerson || null,
@@ -3849,12 +3870,14 @@ export async function getControlPanelOverviewData(filters = {}) {
   let totalTransactions = paidRows.length;
   const failedPaymentRows = selectedRangeDeals.filter((d) => {
     const ps = String(d.paymentStatus || '').toLowerCase();
+    const subStatus = String(d.subscriptionStatus || '').trim();
     const isCancelled = ps.includes('cancel') || ps.includes('בוטל') || ps === 'cancelled';
     const isError = /fail|declin|error|denied|נכשל/i.test(String(d.paymentStatus || ''));
+    const isArrears = subStatus === SUBSCRIPTION_ARREARS_LABEL;
     const hasCardcom =
       d.isCardcomDeal ||
       (d.cardcomRecurringId != null && String(d.cardcomRecurringId).trim() !== '');
-    return hasCardcom && isError && !isCancelled;
+    return hasCardcom && !isCancelled && (isError || isArrears);
   });
 
   const pendingBeneficiaryRows = selectedRangeDeals.filter((d) => {
@@ -4115,7 +4138,11 @@ export async function getControlPanelOverviewData(filters = {}) {
           price: Number(d.payerAmount || 0),
           chargeDate: String(d.billingMonth || '').trim() || (d.createdAt ? new Date(d.createdAt).toISOString() : ''),
           cardcomStatus: String(
-            d?.indicator?.responsdescription || d?.formState?.cardcomResponseDescription || d.paymentStatus || '—'
+            d?.futureBillingStatus ||
+              d?.indicator?.responsdescription ||
+              d?.formState?.cardcomResponseDescription ||
+              d.paymentStatus ||
+              '—'
           ),
           customerName: d.formState?.fullName || '—',
           phoneNumber: d.formState?.phone || '—',
