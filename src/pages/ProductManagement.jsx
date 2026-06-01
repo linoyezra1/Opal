@@ -216,6 +216,7 @@ export default function ProductManagement() {
   const [editProduct, setEditProduct] = React.useState(null);
   const [viewProduct, setViewProduct] = React.useState(null);
   const [deleteTarget, setDeleteTarget] = React.useState(null);
+  const [deleteError, setDeleteError] = React.useState('');
   const [createOpen, setCreateOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
   const [providerFilter, setProviderFilter] = React.useState('all');
@@ -340,21 +341,34 @@ export default function ProductManagement() {
   async function confirmDelete() {
     if (!deleteTarget?.id) return;
     setLoading(true);
-    setError('');
+    setDeleteError('');
     try {
       const res = await fetch(`${API_BASE}/api/admin/products/${deleteTarget.id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) throw new Error(data.error || 'נטרול נכשל');
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'נטרול נכשל');
+      }
       setDeleteTarget(null);
+      setDeleteError('');
       await loadProducts();
     } catch (e2) {
-      setError(e2.message || 'שגיאה');
+      setDeleteError(e2.message || 'שגיאה');
     } finally {
       setLoading(false);
     }
+  }
+
+  function openDeleteDialog(product) {
+    setDeleteError('');
+    setDeleteTarget(product);
+  }
+
+  function closeDeleteDialog() {
+    setDeleteTarget(null);
+    setDeleteError('');
   }
 
   function openEdit(p) {
@@ -465,10 +479,11 @@ export default function ProductManagement() {
             ? `להפוך את "${deleteTarget.productName || deleteTarget.name}" (${deleteTarget.sku}) ללא פעיל? פעולה זו תעביר את המידע לארכיון.`
             : ''
         }
+        error={deleteError}
         confirmLabel="הפוך ללא פעיל"
         danger
         onConfirm={confirmDelete}
-        onCancel={() => setDeleteTarget(null)}
+        onCancel={closeDeleteDialog}
         isLoading={loading}
       />
 
@@ -763,7 +778,7 @@ export default function ProductManagement() {
                                   variant="ghost"
                                   size="icon"
                                   type="button"
-                                  onClick={() => setDeleteTarget(p)}
+                                  onClick={() => openDeleteDialog(p)}
                                   aria-label="הפוך ללא פעיל"
                                 >
                                   <Archive className="size-4 text-destructive" />

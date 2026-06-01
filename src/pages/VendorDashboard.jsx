@@ -224,6 +224,7 @@ export default function VendorDashboard() {
   const [error, setError] = React.useState('');
   const [editVendor, setEditVendor] = React.useState(null);
   const [deleteTarget, setDeleteTarget] = React.useState(null);
+  const [deleteError, setDeleteError] = React.useState('');
   const [createOpen, setCreateOpen] = React.useState(false);
   const [expandedVendor, setExpandedVendor] = React.useState(null);
   const [search, setSearch] = React.useState('');
@@ -421,20 +422,34 @@ export default function VendorDashboard() {
   async function confirmDelete() {
     if (!deleteTarget?.id) return;
     setLoading(true);
+    setDeleteError('');
     try {
       const res = await fetch(`${API_BASE}/api/admin/vendors/${deleteTarget.id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) throw new Error(data.error || 'נטרול נכשל');
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'נטרול נכשל');
+      }
       setDeleteTarget(null);
+      setDeleteError('');
       await loadVendors();
     } catch (e2) {
-      setError(e2.message || 'שגיאה');
+      setDeleteError(e2.message || 'שגיאה');
     } finally {
       setLoading(false);
     }
+  }
+
+  function openDeleteDialog(vendor) {
+    setDeleteError('');
+    setDeleteTarget(vendor);
+  }
+
+  function closeDeleteDialog() {
+    setDeleteTarget(null);
+    setDeleteError('');
   }
 
   function ProductLinksEditor({ isEdit }) {
@@ -548,10 +563,11 @@ export default function VendorDashboard() {
             ? `להפוך את "${deleteTarget.vendorName}" ללא פעיל? פעולה זו תעביר את המידע לארכיון. לא ניתן לנטרל ספק זה אם יש מוצרים המשויכים אליו.`
             : ''
         }
+        error={deleteError}
         confirmLabel="הפוך ללא פעיל"
         danger
         onConfirm={confirmDelete}
-        onCancel={() => setDeleteTarget(null)}
+        onCancel={closeDeleteDialog}
         isLoading={loading}
       />
 
@@ -740,7 +756,7 @@ export default function VendorDashboard() {
                               </Button>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" type="button" onClick={() => setDeleteTarget(v)} aria-label="הפוך ללא פעיל">
+                                  <Button variant="ghost" size="icon" type="button" onClick={() => openDeleteDialog(v)} aria-label="הפוך ללא פעיל">
                                     <Archive className="size-4 text-destructive" />
                                   </Button>
                                 </TooltipTrigger>
