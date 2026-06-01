@@ -3864,7 +3864,8 @@ export async function getControlPanelOverviewData(filters = {}) {
   /** מנוי פעיל = עסקאות בבריכת התקופה עם זכאות active (לא ספירת מוטבים) */
   const activeSubscribers = poolActiveRows.length;
   const pendingCancellationCount = poolPendingCancellationRows.length;
-  const cancellationsCount = poolCanceledRows.length;
+  const cancelledInRange = cancelledByEventDate.filter((d) => d.isRecurringCycle !== true);
+  const cancellationsCount = cancelledInRange.length;
   const notActivatedCount = poolNotActivatedRows.length;
   const { privatePaymentCustomers, centralizedPaymentCustomers } = countPaymentTypeDeals(periodPool);
   let totalTransactions = paidRows.length;
@@ -4020,12 +4021,17 @@ export async function getControlPanelOverviewData(filters = {}) {
     totalNetProfit = Number(cashTotals.totalNetProfit || 0);
     totalTransactions = Number(cashTotals.eventCount || 0);
   }
+  const isCentralizedPaymentDeal = (d) => {
+    const fs = d.formState && typeof d.formState === 'object' ? d.formState : {};
+    return d.isCentralized === true || String(fs.billingType || '').trim().toLowerCase() === 'centralized';
+  };
   const cancellationCountByDay = {};
-  const cancellationRevenueByDay = {};
-  let totalCancellationRevenue = 0;
-  const totalCancellations = poolCanceledRows.length;
-  for (const d of poolCanceledRows) {
-    totalCancellationRevenue += Number(d.payerAmount || 0);
+  const cancellationCentralizedByDay = {};
+  const cancellationPrivateByDay = {};
+  let totalCancellationsCentralized = 0;
+  let totalCancellationsPrivate = 0;
+  const totalCancellations = cancelledInRange.length;
+  for (const d of cancelledInRange) {
     const ent = getEntitlementStatus(d);
     const eventDateRaw =
       (ent.cancelAt && new Date(ent.cancelAt)) || d.cancellationDate || d.updatedAt || d.createdAt;
@@ -4033,8 +4039,13 @@ export async function getControlPanelOverviewData(filters = {}) {
     if (Number.isNaN(dt.getTime())) continue;
     const key = dt.toISOString().slice(0, 10);
     cancellationCountByDay[key] = Number(cancellationCountByDay[key] || 0) + 1;
-    const amount = Number(d.payerAmount || 0);
-    cancellationRevenueByDay[key] = Number(cancellationRevenueByDay[key] || 0) + amount;
+    if (isCentralizedPaymentDeal(d)) {
+      cancellationCentralizedByDay[key] = Number(cancellationCentralizedByDay[key] || 0) + 1;
+      totalCancellationsCentralized += 1;
+    } else {
+      cancellationPrivateByDay[key] = Number(cancellationPrivateByDay[key] || 0) + 1;
+      totalCancellationsPrivate += 1;
+    }
   }
   const baseIncomeChartRows = statusFilteredSelectedDeals.filter((d) => d.isPaidSuccess && !isCancelledDeal(d));
   const dayMapForChart = new Map();
@@ -4062,7 +4073,8 @@ export async function getControlPanelOverviewData(filters = {}) {
       return {
         ...base,
         cancellations: Number(cancellationCountByDay[date] || 0),
-        cancellationRevenue: Number(cancellationRevenueByDay[date] || 0),
+        cancellationsCentralized: Number(cancellationCentralizedByDay[date] || 0),
+        cancellationsPrivate: Number(cancellationPrivateByDay[date] || 0),
         label: new Date(date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }),
       };
     });
@@ -4094,8 +4106,9 @@ export async function getControlPanelOverviewData(filters = {}) {
       notActivatedCount,
       subscriptionPoolDealCount,
       chartSeries: chartSeriesWithCancellations,
-      totalCancellationRevenue,
       totalCancellations,
+      totalCancellationsCentralized,
+      totalCancellationsPrivate,
     },
     drilldowns: {
       activeSubscribers: poolActiveRows.map((d) => ({
@@ -4168,7 +4181,7 @@ export async function getControlPanelOverviewData(filters = {}) {
         subscriptionStatus: String(d.subscriptionStatus || ''),
         createdAt: d.createdAt,
       })),
-      cancelledCustomers: poolCanceledRows.map((d) => ({
+      cancelledCustomers: cancelledInRange.map((d) => ({
         id: String(d._id || ''),
         orderId: d.transactionId || '',
         customerName: d.formState?.fullName || '—',

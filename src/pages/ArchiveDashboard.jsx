@@ -5,7 +5,6 @@ import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
 import { Button } from '../components/ui/button.jsx';
-import { Input } from '../components/ui/input.jsx';
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '../components/ui/empty.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
 import { fmtDateTime } from '../utils/dateUtils.js';
@@ -18,13 +17,30 @@ const TAB_CONFIG = [
   { key: 'vendors', label: 'ספקים' },
   { key: 'organizations', label: 'ארגונים' },
   { key: 'agents', label: 'סוכנים' },
-  { key: 'contactRequests', label: 'פניות צור קשר' },
   { key: 'personalContacts', label: 'פניות - פרטי' },
-  { key: 'orgContacts', label: 'פניות - ארגון' },
   { key: 'priceLists', label: 'מחירונים' },
   { key: 'landingPages', label: 'דפי נחיתה' },
-  { key: 'pricingEntries', label: 'רשומות תמחור' },
 ];
+
+/** עמודות קבועות לפי טאב (שמאל → ימין ב-RTL = סדר המערך) */
+const TAB_COLUMN_ORDER = {
+  personalContacts: ['name', 'phone', 'email', 'message', 'notes'],
+  products: ['productName', 'sku', 'providerId', 'providerCost', 'retailPrice'],
+  priceLists: ['listName', 'orgName', 'createdAt', 'updatedAt'],
+};
+
+const HIDDEN_COLUMN_KEYS = new Set([
+  '_id',
+  'id',
+  'productLinks',
+  'products',
+  'bankDetails',
+  'contactPerson',
+  'accounting',
+  'additionalContact',
+  'provider',
+  'isActive',
+]);
 
 const HEADER_LABELS = {
   id: 'מזהה',
@@ -32,13 +48,17 @@ const HEADER_LABELS = {
   transactionId: 'מספר הזמנה',
   customerName: 'שם לקוח',
   fullName: 'שם לקוח',
+  name: 'שם',
   phoneNumber: 'טלפון',
   phone: 'טלפון',
   email: 'אימייל',
+  message: 'הודעה',
   retailPrice: 'מחיר מכירה',
   providerCost: 'עלות ספק',
   providerId: 'ספק',
   vendorName: 'ספק',
+  listName: 'שם מחירון',
+  orgName: 'ארגון',
   individualsCount: 'כמות מנויים',
   activeEmployees: 'כמות עובדים',
   amount: 'סכום',
@@ -69,14 +89,11 @@ const HEADER_LABELS = {
   monthlyPricePerMember: 'מחיר חודשי לחבר',
   contactEmail: 'אימייל ליצירת קשר',
   contactPhone: 'טלפון ליצירת קשר',
-  notes: 'הערות',
-  name: 'שם',
-  message: 'הודעה',
+  notes: 'הערת מערכת',
   source: 'מקור',
   leadStatus: 'סטטוס ליד',
   requestType: 'סוג בקשה',
   sku: 'קוד מוצר',
-  providerCost: 'עלות ספק',
   isActive: 'פעיל',
   cardcomRecurringId: 'מזהה הוראת קבע',
   cardcomAccountId: 'מזהה חשבון קארדקום',
@@ -94,17 +111,42 @@ function labelForColumn(key) {
   return HEADER_LABELS[key] || key;
 }
 
-/** עמודות תאריך/שעה מהשרת — מוצגות ב-DD/MM/YYYY HH:mm:ss במקום ISO */
-function formatArchiveCell(columnKey, value) {
+function resolveArchiveCellValue(row, columnKey) {
+  if (columnKey === 'providerId') {
+    return String(row.provider?.vendorName || row.vendorName || row[columnKey] || '');
+  }
+  return row[columnKey];
+}
+
+function formatArchiveCell(columnKey, value, row) {
+  const resolved = columnKey === 'providerId' ? resolveArchiveCellValue(row, columnKey) : value;
   const k = String(columnKey || '');
   if (!(/At$/i.test(k) || /Date$/i.test(k) || k === 'date')) {
-    return String(value ?? '');
+    return String(resolved ?? '');
   }
-  const s = String(value ?? '').trim();
+  const s = String(resolved ?? '').trim();
   if (!s) return '';
   const parsed = new Date(s);
   if (Number.isNaN(parsed.getTime())) return s;
   return fmtDateTime(s);
+}
+
+function columnsForTab(tabKey, rows) {
+  const fixed = TAB_COLUMN_ORDER[tabKey];
+  if (fixed?.length) {
+    return fixed.filter((c) => rows.some((r) => r && c in r));
+  }
+  if (!rows.length) return [];
+  const keys = Object.keys(rows[0]).filter((k) => !HIDDEN_COLUMN_KEYS.has(k));
+  const preferredOrder = ['companyName', 'fullName', 'organizationName', 'email', 'phone', 'notes'];
+  return [...keys].sort((a, b) => {
+    const ia = preferredOrder.indexOf(a);
+    const ib = preferredOrder.indexOf(b);
+    if (ia === -1 && ib === -1) return 0;
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
 }
 
 export default function ArchiveDashboard() {
@@ -200,18 +242,14 @@ export default function ArchiveDashboard() {
             const query = String(searchQuery || '').trim().toLowerCase();
             const rows = !query
               ? rowsAll
-              : rowsAll.filter((row) => Object.values(row || {}).some((v) => String(v ?? '').toLowerCase().includes(query)));
-            const canRestore = tab.key !== 'contactRequests';
-            const columns = rows.length ? Object.keys(rows[0]).filter((k) => !['_id', 'id', 'productLinks', 'products', 'bankDetails', 'contactPerson', 'accounting', 'additionalContact'].includes(k)) : [];
-            const preferredOrder = ['companyName', 'fullName', 'organizationName', 'email', 'phone', 'notes'];
-            const displayColumns = [...columns].sort((a, b) => {
-              const ia = preferredOrder.indexOf(a);
-              const ib = preferredOrder.indexOf(b);
-              if (ia === -1 && ib === -1) return 0;
-              if (ia === -1) return 1;
-              if (ib === -1) return -1;
-              return ia - ib;
-            });
+              : rowsAll.filter((row) =>
+                  Object.values(row || {}).some((v) => String(v ?? '').toLowerCase().includes(query))
+                );
+            const canRestore = true;
+            const displayColumns = columnsForTab(tab.key, rows);
+            const visibleColumns =
+              TAB_COLUMN_ORDER[tab.key]?.length ? displayColumns : displayColumns.slice(0, 5);
+
             return (
               <Card key={tab.key}>
                 <button
@@ -256,20 +294,29 @@ export default function ArchiveDashboard() {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              {displayColumns.slice(0, 5).map((c) => <TableHead key={c}>{labelForColumn(c)}</TableHead>)}
+                              {visibleColumns.map((c) => (
+                                <TableHead key={c}>{labelForColumn(c)}</TableHead>
+                              ))}
                               <TableHead>פעולה</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {rows.map((row) => (
                               <TableRow key={row.id}>
-                                {displayColumns.slice(0, 5).map((c) => (
-                                  <TableCell key={`${row.id}-${c}`}>{formatArchiveCell(c, row[c])}</TableCell>
+                                {visibleColumns.map((c) => (
+                                  <TableCell key={`${row.id}-${c}`}>
+                                    {formatArchiveCell(c, resolveArchiveCellValue(row, c), row)}
+                                  </TableCell>
                                 ))}
                                 <TableCell>
-                                  <Button size="sm" variant="outline" onClick={() => restore(tab.key, row.id)} disabled={loading || !canRestore}>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => restore(tab.key, row.id)}
+                                    disabled={loading || !canRestore}
+                                  >
                                     <ArchiveRestore className="size-4 me-1" />
-                                    {canRestore ? 'שחזר' : '—'}
+                                    שחזר
                                   </Button>
                                 </TableCell>
                               </TableRow>

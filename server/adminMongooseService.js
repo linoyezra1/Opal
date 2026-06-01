@@ -575,12 +575,12 @@ export async function deleteProduct(id) {
   await ensureConnection();
   if (!mongoose.isValidObjectId(id)) throw new Error('Invalid product id');
   const oid = new mongoose.Types.ObjectId(id);
-  const pl = await PriceList.findOne({ 'lines.productId': oid }).lean();
-  if (pl) throw new Error('?? ???? ????? ???? ?????? ??????? ????? ? ????? ?? ??????? ?????');
-  await SalesAgent.updateMany({}, { $pull: { productCommissions: { productId: oid } } });
-  await Vendor.updateMany({}, { $pull: { productLinks: { productId: oid } } });
-  await PricingEntry.deleteMany({ productId: oid });
-  await OrgPricingPolicy.updateMany({}, { $pull: { relatedProducts: { productId: oid } } });
+  const pl = await PriceList.findOne({ isActive: { $ne: false }, 'lines.productId': oid }).lean();
+  if (pl) {
+    throw new Error(
+      'לא ניתן להעביר לארכיון: המוצר משויך למחירון פעיל. יש להסיר אותו מהמחירון לפני הארכיון.'
+    );
+  }
   const r = await Product.findByIdAndUpdate(oid, { $set: { isActive: false, updatedAt: new Date() } }, { returnDocument: 'after' });
   if (!r) throw new Error('Product not found');
   return { ok: true };
@@ -772,14 +772,16 @@ export async function deleteVendor(id) {
   const oid = new mongoose.Types.ObjectId(id);
   const ownedActiveProduct = await Product.findOne({ providerId: oid, isActive: { $ne: false } }).select('_id').lean();
   if (ownedActiveProduct) {
-    throw new Error('?? ???? ????? ??? ??? ???? ???????? ??????? ?? ???? ?????? ??????? ????. ?? ???? ???? ??? ???? ????.');
+    throw new Error(
+      'לא ניתן להעביר לארכיון: לספק יש מוצרים פעילים במערכת. יש להעביר את המוצרים לארכיון או לשייך אותם לספק אחר.'
+    );
   }
   const pe = await PricingEntry.findOne({ vendorId: oid }).lean();
-  if (pe) throw new Error('?? ???? ????? ??? ?????? ?????? ??????');
-  const pl = await PriceList.findOne({ 'lines.vendorId': oid }).lean();
-  if (pl) throw new Error('?? ???? ????? ??? ?????? ??????? ?????');
+  if (pe) throw new Error('לא ניתן להעביר לארכיון: הספק משויך לרשומות תמחור פעילות.');
+  const pl = await PriceList.findOne({ isActive: { $ne: false }, 'lines.vendorId': oid }).lean();
+  if (pl) throw new Error('לא ניתן להעביר לארכיון: הספק משויך למחירון פעיל.');
   const op = await OrgPricingPolicy.findOne({ 'relatedProducts.vendorId': oid }).lean();
-  if (op) throw new Error('?? ???? ????? ??? ?????? ??????? ?????');
+  if (op) throw new Error('לא ניתן להעביר לארכיון: הספק משויך למדיניות תמחור ארגונית פעילה.');
   const r = await Vendor.findByIdAndUpdate(oid, { $set: { isActive: false, updatedAt: new Date() } }, { returnDocument: 'after' });
   if (!r) throw new Error('Vendor not found');
   return { ok: true };
@@ -1781,7 +1783,7 @@ export async function listPublicSalesAgents() {
 export async function getArchiveSnapshot(limit = 300) {
   await ensureConnection();
   const db = mongoose.connection.db;
-  const [products, vendors, organizations, agents, subscribers, personalContacts, orgContacts] = await Promise.all([
+  const [products, vendors, organizations, agents, subscribers, personalContacts, archivedPriceLists] = await Promise.all([
     listProducts({ activeOnly: false }).then((rows) => rows.filter((r) => r.isActive === false).slice(0, limit)),
     listVendors({ activeOnly: false }).then((rows) => rows.filter((r) => r.isActive === false).slice(0, limit)),
     db
@@ -1803,12 +1805,11 @@ export async function getArchiveSnapshot(limit = 300) {
       .sort({ updatedAt: -1, createdAt: -1 })
       .limit(limit)
       .toArray(),
-    db
-      .collection('organizationLeads')
-      .find({ isActive: false })
+    PriceList.find({ isActive: false })
       .sort({ updatedAt: -1, createdAt: -1 })
       .limit(limit)
-      .toArray(),
+      .lean()
+      .then((rows) => rows.map((d) => serializePriceListDoc(d)).filter(Boolean)),
   ]);
   return {
     products,
@@ -1827,36 +1828,15 @@ export async function getArchiveSnapshot(limit = 300) {
     })),
     personalContacts: personalContacts.map((d) => ({
       id: String(d._id),
-      ...d,
-      notes: d.notes || d.adminNotes || d.message || '',
+      name: d.name || '',
+      phone: d.phone || '',
+      email: d.email || '',
+      message: d.message || '',
+      notes: d.notes || d.adminNotes || '',
+      createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
+      updatedAt: d.updatedAt ? new Date(d.updatedAt).toISOString() : null,
     })),
-    orgContacts: orgContacts.map((d) => ({
-      id: String(d._id),
-      ...d,
-      notes: d.notes || d.adminNotes || d.message || '',
-    })),
-    contactRequests: [
-      ...personalContacts.map((d) => ({
-        id: String(d._id),
-        kind: 'private',
-        fullName: d.name || '',
-        organizationName: '',
-        phone: d.phone || '',
-        email: d.email || '',
-        notes: d.notes || d.adminNotes || d.message || '',
-        createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
-      })),
-      ...orgContacts.map((d) => ({
-        id: String(d._id),
-        kind: 'corporate',
-        fullName: d.contactName || d.organizationName || '',
-        organizationName: d.organizationName || '',
-        phone: d.phone || '',
-        email: d.email || '',
-        notes: d.notes || d.adminNotes || d.message || '',
-        createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
-      })),
-    ].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))),
+    priceLists: archivedPriceLists,
   };
 }
 
@@ -1896,9 +1876,9 @@ export async function restoreArchiveItem(entity, id) {
     if (!r.matchedCount) throw new Error('Contact not found');
     return { ok: true };
   }
-  if (e === 'orgContacts') {
-    const r = await mongoose.connection.db.collection('organizationLeads').updateOne({ _id: oid }, { $set: { isActive: true, updatedAt: now } });
-    if (!r.matchedCount) throw new Error('Organization contact not found');
+  if (e === 'priceLists') {
+    const r = await PriceList.updateOne({ _id: oid }, { $set: { isActive: true, updatedAt: now } });
+    if (!r.matchedCount) throw new Error('Price list not found');
     return { ok: true };
   }
   throw new Error('Unsupported archive entity');

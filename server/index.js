@@ -1803,7 +1803,9 @@ app.delete('/api/admin/products/:id', requireAdmin, async (req, res) => {
     res.json({ success: true });
   } catch (e) {
     console.error(`[${ts()}] admin/products delete error:`, e);
-    res.status(500).json({ success: false, error: e.message || 'Failed to delete product' });
+    const msg = e.message || 'Failed to delete product';
+    const status = /לא ניתן|מחירון|Invalid/i.test(msg) ? 400 : 500;
+    res.status(status).json({ success: false, error: msg });
   }
 });
 
@@ -1887,7 +1889,9 @@ app.delete('/api/admin/vendors/:id', requireAdmin, async (req, res) => {
     res.json({ success: true });
   } catch (e) {
     console.error(`[${ts()}] admin/vendors delete error:`, e);
-    res.status(500).json({ success: false, error: e.message || 'Failed to delete vendor' });
+    const msg = e.message || 'Failed to delete vendor';
+    const status = /לא ניתן|מחירון|מוצרים פעילים|תמחור/i.test(msg) ? 400 : 500;
+    res.status(status).json({ success: false, error: msg });
   }
 });
 

@@ -128,7 +128,7 @@ export default function AdminControlPanel() {
   const [commentTarget, setCommentTarget] = React.useState(null);
   const [commentText, setCommentText] = React.useState('');
   const [incomeView, setIncomeView] = React.useState('revenue');
-  const [cancelView, setCancelView] = React.useState('loss');
+  const [cancelView, setCancelView] = React.useState('centralized');
   const [alertsSummary, setAlertsSummary] = React.useState({});
 
   const load = React.useCallback(async (next = filters) => {
@@ -407,10 +407,10 @@ export default function AdminControlPanel() {
           <Card className="border-red-200/70 bg-red-50/30">
             <CardHeader>
               <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-red-800">גרף ביטולים / אובדן הכנסה</CardTitle>
+                <CardTitle className="text-red-800">גרף ביטולים לפי סוג תשלום</CardTitle>
                 <div className="flex items-center gap-1 rounded-md border bg-background p-1">
-                  <Button size="sm" variant={cancelView === 'loss' ? 'default' : 'ghost'} onClick={() => setCancelView('loss')}>אובדן הכנסה</Button>
-                  <Button size="sm" variant={cancelView === 'count' ? 'default' : 'ghost'} onClick={() => setCancelView('count')}>כמות מבוטלים</Button>
+                  <Button size="sm" variant={cancelView === 'centralized' ? 'default' : 'ghost'} onClick={() => setCancelView('centralized')}>תשלום מרוכז</Button>
+                  <Button size="sm" variant={cancelView === 'private' ? 'default' : 'ghost'} onClick={() => setCancelView('private')}>תשלום פרטי</Button>
                 </div>
               </div>
             </CardHeader>
@@ -421,18 +421,20 @@ export default function AdminControlPanel() {
                     <LineChart data={overview.chartSeries}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                       <XAxis dataKey="label" />
-                      <YAxis tickFormatter={(v) => cancelView === 'count' ? `${Math.round(Number(v || 0))}` : `₪${Math.round(Number(v || 0))}`} />
+                      <YAxis tickFormatter={(v) => `${Math.round(Number(v || 0))}`} />
                       <RechartsTooltip
                         contentStyle={{ direction: 'rtl', textAlign: 'right' }}
-                        formatter={(value, key) => [key === 'cancellations' ? String(Math.round(Number(value || 0))) : formatCurrency(value), key === 'cancellations' ? 'כמות מבוטלים ' : 'אובדן הכנסה ']}
+                        formatter={(value, key) => [
+                          String(Math.round(Number(value || 0))),
+                          key === 'cancellationsCentralized' ? 'ביטולים — תשלום מרוכז' : key === 'cancellationsPrivate' ? 'ביטולים — תשלום פרטי' : 'סה״כ ביטולים',
+                        ]}
                         labelFormatter={(label) => `תאריך: ${label}`}
                       />
-                      {(cancelView === 'loss') ? (
-                        <Line type="monotone" dataKey="cancellationRevenue" stroke="#dc2626" name="אובדן הכנסה " strokeWidth={2.5} dot={false} />
-                      ) : null}
-                      {(cancelView === 'count') ? (
-                        <Line type="monotone" dataKey="cancellations" stroke="#f97316" name="כמות מבוטלים " strokeWidth={2} dot={false} />
-                      ) : null}
+                      {cancelView === 'centralized' ? (
+                        <Line type="monotone" dataKey="cancellationsCentralized" stroke="#dc2626" name="תשלום מרוכז" strokeWidth={2.5} dot={false} />
+                      ) : (
+                        <Line type="monotone" dataKey="cancellationsPrivate" stroke="#f97316" name="תשלום פרטי" strokeWidth={2.5} dot={false} />
+                      )}
                     </LineChart>
                   </ResponsiveContainer>
                   <div className="flex items-center justify-end gap-2">
@@ -440,10 +442,12 @@ export default function AdminControlPanel() {
                     <Button size="sm" onClick={() => navigate('/admin/subscribers?status=cancelled')}>ניהול מלא</Button>
                   </div>
                   <div className="text-right text-sm">
-                    <span className="text-muted-foreground">סה"כ מבוטלים: </span>
+                    <span className="text-muted-foreground">סה"כ מבוטלים בטווח: </span>
                     <span className="font-semibold text-red-800">{Number(overview.totalCancellations || 0)}</span>
-                    <span className="text-muted-foreground"> | סה"כ אובדן הכנסה: </span>
-                    <span className="font-semibold text-red-800">{formatCurrency(overview.totalCancellationRevenue || 0)}</span>
+                    <span className="text-muted-foreground"> | מרוכז: </span>
+                    <span className="font-semibold text-red-800">{Number(overview.totalCancellationsCentralized || 0)}</span>
+                    <span className="text-muted-foreground"> | פרטי: </span>
+                    <span className="font-semibold text-red-800">{Number(overview.totalCancellationsPrivate || 0)}</span>
                   </div>
                 </>
               ) : <div className="flex h-full items-center justify-center text-muted-foreground">אין רשומות להצגה</div>}
