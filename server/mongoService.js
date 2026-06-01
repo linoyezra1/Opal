@@ -1,5 +1,12 @@
 import { MongoClient, ObjectId } from 'mongodb';
-import { getEntitlementStatus, parseFlexibleDate, STATUS_ACTIVE, STATUS_CANCELED, STATUS_NOT_ACTIVATED, STATUS_PENDING_CANCELLATION } from './entitlementStatus.js';
+import {
+  getEntitlementStatus,
+  parseFlexibleDate,
+  STATUS_ACTIVE,
+  STATUS_CANCELED,
+  STATUS_NOT_ACTIVATED,
+  STATUS_PENDING_CANCELLATION,
+} from './entitlementStatus.js';
 import { countPaymentTypeDeals } from '../lib/paymentTypeMetrics.js';
 import { isActiveContactTaskLead } from '../lib/contactLeadTasks.js';
 
@@ -3134,10 +3141,11 @@ export async function getSalesDashboardData(filters = {}) {
   let shown = enriched;
   if (statusFilter === 'cancelled') {
     shown = shown.filter((d) => {
-      if (!isCancelledByBusinessRule(d)) return false;
+      const ent = getEntitlementStatus(d);
+      if (ent.status !== STATUS_CANCELED && ent.status !== STATUS_PENDING_CANCELLATION) return false;
       if (!dateRange) return true;
-      const eventDate = d.cancellationDate || d.updatedAt || d.createdAt;
-      const dt = new Date(eventDate);
+      const raw = ent.cancelAt || d.cancellationDate || d.cancelAt || d.updatedAt || d.createdAt;
+      const dt = parseFlexibleDate(raw) || new Date(raw);
       if (Number.isNaN(dt.getTime())) return false;
       if (dateRange.$gte && dt < dateRange.$gte) return false;
       if (dateRange.$lte && dt > dateRange.$lte) return false;
@@ -3807,8 +3815,16 @@ export async function getControlPanelOverviewData(filters = {}) {
     if (Number.isNaN(dt.getTime())) return false;
     return dt >= from && dt <= to;
   };
-  const isCancelledDeal = (d) => isCancelledByBusinessRule(d);
-  const cancellationEventDate = (d) => d.cancellationDate || d.updatedAt || d.createdAt;
+  const resolveCancellationEventDate = (d) => {
+    const ent = getEntitlementStatus(d);
+    const raw = ent.cancelAt || d.cancellationDate || d.cancelAt || d.updatedAt || d.createdAt;
+    return parseFlexibleDate(raw) || new Date(raw);
+  };
+  const isCancellationCountedDeal = (d) => {
+    const ent = getEntitlementStatus(d);
+    return ent.status === STATUS_CANCELED || ent.status === STATUS_PENDING_CANCELLATION;
+  };
+  const isCancelledDeal = (d) => isCancellationCountedDeal(d);
   const isActiveDeal = (d) => d.isActive !== false && !isCancelledDeal(d) && d.isRecurringCycle !== true;
 
   const createdRangeDeals = deals.filter((d) => isDateInRange(d.createdAt));
@@ -3816,7 +3832,11 @@ export async function getControlPanelOverviewData(filters = {}) {
     dealHasBillingActivityInRange(d, controlRange, String(filters.month || '').trim())
   );
   const selectedRangeDeals = dateFilterMode === 'join_date' ? createdRangeDeals : billingRangeDeals;
-  const cancelledByEventDate = deals.filter((d) => isCancelledDeal(d) && isDateInRange(cancellationEventDate(d)));
+  const cancelledByEventDate = deals.filter((d) => {
+    if (!isCancellationCountedDeal(d)) return false;
+    const eventDt = resolveCancellationEventDate(d);
+    return isDateInRange(eventDt);
+  });
 
   /** בריכת עסקאות ייחודיות בטווח (לפי מצב תאריך) — עסקת אב בלבד, לסנכרון וידג'טים עם getEntitlementStatus */
   const periodPool = [];
@@ -4032,10 +4052,7 @@ export async function getControlPanelOverviewData(filters = {}) {
   let totalCancellationsPrivate = 0;
   const totalCancellations = cancelledInRange.length;
   for (const d of cancelledInRange) {
-    const ent = getEntitlementStatus(d);
-    const eventDateRaw =
-      (ent.cancelAt && new Date(ent.cancelAt)) || d.cancellationDate || d.updatedAt || d.createdAt;
-    const dt = new Date(eventDateRaw);
+    const dt = resolveCancellationEventDate(d);
     if (Number.isNaN(dt.getTime())) continue;
     const key = dt.toISOString().slice(0, 10);
     cancellationCountByDay[key] = Number(cancellationCountByDay[key] || 0) + 1;

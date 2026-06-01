@@ -1,4 +1,10 @@
 import mongoose from 'mongoose';
+import {
+  getEntitlementStatus,
+  STATUS_ACTIVE,
+  STATUS_NOT_ACTIVATED,
+  STATUS_PENDING_CANCELLATION,
+} from './entitlementStatus.js';
 
 const MONGO_URL = process.env.MONGODB_URI || process.env.MONGO_URL || '';
 const DB_NAME = process.env.MONGO_DB_NAME || 'opal';
@@ -571,16 +577,55 @@ export async function updateProduct(id, payload) {
   return { id: String(doc._id) };
 }
 
+function isPaidDealForProductArchive(deal = {}) {
+  return /success|paid|test_success/i.test(String(deal.paymentStatus || ''));
+}
+
+/** חוסם ארכיון מוצר כשיש מנויים פעילים או ממתינים לביטול (תאריך סיום שירות לא עבר). */
+async function assertProductCanArchive(productId) {
+  const db = mongoose.connection.db;
+  const idStr = String(productId);
+  const oid = new mongoose.Types.ObjectId(productId);
+  const deals = await db
+    .collection('deals')
+    .find({
+      isRecurringCycle: { $ne: true },
+      isActive: { $ne: false },
+      $or: [{ 'formState.productId': idStr }, { 'formState.productId': oid }],
+    })
+    .project({
+      paymentStatus: 1,
+      cancellationDate: 1,
+      cancelAt: 1,
+      isCentralized: 1,
+      paymentMethod: 1,
+      formState: 1,
+    })
+    .toArray();
+
+  let blocking = 0;
+  for (const d of deals) {
+    const ent = getEntitlementStatus(d);
+    if (ent.status === STATUS_ACTIVE || ent.status === STATUS_PENDING_CANCELLATION) {
+      blocking += 1;
+      continue;
+    }
+    if (ent.status === STATUS_NOT_ACTIVATED && isPaidDealForProductArchive(d)) {
+      blocking += 1;
+    }
+  }
+  if (blocking > 0) {
+    throw new Error(
+      `לא ניתן להעביר לארכיון: למוצר משויכים ${blocking} מנויים שעדיין פעילים או שטרם הסתיים תאריך סיום השירות שלהם. ניתן להעביר לארכיון רק לאחר שכל המנויים בוטלו ותאריך הביטול עבר.`
+    );
+  }
+}
+
 export async function deleteProduct(id) {
   await ensureConnection();
   if (!mongoose.isValidObjectId(id)) throw new Error('Invalid product id');
   const oid = new mongoose.Types.ObjectId(id);
-  const pl = await PriceList.findOne({ isActive: { $ne: false }, 'lines.productId': oid }).lean();
-  if (pl) {
-    throw new Error(
-      'לא ניתן להעביר לארכיון: המוצר משויך למחירון פעיל. יש להסיר אותו מהמחירון לפני הארכיון.'
-    );
-  }
+  await assertProductCanArchive(id);
   const r = await Product.findByIdAndUpdate(oid, { $set: { isActive: false, updatedAt: new Date() } }, { returnDocument: 'after' });
   if (!r) throw new Error('Product not found');
   return { ok: true };
@@ -1205,6 +1250,7 @@ function serializeLandingPageDoc(d) {
     registrationSubtitle: d.registrationSubtitle || '',
     validFrom: d.validFrom || '',
     validTo: d.validTo || '',
+    isActive: d.isActive !== false,
     createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
     updatedAt: d.updatedAt ? new Date(d.updatedAt).toISOString() : null,
   };
@@ -1783,7 +1829,8 @@ export async function listPublicSalesAgents() {
 export async function getArchiveSnapshot(limit = 300) {
   await ensureConnection();
   const db = mongoose.connection.db;
-  const [products, vendors, organizations, agents, subscribers, personalContacts, archivedPriceLists] = await Promise.all([
+  const [products, vendors, organizations, agents, subscribers, personalContacts, archivedPriceLists, archivedLandingPages] =
+    await Promise.all([
     listProducts({ activeOnly: false }).then((rows) => rows.filter((r) => r.isActive === false).slice(0, limit)),
     listVendors({ activeOnly: false }).then((rows) => rows.filter((r) => r.isActive === false).slice(0, limit)),
     db
@@ -1810,6 +1857,11 @@ export async function getArchiveSnapshot(limit = 300) {
       .limit(limit)
       .lean()
       .then((rows) => rows.map((d) => serializePriceListDoc(d)).filter(Boolean)),
+    LandingPage.find({ isActive: false })
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .limit(limit)
+      .lean()
+      .then((rows) => rows.map((d) => serializeLandingPageDoc(d)).filter(Boolean)),
   ]);
   return {
     products,
@@ -1837,6 +1889,7 @@ export async function getArchiveSnapshot(limit = 300) {
       updatedAt: d.updatedAt ? new Date(d.updatedAt).toISOString() : null,
     })),
     priceLists: archivedPriceLists,
+    landingPages: archivedLandingPages,
   };
 }
 
@@ -1879,6 +1932,11 @@ export async function restoreArchiveItem(entity, id) {
   if (e === 'priceLists') {
     const r = await PriceList.updateOne({ _id: oid }, { $set: { isActive: true, updatedAt: now } });
     if (!r.matchedCount) throw new Error('Price list not found');
+    return { ok: true };
+  }
+  if (e === 'landingPages') {
+    const r = await LandingPage.updateOne({ _id: oid }, { $set: { isActive: true, updatedAt: now } });
+    if (!r.matchedCount) throw new Error('Landing page not found');
     return { ok: true };
   }
   throw new Error('Unsupported archive entity');

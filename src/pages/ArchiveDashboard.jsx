@@ -27,6 +27,7 @@ const TAB_COLUMN_ORDER = {
   personalContacts: ['name', 'phone', 'email', 'message', 'notes'],
   products: ['productName', 'sku', 'providerId', 'providerCost', 'retailPrice'],
   priceLists: ['listName', 'orgName', 'createdAt', 'updatedAt'],
+  landingPages: ['pageTitle', 'slug', 'pageType', 'updatedAt'],
 };
 
 const HIDDEN_COLUMN_KEYS = new Set([
@@ -71,8 +72,8 @@ const HEADER_LABELS = {
   organizationId: 'מזהה ארגון',
   status: 'סטטוס',
   cardcomStatus: 'סטטוס סליקה',
-  createdAt: 'תאריך',
-  updatedAt: 'תאריך',
+  createdAt: 'תאריך יצירה',
+  updatedAt: 'תאריך העברה לארכיון',
   date: 'תאריך',
   isHandled: 'סטטוס טיפול',
   agentName: 'סוכן',
@@ -94,6 +95,9 @@ const HEADER_LABELS = {
   leadStatus: 'סטטוס ליד',
   requestType: 'סוג בקשה',
   sku: 'קוד מוצר',
+  slug: 'כתובת דף (Slug)',
+  pageTitle: 'כותרת דף',
+  pageType: 'סוג דף',
   isActive: 'פעיל',
   cardcomRecurringId: 'מזהה הוראת קבע',
   cardcomAccountId: 'מזהה חשבון קארדקום',

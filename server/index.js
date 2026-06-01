@@ -1803,7 +1803,7 @@ app.delete('/api/admin/products/:id', requireAdmin, async (req, res) => {
     res.json({ success: true });
   } catch (e) {
     const msg = e.message || 'Failed to delete product';
-    const status = /לא ניתן|מחירון|Invalid/i.test(msg) ? 400 : 500;
+    const status = /לא ניתן|מנויים|מחירון|Invalid/i.test(msg) ? 400 : 500;
     if (status === 400) {
       console.warn(`[${ts()}] admin/products delete blocked:`, msg);
     } else {

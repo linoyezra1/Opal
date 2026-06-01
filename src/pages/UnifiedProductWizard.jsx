@@ -18,6 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 import { slugify } from '../utils/stringUtils.js';
+import ConfirmDialog from '../components/ConfirmDialog.jsx';
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 const TOKEN_KEY = 'opal_admin_token';
@@ -226,6 +227,8 @@ export default function UnifiedProductWizard() {
   });
   const [hubSearch, setHubSearch] = useState('');
   const [copiedSlug, setCopiedSlug] = useState('');
+  const [archiveTarget, setArchiveTarget] = useState(null);
+  const [archiveError, setArchiveError] = useState('');
 
   // ── Wizard UI ──────────────────────────────────────────────────────────────
   const [openStep, setOpenStep] = useState(1);
@@ -446,15 +449,34 @@ export default function UnifiedProductWizard() {
     setOpenStep(1);
   }
 
-  async function deleteLandingPage(id) {
+  function openArchiveLandingPage(page) {
+    setArchiveError('');
+    setArchiveTarget(page);
+  }
+
+  function closeArchiveLandingPage() {
+    setArchiveTarget(null);
+    setArchiveError('');
+  }
+
+  async function confirmArchiveLandingPage() {
+    const id = archiveTarget?.id;
     if (!id) return;
     setHubLoading(true);
+    setArchiveError('');
     try {
-      await fetch(`${API_BASE}/api/admin/landing-pages/${encodeURIComponent(id)}`, {
+      const res = await fetch(`${API_BASE}/api/admin/landing-pages/${encodeURIComponent(id)}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'העברה לארכיון נכשלה');
+      }
+      closeArchiveLandingPage();
       await loadLandingPages();
+    } catch (e) {
+      setArchiveError(e.message || 'שגיאה');
     } finally {
       setHubLoading(false);
     }
@@ -770,6 +792,21 @@ export default function UnifiedProductWizard() {
   return (
     <TooltipProvider delayDuration={250}>
       <AdminPageShell>
+      <ConfirmDialog
+        open={!!archiveTarget}
+        title="העברת דף לארכיון"
+        message={
+          archiveTarget
+            ? `להעביר את "${archiveTarget.pageTitle || archiveTarget.slug}" לארכיון? הדף לא יהיה זמין לציבור, וניתן לשחזר אותו ממסך הארכיון.`
+            : ''
+        }
+        error={archiveError}
+        confirmLabel="העבר לארכיון"
+        danger
+        onConfirm={confirmArchiveLandingPage}
+        onCancel={closeArchiveLandingPage}
+        isLoading={hubLoading}
+      />
       <div className="space-y-6" dir="rtl">
         {hubMode === 'hub' ? (() => {
           // pageStatus uses the shared isExpired helper from dateUtils.js —
@@ -961,7 +998,7 @@ export default function UnifiedProductWizard() {
                                         size="icon"
                                         type="button"
                                         className="size-8 hover:bg-destructive/10 hover:text-destructive"
-                                        onClick={() => deleteLandingPage(pg.id)}
+                                        onClick={() => openArchiveLandingPage(pg)}
                                         aria-label="העברה לארכיון"
                                       >
                                         <Archive className="size-4 text-destructive" />
