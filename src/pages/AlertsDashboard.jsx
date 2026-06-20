@@ -57,6 +57,7 @@ const COLUMN_LABELS = {
   message: 'הודעה',
   transactionId: 'מספר הזמנה',
   finalBillingMonth: 'חודש בילינג אחרון',
+  subscriptionEndDate: 'תאריך סיום מנוי',
   subscriptionStatus: 'סטטוס מנוי',
   companyId: 'ח.פ',
   billingType: 'סוג חיוב',
@@ -80,7 +81,7 @@ const ALERT_COLUMNS = {
   contactTasks: ['fullName', 'phone', 'email', 'kind', 'message'],
   orgPendingApproval: ['organizationName', 'organizationId', 'companyId', 'billingType', 'email'],
   pendingBeneficiaries: ['fullName', 'phone', 'transactionId', 'amount', 'createdAt'],
-  pendingCancellationCount: ['fullName', 'phone', 'transactionId', 'finalBillingMonth', 'subscriptionStatus'],
+  pendingCancellationCount: ['fullName', 'phone', 'transactionId', 'subscriptionEndDate', 'subscriptionStatus'],
   organizationCollectionsDebt: [
     'organizationName',
     'organizationId',

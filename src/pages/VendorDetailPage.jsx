@@ -23,6 +23,16 @@ import {
 
 const TOKEN_KEY = 'opal_admin_token';
 
+function monthStartEndIso() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = d.getMonth();
+  const start = new Date(y, m, 1);
+  const end = new Date(y, m + 1, 0);
+  const toYmd = (dt) => dt.toISOString().slice(0, 10);
+  return { from: toYmd(start), to: toYmd(end) };
+}
+
 function formatCurrency(v) {
   return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 2 }).format(
     Number(v || 0)
@@ -45,18 +55,19 @@ export default function VendorDetailPage() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const token = localStorage.getItem(TOKEN_KEY) || '';
+  const dateDefaults = monthStartEndIso();
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [vendor, setVendor] = useState(null);
   const [saveBusy, setSaveBusy] = useState(false);
   const [mainTab, setMainTab] = useState('payments');
 
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
-  const [lockInvoiceNum, setLockInvoiceNum] = useState('');
+  const [fromDate, setFromDate] = useState(dateDefaults.from);
+  const [toDate, setToDate] = useState(dateDefaults.to);
   const [preview, setPreview] = useState({ rows: [], summary: {} });
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [snapshots, setSnapshots] = useState([]);
-  const [selectedLedgerIds, setSelectedLedgerIds] = useState(new Set());
+  const [selectedDealIds, setSelectedDealIds] = useState(() => new Set());
   const [lockBusy, setLockBusy] = useState(false);
   const [snapEditOpen, setSnapEditOpen] = useState(false);
   const [snapEditTarget, setSnapEditTarget] = useState(null);
@@ -84,6 +95,8 @@ export default function VendorDetailPage() {
 
   const loadExportPreview = useCallback(async () => {
     if (!token || !id) return;
+    setPreviewLoading(true);
+    setErr('');
     try {
       const q = new URLSearchParams();
       if (fromDate) q.set('fromDate', fromDate);
@@ -94,9 +107,14 @@ export default function VendorDetailPage() {
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error || 'טעינת תצוגה מקדימה נכשלה');
       setPreview({ rows: j.rows || [], summary: j.summary || {} });
-      setSelectedLedgerIds(new Set());
+      const openIds = (j.rows || []).filter((r) => !r.ledgerLocked).map((r) => String(r.dealId));
+      setSelectedDealIds(new Set(openIds));
     } catch (e) {
       setErr(e?.message || 'שגיאה');
+      setPreview({ rows: [], summary: {} });
+      setSelectedDealIds(new Set());
+    } finally {
+      setPreviewLoading(false);
     }
   }, [token, id, fromDate, toDate]);
 
@@ -131,33 +149,34 @@ export default function VendorDetailPage() {
     if (mainTab === 'export') loadExportPreview();
   }, [mainTab, loadExportPreview]);
 
-  const toggleLedgerRow = (ledgerId) => {
-    setSelectedLedgerIds((prev) => {
+  const openPreviewRows = (preview.rows || []).filter((r) => !r.ledgerLocked);
+
+  const toggleDealRow = (dealId) => {
+    setSelectedDealIds((prev) => {
       const next = new Set(prev);
-      if (next.has(ledgerId)) next.delete(ledgerId);
-      else next.add(ledgerId);
+      const key = String(dealId);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
 
-  const toggleAllLedger = (checked) => {
-    const open = (preview.rows || []).filter((r) => !r.ledgerLocked);
-    if (!open.length) return;
-    if (checked) setSelectedLedgerIds(new Set(open.map((r) => r.ledgerEntryId)));
-    else setSelectedLedgerIds(new Set());
+  const toggleAllDeals = (checked) => {
+    if (!openPreviewRows.length) return;
+    if (checked) setSelectedDealIds(new Set(openPreviewRows.map((r) => String(r.dealId))));
+    else setSelectedDealIds(new Set());
   };
 
   const lockVendorPayouts = async () => {
+    const dealIds = [...selectedDealIds];
+    if (!dealIds.length) {
+      setErr('נא לבחור לפחות רשומה אחת לנעילה');
+      return;
+    }
     setLockBusy(true);
     setErr('');
     try {
-      const entryIds = [...selectedLedgerIds];
-      const body = {
-        fromDate,
-        toDate,
-        invoiceNum: lockInvoiceNum,
-        entryIds: entryIds.length ? entryIds : null,
-      };
+      const body = { fromDate, toDate, dealIds };
       const res = await fetch(`${API_BASE}/api/admin/vendors/${encodeURIComponent(id)}/lock-payouts`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -212,7 +231,7 @@ export default function VendorDetailPage() {
     }
   };
 
-  const openPreviewRows = (preview.rows || []).filter((r) => !r.ledgerLocked);
+  const lockDisabled = lockBusy || previewLoading || selectedDealIds.size === 0;
 
   if (!token) {
     return (
@@ -339,7 +358,8 @@ export default function VendorDetailPage() {
                 <CardHeader>
                   <CardTitle>דוח יצוא לספק — רשומות פתוחות</CardTitle>
                   <CardDescription>
-                    מבוטחים ראשיים זכאים לשירות (פעיל / ממתין לביטול). בחרו, הזינו מספר חשבונית ונעלו ליצירת דרישת תשלום.
+                    מבוטחים ראשיים זכאים לשירות (פעיל / ממתין לביטול). בחרו שורות ונעלו ליצירת דרישת תשלום — זהה לדוח
+                    ייצוא לספק במסך דוחות.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -352,20 +372,11 @@ export default function VendorDetailPage() {
                       <FieldLabel>עד תאריך</FieldLabel>
                       <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
                     </Field>
-                    <Field className="min-w-[160px]">
-                      <FieldLabel>מספר חשבונית</FieldLabel>
-                      <Input
-                        value={lockInvoiceNum}
-                        onChange={(e) => setLockInvoiceNum(e.target.value)}
-                        className={ltrInputClass}
-                        dir="ltr"
-                        placeholder="אופציונלי"
-                      />
-                    </Field>
-                    <Button type="button" variant="outline" onClick={loadExportPreview}>
-                      טען
+                    <Button type="button" variant="outline" onClick={loadExportPreview} disabled={previewLoading}>
+                      {previewLoading ? <RefreshCw className="size-4 me-2 animate-spin" /> : null}
+                      {previewLoading ? 'טוען…' : 'טען'}
                     </Button>
-                    <Button type="button" onClick={lockVendorPayouts} disabled={lockBusy || !openPreviewRows.length}>
+                    <Button type="button" onClick={lockVendorPayouts} disabled={lockDisabled}>
                       {lockBusy ? <Spinner className="size-4 me-2" /> : <Lock className="size-4 me-2" />}
                       נעל וצור דרישת תשלום
                     </Button>
@@ -373,8 +384,14 @@ export default function VendorDetailPage() {
                   <p className="text-sm text-muted-foreground">
                     סה״כ לתשלום לספק (פתוח): {formatCurrency(preview.summary?.totalVendorPayout || 0)} ·{' '}
                     {openPreviewRows.length} רשומות
+                    {selectedDealIds.size > 0 ? ` · נבחרו ${selectedDealIds.size}` : ''}
                   </p>
-                  <div className="rounded-md border overflow-x-auto">
+                  <div className="rounded-md border overflow-x-auto relative">
+                    {previewLoading ? (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
+                        <Spinner className="size-8" />
+                      </div>
+                    ) : null}
                     <Table className="text-sm [&_th]:text-right">
                       <TableHeader>
                         <TableRow>
@@ -382,10 +399,11 @@ export default function VendorDetailPage() {
                             <input
                               type="checkbox"
                               className="size-4"
+                              disabled={previewLoading || !openPreviewRows.length}
                               checked={
-                                openPreviewRows.length > 0 && selectedLedgerIds.size === openPreviewRows.length
+                                openPreviewRows.length > 0 && selectedDealIds.size === openPreviewRows.length
                               }
-                              onChange={(e) => toggleAllLedger(e.target.checked)}
+                              onChange={(e) => toggleAllDeals(e.target.checked)}
                             />
                           </TableHead>
                           <TableHead>לקוח</TableHead>
@@ -398,13 +416,14 @@ export default function VendorDetailPage() {
                       </TableHeader>
                       <TableBody>
                         {openPreviewRows.map((r) => (
-                          <TableRow key={r.ledgerEntryId}>
+                          <TableRow key={r.dealId}>
                             <TableCell>
                               <input
                                 type="checkbox"
                                 className="size-4"
-                                checked={selectedLedgerIds.has(r.ledgerEntryId)}
-                                onChange={() => toggleLedgerRow(r.ledgerEntryId)}
+                                checked={selectedDealIds.has(String(r.dealId))}
+                                disabled={previewLoading}
+                                onChange={() => toggleDealRow(r.dealId)}
                               />
                             </TableCell>
                             <TableCell>{`${r.firstName || ''} ${r.lastName || ''}`.trim() || '—'}</TableCell>
@@ -415,7 +434,7 @@ export default function VendorDetailPage() {
                             <TableCell className="font-mono text-xs">{r.transactionId || '—'}</TableCell>
                           </TableRow>
                         ))}
-                        {!openPreviewRows.length ? (
+                        {!openPreviewRows.length && !previewLoading ? (
                           <TableRow>
                             <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                               אין רשומות פתוחות בטווח — עדכנו תאריכים ולחצו טען
@@ -505,7 +524,7 @@ export default function VendorDetailPage() {
               </TableHeader>
               <TableBody>
                 {(snapRowsTarget?.rows || []).map((r, i) => (
-                  <TableRow key={`${r.ledgerEntryId || i}`}>
+                  <TableRow key={`${r.ledgerEntryId || r.dealId || i}`}>
                     <TableCell>{`${r.firstName || ''} ${r.lastName || ''}`.trim() || '—'}</TableCell>
                     <TableCell className="font-mono text-xs">{r.transactionId || '—'}</TableCell>
                     <TableCell>{formatCurrency(r.vendorPayout)}</TableCell>

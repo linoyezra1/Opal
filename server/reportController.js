@@ -23,6 +23,8 @@ import {
   getEntitlementStatus,
   getReportingServiceWindow,
   STATUS_CANCELED,
+  STATUS_ACTIVE,
+  STATUS_PENDING_CANCELLATION,
 } from './entitlementStatus.js';
 
 /**
@@ -458,6 +460,57 @@ export function filterDealsForSubscriberExport(deals, filters = {}) {
 
     return true;
   });
+}
+
+/** מנויים זכאים לתור תשלום לספק — פעיל או ממתין לביטול בלבד */
+export function filterDealsEligibleForVendorPayoutQueue(deals) {
+  return (Array.isArray(deals) ? deals : []).filter((d) => {
+    if (!passesServiceReportGate(d)) return false;
+    const ent = getEntitlementStatus(d);
+    return ent.status === STATUS_ACTIVE || ent.status === STATUS_PENDING_CANCELLATION;
+  });
+}
+
+/**
+ * שלב סינון משותף לדוח יצוא לספק (Reports + Vendor Payments Export Tab).
+ * @param {object[]} deals — לאחר filterDealsOverlappingEligibleServicePeriod
+ */
+export function resolveVendorExportDeals(deals, { vendorName = '', month = '' } = {}) {
+  const afterProvider = filterDealsForSubscriberExport(deals, {
+    provider: vendorName,
+    month,
+  });
+  return filterDealsEligibleForVendorPayoutQueue(afterProvider);
+}
+
+/** שורות תצוגה מקדימה לנעילת תשלום — מבוטח ראשי בלבד, עלות 0 למוטב משני */
+export function buildVendorPayoutPreviewRowsFromDeals(deals, { lockedDealIds = new Set() } = {}) {
+  const locked = lockedDealIds instanceof Set ? lockedDealIds : new Set(lockedDealIds);
+  const rows = [];
+  for (const d of Array.isArray(deals) ? deals : []) {
+    const dealId = String(d._id || '');
+    if (!dealId || locked.has(dealId)) continue;
+    const flat = generateFlattenedSubscriberRows([d]);
+    const primary = flat.find((r) => r.rowRole === 'primary');
+    if (!primary) continue;
+    rows.push({
+      dealId,
+      transactionId: primary.transactionId,
+      firstName: primary.firstName,
+      lastName: primary.lastName,
+      idNumber: primary.idNumber,
+      productName: primary.productName,
+      vendorPayout: Number(primary.vendorPayout || 0),
+      billingMonth: primary.billingMonth,
+      subscriptionStatus: primary.subscriptionStatus,
+      subscriptionEndDisplay: primary.subscriptionEndDisplay,
+      entitlementStatus: getEntitlementStatus(d).status,
+      ledgerEntryId: '',
+      ledgerLocked: false,
+      isSecondary: false,
+    });
+  }
+  return rows;
 }
 
 export function listProviderNamesFromDeals(deals) {

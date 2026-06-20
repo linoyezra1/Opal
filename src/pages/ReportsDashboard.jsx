@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FileSpreadsheet, Users, RefreshCw, Lock, Edit2, Download, ChevronDown, ChevronUp, Wallet } from 'lucide-react';
+import { FileSpreadsheet, Users, RefreshCw, Lock, Edit2, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { API_BASE } from '../apiBase.js';
 import { fmtDateTime } from '../utils/dateUtils.js';
@@ -143,10 +143,6 @@ export default function ReportsDashboard() {
   const [snapEditForm, setSnapEditForm] = useState({ status: 'Pending', invoiceNum: '', receiptNum: '', notes: '' });
   const [saveSnapBusy, setSaveSnapBusy] = useState(false);
 
-  const [closedPayouts, setClosedPayouts] = useState([]);
-  const [closedLoading, setClosedLoading] = useState(false);
-  const [expandedClosedId, setExpandedClosedId] = useState('');
-
   const loadAllSnapshots = useCallback(async () => {
     if (!token) return;
     setSnapsLoading(true);
@@ -162,22 +158,6 @@ export default function ReportsDashboard() {
       setSnapsErr(e?.message || 'שגיאה');
     } finally {
       setSnapsLoading(false);
-    }
-  }, [token]);
-
-  const loadClosedPayouts = useCallback(async () => {
-    if (!token) return;
-    setClosedLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/closed-payouts?limit=300`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const j = await res.json().catch(() => ({}));
-      if (res.ok && j.success) setClosedPayouts(Array.isArray(j.invoices) ? j.invoices : []);
-    } catch {
-      /* ignore */
-    } finally {
-      setClosedLoading(false);
     }
   }, [token]);
 
@@ -310,11 +290,6 @@ export default function ReportsDashboard() {
     if (tab !== 'snapshots') return;
     loadAllSnapshots();
   }, [tab, loadAllSnapshots]);
-
-  useEffect(() => {
-    if (tab !== 'closed-payouts') return;
-    loadClosedPayouts();
-  }, [tab, loadClosedPayouts]);
 
   const runSubscribersExport = async () => {
     setExportErr('');
@@ -509,7 +484,6 @@ export default function ReportsDashboard() {
             next.set('tab', v);
             setSearchParams(next, { replace: true });
             if (v === 'snapshots') loadAllSnapshots();
-            if (v === 'closed-payouts') loadClosedPayouts();
           }}
           className="w-full"
         >
@@ -525,10 +499,6 @@ export default function ReportsDashboard() {
             <TabsTrigger value="snapshots" className="gap-1">
               <Lock className="size-4" />
               דוח ארגונים תש' מרוכז
-            </TabsTrigger>
-            <TabsTrigger value="closed-payouts" className="gap-1">
-              <Wallet className="size-4" />
-              תשלומים סגורים
             </TabsTrigger>
           </TabsList>
 
@@ -919,102 +889,6 @@ export default function ReportsDashboard() {
                     </div>
                   </>
                 )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="closed-payouts" className="mt-4" dir="rtl">
-            <Card className="text-right" dir="rtl">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>תשלומים סגורים</CardTitle>
-                  <CardDescription>
-                    מרכז תשלומים סגורים — חשבוניות ששולמו לספקים ולסוכנים (קריאה בלבד)
-                  </CardDescription>
-                </div>
-                <Button type="button" variant="outline" size="sm" onClick={loadClosedPayouts} disabled={closedLoading}>
-                  <RefreshCw className={`size-4 me-2 ${closedLoading ? 'animate-spin' : ''}`} />
-                  רענון
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-8" />
-                        <TableHead className="text-right">סוג</TableHead>
-                        <TableHead className="text-right">שם</TableHead>
-                        <TableHead className="text-right">חודש / טווח</TableHead>
-                        <TableHead className="text-right">מספר חשבונית</TableHead>
-                        <TableHead className="text-right">סה״כ</TableHead>
-                        <TableHead className="text-right">עסקאות</TableHead>
-                        <TableHead className="text-right">עודכן</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {closedPayouts.map((inv) => {
-                        const isOpen = expandedClosedId === inv.id;
-                        const period =
-                          inv.kind === 'vendor' && inv.fromDate && inv.toDate
-                            ? `${inv.fromDate} — ${inv.toDate}`
-                            : inv.month || '—';
-                        return (
-                          <React.Fragment key={inv.id}>
-                            <TableRow
-                              className="cursor-pointer hover:bg-muted/40"
-                              onClick={() => setExpandedClosedId(isOpen ? '' : inv.id)}
-                            >
-                              <TableCell>{isOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}</TableCell>
-                              <TableCell>{inv.kind === 'vendor' ? 'ספק' : 'סוכן'}</TableCell>
-                              <TableCell className="font-medium">{inv.partyName || '—'}</TableCell>
-                              <TableCell>{period}</TableCell>
-                              <TableCell>{inv.invoiceNum || '—'}</TableCell>
-                              <TableCell>{formatCurrency(inv.totalAmount)}</TableCell>
-                              <TableCell>{inv.totalDeals || 0}</TableCell>
-                              <TableCell>{fmtDateTime(inv.updatedAt)}</TableCell>
-                            </TableRow>
-                            {isOpen ? (
-                              <TableRow>
-                                <TableCell colSpan={8} className="bg-muted/20 p-0">
-                                  <div className="p-4 overflow-x-auto">
-                                    <Table className="text-sm">
-                                      <TableHeader>
-                                        <TableRow>
-                                          <TableHead className="text-right">לקוח</TableHead>
-                                          <TableHead className="text-right">הזמנה</TableHead>
-                                          <TableHead className="text-right">סכום</TableHead>
-                                        </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
-                                        {(inv.rows || []).map((r, i) => (
-                                          <TableRow key={`${inv.id}-sub-${i}`}>
-                                            <TableCell>
-                                              {r.employeeName || `${r.firstName || ''} ${r.lastName || ''}`.trim() || '—'}
-                                            </TableCell>
-                                            <TableCell className="font-mono text-xs">{r.transactionId || '—'}</TableCell>
-                                            <TableCell>{formatCurrency(r.amount ?? r.vendorPayout ?? 0)}</TableCell>
-                                          </TableRow>
-                                        ))}
-                                      </TableBody>
-                                    </Table>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            ) : null}
-                          </React.Fragment>
-                        );
-                      })}
-                      {!closedPayouts.length && !closedLoading ? (
-                        <TableRow>
-                          <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                            אין חשבוניות ששולמו עדיין
-                          </TableCell>
-                        </TableRow>
-                      ) : null}
-                    </TableBody>
-                  </Table>
-                </div>
               </CardContent>
             </Card>
           </TabsContent>

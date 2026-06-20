@@ -90,7 +90,6 @@ import {
   lockVendorPayoutSnapshot,
   listVendorPayoutSnapshots,
   updateVendorPayoutSnapshot,
-  listClosedPaidPayoutInvoices,
   persistCheckoutSession,
   loadCheckoutSession,
   consumeCheckoutSession,
@@ -1931,6 +1930,7 @@ app.post('/api/admin/vendors/:id/lock-payouts', requireAdmin, async (req, res) =
       fromDate: req.body?.fromDate || req.query.fromDate || '',
       toDate: req.body?.toDate || req.query.toDate || '',
       month: req.body?.month || req.query.month || '',
+      dealIds: Array.isArray(req.body?.dealIds) ? req.body.dealIds : null,
       entryIds: Array.isArray(req.body?.entryIds) ? req.body.entryIds : null,
     });
     res.json({ success: true, snapshot });
@@ -1947,16 +1947,6 @@ app.patch('/api/admin/vendors/:id/payout-snapshots/:snapId', requireAdmin, async
   } catch (e) {
     console.error(`[${ts()}] admin/vendors/:id/payout-snapshots/:snapId patch error:`, e);
     res.status(400).json({ success: false, error: e.message || 'Failed to update vendor snapshot' });
-  }
-});
-
-app.get('/api/admin/closed-payouts', requireAdmin, async (req, res) => {
-  try {
-    const invoices = await listClosedPaidPayoutInvoices(Number(req.query.limit) || 500);
-    res.json({ success: true, invoices });
-  } catch (e) {
-    console.error(`[${ts()}] admin/closed-payouts error:`, e);
-    res.status(500).json({ success: false, error: e.message || 'Failed to load closed payouts' });
   }
 });
 
