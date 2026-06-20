@@ -6113,7 +6113,11 @@ function mapVendorPayoutSnapshotDoc(d) {
     creditNoteAmount: Number(d.creditNoteAmount || 0),
     totalPaid: Number(d.totalPaid || 0),
     balance: Number(
-      d.balance != null ? d.balance : Number(d.totalAmount || 0) - Number(d.totalPaid || 0)
+      d.balance != null
+        ? d.balance
+        : Number(d.invoiceAmount || d.totalAmount || 0) -
+            Number(d.creditNoteAmount || 0) -
+            Number(d.totalPaid || 0)
     ),
     notes: String(d.notes || ''),
     rows: Array.isArray(d.rows) ? d.rows : [],
@@ -6331,7 +6335,14 @@ export async function updateVendorPayoutSnapshot(vendorId, snapshotId, patch = {
   const vid = String(vendorId || '').trim();
   const existing = await db.collection('vendor_payout_snapshots').findOne(
     { _id: sid, vendorId: vid },
-    { projection: { totalAmount: 1, totalPaid: 1 } }
+    {
+      projection: {
+        totalAmount: 1,
+        totalPaid: 1,
+        invoiceAmount: 1,
+        creditNoteAmount: 1,
+      },
+    }
   );
   if (!existing) throw new Error('Snapshot לא נמצא');
 
@@ -6339,14 +6350,19 @@ export async function updateVendorPayoutSnapshot(vendorId, snapshotId, patch = {
   if (patch.status != null) set.status = String(patch.status || 'Pending');
   if (patch.notes != null) set.notes = String(patch.notes || '');
   if (patch.invoiceNum != null) set.invoiceNum = String(patch.invoiceNum || '');
-  if (patch.invoiceAmount != null) set.invoiceAmount = Number(patch.invoiceAmount || 0);
+  if (patch.invoiceAmount != null) set.invoiceAmount = Math.max(0, Number(patch.invoiceAmount || 0));
   if (patch.creditNoteNum != null) set.creditNoteNum = String(patch.creditNoteNum || '');
-  if (patch.creditNoteAmount != null) set.creditNoteAmount = Number(patch.creditNoteAmount || 0);
+  if (patch.creditNoteAmount != null) set.creditNoteAmount = Math.max(0, Number(patch.creditNoteAmount || 0));
   if (patch.totalPaid != null) set.totalPaid = Math.max(0, Number(patch.totalPaid || 0));
 
-  const paidBase = Number(existing.totalPaid || 0);
-  const totalPaidNext = set.totalPaid != null ? Number(set.totalPaid || 0) : paidBase;
-  set.balance = Number(existing.totalAmount || 0) - totalPaidNext;
+  const invoiceAmount =
+    set.invoiceAmount != null ? Number(set.invoiceAmount || 0) : Number(existing.invoiceAmount || 0);
+  const creditNoteAmount =
+    set.creditNoteAmount != null
+      ? Number(set.creditNoteAmount || 0)
+      : Number(existing.creditNoteAmount || 0);
+  const totalPaid = set.totalPaid != null ? Number(set.totalPaid || 0) : Number(existing.totalPaid || 0);
+  set.balance = invoiceAmount - creditNoteAmount - totalPaid;
 
   const r = await db.collection('vendor_payout_snapshots').updateOne({ _id: sid, vendorId: vid }, { $set: set });
   if (!r.matchedCount) throw new Error('Snapshot לא נמצא');

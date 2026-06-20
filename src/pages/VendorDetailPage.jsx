@@ -3,11 +3,11 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowRight, Edit2, Lock, RefreshCw } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
+import VendorPaymentEditDrawer from '../components/drawers/VendorPaymentEditDrawer.jsx';
 import { Button } from '../components/ui/button.jsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
 import { Input } from '../components/ui/input.jsx';
-import { Textarea } from '../components/ui/textarea.jsx';
 import { Field, FieldGroup, FieldLabel } from '../components/ui/field.jsx';
 import { Badge } from '../components/ui/badge.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
@@ -16,7 +16,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog.jsx';
@@ -39,18 +38,6 @@ function formatCurrency(v) {
   );
 }
 
-const emptySnapEditForm = () => ({
-  status: 'Pending',
-  invoiceNum: '',
-  invoiceAmount: 0,
-  creditNoteNum: '',
-  creditNoteAmount: 0,
-  totalPaid: 0,
-  notes: '',
-});
-
-const ltrInputClass = 'text-left font-mono tabular-nums';
-
 export default function VendorDetailPage() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
@@ -71,7 +58,6 @@ export default function VendorDetailPage() {
   const [lockBusy, setLockBusy] = useState(false);
   const [snapEditOpen, setSnapEditOpen] = useState(false);
   const [snapEditTarget, setSnapEditTarget] = useState(null);
-  const [snapEditForm, setSnapEditForm] = useState(emptySnapEditForm);
   const [snapRowsOpen, setSnapRowsOpen] = useState(false);
   const [snapRowsTarget, setSnapRowsTarget] = useState(null);
 
@@ -196,33 +182,26 @@ export default function VendorDetailPage() {
 
   const openSnapEdit = (snap) => {
     setSnapEditTarget(snap);
-    setSnapEditForm({
-      status: snap.status || 'Pending',
-      invoiceNum: snap.invoiceNum || '',
-      invoiceAmount: Number(snap.invoiceAmount || 0),
-      creditNoteNum: snap.creditNoteNum || '',
-      creditNoteAmount: Number(snap.creditNoteAmount || 0),
-      totalPaid: Number(snap.totalPaid || 0),
-      notes: snap.notes || '',
-    });
     setSnapEditOpen(true);
   };
 
-  const saveSnapEdit = async () => {
+  const saveSnapEdit = async (form) => {
     if (!snapEditTarget) return;
     setSaveBusy(true);
+    setErr('');
     try {
       const res = await fetch(
         `${API_BASE}/api/admin/vendors/${encodeURIComponent(id)}/payout-snapshots/${encodeURIComponent(snapEditTarget.id)}`,
         {
           method: 'PATCH',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify(snapEditForm),
+          body: JSON.stringify(form),
         }
       );
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.success) throw new Error(j.error || 'שמירה נכשלה');
       setSnapEditOpen(false);
+      setSnapEditTarget(null);
       await loadSnapshots();
     } catch (e) {
       setErr(e?.message || 'שגיאה');
@@ -307,7 +286,11 @@ export default function VendorDetailPage() {
                       </TableHeader>
                       <TableBody>
                         {snapshots.map((s) => (
-                          <TableRow key={s.id}>
+                          <TableRow
+                            key={s.id}
+                            className="cursor-pointer hover:bg-muted/40"
+                            onClick={() => openSnapEdit(s)}
+                          >
                             <TableCell>
                               {s.fromDate && s.toDate ? `${s.fromDate} — ${s.toDate}` : s.month || '—'}
                             </TableCell>
@@ -320,7 +303,7 @@ export default function VendorDetailPage() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <div className="flex gap-1">
+                              <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                                 <Button
                                   type="button"
                                   size="sm"
@@ -451,57 +434,17 @@ export default function VendorDetailPage() {
         )}
       </div>
 
-      <Dialog open={snapEditOpen} onOpenChange={setSnapEditOpen}>
-        <DialogContent className="sm:max-w-md text-right" dir="rtl">
-          <DialogHeader>
-            <DialogTitle>עריכת דרישת תשלום לספק</DialogTitle>
-            <DialogDescription>
-              {snapEditTarget
-                ? `${snapEditTarget.totalDeals || 0} עסקאות · ${formatCurrency(snapEditTarget.totalAmount)}`
-                : ''}
-            </DialogDescription>
-          </DialogHeader>
-          <FieldGroup className="gap-3">
-            <Field>
-              <FieldLabel>סטטוס</FieldLabel>
-              <select
-                className="flex h-9 w-full rounded-md border px-3 text-sm"
-                value={snapEditForm.status}
-                onChange={(e) => setSnapEditForm((p) => ({ ...p, status: e.target.value }))}
-              >
-                <option value="Pending">ממתין לתשלום</option>
-                <option value="Paid">שולם</option>
-              </select>
-            </Field>
-            <Field>
-              <FieldLabel>מספר חשבונית</FieldLabel>
-              <Input
-                value={snapEditForm.invoiceNum}
-                onChange={(e) => setSnapEditForm((p) => ({ ...p, invoiceNum: e.target.value }))}
-                className={ltrInputClass}
-                dir="ltr"
-              />
-            </Field>
-            <Field>
-              <FieldLabel>הערות</FieldLabel>
-              <Textarea
-                value={snapEditForm.notes}
-                onChange={(e) => setSnapEditForm((p) => ({ ...p, notes: e.target.value }))}
-                rows={3}
-              />
-            </Field>
-          </FieldGroup>
-          <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
-            <Button type="button" variant="outline" onClick={() => setSnapEditOpen(false)}>
-              ביטול
-            </Button>
-            <Button type="button" onClick={saveSnapEdit} disabled={saveBusy}>
-              {saveBusy ? <Spinner className="me-2" /> : null}
-              שמירה
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <VendorPaymentEditDrawer
+        open={snapEditOpen}
+        onOpenChange={(open) => {
+          setSnapEditOpen(open);
+          if (!open) setSnapEditTarget(null);
+        }}
+        vendorName={vendor?.vendorName || snapEditTarget?.vendorName || ''}
+        snapshot={snapEditTarget}
+        onSave={saveSnapEdit}
+        saving={saveBusy}
+      />
 
       <Dialog open={snapRowsOpen} onOpenChange={setSnapRowsOpen}>
         <DialogContent className="sm:max-w-2xl text-right" dir="rtl">
