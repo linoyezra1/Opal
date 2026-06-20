@@ -1051,7 +1051,7 @@ export async function resolveEconomicsForBillingPayment(formState, actualAmount)
   };
 }
 
-function serializePriceListDoc(d) {
+function serializePriceListDoc(d, productById = null) {
   if (!d) return null;
   const lines = (d.lines || []).map((line) => {
     const retail = Number(line.retailPrice || 0);
@@ -1071,11 +1071,18 @@ function serializePriceListDoc(d) {
       profit: Number(line.profit ?? net),
     };
   });
+  const primaryLine = lines[0] || null;
+  const prod =
+    primaryLine && productById instanceof Map ? productById.get(String(primaryLine.productId)) : null;
   return {
     id: String(d._id),
     listName: d.listName,
     orgName: d.orgName || '',
     lines,
+    productId: primaryLine?.productId || '',
+    productName: prod ? String(prod.productName || prod.name || '') : '',
+    sku: prod ? String(prod.sku || '') : '',
+    basePrice: primaryLine ? Number(primaryLine.retailPrice || 0) : 0,
     createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
     updatedAt: d.updatedAt ? new Date(d.updatedAt).toISOString() : null,
   };
@@ -1084,19 +1091,41 @@ function serializePriceListDoc(d) {
 export async function listPriceLists() {
   await ensureConnection();
   const docs = await PriceList.find({ isActive: { $ne: false } }).sort({ updatedAt: -1 }).lean();
-  return docs.map((d) => serializePriceListDoc(d));
+  const productIds = [
+    ...new Set(
+      docs.flatMap((d) => (d.lines || []).map((l) => String(l.productId)).filter(Boolean))
+    ),
+  ].filter((id) => mongoose.isValidObjectId(id));
+  const products = productIds.length
+    ? await Product.find({ _id: { $in: productIds } })
+        .select('productName name sku providerCost retailPrice')
+        .lean()
+    : [];
+  const productById = new Map(products.map((p) => [String(p._id), p]));
+  return docs.map((d) => serializePriceListDoc(d, productById));
 }
 
 export async function getPriceListById(id) {
   await ensureConnection();
   if (!mongoose.isValidObjectId(id)) return null;
   const d = await PriceList.findById(id).lean();
-  return serializePriceListDoc(d);
+  if (!d) return null;
+  const pid = String(d.lines?.[0]?.productId || '');
+  const prod =
+    pid && mongoose.isValidObjectId(pid)
+      ? await Product.findById(pid).select('productName name sku providerCost retailPrice').lean()
+      : null;
+  const productById = prod ? new Map([[String(prod._id), prod]]) : new Map();
+  return serializePriceListDoc(d, productById);
 }
 
 export async function createPriceList(payload) {
   await ensureConnection();
-  const linesIn = Array.isArray(payload.lines) ? payload.lines : [];
+  const linesInRaw = Array.isArray(payload.lines) ? payload.lines : [];
+  if (linesInRaw.length > 1) {
+    throw new Error('מחירון יכול להכיל מוצר יחיד בלבד');
+  }
+  const linesIn = linesInRaw.slice(0, 1);
   const lines = [];
   for (const row of linesIn) {
     const pid = row.productId;
@@ -1146,7 +1175,11 @@ export async function createPriceList(payload) {
 export async function updatePriceList(id, payload) {
   await ensureConnection();
   if (!mongoose.isValidObjectId(id)) throw new Error('Invalid price list id');
-  const linesIn = Array.isArray(payload.lines) ? payload.lines : [];
+  const linesInRaw = Array.isArray(payload.lines) ? payload.lines : [];
+  if (linesInRaw.length > 1) {
+    throw new Error('מחירון יכול להכיל מוצר יחיד בלבד');
+  }
+  const linesIn = linesInRaw.slice(0, 1);
   const lines = [];
   for (const row of linesIn) {
     const pid = row.productId;

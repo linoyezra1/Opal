@@ -260,14 +260,6 @@ export default function PricingDashboard() {
     });
   }
 
-  function addLine() {
-    setLines((prev) => [...prev, emptyLine()]);
-  }
-
-  function removeLine(i) {
-    setLines((prev) => prev.filter((_, j) => j !== i));
-  }
-
   async function saveList(e) {
     e.preventDefault();
     setLoading(true);
@@ -277,6 +269,7 @@ export default function PricingDashboard() {
         listName,
         orgName,
         lines: lines
+          .slice(0, 1)
           .map((l) => {
             const p = (products || []).find((x) => String(x.id) === String(l.productId));
             const vendorId = String(l.vendorId || p?.providerId || '');
@@ -300,7 +293,10 @@ export default function PricingDashboard() {
           })),
       };
       if (!body.lines.length) {
-        throw new Error('יש להוסיף לפחות מוצר אחד');
+        throw new Error('יש לבחור מוצר יחיד למחירון');
+      }
+      if (body.lines.length > 1) {
+        throw new Error('מחירון יכול להכיל מוצר יחיד בלבד');
       }
       const url = editId ? `${API_BASE}/api/admin/price-lists/${editId}` : `${API_BASE}/api/admin/price-lists`;
       const res = await fetch(url, {
@@ -373,8 +369,7 @@ export default function PricingDashboard() {
           <DialogHeader>
             <DialogTitle>{editId ? 'עריכת מחירון' : 'מחירון חדש'}</DialogTitle>
             <DialogDescription>
-              לכל שורה: מוצר, ספק נקבע אוטומטית מהמוצר, ואופציונלית סוכן — העמלה תימשך אוטומטית מפרופיל הסוכן (productCommissions). בלי סוכן ניתן להזין
-              עמלה ידנית.
+              מחירון מקושר למוצר יחיד. בחרו מוצר, סוכן (אופציונלי) ומחיר לצרכן.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={saveList} className="space-y-4">
@@ -386,8 +381,8 @@ export default function PricingDashboard() {
             </FieldGroup>
 
             <div className="space-y-3">
-              <h3 className="font-semibold text-sm">מוצרים במחירון</h3>
-              {lines.map((line, i) => {
+              <h3 className="font-semibold text-sm">מוצר במחירון</h3>
+              {lines.slice(0, 1).map((line, i) => {
                 const selectedProduct = (products || []).find((p) => String(p.id) === String(line.productId));
                 const providerLabel =
                   line.providerName ||
@@ -486,18 +481,9 @@ export default function PricingDashboard() {
                         </Field>
                       </div>
                     </div>
-                    <div className="flex justify-end">
-                      <Button type="button" variant="ghost" className="text-destructive" onClick={() => removeLine(i)}>
-                        הסר שורה
-                      </Button>
-                    </div>
                   </div>
                 );
               })}
-              <Button type="button" variant="default" className="w-full sm:w-auto" onClick={addLine}>
-                <Plus className="size-4 me-2" />
-                הוסף מוצר למחירון
-              </Button>
             </div>
             {error ? <p className="text-destructive text-sm">{error}</p> : null}
             <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
@@ -637,6 +623,9 @@ export default function PricingDashboard() {
                     <TableRow className="[&_th]:text-right">
                       <TableHead className="w-8" />
                       <TableHead>שם מחירון</TableHead>
+                      <TableHead>שם מוצר</TableHead>
+                      <TableHead>מק&quot;ט</TableHead>
+                      <TableHead>מחיר בסיס</TableHead>
                       <TableHead>תאריך יצירה</TableHead>
                       <TableHead className="w-36">פעולות</TableHead>
                     </TableRow>
@@ -668,6 +657,9 @@ export default function PricingDashboard() {
                                 : <ChevronDown className="size-4 text-muted-foreground mx-auto" />}
                             </TableCell>
                             <TableCell className="font-medium">{row.listName}</TableCell>
+                            <TableCell>{row.productName || productMap.get(String(row.productId || ''))?.productName || '—'}</TableCell>
+                            <TableCell className="font-mono text-sm">{row.sku || productMap.get(String(row.productId || ''))?.sku || '—'}</TableCell>
+                            <TableCell>{formatCurrency(row.basePrice ?? row.lines?.[0]?.retailPrice ?? 0)}</TableCell>
                             <TableCell className="text-sm text-muted-foreground">{dateLabel}</TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1 flex-wrap">
@@ -692,7 +684,7 @@ export default function PricingDashboard() {
 
                           {isExpanded && (
                             <TableRow className="bg-muted/30 hover:bg-muted/30">
-                              <TableCell colSpan={4} className="p-0">
+                              <TableCell colSpan={7} className="p-0">
                                 <div className="px-6 py-4 space-y-2">
                                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                                     ארגונים מקושרים למחירון

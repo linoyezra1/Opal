@@ -8,6 +8,7 @@ import {
   CreditCard,
   ChevronDown,
   ChevronUp,
+  Download,
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
@@ -237,6 +238,26 @@ export default function VendorDashboard() {
   const [providerApps, setProviderApps] = React.useState([]);
   const [loadingApps, setLoadingApps] = React.useState(false);
   const [approvingId, setApprovingId] = React.useState('');
+
+  async function exportVendorsExcel() {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/reports/vendors-export-xlsx`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('ייצוא נכשל');
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = 'opal-vendors.xlsx';
+      a.click();
+      URL.revokeObjectURL(href);
+    } catch (e) {
+      setError(e?.message || 'ייצוא נכשל');
+    }
+  }
+
   const vendorFilterConfig = React.useMemo(
     () => [
       { key: 'search', label: 'חיפוש', type: 'text', placeholder: 'חיפוש חופשי: ספק, ח.פ, טלפון, אימייל, מוצר' },
@@ -638,17 +659,23 @@ export default function VendorDashboard() {
 
           </div>
           {activeTab === 'vendors' && (
-            <Button
-              onClick={() => {
-                setForm(emptyVendor);
-                setProductLinks([emptyLink()]);
-                setError('');
-                setCreateOpen(true);
-              }}
-            >
-              <Plus className="size-4 me-2" />
-              הוסף ספק
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" onClick={exportVendorsExcel}>
+                <Download className="size-4 me-2" />
+                ייצוא לאקסל
+              </Button>
+              <Button
+                onClick={() => {
+                  setForm(emptyVendor);
+                  setProductLinks([emptyLink()]);
+                  setError('');
+                  setCreateOpen(true);
+                }}
+              >
+                <Plus className="size-4 me-2" />
+                הוסף ספק
+              </Button>
+            </div>
           )}
         </div>
 

@@ -85,6 +85,12 @@ import {
   tryAcquireCheckoutLock,
   releaseCheckoutLock,
   writeInitialCheckoutCommissionLedger,
+  writeInitialCheckoutVendorPayoutLedger,
+  getVendorPayoutPreview,
+  lockVendorPayoutSnapshot,
+  listVendorPayoutSnapshots,
+  updateVendorPayoutSnapshot,
+  listClosedPaidPayoutInvoices,
   persistCheckoutSession,
   loadCheckoutSession,
   consumeCheckoutSession,
@@ -157,6 +163,9 @@ import {
   filterDealsCancellationsServiceEndInPeriod,
   listProviderNamesFromDealsForFilter,
   buildSubscribersXlsxBuffer,
+  buildVendorExportXlsxBuffer,
+  buildProductsXlsxBuffer,
+  buildVendorsXlsxBuffer,
   buildCancellationsXlsxBuffer,
   buildAgentPaymentTransferDocxBuffer,
   buildProviderPaymentTransferDocxBuffer,
@@ -1031,6 +1040,19 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
       }
     }
 
+    if (!result.duplicate && Number(econ.resolvedVendorCost || 0) > 0) {
+      try {
+        await writeInitialCheckoutVendorPayoutLedger({
+          dealId: result.id,
+          transactionId,
+          formState: finalForm || mergedForm || {},
+          vendorCost: Number(econ.resolvedVendorCost || 0),
+        });
+      } catch (vendorLedgerErr) {
+        console.warn(`[${ts()}] writeInitialCheckoutVendorPayoutLedger (non-blocking):`, vendorLedgerErr?.message || vendorLedgerErr);
+      }
+    }
+
     try {
       await markPendingCheckoutLeadConverted(lowProfileCode, transactionId);
     } catch (linkErr) {
@@ -1874,6 +1896,65 @@ app.patch('/api/admin/vendors/:id/payouts/:payoutId', requireAdmin, async (req, 
   } catch (e) {
     console.error(`[${ts()}] admin/vendors/:id/payouts patch error:`, e);
     res.status(400).json({ success: false, error: e.message || 'Failed to update payout' });
+  }
+});
+
+app.get('/api/admin/vendors/:id/payout-preview', requireAdmin, async (req, res) => {
+  try {
+    const payload = await getVendorPayoutPreview(req.params.id, {
+      fromDate: req.query.fromDate || req.query.from || '',
+      toDate: req.query.toDate || req.query.to || '',
+      month: req.query.month || '',
+    });
+    res.json({ success: true, ...payload });
+  } catch (e) {
+    console.error(`[${ts()}] admin/vendors/:id/payout-preview error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to load vendor payout preview' });
+  }
+});
+
+app.get('/api/admin/vendors/:id/payout-snapshots', requireAdmin, async (req, res) => {
+  try {
+    const snapshots = await listVendorPayoutSnapshots(req.params.id, Number(req.query.limit) || 100);
+    res.json({ success: true, snapshots });
+  } catch (e) {
+    console.error(`[${ts()}] admin/vendors/:id/payout-snapshots error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to list vendor snapshots' });
+  }
+});
+
+app.post('/api/admin/vendors/:id/lock-payouts', requireAdmin, async (req, res) => {
+  try {
+    const snapshot = await lockVendorPayoutSnapshot(req.params.id, {
+      fromDate: req.body?.fromDate || req.query.fromDate || '',
+      toDate: req.body?.toDate || req.query.toDate || '',
+      month: req.body?.month || req.query.month || '',
+      entryIds: Array.isArray(req.body?.entryIds) ? req.body.entryIds : null,
+    });
+    res.json({ success: true, snapshot });
+  } catch (e) {
+    console.error(`[${ts()}] admin/vendors/:id/lock-payouts error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to lock vendor payouts' });
+  }
+});
+
+app.patch('/api/admin/vendors/:id/payout-snapshots/:snapId', requireAdmin, async (req, res) => {
+  try {
+    const result = await updateVendorPayoutSnapshot(req.params.id, req.params.snapId, req.body || {});
+    res.json(result);
+  } catch (e) {
+    console.error(`[${ts()}] admin/vendors/:id/payout-snapshots/:snapId patch error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to update vendor snapshot' });
+  }
+});
+
+app.get('/api/admin/closed-payouts', requireAdmin, async (req, res) => {
+  try {
+    const invoices = await listClosedPaidPayoutInvoices(Number(req.query.limit) || 500);
+    res.json({ success: true, invoices });
+  } catch (e) {
+    console.error(`[${ts()}] admin/closed-payouts error:`, e);
+    res.status(500).json({ success: false, error: e.message || 'Failed to load closed payouts' });
   }
 });
 
@@ -3088,19 +3169,52 @@ app.get('/api/admin/reports/subscribers-export-xlsx', requireAdmin, async (req, 
       organizationId: req.query.organizationId,
       month: req.query.month,
     });
-    const file = await buildSubscribersXlsxBuffer(deals);
+    const vendorMode = String(req.query.vendorExport || req.query.mode || '') === 'vendor';
+    const xlsxFile = vendorMode ? await buildVendorExportXlsxBuffer(deals) : await buildSubscribersXlsxBuffer(deals);
     res.setHeader(
       'Content-Disposition',
-      'attachment; filename="opal-subscribers-by-person.xlsx"'
+      `attachment; filename="${vendorMode ? 'opal-vendor-export' : 'opal-subscribers-by-person'}.xlsx"`
     );
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.send(xlsxFile);
+  } catch (e) {
+    console.error(`[${ts()}] reports/subscribers-export-xlsx error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to build XLSX export' });
+  }
+});
+
+app.get('/api/admin/reports/products-export-xlsx', requireAdmin, async (req, res) => {
+  try {
+    const products = await listProducts();
+    const file = await buildProductsXlsxBuffer(products);
+    res.setHeader('Content-Disposition', 'attachment; filename="opal-products.xlsx"');
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     );
     res.send(file);
   } catch (e) {
-    console.error(`[${ts()}] reports/subscribers-export-xlsx error:`, e);
-    res.status(500).json({ success: false, error: 'Failed to build XLSX export' });
+    console.error(`[${ts()}] reports/products-export-xlsx error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to build products XLSX export' });
+  }
+});
+
+app.get('/api/admin/reports/vendors-export-xlsx', requireAdmin, async (req, res) => {
+  try {
+    const vendors = await listVendors({ activeOnly: false });
+    const file = await buildVendorsXlsxBuffer(vendors);
+    res.setHeader('Content-Disposition', 'attachment; filename="opal-vendors.xlsx"');
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.send(file);
+  } catch (e) {
+    console.error(`[${ts()}] reports/vendors-export-xlsx error:`, e);
+    res.status(500).json({ success: false, error: 'Failed to build vendors XLSX export' });
   }
 });
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Plus, Edit2, Archive, Package, Eye, Check, Copy, ExternalLink, Globe } from 'lucide-react';
+import { Plus, Edit2, Archive, Package, Eye, Check, Copy, ExternalLink, Globe, Download } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
@@ -218,6 +218,26 @@ export default function ProductManagement() {
   const [deleteTarget, setDeleteTarget] = React.useState(null);
   const [deleteError, setDeleteError] = React.useState('');
   const [createOpen, setCreateOpen] = React.useState(false);
+
+  async function exportProductsExcel() {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/reports/products-export-xlsx`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('ייצוא נכשל');
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = 'opal-products.xlsx';
+      a.click();
+      URL.revokeObjectURL(href);
+    } catch (e) {
+      setError(e?.message || 'ייצוא נכשל');
+    }
+  }
+
   const [search, setSearch] = React.useState('');
   const [providerFilter, setProviderFilter] = React.useState('all');
   // Apply ?providerName= query param once providers are loaded (from vendor dashboard link)
@@ -681,15 +701,21 @@ export default function ProductManagement() {
             <h1 className="text-2xl font-bold tracking-tight">מוצרים</h1>
             <p className="text-muted-foreground">ניהול מוצרים וקטלוג</p>
           </div>
-          <Button
-            onClick={() => {
-              setForm(EMPTY_FORM);
-              setCreateOpen(true);
-            }}
-          >
-            <Plus className="size-4 me-2" />
-            הוסף מוצר
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" onClick={exportProductsExcel}>
+              <Download className="size-4 me-2" />
+              ייצוא לאקסל
+            </Button>
+            <Button
+              onClick={() => {
+                setForm(EMPTY_FORM);
+                setCreateOpen(true);
+              }}
+            >
+              <Plus className="size-4 me-2" />
+              הוסף מוצר
+            </Button>
+          </div>
         </div>
 
         <Card>

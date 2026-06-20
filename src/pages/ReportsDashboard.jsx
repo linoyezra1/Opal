@@ -305,10 +305,11 @@ export default function ReportsDashboard() {
       if (provAgentId) q.set('agentId', provAgentId);
       if (provOrgId) q.set('organizationId', provOrgId);
       if (provMonth) q.set('month', provMonth);
+      q.set('vendorExport', 'vendor');
       await downloadCsv(
         `${API_BASE}/api/admin/reports/subscribers-export-xlsx?${q.toString()}`,
         token,
-        'opal-subscribers-by-person.xlsx'
+        'opal-vendor-export.xlsx'
       );
     } catch (e) {
       setExportErr(e?.message || 'שגיאה');
@@ -609,7 +610,7 @@ export default function ReportsDashboard() {
                         <TableHead className="text-right">תאריך תחילת מנוי</TableHead>
                         <TableHead className="text-right">תאריך סיום מנוי</TableHead>
                         <TableHead className="text-right">מוצר</TableHead>
-                        <TableHead className="text-right">סכום</TableHead>
+                        <TableHead className="text-right">עלות ספק / תשלום לספק</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -624,7 +625,7 @@ export default function ReportsDashboard() {
                             {String(r.subscriptionEndDisplay || r.subscriptionEndDateRaw || '—')}
                           </TableCell>
                           <TableCell>{String(r.productName || '—')}</TableCell>
-                          <TableCell>{formatCurrency(r.payerAmount || 0)}</TableCell>
+                          <TableCell>{formatCurrency(r.isSecondary ? 0 : (r.vendorPayout ?? 0))}</TableCell>
                         </TableRow>
                       ))}
                       {!previewRows.length ? (

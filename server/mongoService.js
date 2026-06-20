@@ -441,6 +441,72 @@ export async function writeInitialCheckoutCommissionLedger({
   return { ok: true, rowId };
 }
 
+async function resolveVendorIdForDeal(db, formState) {
+  const fs = formState && typeof formState === 'object' ? formState : {};
+  const direct = String(fs.providerId || fs.vendorId || '').trim();
+  if (direct && ObjectId.isValid(direct)) return direct;
+  const pid = String(fs.productId || '').trim();
+  if (!pid || !ObjectId.isValid(pid)) return '';
+  const prod = await db
+    .collection('products')
+    .findOne({ _id: new ObjectId(pid) }, { projection: { providerId: 1 } });
+  return prod?.providerId ? String(prod.providerId) : '';
+}
+
+/**
+ * יומן תשלום לספק — רשומה למבוטח ראשי בלבד (לא מוטב משני).
+ */
+export async function writeInitialCheckoutVendorPayoutLedger({
+  dealId,
+  transactionId,
+  formState,
+  vendorCost,
+  billingMonth,
+}) {
+  const cost = Number(vendorCost || 0);
+  if (!dealId || cost <= 0) return { ok: false, reason: 'missing dealId or zero vendor cost' };
+
+  const db = await getDb();
+  const vendorId = await resolveVendorIdForDeal(db, formState);
+  if (!vendorId) return { ok: false, reason: 'missing vendorId' };
+
+  const col = db.collection('vendor_payout_ledger');
+  const rowId = `VENDOR_INITIAL_${String(dealId)}`;
+  const now = new Date();
+  const month = String(billingMonth || formatBillingMonthFromDate(now));
+
+  try {
+    await col.createIndex({ rowId: 1 }, { unique: true });
+  } catch {
+    /* may exist */
+  }
+
+  const existing = await col.findOne({ rowId }, { projection: { locked: 1 } });
+  if (existing?.locked === true) return { ok: true, skipped: true, reason: 'locked' };
+
+  await col.updateOne(
+    { rowId },
+    {
+      $set: {
+        vendorId,
+        dealId: String(dealId),
+        transactionId: String(transactionId || ''),
+        vendorPayout: cost,
+        billingMonth: month,
+        lastBillDate: now,
+        locked: false,
+        snapshotId: null,
+        updatedAt: now,
+        source: 'initial_checkout',
+        isSecondary: false,
+      },
+      $setOnInsert: { rowId, createdAt: now },
+    },
+    { upsert: true }
+  );
+  return { ok: true, rowId };
+}
+
 export async function findDealForRecurringEvent(params = {}) {
   const db = await getDb();
   const deals = db.collection('deals');
@@ -854,6 +920,47 @@ export async function processDetailRecurringWebhook(body = {}, query = {}) {
       { rowId },
       { $set: { statusCode, agentCommission: 0, netProfit: 0, updatedAt: new Date(), reversedAt: new Date() } }
     );
+  }
+
+  const vendorCostNum = Number(vendorCost || 0);
+  if (statusCode === 1 && sum > 0 && vendorCostNum > 0) {
+    try {
+      await db.collection('vendor_payout_ledger').createIndex({ rowId: 1 }, { unique: true });
+    } catch {
+      /* index may exist */
+    }
+    const vendorRowId = `VENDOR_RECURRING_${String(rowId)}`;
+    const vendorId = await resolveVendorIdForDeal(db, parent.formState);
+    if (vendorId) {
+      const existingVendorLed = await db
+        .collection('vendor_payout_ledger')
+        .findOne({ rowId: vendorRowId }, { projection: { locked: 1 } });
+      const vendorLedgerFields = {
+        vendorId,
+        dealId: String(parent.id),
+        transactionId: String(parent.transactionId || ''),
+        vendorPayout: vendorCostNum,
+        billingMonth,
+        lastBillDate: lastBillDt,
+        locked: false,
+        snapshotId: null,
+        updatedAt: new Date(),
+        source: 'detail_recurring',
+        isSecondary: false,
+      };
+      if (existingVendorLed?.locked === true) {
+        await db.collection('vendor_payout_ledger').updateOne(
+          { rowId: vendorRowId },
+          { $set: { vendorPayout: vendorCostNum, billingMonth, lastBillDate: lastBillDt, updatedAt: new Date() } }
+        );
+      } else {
+        await db.collection('vendor_payout_ledger').updateOne(
+          { rowId: vendorRowId },
+          { $set: vendorLedgerFields, $setOnInsert: { rowId: vendorRowId, createdAt: new Date() } },
+          { upsert: true }
+        );
+      }
+    }
   }
 
   try {
@@ -4273,6 +4380,9 @@ export async function getAlertsSummary(filters = {}) {
   const agentDue = Array.isArray(data?.drilldowns?.agentPaymentsDue)
     ? data.drilldowns.agentPaymentsDue
     : [];
+  const pendingCancellationRows = Array.isArray(data?.drilldowns?.pendingCancellationCount)
+    ? data.drilldowns.pendingCancellationCount
+    : [];
   return {
     contactTasks: contactTasks.length,
     orgPendingApproval: orgPending.length,
@@ -4281,6 +4391,7 @@ export async function getAlertsSummary(filters = {}) {
     organizationsToBill: orgDebt.length,
     providerPaymentsDue: providerDue.length,
     agentPaymentsDue: agentDue.length,
+    pendingCancellationSubscriptions: pendingCancellationRows.length,
   };
 }
 
@@ -5931,4 +6042,298 @@ export async function getProviderPaymentExportRow(providerId, payoutIds = []) {
     accountNumber: firstNonEmpty(vendor?.accountNum),
     agentName: firstNonEmpty(vendor?.accountHolder, vendor?.vendorName),
   };
+}
+
+function mapVendorPayoutSnapshotDoc(d) {
+  return {
+    id: String(d._id),
+    vendorId: String(d.vendorId || ''),
+    vendorName: String(d.vendorName || ''),
+    month: String(d.month || ''),
+    fromDate: String(d.fromDate || ''),
+    toDate: String(d.toDate || ''),
+    totalAmount: Number(d.totalAmount || 0),
+    totalDeals: Number(d.totalDeals || 0),
+    status: String(d.status || 'Pending'),
+    invoiceNum: String(d.invoiceNum || ''),
+    invoiceAmount: Number(d.invoiceAmount || 0),
+    creditNoteNum: String(d.creditNoteNum || ''),
+    creditNoteAmount: Number(d.creditNoteAmount || 0),
+    totalPaid: Number(d.totalPaid || 0),
+    balance: Number(
+      d.balance != null ? d.balance : Number(d.totalAmount || 0) - Number(d.totalPaid || 0)
+    ),
+    notes: String(d.notes || ''),
+    rows: Array.isArray(d.rows) ? d.rows : [],
+    createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+    updatedAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : d.updatedAt,
+  };
+}
+
+/** תצוגה מקדימה לנעילת תשלומי ספק — רשומות מבוטח ראשי שלא ננעלו */
+export async function getVendorPayoutPreview(vendorId, { fromDate = '', toDate = '', month = '' } = {}) {
+  const db = await getDb();
+  const vid = String(vendorId || '').trim();
+  if (!vid) throw new Error('מזהה ספק חסר');
+
+  let vendor = null;
+  if (ObjectId.isValid(vid)) {
+    vendor = await db.collection('vendors').findOne({ _id: new ObjectId(vid) });
+  }
+  if (!vendor) vendor = await db.collection('vendors').findOne({ _id: vid });
+  if (!vendor) throw new Error('ספק לא נמצא');
+
+  const vendorName = String(vendor.vendorName || '');
+  const ledgerQuery = { vendorId: vid, $or: [{ locked: false }, { locked: { $exists: false } }] };
+  const monthStr = String(month || '').trim();
+  if (monthStr) ledgerQuery.billingMonth = monthStr;
+
+  const ledgerDocs = await db.collection('vendor_payout_ledger').find(ledgerQuery).sort({ lastBillDate: 1 }).toArray();
+
+  const dealIds = [...new Set(ledgerDocs.map((l) => l.dealId).filter(Boolean))];
+  const dealsMap = new Map();
+  if (dealIds.length) {
+    const oids = dealIds.filter((id) => ObjectId.isValid(String(id))).map((id) => new ObjectId(String(id)));
+    if (oids.length) {
+      const drs = await db
+        .collection('deals')
+        .find({ _id: { $in: oids } })
+        .project({
+          formState: 1,
+          transactionId: 1,
+          paymentStatus: 1,
+          subscriptionStatus: 1,
+          cancellationDate: 1,
+          subscriptionEndDate: 1,
+          cancelAt: 1,
+        })
+        .toArray();
+      for (const dr of drs) dealsMap.set(String(dr._id), dr);
+    }
+  }
+
+  let rows = ledgerDocs.map((L) => {
+    const d = dealsMap.get(String(L.dealId)) || {};
+    const fs = d?.formState && typeof d.formState === 'object' ? d.formState : {};
+    const ent = getEntitlementStatus(d);
+    const lastBill =
+      L.lastBillDate instanceof Date ? L.lastBillDate.toISOString() : L.lastBillDate || '';
+    const primaryFirst = String(fs.fullName || '').trim().split(/\s+/)[0] || '—';
+    const primaryLast = String(fs.fullName || '').trim().split(/\s+/).slice(1).join(' ') || '';
+    return {
+      ledgerEntryId: String(L._id),
+      dealId: String(L.dealId),
+      transactionId: String(L.transactionId || d.transactionId || ''),
+      firstName: primaryFirst,
+      lastName: primaryLast,
+      idNumber: String(fs.id || '').trim() || '—',
+      productName: String(fs.productName || '').trim(),
+      vendorPayout: Number(L.vendorPayout || 0),
+      billingMonth: String(L.billingMonth || ''),
+      lastBillDate: lastBill,
+      subscriptionStartDate: fs.subscriptionStartDate || '',
+      entitlementStatus: ent.status,
+      ledgerLocked: L.locked === true,
+      isSecondary: false,
+    };
+  });
+
+  if (fromDate && toDate) {
+    const fromRaw = fromDate ? new Date(String(fromDate)) : null;
+    const toRaw = toDate ? new Date(String(toDate)) : null;
+    if (fromRaw && toRaw && !Number.isNaN(fromRaw.getTime()) && !Number.isNaN(toRaw.getTime())) {
+      const fromStart = new Date(fromRaw);
+      fromStart.setHours(0, 0, 0, 0);
+      const toEnd = new Date(toRaw);
+      toEnd.setHours(23, 59, 59, 999);
+      rows = rows.filter((row) => {
+        const dt = parseFlexibleDate(row.lastBillDate);
+        if (!dt) return true;
+        return dt >= fromStart && dt <= toEnd;
+      });
+    }
+  }
+
+  const snapshots = await db
+    .collection('vendor_payout_snapshots')
+    .find({ vendorId: vid, status: { $ne: 'Paid' } })
+    .project({ totalAmount: 1 })
+    .toArray();
+  const pendingPayouts = snapshots.reduce((sum, s) => sum + Number(s.totalAmount || 0), 0);
+
+  return {
+    vendor: { id: vid, vendorName },
+    fromDate: String(fromDate || ''),
+    toDate: String(toDate || ''),
+    month: monthStr,
+    summary: {
+      totalVendorPayout: rows.reduce((s, r) => s + Number(r.vendorPayout || 0), 0),
+      activeDeals: rows.length,
+      pendingPayouts,
+    },
+    rows,
+  };
+}
+
+export async function lockVendorPayoutSnapshot(vendorId, options = {}) {
+  const preview = await getVendorPayoutPreview(vendorId, {
+    fromDate: options.fromDate,
+    toDate: options.toDate,
+    month: options.month,
+  });
+  let rows = Array.isArray(preview.rows) ? preview.rows : [];
+  const entryIds = Array.isArray(options.entryIds) ? options.entryIds : null;
+  if (entryIds && entryIds.length > 0) {
+    const idSet = new Set(entryIds.map((x) => String(x)));
+    rows = rows.filter((r) => r.ledgerEntryId && idSet.has(String(r.ledgerEntryId)));
+    if (!rows.length) throw new Error('לא נבחרו רשומות תואמות לנעילה');
+  }
+  if (!rows.length) throw new Error('אין רשומות פתוחות לנעילה');
+
+  const totalAmount = rows.reduce((sum, r) => sum + Number(r.vendorPayout || 0), 0);
+  const db = await getDb();
+  const now = new Date();
+  const snapshot = {
+    vendorId: String(preview.vendor.id),
+    vendorName: String(preview.vendor.vendorName || ''),
+    month: String(options.month || preview.month || ''),
+    fromDate: String(options.fromDate || preview.fromDate || ''),
+    toDate: String(options.toDate || preview.toDate || ''),
+    totalAmount: Number(totalAmount || 0),
+    totalDeals: Number(rows.length || 0),
+    rows,
+    status: 'Pending',
+    invoiceNum: '',
+    invoiceAmount: 0,
+    creditNoteNum: '',
+    creditNoteAmount: 0,
+    totalPaid: 0,
+    balance: Number(totalAmount || 0),
+    notes: '',
+    createdAt: now,
+    updatedAt: now,
+  };
+  const result = await db.collection('vendor_payout_snapshots').insertOne(snapshot);
+  const snapId = String(result.insertedId);
+
+  const ledgerOids = rows
+    .map((r) => r.ledgerEntryId)
+    .filter(Boolean)
+    .map((id) => {
+      try {
+        return new ObjectId(String(id));
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+
+  if (ledgerOids.length) {
+    await db.collection('vendor_payout_ledger').updateMany(
+      { _id: { $in: ledgerOids } },
+      { $set: { locked: true, snapshotId: snapId, updatedAt: now } }
+    );
+  }
+
+  return { success: true, snapshotId: snapId, ...snapshot };
+}
+
+export async function listVendorPayoutSnapshots(vendorId, limit = 100) {
+  const db = await getDb();
+  const vid = String(vendorId || '').trim();
+  const docs = await db
+    .collection('vendor_payout_snapshots')
+    .find({ vendorId: vid })
+    .sort({ createdAt: -1 })
+    .limit(Math.max(1, Math.min(Number(limit) || 100, 500)))
+    .toArray();
+  return docs.map(mapVendorPayoutSnapshotDoc);
+}
+
+export async function updateVendorPayoutSnapshot(vendorId, snapshotId, patch = {}) {
+  const db = await getDb();
+  let sid;
+  try {
+    sid = new ObjectId(String(snapshotId));
+  } catch {
+    throw new Error('מזהה snapshot לא תקין');
+  }
+  const vid = String(vendorId || '').trim();
+  const existing = await db.collection('vendor_payout_snapshots').findOne(
+    { _id: sid, vendorId: vid },
+    { projection: { totalAmount: 1, totalPaid: 1 } }
+  );
+  if (!existing) throw new Error('Snapshot לא נמצא');
+
+  const set = { updatedAt: new Date() };
+  if (patch.status != null) set.status = String(patch.status || 'Pending');
+  if (patch.notes != null) set.notes = String(patch.notes || '');
+  if (patch.invoiceNum != null) set.invoiceNum = String(patch.invoiceNum || '');
+  if (patch.invoiceAmount != null) set.invoiceAmount = Number(patch.invoiceAmount || 0);
+  if (patch.creditNoteNum != null) set.creditNoteNum = String(patch.creditNoteNum || '');
+  if (patch.creditNoteAmount != null) set.creditNoteAmount = Number(patch.creditNoteAmount || 0);
+  if (patch.totalPaid != null) set.totalPaid = Math.max(0, Number(patch.totalPaid || 0));
+
+  const paidBase = Number(existing.totalPaid || 0);
+  const totalPaidNext = set.totalPaid != null ? Number(set.totalPaid || 0) : paidBase;
+  set.balance = Number(existing.totalAmount || 0) - totalPaidNext;
+
+  const r = await db.collection('vendor_payout_snapshots').updateOne({ _id: sid, vendorId: vid }, { $set: set });
+  if (!r.matchedCount) throw new Error('Snapshot לא נמצא');
+  return { success: true };
+}
+
+/** מרכז תשלומים סגורים — חשבוניות ששולמו (סוכנים + ספקים) */
+export async function listClosedPaidPayoutInvoices(limit = 500) {
+  const db = await getDb();
+  const cap = Math.max(1, Math.min(Number(limit) || 500, 2000));
+
+  const [agentSnaps, vendorSnaps] = await Promise.all([
+    db
+      .collection('agent_commission_snapshots')
+      .find({ status: 'Paid' })
+      .sort({ updatedAt: -1 })
+      .limit(cap)
+      .toArray(),
+    db
+      .collection('vendor_payout_snapshots')
+      .find({ status: 'Paid' })
+      .sort({ updatedAt: -1 })
+      .limit(cap)
+      .toArray(),
+  ]);
+
+  const agentRows = agentSnaps.map((d) => ({
+    id: String(d._id),
+    kind: 'agent',
+    partyId: String(d.agentId || ''),
+    partyName: String(d.agentName || ''),
+    month: String(d.month || ''),
+    invoiceNum: String(d.invoiceNum || ''),
+    totalAmount: Number(d.totalAmount || 0),
+    totalPaid: Number(d.totalPaid || 0),
+    totalDeals: Number(d.totalDeals || 0),
+    rows: Array.isArray(d.rows) ? d.rows : [],
+    updatedAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : d.updatedAt,
+  }));
+
+  const vendorRows = vendorSnaps.map((d) => ({
+    id: String(d._id),
+    kind: 'vendor',
+    partyId: String(d.vendorId || ''),
+    partyName: String(d.vendorName || ''),
+    month: String(d.month || ''),
+    fromDate: String(d.fromDate || ''),
+    toDate: String(d.toDate || ''),
+    invoiceNum: String(d.invoiceNum || ''),
+    totalAmount: Number(d.totalAmount || 0),
+    totalPaid: Number(d.totalPaid || 0),
+    totalDeals: Number(d.totalDeals || 0),
+    rows: Array.isArray(d.rows) ? d.rows : [],
+    updatedAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : d.updatedAt,
+  }));
+
+  return [...agentRows, ...vendorRows].sort((a, b) =>
+    String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))
+  );
 }

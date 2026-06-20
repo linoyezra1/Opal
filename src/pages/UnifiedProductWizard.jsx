@@ -23,6 +23,7 @@ import ConfirmDialog from '../components/ConfirmDialog.jsx';
 // ─── Constants ──────────────────────────────────────────────────────────────────
 const TOKEN_KEY = 'opal_admin_token';
 const DRAFT_KEY = 'opal_wizard_draft';
+const DRAFT_FINALIZED_KEY = 'opal_wizard_draft_finalized';
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 const LOCKED_FLOW_TYPE = 'רופא עד הבית';
@@ -208,6 +209,7 @@ export default function UnifiedProductWizard() {
   const navigate = useNavigate();
   const [token] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const draftTimer = useRef(null);
+  const draftSaveEnabled = useRef(true);
 
   // ── Reference data ─────────────────────────────────────────────────────────
   const [vendors, setVendors] = useState([]);
@@ -303,10 +305,20 @@ export default function UnifiedProductWizard() {
   // ── Draft: load on mount ─────────────────────────────────────────────────────
   useEffect(() => {
     try {
+      if (sessionStorage.getItem(DRAFT_FINALIZED_KEY) === '1') {
+        sessionStorage.removeItem(DRAFT_KEY);
+        sessionStorage.removeItem(DRAFT_FINALIZED_KEY);
+        setShowDraftPrompt(false);
+        setPendingDraft(null);
+        setDraftReady(true);
+        return;
+      }
       const raw = sessionStorage.getItem(DRAFT_KEY);
       if (raw) {
         const d = JSON.parse(raw);
-        if (d?.s1?.productName) {
+        if (d?.finalized === true) {
+          sessionStorage.removeItem(DRAFT_KEY);
+        } else if (d?.s1?.productName) {
           setPendingDraft(d);
           setShowDraftPrompt(true);
         }
@@ -317,7 +329,7 @@ export default function UnifiedProductWizard() {
 
   // ── Draft: save on every relevant state change ──────────────────────────────
   useEffect(() => {
-    if (!draftReady) return;
+    if (!draftReady || !draftSaveEnabled.current || finalizeDone) return;
     clearTimeout(draftTimer.current);
     draftTimer.current = setTimeout(() => {
       const draft = {
@@ -328,7 +340,7 @@ export default function UnifiedProductWizard() {
       };
       sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
     }, 300);
-  }, [vendorMode, productMode, s1, s2, s3, selectedAgents, committed, openStep, draftReady]);
+  }, [vendorMode, productMode, s1, s2, s3, selectedAgents, committed, openStep, draftReady, finalizeDone]);
 
   // ── Auto-derive s2/s3 fields when productName or vendorCost changes ──────────
   useEffect(() => {
@@ -735,7 +747,11 @@ export default function UnifiedProductWizard() {
       // ── Done ───────────────────────────────────────────────────────────────
       setFinalizeProgress('');
       setFinalizeDone(true);
+      draftSaveEnabled.current = false;
       sessionStorage.removeItem(DRAFT_KEY);
+      sessionStorage.setItem(DRAFT_FINALIZED_KEY, '1');
+      setShowDraftPrompt(false);
+      setPendingDraft(null);
       await loadRef();
       await loadLandingPages();
 

@@ -12,6 +12,7 @@ import {
   Pencil,
   Truck,
   Briefcase,
+  Clock,
 } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import { ADMIN_ALERTS_CHANGED_EVENT } from '../../lib/adminAlertsEvents.js';
@@ -31,6 +32,7 @@ const ALERT_DEFS = [
   { key: 'contactTasks', title: 'צור קשר', icon: Users, severity: 'normal' },
   { key: 'orgPendingApproval', title: 'ארגון ממתין לאישור', icon: Building2, severity: 'warning' },
   { key: 'pendingBeneficiaries', title: 'השלמת טפסים', icon: FileText, severity: 'warning' },
+  { key: 'pendingCancellationCount', title: 'ממתין לביטול', icon: Clock, severity: 'critical' },
   { key: 'failedPayments', title: 'פיגור תשלום', icon: CreditCard, severity: 'critical' },
   { key: 'organizationCollectionsDebt', title: 'ארגונים לחיוב', icon: Receipt, severity: 'warning' },
   { key: 'providerPaymentsDue', title: 'תשלומים לספקים', icon: Truck, severity: 'warning' },
@@ -54,6 +56,8 @@ const COLUMN_LABELS = {
   comments: 'הערות',
   message: 'הודעה',
   transactionId: 'מספר הזמנה',
+  finalBillingMonth: 'חודש בילינג אחרון',
+  subscriptionStatus: 'סטטוס מנוי',
   companyId: 'ח.פ',
   billingType: 'סוג חיוב',
   activeEmployees: 'עובדים פעילים',
@@ -76,6 +80,7 @@ const ALERT_COLUMNS = {
   contactTasks: ['fullName', 'phone', 'email', 'kind', 'message'],
   orgPendingApproval: ['organizationName', 'organizationId', 'companyId', 'billingType', 'email'],
   pendingBeneficiaries: ['fullName', 'phone', 'transactionId', 'amount', 'createdAt'],
+  pendingCancellationCount: ['fullName', 'phone', 'transactionId', 'finalBillingMonth', 'subscriptionStatus'],
   organizationCollectionsDebt: [
     'organizationName',
     'organizationId',
@@ -129,6 +134,7 @@ function formatCellValue(key, value) {
 function summaryCountKey(key) {
   if (key === 'failedPayments') return 'paymentArrears';
   if (key === 'organizationCollectionsDebt') return 'organizationsToBill';
+  if (key === 'pendingCancellationCount') return 'pendingCancellationSubscriptions';
   return key;
 }
 
@@ -198,6 +204,7 @@ export default function AlertsDashboard() {
     Number(summary?.contactTasks || 0) +
     Number(summary?.orgPendingApproval || 0) +
     Number(summary?.pendingBeneficiaries || 0) +
+    Number(summary?.pendingCancellationSubscriptions || 0) +
     Number(summary?.paymentArrears || 0) +
     Number(summary?.organizationsToBill || 0) +
     Number(summary?.providerPaymentsDue || 0) +
@@ -232,6 +239,14 @@ export default function AlertsDashboard() {
       return;
     }
     if (key === 'pendingBeneficiaries') {
+      const search = String(row.transactionId || row.id || '').trim();
+      if (!search) return;
+      navigate(
+        `/admin/subscribers?search=${encodeURIComponent(search)}&editId=${encodeURIComponent(String(row.id || ''))}`
+      );
+      return;
+    }
+    if (key === 'pendingCancellationCount') {
       const search = String(row.transactionId || row.id || '').trim();
       if (!search) return;
       navigate(

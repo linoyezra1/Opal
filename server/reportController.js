@@ -122,6 +122,7 @@ export function generateFlattenedSubscriberRows(deals) {
     const payerAmount = Number(d.payerAmount || 0);
     const billingMonth = String(d.billingMonth || '').trim();
     const commissionAmount = Number(d.commissionAmount ?? fs.resolvedAgentCommission ?? 0);
+    const vendorUnitCost = Number(fs.resolvedVendorCost ?? d.resolvedVendorCost ?? 0);
     const productName = subscriberExportProductName(d, fs);
     const createdAt =
       d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt || '';
@@ -169,6 +170,8 @@ export function generateFlattenedSubscriberRows(deals) {
       payerAmount,
       billingMonth,
       commissionAmount,
+      vendorPayout: Number.isFinite(vendorUnitCost) ? vendorUnitCost : 0,
+      isSecondary: false,
       paymentStatus: String(d.paymentStatus || ''),
       subscriptionStatus: String(d.subscriptionStatus || ''),
       productName,
@@ -229,6 +232,8 @@ export function generateFlattenedSubscriberRows(deals) {
         payerAmount,
         billingMonth,
         commissionAmount,
+        vendorPayout: 0,
+        isSecondary: true,
         paymentStatus: String(d.paymentStatus || ''),
         subscriptionStatus: String(d.subscriptionStatus || ''),
         productName,
@@ -240,6 +245,24 @@ export function generateFlattenedSubscriberRows(deals) {
     }
   }
   return rows;
+}
+
+/** סיכום דוח יצוא לספק — מונים וטוטלים לשורות עליונות בגיליון */
+export function computeVendorExportSummary(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const mainRows = list.filter((r) => !r.isSecondary && String(r.rowRole || '') === 'primary');
+  const secondaryRows = list.filter((r) => r.isSecondary || String(r.rowRole || '') === 'beneficiary');
+  const totalMainMembers = mainRows.length;
+  const totalSecondaryMembers = secondaryRows.length;
+  const grandTotalMembers = totalMainMembers + totalSecondaryMembers;
+  const totalVendorPayout = list.reduce((s, r) => s + Number(r.vendorPayout || 0), 0);
+  return {
+    totalMainMembers,
+    totalSecondaryMembers,
+    grandTotalMembers,
+    totalTransactions: totalMainMembers,
+    totalVendorPayout,
+  };
 }
 
 export function generateCancellationExportRows(deals) {
@@ -507,6 +530,163 @@ export async function buildSubscribersXlsxBuffer(deals) {
   sheet.getRow(1).font = { bold: true };
   sheet.columns.forEach((col) => {
     col.width = 18;
+  });
+  return workbook.xlsx.writeBuffer();
+}
+
+const VENDOR_EXPORT_HEADERS = [
+  'סוג שורה',
+  'שם פרטי',
+  'שם משפחה',
+  'תעודת זהות',
+  'טלפון',
+  'אימייל',
+  'כתובת',
+  'תאריך לידה',
+  'מין',
+  'קופת חולים',
+  'ביטוח משלים',
+  'חודש בילינג',
+  'סטטוס תשלום',
+  'סטטוס מנוי',
+  'מוצר',
+  'תאריך תחילת מנוי',
+  'תאריך סיום מנוי',
+  'עלות ספק / תשלום לספק',
+  'מספר הזמנה',
+  'נוצר בתאריך',
+];
+
+const VENDOR_EXPORT_SUMMARY_LABELS = [
+  ['טוטל מנוי ראשי בכמות', 'totalMainMembers'],
+  ['טוטל משני בכמות', 'totalSecondaryMembers'],
+  ['טוטל מנוי ראשי + משני', 'grandTotalMembers'],
+  ['סה"כ עסקאות', 'totalTransactions'],
+  ['סה"כ לתשלום לספק', 'totalVendorPayout'],
+];
+
+/** ייצוא אקסל לספק — ללא עמודת מחיר ללקוח, עם עלות ספק וסיכום בראש הגיליון */
+export async function buildVendorExportXlsxBuffer(deals) {
+  const rows = generateFlattenedSubscriberRows(deals);
+  const summary = computeVendorExportSummary(rows);
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('VendorExport', { views: [{ rightToLeft: true }] });
+
+  for (const [label, key] of VENDOR_EXPORT_SUMMARY_LABELS) {
+    const val = summary[key];
+    const display =
+      key === 'totalVendorPayout'
+        ? Number(val || 0)
+        : Number(val || 0);
+    sheet.addRow([label, display]);
+  }
+  sheet.addRow([]);
+
+  sheet.addRow(VENDOR_EXPORT_HEADERS);
+  const headerRowNum = sheet.rowCount;
+  for (const r of rows) {
+    sheet.addRow([
+      r.rowRole === 'primary' ? 'מבוטח ראשי' : 'מוטב משני',
+      r.firstName,
+      r.lastName,
+      r.idNumber,
+      r.phone,
+      r.email,
+      r.address,
+      r.dateOfBirth,
+      r.gender,
+      r.healthFund,
+      r.supplementalInsurance,
+      r.billingMonth,
+      r.paymentStatus,
+      r.subscriptionStatus,
+      r.productName,
+      r.subscriptionStartDate,
+      r.subscriptionEndDisplay,
+      Number(r.vendorPayout || 0),
+      r.transactionId,
+      r.createdAt,
+    ]);
+    if (r.rowRole === 'primary') {
+      const row = sheet.getRow(sheet.rowCount);
+      row.eachCell((cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+      });
+    }
+  }
+  sheet.getRow(headerRowNum).font = { bold: true };
+  for (let i = 1; i <= VENDOR_EXPORT_SUMMARY_LABELS.length; i++) {
+    sheet.getRow(i).getCell(1).font = { bold: true };
+  }
+  sheet.columns.forEach((col) => {
+    col.width = 18;
+  });
+  return workbook.xlsx.writeBuffer();
+}
+
+export async function buildProductsXlsxBuffer(products) {
+  const headers = ['שם מוצר', 'מק"ט', 'ספק', 'מחיר', 'תאריך יצירה', 'סטטוס'];
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Products', { views: [{ rightToLeft: true }] });
+  sheet.addRow(headers);
+  for (const p of Array.isArray(products) ? products : []) {
+    const active = p.isActive === false ? 'לא פעיל' : 'פעיל';
+    const created =
+      p.createdAt instanceof Date
+        ? p.createdAt.toISOString().slice(0, 10)
+        : p.createdAt
+          ? String(p.createdAt).slice(0, 10)
+          : '';
+    sheet.addRow([
+      String(p.productName || p.name || ''),
+      String(p.sku || ''),
+      String(p.provider?.vendorName || p.providerName || ''),
+      Number(p.providerCost ?? p.retailPrice ?? 0),
+      created,
+      active,
+    ]);
+  }
+  sheet.getRow(1).font = { bold: true };
+  sheet.columns.forEach((col) => {
+    col.width = 20;
+  });
+  return workbook.xlsx.writeBuffer();
+}
+
+function formatVendorBankDetails(v) {
+  const parts = [
+    v.bankName ? `בנק: ${v.bankName}` : '',
+    v.bankNum ? `מס׳ בנק: ${v.bankNum}` : '',
+    v.branchNum ? `סניף: ${v.branchNum}` : '',
+    v.accountNum ? `חשבון: ${v.accountNum}` : '',
+    v.accountHolder ? `בעל חשבון: ${v.accountHolder}` : '',
+  ].filter(Boolean);
+  return parts.join(' | ') || '—';
+}
+
+export async function buildVendorsXlsxBuffer(vendors) {
+  const headers = ['שם ספק', 'ח.פ / מספר זיהוי', 'טלפון', 'אימייל', 'מוצרים פעילים', 'פרטי חשבון בנק'];
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Vendors', { views: [{ rightToLeft: true }] });
+  sheet.addRow(headers);
+  for (const v of Array.isArray(vendors) ? vendors : []) {
+    const productCount = Array.isArray(v.products)
+      ? v.products.length
+      : Array.isArray(v.productLinks)
+        ? v.productLinks.length
+        : 0;
+    sheet.addRow([
+      String(v.vendorName || ''),
+      String(v.idNum || ''),
+      String(v.phone || ''),
+      String(v.email || ''),
+      productCount,
+      formatVendorBankDetails(v),
+    ]);
+  }
+  sheet.getRow(1).font = { bold: true };
+  sheet.columns.forEach((col) => {
+    col.width = 22;
   });
   return workbook.xlsx.writeBuffer();
 }
