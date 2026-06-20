@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, RefreshCw, Wallet, Users, CreditCard, UserCheck, AlertCircle, Building2, Pencil, MessageSquareText, Bell, Clock, UserX, ChevronDown, ChevronUp } from 'lucide-react';
+import { LayoutDashboard, RefreshCw, Wallet, Users, CreditCard, UserCheck, AlertCircle, Building2, Pencil, MessageSquareText, Bell, Clock, UserX } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { API_BASE } from '../apiBase.js';
 import { fmtDateTime } from '../utils/dateUtils.js';
@@ -9,7 +9,6 @@ import { StatsCard } from '../components/admin/stats-card.jsx';
 import { Button } from '../components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog.jsx';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
 import { Input } from '../components/ui/input.jsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
@@ -131,10 +130,6 @@ export default function AdminControlPanel() {
   const [incomeView, setIncomeView] = React.useState('revenue');
   const [cancelView, setCancelView] = React.useState('centralized');
   const [alertsSummary, setAlertsSummary] = React.useState({});
-  const [dashboardTab, setDashboardTab] = React.useState('overview');
-  const [closedPayouts, setClosedPayouts] = React.useState([]);
-  const [closedLoading, setClosedLoading] = React.useState(false);
-  const [expandedClosedId, setExpandedClosedId] = React.useState('');
 
   const load = React.useCallback(async (next = filters) => {
     if (!token) return;
@@ -188,26 +183,6 @@ export default function AdminControlPanel() {
       window.removeEventListener(ADMIN_ALERTS_CHANGED_EVENT, refreshDashboard);
     };
   }, [token, load, filters]);
-
-  const loadClosedPayouts = React.useCallback(async () => {
-    if (!token) return;
-    setClosedLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/closed-payouts?limit=300`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const j = await res.json().catch(() => ({}));
-      if (res.ok && j.success) setClosedPayouts(Array.isArray(j.invoices) ? j.invoices : []);
-    } catch {
-      /* ignore */
-    } finally {
-      setClosedLoading(false);
-    }
-  }, [token]);
-
-  React.useEffect(() => {
-    if (dashboardTab === 'closed') loadClosedPayouts();
-  }, [dashboardTab, loadClosedPayouts]);
 
   const overview = data?.overview || {};
   const grossProfit = Number(overview.totalRevenue || 0) - Number(overview.totalExpenses || 0);
@@ -350,13 +325,7 @@ export default function AdminControlPanel() {
 
         {error ? <p className="text-destructive text-sm">{error}</p> : null}
 
-        <Tabs value={dashboardTab} onValueChange={setDashboardTab} dir="rtl">
-          <TabsList>
-            <TabsTrigger value="overview">סקירה פיננסית</TabsTrigger>
-            <TabsTrigger value="closed">מרכז תשלומים סגורים</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview" className="mt-4 space-y-6">
+        <div className="space-y-6">
 
         {SECTIONS.map((section) => (
           <div key={section.title} className="space-y-2">
@@ -494,94 +463,8 @@ export default function AdminControlPanel() {
           </Card>
         </div>
 
-          </TabsContent>
+        </div>
 
-          <TabsContent value="closed" className="mt-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>מרכז תשלומים סגורים</CardTitle>
-                <Button type="button" variant="outline" size="sm" onClick={loadClosedPayouts} disabled={closedLoading}>
-                  <RefreshCw className={`size-4 me-2 ${closedLoading ? 'animate-spin' : ''}`} />
-                  רענון
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-8" />
-                        <TableHead className="text-right">סוג</TableHead>
-                        <TableHead className="text-right">שם</TableHead>
-                        <TableHead className="text-right">חודש / טווח</TableHead>
-                        <TableHead className="text-right">מספר חשבונית</TableHead>
-                        <TableHead className="text-right">סה״כ</TableHead>
-                        <TableHead className="text-right">עסקאות</TableHead>
-                        <TableHead className="text-right">עודכן</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {closedPayouts.map((inv) => {
-                        const isOpen = expandedClosedId === inv.id;
-                        const period =
-                          inv.kind === 'vendor' && inv.fromDate && inv.toDate
-                            ? `${inv.fromDate} — ${inv.toDate}`
-                            : inv.month || '—';
-                        return (
-                          <React.Fragment key={inv.id}>
-                            <TableRow className="cursor-pointer hover:bg-muted/40" onClick={() => setExpandedClosedId(isOpen ? '' : inv.id)}>
-                              <TableCell>{isOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}</TableCell>
-                              <TableCell>{inv.kind === 'vendor' ? 'ספק' : 'סוכן'}</TableCell>
-                              <TableCell className="font-medium">{inv.partyName || '—'}</TableCell>
-                              <TableCell>{period}</TableCell>
-                              <TableCell>{inv.invoiceNum || '—'}</TableCell>
-                              <TableCell>{formatCurrency(inv.totalAmount)}</TableCell>
-                              <TableCell>{inv.totalDeals || 0}</TableCell>
-                              <TableCell>{fmtDateTime(inv.updatedAt)}</TableCell>
-                            </TableRow>
-                            {isOpen ? (
-                              <TableRow>
-                                <TableCell colSpan={8} className="bg-muted/20 p-0">
-                                  <div className="p-4 overflow-x-auto">
-                                    <Table className="text-sm">
-                                      <TableHeader>
-                                        <TableRow>
-                                          <TableHead className="text-right">לקוח</TableHead>
-                                          <TableHead className="text-right">הזמנה</TableHead>
-                                          <TableHead className="text-right">סכום</TableHead>
-                                        </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
-                                        {(inv.rows || []).map((r, i) => (
-                                          <TableRow key={`${inv.id}-sub-${i}`}>
-                                            <TableCell>{r.employeeName || `${r.firstName || ''} ${r.lastName || ''}`.trim() || '—'}</TableCell>
-                                            <TableCell className="font-mono text-xs">{r.transactionId || '—'}</TableCell>
-                                            <TableCell>{formatCurrency(r.amount ?? r.vendorPayout ?? 0)}</TableCell>
-                                          </TableRow>
-                                        ))}
-                                      </TableBody>
-                                    </Table>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            ) : null}
-                          </React.Fragment>
-                        );
-                      })}
-                      {!closedPayouts.length && !closedLoading ? (
-                        <TableRow>
-                          <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                            אין חשבוניות ששולמו עדיין
-                          </TableCell>
-                        </TableRow>
-                      ) : null}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
       </div>
 
       <Dialog open={!!modalKey} onOpenChange={(open) => !open && setModalKey('')}>

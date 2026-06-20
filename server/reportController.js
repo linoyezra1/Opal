@@ -22,6 +22,7 @@ import {
   passesServiceReportGate,
   getEntitlementStatus,
   getReportingServiceWindow,
+  STATUS_CANCELED,
 } from './entitlementStatus.js';
 
 /**
@@ -85,6 +86,25 @@ export function filterDealsCancellationsServiceEndInPeriod(deals, fromStr, toStr
   });
 }
 
+/** ביטולים לספק — רק מבוטלים (לא ממתין לביטול), תאריך סיום שירות בטווח */
+export function filterDealsStrictlyCancelledInPeriod(deals, fromStr, toStr) {
+  const r = parseReportServiceRange(fromStr, toStr);
+  if (!r.valid) return [];
+  return (Array.isArray(deals) ? deals : []).filter((d) => {
+    const ent = getEntitlementStatus(d);
+    if (ent.status !== STATUS_CANCELED) return false;
+    const { serviceEnd } = getReportingServiceWindow(d);
+    if (!serviceEnd || Number.isNaN(serviceEnd.getTime())) return false;
+    const t = serviceEnd.getTime();
+    return t >= r.fromStart.getTime() && t <= r.toEnd.getTime();
+  });
+}
+
+function formatSubscriptionEndDisplay(serviceEnd) {
+  if (!serviceEnd || Number.isNaN(serviceEnd.getTime())) return '-';
+  return serviceEnd.toISOString().slice(0, 10);
+}
+
 function splitFullName(full) {
   const s = String(full || '').trim();
   if (!s) return { firstName: '', lastName: '' };
@@ -132,10 +152,10 @@ export function generateFlattenedSubscriberRows(deals) {
     const dealId = String(d._id || '');
 
     const { serviceStart, serviceEnd } = getReportingServiceWindow(d);
+    const entitlement = getEntitlementStatus(d);
     const subscriptionStartDate =
       serviceStart && !Number.isNaN(serviceStart.getTime()) ? serviceStart.toISOString().slice(0, 10) : '';
-    const subscriptionEndDisplay =
-      !serviceEnd || Number.isNaN(serviceEnd.getTime()) ? 'פעיל' : serviceEnd.toISOString().slice(0, 10);
+    const subscriptionEndDisplay = formatSubscriptionEndDisplay(serviceEnd);
     const subscriptionEndDateRaw =
       serviceEnd && !Number.isNaN(serviceEnd.getTime()) ? serviceEnd.toISOString().slice(0, 10) : '';
 
@@ -173,7 +193,7 @@ export function generateFlattenedSubscriberRows(deals) {
       vendorPayout: Number.isFinite(vendorUnitCost) ? vendorUnitCost : 0,
       isSecondary: false,
       paymentStatus: String(d.paymentStatus || ''),
-      subscriptionStatus: String(d.subscriptionStatus || ''),
+      subscriptionStatus: entitlement.label,
       productName,
       createdAt,
       subscriptionStartDate,
@@ -235,7 +255,7 @@ export function generateFlattenedSubscriberRows(deals) {
         vendorPayout: 0,
         isSecondary: true,
         paymentStatus: String(d.paymentStatus || ''),
-        subscriptionStatus: String(d.subscriptionStatus || ''),
+        subscriptionStatus: entitlement.label,
         productName,
         createdAt,
         subscriptionStartDate,
@@ -286,10 +306,10 @@ export function generateCancellationExportRows(deals) {
         : 0;
 
     const { serviceStart, serviceEnd } = getReportingServiceWindow(d);
+    const entitlement = getEntitlementStatus(d);
     const subscriptionStartDate =
       serviceStart && !Number.isNaN(serviceStart.getTime()) ? serviceStart.toISOString().slice(0, 10) : '';
-    const subscriptionEndDisplay =
-      !serviceEnd || Number.isNaN(serviceEnd.getTime()) ? 'פעיל' : serviceEnd.toISOString().slice(0, 10);
+    const subscriptionEndDisplay = formatSubscriptionEndDisplay(serviceEnd);
     const subscriptionEndDateRaw =
       serviceEnd && !Number.isNaN(serviceEnd.getTime()) ? serviceEnd.toISOString().slice(0, 10) : '';
 
@@ -309,7 +329,7 @@ export function generateCancellationExportRows(deals) {
       payerAmount: Number(d.payerAmount || 0),
       billingMonth: String(d.billingMonth || '').trim(),
       paymentStatus: String(d.paymentStatus || ''),
-      subscriptionStatus: String(d.subscriptionStatus || ''),
+      subscriptionStatus: entitlement.label,
       secondaryBeneficiaryCount: benCount,
     };
   });
@@ -558,9 +578,9 @@ const VENDOR_EXPORT_HEADERS = [
 ];
 
 const VENDOR_EXPORT_SUMMARY_LABELS = [
-  ['טוטל מנוי ראשי בכמות', 'totalMainMembers'],
-  ['טוטל משני בכמות', 'totalSecondaryMembers'],
-  ['טוטל מנוי ראשי + משני', 'grandTotalMembers'],
+  ['סה"כ מנויים ראשיים', 'totalMainMembers'],
+  ['סה"כ מנויים משניים', 'totalSecondaryMembers'],
+  ['סה"כ מנויים ראשיים + משניים', 'grandTotalMembers'],
   ['סה"כ עסקאות', 'totalTransactions'],
   ['סה"כ לתשלום לספק', 'totalVendorPayout'],
 ];
@@ -664,23 +684,47 @@ function formatVendorBankDetails(v) {
   return parts.join(' | ') || '—';
 }
 
+function formatVendorLinkedProducts(v) {
+  const names = new Set();
+  for (const link of v.productLinks || []) {
+    if (link.isActive === false) continue;
+    const n = String(link.product?.productName || link.productName || '').trim();
+    if (n) names.add(n);
+  }
+  for (const p of v.products || []) {
+    if (p.isActive === false) continue;
+    const n = String(p.productName || p.name || '').trim();
+    if (n) names.add(n);
+  }
+  return [...names].sort((a, b) => a.localeCompare(b, 'he')).join(', ') || '—';
+}
+
 export async function buildVendorsXlsxBuffer(vendors) {
-  const headers = ['שם ספק', 'ח.פ / מספר זיהוי', 'טלפון', 'אימייל', 'מוצרים פעילים', 'פרטי חשבון בנק'];
+  const headers = [
+    'שם ספק',
+    'ח.פ / מספר זיהוי',
+    'טלפון',
+    'אימייל',
+    'איש קשר',
+    'טלפון איש קשר',
+    'אימייל איש קשר',
+    'מוצרים מקושרים',
+    'פרטי חשבון בנק',
+  ];
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('Vendors', { views: [{ rightToLeft: true }] });
   sheet.addRow(headers);
   for (const v of Array.isArray(vendors) ? vendors : []) {
-    const productCount = Array.isArray(v.products)
-      ? v.products.length
-      : Array.isArray(v.productLinks)
-        ? v.productLinks.length
-        : 0;
+    const cp = v.contactPerson && typeof v.contactPerson === 'object' ? v.contactPerson : {};
     sheet.addRow([
       String(v.vendorName || ''),
       String(v.idNum || ''),
-      String(v.phone || ''),
-      String(v.email || ''),
-      productCount,
+      String(v.phone || cp.phone || ''),
+      String(v.email || cp.email || ''),
+      String(cp.name || ''),
+      String(cp.phone || ''),
+      String(cp.email || ''),
+      formatVendorLinkedProducts(v),
       formatVendorBankDetails(v),
     ]);
   }
@@ -689,6 +733,11 @@ export async function buildVendorsXlsxBuffer(vendors) {
     col.width = 22;
   });
   return workbook.xlsx.writeBuffer();
+}
+
+/** אקסל ביטולים לספק — אותה תבנית כמו דוח יצוא לספק */
+export async function buildVendorCancellationsXlsxBuffer(deals) {
+  return buildVendorExportXlsxBuffer(deals);
 }
 
 export function buildCancellationsCsv(deals) {

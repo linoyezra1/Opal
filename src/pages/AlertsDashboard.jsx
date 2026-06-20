@@ -197,8 +197,12 @@ export default function AlertsDashboard() {
     setOpenSections(next);
   }, [openTab]);
 
-  const rowsFor = (key) =>
-    Array.isArray(data?.drilldowns?.[key]) ? data.drilldowns[key] : [];
+  const rowsFor = (key) => {
+    if (key === 'pendingCancellationCount' && Array.isArray(summary?.pendingCancellationDrilldown)) {
+      return summary.pendingCancellationDrilldown;
+    }
+    return Array.isArray(data?.drilldowns?.[key]) ? data.drilldowns[key] : [];
+  };
 
   const totalAlerts =
     Number(summary?.contactTasks || 0) +

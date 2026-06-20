@@ -9,6 +9,10 @@ import {
 } from './entitlementStatus.js';
 import { countPaymentTypeDeals } from '../lib/paymentTypeMetrics.js';
 import { isActiveContactTaskLead } from '../lib/contactLeadTasks.js';
+import {
+  parseReportServiceRange,
+  dealOverlapsServiceReportPeriod,
+} from './reportController.js';
 
 const MONGO_URL = process.env.MONGODB_URI || process.env.MONGO_URL || '';
 const DB_NAME = process.env.MONGO_DB_NAME || 'opal';
@@ -4380,9 +4384,7 @@ export async function getAlertsSummary(filters = {}) {
   const agentDue = Array.isArray(data?.drilldowns?.agentPaymentsDue)
     ? data.drilldowns.agentPaymentsDue
     : [];
-  const pendingCancellationRows = Array.isArray(data?.drilldowns?.pendingCancellationCount)
-    ? data.drilldowns.pendingCancellationCount
-    : [];
+  const pendingCancellationRows = await listAllPendingCancellationAlerts();
   return {
     contactTasks: contactTasks.length,
     orgPendingApproval: orgPending.length,
@@ -4392,7 +4394,50 @@ export async function getAlertsSummary(filters = {}) {
     providerPaymentsDue: providerDue.length,
     agentPaymentsDue: agentDue.length,
     pendingCancellationSubscriptions: pendingCancellationRows.length,
+    pendingCancellationDrilldown: pendingCancellationRows,
   };
+}
+
+/** כל המנויים במצב ממתין לביטול — ללא סינון טווח תאריכים (התראות שימור) */
+export async function listAllPendingCancellationAlerts() {
+  const db = await getDb();
+  const docs = await db
+    .collection('deals')
+    .find({
+      isRecurringCycle: { $ne: true },
+      $or: [
+        { subscriptionStatus: { $regex: /pending|cancel|ממתין|ביטול/i } },
+        { cancellationDate: { $exists: true, $ne: null } },
+        { cancelAt: { $exists: true, $ne: null } },
+      ],
+    })
+    .project({
+      formState: 1,
+      beneficiaryUpdate: 1,
+      transactionId: 1,
+      subscriptionStatus: 1,
+      cancellationDate: 1,
+      cancelAt: 1,
+      finalBillingMonth: 1,
+      subscriptionEndDate: 1,
+      updatedAt: 1,
+      createdAt: 1,
+    })
+    .sort({ updatedAt: -1 })
+    .limit(5000)
+    .toArray();
+
+  return docs
+    .filter((d) => getEntitlementStatus(d).status === STATUS_PENDING_CANCELLATION)
+    .map((d) => ({
+      id: String(d._id || ''),
+      transactionId: d.transactionId || '',
+      fullName: d.formState?.fullName || '—',
+      phone: d.formState?.phone || '—',
+      cancellationDate: d.cancellationDate || d.updatedAt || d.createdAt,
+      finalBillingMonth: String(d.finalBillingMonth || '').trim(),
+      subscriptionStatus: getEntitlementStatus(d).label,
+    }));
 }
 
 export async function markControlPanelItemHandled(type, id, handled = true) {
@@ -6100,6 +6145,7 @@ export async function getVendorPayoutPreview(vendorId, { fromDate = '', toDate =
         .find({ _id: { $in: oids } })
         .project({
           formState: 1,
+          beneficiaryUpdate: 1,
           transactionId: 1,
           paymentStatus: 1,
           subscriptionStatus: 1,
@@ -6118,38 +6164,48 @@ export async function getVendorPayoutPreview(vendorId, { fromDate = '', toDate =
     const ent = getEntitlementStatus(d);
     const lastBill =
       L.lastBillDate instanceof Date ? L.lastBillDate.toISOString() : L.lastBillDate || '';
-    const primaryFirst = String(fs.fullName || '').trim().split(/\s+/)[0] || '—';
-    const primaryLast = String(fs.fullName || '').trim().split(/\s+/).slice(1).join(' ') || '';
+    const bu = d?.beneficiaryUpdate && typeof d.beneficiaryUpdate === 'object' ? d.beneficiaryUpdate : {};
+    const primary = bu.primaryMember && typeof bu.primaryMember === 'object' ? bu.primaryMember : {};
+    const primaryFirst = String(primary.firstName || fs.fullName || '').trim().split(/\s+/)[0] || '—';
+    const primaryLast =
+      String(primary.lastName || '').trim() ||
+      String(fs.fullName || '').trim().split(/\s+/).slice(1).join(' ') ||
+      '';
     return {
       ledgerEntryId: String(L._id),
       dealId: String(L.dealId),
       transactionId: String(L.transactionId || d.transactionId || ''),
       firstName: primaryFirst,
       lastName: primaryLast,
-      idNumber: String(fs.id || '').trim() || '—',
+      idNumber: String(primary.id || fs.id || '').trim() || '—',
       productName: String(fs.productName || '').trim(),
       vendorPayout: Number(L.vendorPayout || 0),
       billingMonth: String(L.billingMonth || ''),
       lastBillDate: lastBill,
       subscriptionStartDate: fs.subscriptionStartDate || '',
       entitlementStatus: ent.status,
+      subscriptionStatus: ent.label,
       ledgerLocked: L.locked === true,
       isSecondary: false,
     };
   });
 
+  rows = rows.filter((row) => {
+    const deal = dealsMap.get(String(row.dealId));
+    if (!deal) return false;
+    const ent = getEntitlementStatus(deal);
+    return ent.status === STATUS_ACTIVE || ent.status === STATUS_PENDING_CANCELLATION;
+  });
+
   if (fromDate && toDate) {
-    const fromRaw = fromDate ? new Date(String(fromDate)) : null;
-    const toRaw = toDate ? new Date(String(toDate)) : null;
-    if (fromRaw && toRaw && !Number.isNaN(fromRaw.getTime()) && !Number.isNaN(toRaw.getTime())) {
-      const fromStart = new Date(fromRaw);
-      fromStart.setHours(0, 0, 0, 0);
-      const toEnd = new Date(toRaw);
-      toEnd.setHours(23, 59, 59, 999);
+    const r = parseReportServiceRange(fromDate, toDate);
+    if (!r.valid) {
+      rows = [];
+    } else {
       rows = rows.filter((row) => {
-        const dt = parseFlexibleDate(row.lastBillDate);
-        if (!dt) return true;
-        return dt >= fromStart && dt <= toEnd;
+        const deal = dealsMap.get(String(row.dealId));
+        if (!deal) return false;
+        return dealOverlapsServiceReportPeriod(deal, r.fromStart, r.toEnd);
       });
     }
   }
@@ -6203,7 +6259,7 @@ export async function lockVendorPayoutSnapshot(vendorId, options = {}) {
     totalDeals: Number(rows.length || 0),
     rows,
     status: 'Pending',
-    invoiceNum: '',
+    invoiceNum: String(options.invoiceNum || '').trim(),
     invoiceAmount: 0,
     creditNoteNum: '',
     creditNoteAmount: 0,

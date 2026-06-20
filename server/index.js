@@ -161,9 +161,11 @@ import {
   filterDealsForSubscriberExport,
   filterDealsOverlappingEligibleServicePeriod,
   filterDealsCancellationsServiceEndInPeriod,
+  filterDealsStrictlyCancelledInPeriod,
   listProviderNamesFromDealsForFilter,
   buildSubscribersXlsxBuffer,
   buildVendorExportXlsxBuffer,
+  buildVendorCancellationsXlsxBuffer,
   buildProductsXlsxBuffer,
   buildVendorsXlsxBuffer,
   buildCancellationsXlsxBuffer,
@@ -3280,10 +3282,18 @@ app.get('/api/admin/reports/cancellations-export-xlsx', requireAdmin, async (req
   try {
     const fromDate = req.query.fromDate || req.query.from || '';
     const toDate = req.query.toDate || req.query.to || '';
+    const vendorMode = String(req.query.vendorExport || '').trim() === 'vendor';
     const candidates = await findDealsForServiceReportsCandidates();
-    const deals = filterDealsCancellationsServiceEndInPeriod(candidates, fromDate, toDate);
-    const file = await buildCancellationsXlsxBuffer(deals);
-    res.setHeader('Content-Disposition', 'attachment; filename="opal-cancellations.xlsx"');
+    const deals = vendorMode
+      ? filterDealsStrictlyCancelledInPeriod(candidates, fromDate, toDate)
+      : filterDealsCancellationsServiceEndInPeriod(candidates, fromDate, toDate);
+    const file = vendorMode
+      ? await buildVendorCancellationsXlsxBuffer(deals)
+      : await buildCancellationsXlsxBuffer(deals);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${vendorMode ? 'opal-vendor-cancellations' : 'opal-cancellations'}.xlsx"`
+    );
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
