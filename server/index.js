@@ -82,8 +82,6 @@ import {
   updateAgentCommissionSnapshot,
   hasUnlockedAgentCommissionsForMonth,
   processDetailRecurringWebhook,
-  tryAcquireCheckoutLock,
-  releaseCheckoutLock,
   writeInitialCheckoutCommissionLedger,
   writeInitialCheckoutVendorPayoutLedger,
   getVendorPayoutPreview,
@@ -608,9 +606,11 @@ app.post('/api/create-checkout-session', async (req, res) => {
 
     // Persist to MongoDB so any server instance (PM2 worker, separate dyno) can
     // handle the Cardcom webhook — not only the instance that created this session.
-    persistCheckoutSession(result.lowProfileCode, { formState: enrichedForm, payerAmount }).catch(
-      (e) => console.warn(`[${ts()}] persistCheckoutSession (non-blocking):`, e?.message || e)
-    );
+    try {
+      await persistCheckoutSession(result.lowProfileCode, { formState: enrichedForm, payerAmount });
+    } catch (e) {
+      console.warn(`[${ts()}] persistCheckoutSession:`, e?.message || e);
+    }
 
     try {
       await upsertPendingCheckoutLead({
@@ -719,40 +719,41 @@ app.post('/api/cardcom-detail-recurring-webhook', requireCardcomIp, (req, res) =
 
 /**
  * Process webhook in background: confirm deal with Cardcom, then persist to MongoDB.
- * Uses fallbacks everywhere so missing metadata does not crash.
+ * Idempotency is based on a completed deal document only — not checkout_locks.
  */
 async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQuery = {}) {
-  // ── Distributed idempotency (native _id on checkout_locks) ──────────────────
-  // First webhook insert wins (_id = LowProfileCode); duplicates get E11000 → skip.
-  // The document is never deleted: permanent idempotency key for Cardcom retries.
-  let lockAcquired = false;
-  try {
-    lockAcquired = await tryAcquireCheckoutLock(lowProfileCode);
-  } catch (lockErr) {
-    console.error(`[${ts()}] Webhook: lock check failed for ${lowProfileCode}:`, lockErr?.message || lockErr);
-    return; // safer to skip than to risk a duplicate profile
-  }
-  if (!lockAcquired) {
-    console.log(`[${ts()}] Webhook: ${lowProfileCode} idempotency key exists — duplicate webhook skipped`);
+  const code = String(lowProfileCode ?? '').trim();
+  if (!code) return;
+
+  const existingDeal = await findDealByLowProfileCode(code);
+  if (existingDeal?.transactionId) {
+    console.log(`[${ts()}] Webhook: ${code} — עסקה כבר קיימת; webhook כפול נדחה`);
     return;
   }
-  // ────────────────────────────────────────────────────────────────────────────
 
   try {
     // ── Consume-once: first reader wins, all others get nothing ──────────────
     // In-memory: synchronous get + delete — blocks concurrent calls in same process.
     // MongoDB: findOneAndDelete — atomic consume across processes / workers.
-    let pending = pendingDeals.get(lowProfileCode);
+    let pending = pendingDeals.get(code);
     if (pending) {
-      pendingDeals.delete(lowProfileCode);
+      pendingDeals.delete(code);
     } else {
-      pending = await consumeCheckoutSession(lowProfileCode);
+      pending = await consumeCheckoutSession(code);
+      if (!pending) {
+        pending = await loadCheckoutSession(code);
+      }
       if (pending) {
-        console.log(`[${ts()}] Webhook: session consumed from MongoDB for ${lowProfileCode}`);
+        console.log(`[${ts()}] Webhook: session loaded from MongoDB for ${code}`);
       }
     }
     if (!pending) {
-      console.warn(`[${ts()}] Webhook: no session data for ${lowProfileCode} — expired or unknown code`);
+      const dealAfterMiss = await findDealByLowProfileCode(code);
+      if (dealAfterMiss?.transactionId) {
+        console.log(`[${ts()}] Webhook: ${code} — עסקה נשמרה על ידי handler מקביל`);
+        return;
+      }
+      console.warn(`[${ts()}] Webhook: no session data for ${code} — expired or unknown code`);
       return;
     }
 
@@ -1146,8 +1147,6 @@ async function handleWebhookSuccess(lowProfileCode, webhookBody = {}, webhookQue
     const paymentStatus = (Number(process.env.CARDCOM_TERMINAL) === 1000) ? 'TEST' : 'LIVE';
     console.log(`[${ts()}] Payment status: ${paymentStatus} - Result: FAILURE`);
     console.error(`[${ts()}] Webhook: handleWebhookSuccess failed`, err);
-  } finally {
-    await releaseCheckoutLock(lowProfileCode);
   }
 }
 
