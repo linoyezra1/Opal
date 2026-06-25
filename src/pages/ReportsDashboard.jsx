@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FileSpreadsheet, Users, RefreshCw, Lock, Edit2, Download } from 'lucide-react';
+import { FileSpreadsheet, Users, RefreshCw, Lock, Edit2, Download, Search } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { API_BASE } from '../apiBase.js';
 import { fmtDateTime } from '../utils/dateUtils.js';
@@ -24,6 +24,7 @@ import { Spinner } from '../components/ui/spinner.jsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 import { Textarea } from '../components/ui/textarea.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
+import TableNumericFooter from '../components/admin/TableNumericFooter.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -275,13 +276,6 @@ export default function ReportsDashboard() {
     loadOrgsAndProducts();
   }, [loadOrgsAndProducts]);
   useEffect(() => {
-    loadProviders();
-  }, [loadProviders]);
-  useEffect(() => {
-    if (tab !== 'provider') return;
-    loadPreview();
-  }, [tab, loadPreview]);
-  useEffect(() => {
     if (tab !== 'agents') return;
     loadAgentSnapshots();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -518,6 +512,10 @@ export default function ReportsDashboard() {
                     <FieldLabel>עד תאריך</FieldLabel>
                     <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
                   </Field>
+                  <Button type="button" className="gap-2" onClick={() => { loadProviders(); loadPreview(); }} disabled={previewLoading}>
+                    <Search className="size-4" />
+                    חיפוש
+                  </Button>
                 </FieldGroup>
                 <div className="rounded-xl border p-3 md:p-4">
                   <UnifiedFilterShell
@@ -582,6 +580,7 @@ export default function ReportsDashboard() {
                     ]}
                     values={provExportFilterValues}
                     onChange={applyProvExportFilters}
+                    onApply={() => { loadProviders(); loadPreview(); }}
                     onClear={clearProvExportFilters}
                     resultsCount={previewRows.length}
                     totalCount={previewTotal}
@@ -637,6 +636,17 @@ export default function ReportsDashboard() {
                         </TableRow>
                       ) : null}
                     </TableBody>
+                    <TableNumericFooter
+                      leadingColSpan={7}
+                      rows={previewRows}
+                      columns={[
+                        {
+                          key: 'vendorPayout',
+                          format: 'currency2',
+                          getValue: (r) => (r.isSecondary ? 0 : (r.vendorPayout ?? 0)),
+                        },
+                      ]}
+                    />
                   </Table>
                 </div>
                 <p className="text-xs text-muted-foreground">

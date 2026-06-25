@@ -17,6 +17,8 @@ import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog.jsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
+import TableNumericFooter from '../components/admin/TableNumericFooter.jsx';
+import { openAdminPath } from '../utils/adminNavigation.js';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -588,11 +590,14 @@ export default function AgentDetailPage() {
                           <TableCell>{formatDate(r.subscriptionEndDate || r.subscriptionEndDateRaw)}</TableCell>
                           <TableCell>{formatCurrency(r.amount)}</TableCell>
                           <TableCell>
-                            <Button type="button" variant="outline" size="sm" asChild>
-                              <Link to={`/admin/subscribers?search=${encodeURIComponent(r.transactionId || '')}`}>
-                                <Pencil className="size-4 ms-1" />
-                                עריכת לקוח
-                              </Link>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openAdminPath(`/admin/subscribers?search=${encodeURIComponent(r.transactionId || '')}`)}
+                            >
+                              <Pencil className="size-4 ms-1" />
+                              עריכת לקוח
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -608,6 +613,17 @@ export default function AgentDetailPage() {
                         </TableRow>
                       ) : null}
                     </TableBody>
+                    <TableNumericFooter
+                      leadingColSpan={lockNeedsSelection ? 8 : 5}
+                      trailingColSpan={1}
+                      rows={preview.rows || []}
+                      columns={[
+                        ...(lockNeedsSelection
+                          ? [{ key: 'actualBillingAmount', format: 'currency2', getValue: (r) => r.actualBillingAmount }]
+                          : []),
+                        { key: 'amount', format: 'currency2', getValue: (r) => r.amount },
+                      ]}
+                    />
                   </Table>
                 </div>
               </CardContent>
@@ -748,6 +764,19 @@ export default function AgentDetailPage() {
                         </TableRow>
                       ) : null}
                     </TableBody>
+                    <TableNumericFooter
+                      leadingColSpan={3}
+                      trailingColSpan={3}
+                      rows={snapshots}
+                      columns={[
+                        { key: 'invoiceAmount', format: 'currency2', getValue: (s) => s.invoiceAmount },
+                        { key: 'creditNoteAmount', format: 'currency2', getValue: (s) => s.creditNoteAmount },
+                        { key: 'totalAmount', format: 'currency2', getValue: (s) => s.totalAmount },
+                        { key: 'totalPaid', format: 'currency2', getValue: (s) => s.totalPaid },
+                        { key: 'balance', format: 'currency2', getValue: (s) => s.balance },
+                        { key: 'totalDeals', getValue: (s) => s.totalDeals ?? 0 },
+                      ]}
+                    />
                   </Table>
                 </div>
               </CardContent>

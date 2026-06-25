@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Building2, Plus, Archive, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { Building2, Plus, Archive, Copy, Check, ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import { dispatchAdminAlertsChanged } from '../../lib/adminAlertsEvents.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
@@ -23,6 +23,8 @@ import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '../components/u
 import { Badge } from '../components/ui/badge.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
+import { openAdminPath } from '../utils/adminNavigation.js';
+import TableNumericFooter from '../components/admin/TableNumericFooter.jsx';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -67,7 +69,9 @@ export default function OrganizationsDashboard() {
   const [billingEditPending, setBillingEditPending] = useState(null);
   const [products, setProducts] = useState([]);
   const [priceLists, setPriceLists] = useState([]);
-  const [search, setSearch] = useState('');
+  const [searchDraft, setSearchDraft] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const [billingFilterDraft, setBillingFilterDraft] = useState('all');
   const [billingFilter, setBillingFilter] = useState('all');
   const [activeMainTab, setActiveMainTab] = useState(
     () => String(new URLSearchParams(window.location.search).get('tab') || 'orgs') === 'applications' ? 'applications' : 'orgs'
@@ -116,7 +120,10 @@ export default function OrganizationsDashboard() {
 
   useEffect(() => {
     const deepSearch = String(searchParams.get('search') || '').trim();
-    if (deepSearch) setSearch(deepSearch);
+    if (deepSearch) {
+      setSearchDraft(deepSearch);
+      setAppliedSearch(deepSearch);
+    }
     const tabParam = String(searchParams.get('tab') || '').trim();
     if (tabParam === 'applications') setActiveMainTab('applications');
   }, [searchParams]);
@@ -294,7 +301,7 @@ export default function OrganizationsDashboard() {
   );
 
   const filteredRows = React.useMemo(() => {
-    const q = String(search || '').trim().toLowerCase();
+    const q = String(appliedSearch || '').trim().toLowerCase();
     return (rows || []).filter((r) => {
       if (['pending', 'Pending'].includes(String(r.status || ''))) return false;
       if (billingFilter === 'centralized' && r.billingType !== 'Centralized') return false;
@@ -312,7 +319,7 @@ export default function OrganizationsDashboard() {
         .join(' | ');
       return hay.includes(q);
     });
-  }, [rows, search, billingFilter]);
+  }, [rows, appliedSearch, billingFilter]);
 
   function providerNameForProduct(product) {
     if (!product || typeof product !== 'object') return '—';
@@ -950,21 +957,39 @@ export default function OrganizationsDashboard() {
           <TabsContent value="orgs" className="space-y-4 mt-4">
             <Card>
               <CardContent className="pt-6">
-                <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
                   <Input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    value={searchDraft}
+                    onChange={(e) => setSearchDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        setAppliedSearch(searchDraft);
+                        setBillingFilter(billingFilterDraft);
+                      }
+                    }}
                     placeholder="חיפוש חופשי: ארגון, ח.פ, אימייל, טלפון, מוצר"
                   />
                   <select
                     className="flex h-10 min-w-56 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    value={billingFilter}
-                    onChange={(e) => setBillingFilter(e.target.value)}
+                    value={billingFilterDraft}
+                    onChange={(e) => setBillingFilterDraft(e.target.value)}
                   >
                     <option value="all">כל סוגי החיוב</option>
                     <option value="centralized">חיוב מרוכז</option>
                     <option value="private">חיוב פרטי</option>
                   </select>
+                  <Button
+                    type="button"
+                    className="gap-2 shrink-0"
+                    onClick={() => {
+                      setAppliedSearch(searchDraft);
+                      setBillingFilter(billingFilterDraft);
+                    }}
+                  >
+                    <Search className="size-4" />
+                    חיפוש
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -1022,7 +1047,15 @@ export default function OrganizationsDashboard() {
                                     {isExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
                                   </Button>
                                 </TableCell>
-                                <TableCell className="font-medium">{r.companyName || '—'}</TableCell>
+                                <TableCell className="font-medium">
+                                  <button
+                                    type="button"
+                                    className="text-primary hover:underline font-medium"
+                                    onClick={() => openAdminPath(`/admin/organizations/${encodeURIComponent(r.id)}`)}
+                                  >
+                                    {r.companyName || '—'}
+                                  </button>
+                                </TableCell>
                                 <TableCell>{r.companyId || '—'}</TableCell>
                                 <TableCell>
                                   <Badge variant="outline">
@@ -1043,8 +1076,13 @@ export default function OrganizationsDashboard() {
                                                                 </TableCell>
                                 <TableCell>
                                   <div className="flex items-center gap-1 flex-wrap">
-                                    <Button variant="outline" size="sm" type="button" asChild>
-                                      <Link to={`/admin/organizations/${encodeURIComponent(r.id)}`}>פרופיל</Link>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      type="button"
+                                      onClick={() => openAdminPath(`/admin/organizations/${encodeURIComponent(r.id)}`)}
+                                    >
+                                      פרופיל
                                     </Button>
                                     <Tooltip>
                                       <TooltipTrigger asChild>
@@ -1098,6 +1136,15 @@ export default function OrganizationsDashboard() {
                           );
                         })}
                       </TableBody>
+                      <TableNumericFooter
+                        leadingColSpan={4}
+                        trailingColSpan={3}
+                        rows={filteredRows}
+                        columns={[
+                          { key: 'activeMemberCount', getValue: (r) => r.activeMemberCount ?? 0 },
+                          { key: 'monthlyPricePerMember', format: 'currency', getValue: (r) => r.monthlyPricePerMember ?? 0 },
+                        ]}
+                      />
                     </Table>
                   </div>
                 )}

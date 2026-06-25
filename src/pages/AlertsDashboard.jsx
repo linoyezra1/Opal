@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   Bell,
   Building2,
@@ -25,6 +25,7 @@ import { Badge } from '../components/ui/badge.jsx';
 import { Button } from '../components/ui/button.jsx';
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '../components/ui/empty.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
+import { openAdminPath } from '../utils/adminNavigation.js';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -140,7 +141,6 @@ function summaryCountKey(key) {
 }
 
 export default function AlertsDashboard() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [token] = React.useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [loading, setLoading] = React.useState(false);
@@ -240,13 +240,13 @@ export default function AlertsDashboard() {
     if (key === 'failedPayments') {
       const search = String(row.cardcomRecurringId || row.orderId || row.transactionId || '').trim();
       if (!search) return;
-      navigate(`/admin/subscribers?search=${encodeURIComponent(search)}`);
+      openAdminPath(`/admin/subscribers?search=${encodeURIComponent(search)}`);
       return;
     }
     if (key === 'pendingBeneficiaries') {
       const search = String(row.transactionId || row.id || '').trim();
       if (!search) return;
-      navigate(
+      openAdminPath(
         `/admin/subscribers?search=${encodeURIComponent(search)}&editId=${encodeURIComponent(String(row.id || ''))}`
       );
       return;
@@ -254,7 +254,7 @@ export default function AlertsDashboard() {
     if (key === 'pendingCancellationCount') {
       const search = String(row.transactionId || row.id || '').trim();
       if (!search) return;
-      navigate(
+      openAdminPath(
         `/admin/subscribers?search=${encodeURIComponent(search)}&editId=${encodeURIComponent(String(row.id || ''))}`
       );
       return;
@@ -263,12 +263,12 @@ export default function AlertsDashboard() {
       const kind = String(row.kind || '').toLowerCase();
       if (kind === 'corporate') {
         const orgName = String(row.organizationName || row.fullName || '').trim();
-        navigate(
+        openAdminPath(
           `/admin/organizations?search=${encodeURIComponent(orgName)}&editId=${encodeURIComponent(String(row.organizationId || ''))}`
         );
       } else {
         const search = String(row.fullName || row.customerName || row.name || row.id || '').trim();
-        navigate(
+        openAdminPath(
           `/admin/contacts?search=${encodeURIComponent(search)}&editKind=${encodeURIComponent(kind || 'private')}&editId=${encodeURIComponent(String(row.id || ''))}`
         );
       }
@@ -280,13 +280,13 @@ export default function AlertsDashboard() {
       const qs = new URLSearchParams({ tab: 'applications' });
       if (orgName) qs.set('search', orgName);
       if (orgId) qs.set('editId', orgId);
-      navigate(`/admin/organizations?${qs.toString()}`);
+      openAdminPath(`/admin/organizations?${qs.toString()}`);
       return;
     }
     if (key === 'organizationCollectionsDebt') {
       const orgId = String(row.organizationId || '').trim();
       if (!orgId) return;
-      navigate(`/admin/organizations/${encodeURIComponent(orgId)}?tab=payments`);
+      openAdminPath(`/admin/organizations/${encodeURIComponent(orgId)}?tab=payments`);
       return;
     }
     if (key === 'providerPaymentsDue') {
@@ -295,7 +295,7 @@ export default function AlertsDashboard() {
       if (!vendorId) return;
       const qs = new URLSearchParams();
       if (payoutId) qs.set('highlightPayoutId', payoutId);
-      navigate(`/admin/vendors/${encodeURIComponent(vendorId)}?${qs.toString()}`);
+      openAdminPath(`/admin/vendors/${encodeURIComponent(vendorId)}?${qs.toString()}`);
       return;
     }
     if (key === 'agentPaymentsDue') {
@@ -304,7 +304,7 @@ export default function AlertsDashboard() {
       if (!agentId) return;
       const qs = new URLSearchParams({ tab: 'commissions' });
       if (snapshotId) qs.set('highlightSnapshotId', snapshotId);
-      navigate(`/admin/agents/${encodeURIComponent(agentId)}?${qs.toString()}`);
+      openAdminPath(`/admin/agents/${encodeURIComponent(agentId)}?${qs.toString()}`);
     }
   }
 

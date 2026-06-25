@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, RefreshCw, Wallet, Users, CreditCard, UserCheck, AlertCircle, Building2, Pencil, MessageSquareText, Bell, Clock, UserX } from 'lucide-react';
+import { LayoutDashboard, RefreshCw, Wallet, Users, CreditCard, UserCheck, AlertCircle, Building2, Pencil, MessageSquareText, Bell, Clock, UserX, Search } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { API_BASE } from '../apiBase.js';
 import { fmtDateTime } from '../utils/dateUtils.js';
@@ -120,6 +120,7 @@ export default function AdminControlPanel() {
   const navigate = useNavigate();
   const [token] = React.useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [filters, setFilters] = React.useState(() => monthDefaults());
+  const [draftFilters, setDraftFilters] = React.useState(() => monthDefaults());
   const [data, setData] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -150,9 +151,9 @@ export default function AdminControlPanel() {
     } finally {
       setLoading(false);
     }
-  }, [filters, token]);
+  }, [token]);
 
-  React.useEffect(() => { load(filters); }, [load, filters]);
+  React.useEffect(() => { load(filters); }, [token]);
   React.useEffect(() => {
     if (!token) return;
     let cancelled = false;
@@ -271,53 +272,64 @@ export default function AdminControlPanel() {
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <Button
                 type="button"
-                variant={filters.dateFilterMode === 'billing_date' ? 'default' : 'outline'}
-                onClick={() => setFilters((f) => ({ ...f, dateFilterMode: 'billing_date' }))}
+                variant={draftFilters.dateFilterMode === 'billing_date' ? 'default' : 'outline'}
+                onClick={() => setDraftFilters((f) => ({ ...f, dateFilterMode: 'billing_date' }))}
               >
                 סנן לפי תאריך חיוב
               </Button>
               <Button
                 type="button"
-                variant={filters.dateFilterMode === 'join_date' ? 'default' : 'outline'}
-                onClick={() => setFilters((f) => ({ ...f, dateFilterMode: 'join_date' }))}
+                variant={draftFilters.dateFilterMode === 'join_date' ? 'default' : 'outline'}
+                onClick={() => setDraftFilters((f) => ({ ...f, dateFilterMode: 'join_date' }))}
               >
                 סנן לפי תאריך הצטרפות
               </Button>
             </div>
-            <div className="grid gap-3 md:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-4 items-end">
               <Input
                 type="month"
-                value={filters.month}
+                value={draftFilters.month}
                 onChange={(e) => {
                   const m = String(e.target.value || '').trim();
                   if (!/^\d{4}-\d{2}$/.test(m)) {
-                    setFilters((f) => ({ ...f, month: m }));
+                    setDraftFilters((f) => ({ ...f, month: m }));
                     return;
                   }
                   const [y, mo] = m.split('-').map(Number);
                   const start = new Date(y, mo - 1, 1);
                   const end = new Date(y, mo, 0);
                   const toYmd = (d) => d.toISOString().slice(0, 10);
-                  setFilters((f) => ({ ...f, month: m, fromDate: toYmd(start), toDate: toYmd(end) }));
+                  setDraftFilters((f) => ({ ...f, month: m, fromDate: toYmd(start), toDate: toYmd(end) }));
                 }}
               />
               <Input
                 type="date"
-                aria-label={filters.dateFilterMode === 'join_date' ? 'מתאריך הצטרפות' : 'מתאריך חיוב'}
-                value={filters.fromDate}
-                onChange={(e) => setFilters((f) => ({ ...f, fromDate: e.target.value }))}
+                aria-label={draftFilters.dateFilterMode === 'join_date' ? 'מתאריך הצטרפות' : 'מתאריך חיוב'}
+                value={draftFilters.fromDate}
+                onChange={(e) => setDraftFilters((f) => ({ ...f, fromDate: e.target.value }))}
               />
               <Input
                 type="date"
-                aria-label={filters.dateFilterMode === 'join_date' ? 'עד תאריך הצטרפות' : 'עד תאריך חיוב'}
-                value={filters.toDate}
-                onChange={(e) => setFilters((f) => ({ ...f, toDate: e.target.value }))}
+                aria-label={draftFilters.dateFilterMode === 'join_date' ? 'עד תאריך הצטרפות' : 'עד תאריך חיוב'}
+                value={draftFilters.toDate}
+                onChange={(e) => setDraftFilters((f) => ({ ...f, toDate: e.target.value }))}
               />
-              <div className="text-sm text-muted-foreground flex flex-col items-end gap-0.5">
+              <Button
+                type="button"
+                className="gap-2"
+                disabled={loading}
+                onClick={() => {
+                  setFilters(draftFilters);
+                  load(draftFilters);
+                }}
+              >
+                <Search className={`size-4 ${loading ? 'animate-pulse' : ''}`} />
+                חיפוש
+              </Button>
+              <div className="text-sm text-muted-foreground flex flex-col items-end gap-0.5 md:col-span-4">
                 <span>
                   טווח פעיל: {data?.range?.fromDate || filters.fromDate} - {data?.range?.toDate || filters.toDate}
                 </span>
-
               </div>
             </div>
           </CardContent>

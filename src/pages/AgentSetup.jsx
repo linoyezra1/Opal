@@ -27,6 +27,7 @@ import { Badge } from '../components/ui/badge.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
+import { openAdminPath } from '../utils/adminNavigation.js';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -867,7 +868,7 @@ export default function AgentSetup() {
                               <button
                                 type="button"
                                 className="font-semibold text-foreground hover:text-primary transition-colors text-start"
-                                onClick={() => navigate(`/admin/agents/${encodeURIComponent(r.id)}`)}
+                                onClick={() => openAdminPath(`/admin/agents/${encodeURIComponent(r.id)}`)}
                               >
                                 {r.agentName}
                               </button>
@@ -909,7 +910,7 @@ export default function AgentSetup() {
                                     <Button
                                       variant="ghost" size="icon" type="button"
                                       className="size-8 text-primary hover:text-primary hover:bg-primary/10"
-                                      onClick={() => navigate(`/admin/agents/${encodeURIComponent(r.id)}`)}
+                                      onClick={() => openAdminPath(`/admin/agents/${encodeURIComponent(r.id)}`)}
                                       aria-label="צפייה"
                                     >
                                       <Eye className="size-4" />

@@ -2,11 +2,13 @@ import React from 'react';
 import { Search, Filter, ChevronDown, ChevronUp, RotateCcw, X } from 'lucide-react';
 import { Input } from '../ui/input.jsx';
 import { Button } from '../ui/button.jsx';
+
 export default function UnifiedFilterShell(props) {
   const {
     filters = null,
     values = null,
     onChange = null,
+    onApply = null,
     onClear = null,
     resultsCount,
     totalCount,
@@ -19,49 +21,100 @@ export default function UnifiedFilterShell(props) {
     advancedContent = null,
     toolbarTrailing = null,
     hideSearchBar = false,
+    applyLabel = 'חיפוש',
   } = props;
+
   const [expanded, setExpanded] = React.useState(false);
   const hasNewApi = Array.isArray(filters) && values && typeof onChange === 'function';
   const searchFilter = hasNewApi ? filters.find((f) => f.key === 'search' || f.type === 'text') : null;
   const otherFilters = hasNewApi ? filters.filter((f) => !(f.key === (searchFilter?.key || '') || f.type === 'text')) : [];
-  const resolvedSearchValue = hasNewApi ? String(values?.[searchFilter?.key] || '') : searchValue;
   const resolvedSearchPlaceholder = hasNewApi ? (searchFilter?.placeholder || searchPlaceholder) : searchPlaceholder;
 
-  function updateValue(key, value) {
-    if (!hasNewApi) return;
-    onChange({ ...values, [key]: value });
+  const [draft, setDraft] = React.useState(() => (hasNewApi ? { ...values } : {}));
+  const [draftSearch, setDraftSearch] = React.useState(() => String(searchValue || ''));
+
+  React.useEffect(() => {
+    if (hasNewApi) setDraft({ ...values });
+  }, [hasNewApi, values]);
+
+  React.useEffect(() => {
+    if (!hasNewApi) setDraftSearch(String(searchValue || ''));
+  }, [hasNewApi, searchValue]);
+
+  function updateDraft(key, value) {
+    setDraft((prev) => ({ ...prev, [key]: value }));
   }
+
+  function handleApply() {
+    if (hasNewApi) {
+      onChange?.({ ...draft });
+      onApply?.({ ...draft });
+      return;
+    }
+    onSearchChange?.(draftSearch);
+    onApply?.(draftSearch);
+  }
+
+  function handleClear() {
+    if (hasNewApi && searchFilter) {
+      const cleared = { ...values };
+      for (const f of filters) cleared[f.key] = f.type === 'select' ? (f.key === 'status' ? 'all' : '') : '';
+      setDraft(cleared);
+    } else {
+      setDraftSearch('');
+    }
+    onClear?.();
+  }
+
+  function handleSearchKeyDown(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleApply();
+    }
+  }
+
+  const resolvedDraftSearch = hasNewApi ? String(draft?.[searchFilter?.key] || '') : draftSearch;
 
   return (
     <div className={`space-y-3 ${className}`} dir="rtl">
       <div className="flex flex-wrap items-center gap-3">
         {!hideSearchBar ? (
           <div className="relative w-full sm:flex-1 sm:min-w-[220px] sm:max-w-xl">
-            <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
             <Input
-              value={resolvedSearchValue}
+              value={resolvedDraftSearch}
               onChange={(e) => {
-                if (hasNewApi && searchFilter) updateValue(searchFilter.key, e.target.value);
-                else onSearchChange?.(e.target.value);
+                if (hasNewApi && searchFilter) updateDraft(searchFilter.key, e.target.value);
+                else setDraftSearch(e.target.value);
               }}
+              onKeyDown={handleSearchKeyDown}
               placeholder={resolvedSearchPlaceholder}
-              className="h-10 pe-10 ps-9 bg-white border-slate-200 shadow-sm"
+              className="h-10 bg-white border-slate-200 shadow-sm"
             />
-            {resolvedSearchValue ? (
+            {resolvedDraftSearch ? (
               <button
                 type="button"
                 onClick={() => {
-                  if (hasNewApi && searchFilter) updateValue(searchFilter.key, '');
-                  else onSearchChange?.('');
+                  if (hasNewApi && searchFilter) updateDraft(searchFilter.key, '');
+                  else setDraftSearch('');
                 }}
                 className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                aria-label="נקה חיפוש"
+                aria-label="נקה טקסט חיפוש"
               >
                 <X className="size-4" />
               </button>
             ) : null}
           </div>
         ) : null}
+
+        <Button
+          type="button"
+          className="h-10 gap-2 shrink-0"
+          onClick={handleApply}
+          disabled={isLoading}
+        >
+          <Search className={`size-4 ${isLoading ? 'animate-pulse' : ''}`} />
+          {applyLabel}
+        </Button>
 
         {!hasNewApi ? basicControls : null}
 
@@ -92,7 +145,7 @@ export default function UnifiedFilterShell(props) {
           <div className="mb-4 flex items-center justify-between">
             <h4 className="text-sm font-medium text-slate-800">סינון מתקדם</h4>
             {onClear ? (
-              <Button type="button" variant="ghost" size="sm" onClick={onClear} className="h-8 gap-1.5 text-muted-foreground">
+              <Button type="button" variant="ghost" size="sm" onClick={handleClear} className="h-8 gap-1.5 text-muted-foreground">
                 <RotateCcw className="size-3.5" />
                 נקה הכל
               </Button>
@@ -106,8 +159,8 @@ export default function UnifiedFilterShell(props) {
                   <label className="text-xs font-medium text-muted-foreground">{filter.label}</label>
                   {filter.type === 'select' && Array.isArray(filter.options) ? (
                     <select
-                      value={String(values?.[filter.key] || '')}
-                      onChange={(e) => updateValue(filter.key, e.target.value)}
+                      value={String(draft?.[filter.key] ?? '')}
+                      onChange={(e) => updateDraft(filter.key, e.target.value)}
                       className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-sm"
                     >
                       <option value="">הכל</option>
@@ -124,8 +177,9 @@ export default function UnifiedFilterShell(props) {
                             ? 'month'
                             : 'text'
                       }
-                      value={String(values?.[filter.key] || '')}
-                      onChange={(e) => updateValue(filter.key, e.target.value)}
+                      value={String(draft?.[filter.key] || '')}
+                      onChange={(e) => updateDraft(filter.key, e.target.value)}
+                      onKeyDown={handleSearchKeyDown}
                       placeholder={filter.placeholder || ''}
                       className="h-9 bg-slate-50 border-slate-200 text-sm"
                     />

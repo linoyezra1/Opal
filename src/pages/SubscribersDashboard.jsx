@@ -39,6 +39,8 @@ import {
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import { StatsCard } from '../components/admin/stats-card.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
+import TableNumericFooter from '../components/admin/TableNumericFooter.jsx';
+import { openAdminPath } from '../utils/adminNavigation.js';
 import { Button } from '../components/ui/button.jsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.jsx';
@@ -516,12 +518,9 @@ export default function SubscribersDashboard() {
   }
 
   useEffect(() => {
-    const t = setTimeout(() => {
-      loadDashboard();
-    }, 250);
-    return () => clearTimeout(t);
+    loadDashboard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, liveSearch]);
+  }, []);
 
   useEffect(() => {
     const current = String(searchParams.get('search') || '').trim();
@@ -1962,6 +1961,7 @@ export default function SubscribersDashboard() {
                     customerSegmentFilter: String(next.customerSegmentFilter || ''),
                   }));
                 }}
+                onApply={() => loadDashboard()}
                 onClear={clearFilters}
                 advancedContent={(
                   <div className="text-sm text-muted-foreground">
@@ -2106,7 +2106,13 @@ export default function SubscribersDashboard() {
                             {formatCurrency(r.totalCustomerRevenue ?? r.amount)}
                           </TableCell>
                           <TableCell dir="rtl" className="font-mono text-xs text-right">
-                            {r.transactionId}
+                            <button
+                              type="button"
+                              className="text-primary hover:underline"
+                              onClick={() => openAdminPath(`/admin/subscribers?search=${encodeURIComponent(r.transactionId || '')}&editId=${encodeURIComponent(r.id || '')}`)}
+                            >
+                              {r.transactionId}
+                            </button>
                           </TableCell>
                           <TableCell dir="rtl" className="whitespace-nowrap text-xs text-right">
                             {fmtDateTime(r.createdAt)}
@@ -2330,6 +2336,15 @@ export default function SubscribersDashboard() {
                           );
                       })}
                     </TableBody>
+                    <TableNumericFooter
+                      leadingColSpan={2}
+                      trailingColSpan={6}
+                      rows={visibleRows}
+                      columns={[
+                        { key: 'amount', format: 'currency' },
+                        { key: 'totalCustomerRevenue', format: 'currency', getValue: (r) => r.totalCustomerRevenue ?? r.amount },
+                      ]}
+                    />
                   </Table>
                 </div>
               )}

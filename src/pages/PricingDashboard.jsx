@@ -20,6 +20,9 @@ import { FieldGroup, Field, FieldLabel } from '../components/ui/field.jsx';
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '../components/ui/empty.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
+import RecordDetailDrawer from '../components/admin/RecordDetailDrawer.jsx';
+import TableNumericFooter from '../components/admin/TableNumericFooter.jsx';
+import { openAdminPath } from '../utils/adminNavigation.js';
 import { fmtDateTime } from '../utils/dateUtils.js';
 
 const TOKEN_KEY = 'opal_admin_token';
@@ -499,14 +502,20 @@ export default function PricingDashboard() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!viewRow} onOpenChange={(o) => { if (!o) setViewRow(null); }}>
-        <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto text-right" dir="rtl">
-          <DialogHeader>
-            <DialogTitle>פרטי מוצרים במחירון</DialogTitle>
-            <DialogDescription>
-              {viewRow?.listName ? `מחירון: ${viewRow.listName}` : null}
-            </DialogDescription>
-          </DialogHeader>
+      <RecordDetailDrawer
+        open={!!viewRow}
+        onOpenChange={(o) => { if (!o) setViewRow(null); }}
+        wide
+        title={viewRow?.listName || 'מחירון'}
+        subtitle={(() => {
+          const prod = viewRow ? productMap.get(String(viewRow.productId || '')) : null;
+          const vendor = prod?.provider?.vendorName || '—';
+          const prodName = viewRow?.productName || prod?.productName || prod?.name || '—';
+          return `ספק: ${vendor} | מוצר: ${prodName}`;
+        })()}
+        onSave={viewRow ? () => { setViewRow(null); openEdit(viewRow); } : undefined}
+        saveLabel="עריכה"
+      >
           <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
@@ -546,15 +555,21 @@ export default function PricingDashboard() {
                   })
                 )}
               </TableBody>
+              {viewRow && (viewRow.lines || []).length > 0 ? (
+                <TableNumericFooter
+                  leadingColSpan={1}
+                  rows={viewRow.lines || []}
+                  columns={[
+                    { key: 'vendorCost', format: 'currency2', getValue: (l) => l.vendorCost },
+                    { key: 'defaultAgentCommission', format: 'currency2', getValue: (l) => l.defaultAgentCommission },
+                    { key: 'retailPrice', format: 'currency2', getValue: (l) => l.retailPrice },
+                    { key: 'net', format: 'currency2', getValue: (l) => lineNetProfit(l) },
+                  ]}
+                />
+              ) : null}
             </Table>
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setViewRow(null)}>
-              סגור
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </RecordDetailDrawer>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -704,9 +719,16 @@ export default function PricingDashboard() {
                                             className="flex items-center gap-2 rounded-md border bg-background px-3 py-2"
                                           >
                                             <Building2 className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                                            <span>
+                                            <button
+                                              type="button"
+                                              className="text-primary hover:underline"
+                                              onClick={() => {
+                                                const orgId = String(org.id || org._id || '').trim();
+                                                if (orgId) openAdminPath(`/admin/organizations/${encodeURIComponent(orgId)}`);
+                                              }}
+                                            >
                                               {name} - {price} ₪
-                                            </span>
+                                            </button>
                                           </li>
                                         );
                                       })}
@@ -720,6 +742,18 @@ export default function PricingDashboard() {
                       );
                     })}
                   </TableBody>
+                  <TableNumericFooter
+                    leadingColSpan={4}
+                    trailingColSpan={1}
+                    rows={filteredLists}
+                    columns={[
+                      {
+                        key: 'basePrice',
+                        format: 'currency2',
+                        getValue: (r) => r.basePrice ?? r.lines?.[0]?.retailPrice ?? 0,
+                      },
+                    ]}
+                  />
                 </Table>
               </div>
             )}

@@ -23,6 +23,9 @@ import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '../components/u
 import { Spinner } from '../components/ui/spinner.jsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
+import RecordDetailDrawer from '../components/admin/RecordDetailDrawer.jsx';
+import TableNumericFooter from '../components/admin/TableNumericFooter.jsx';
+import { openAdminPath } from '../utils/adminNavigation.js';
 import { fmtDateTime } from '../utils/dateUtils.js';
 
 const TOKEN_KEY = 'opal_admin_token';
@@ -38,13 +41,11 @@ const EMPTY_FORM = {
   defaultBeneficiaryCount: 1,
 };
 
-// ─── View Product Dialog ────────────────────────────────────────────────────────
-function ViewProductDialog({ product, productSlugMap, productPurchaseCounts, productSlugPurchaseCounts, onClose, onEdit }) {
+// ─── View Product Drawer ──────────────────────────────────────────────────────
+function ViewProductDrawer({ product, productSlugMap, productPurchaseCounts, productSlugPurchaseCounts, onClose, onEdit }) {
   const [copiedLink, setCopiedLink] = React.useState('');
 
-  if (!product) return null;
-
-  const totalPurchases = productPurchaseCounts.get(product.id) ?? 0;
+  const totalPurchases = product ? (productPurchaseCounts.get(product.id) ?? 0) : 0;
 
   function copyLink(link) {
     navigator.clipboard.writeText(link).then(() => {
@@ -53,33 +54,23 @@ function ViewProductDialog({ product, productSlugMap, productPurchaseCounts, pro
     }).catch(() => {});
   }
 
-  const slugEntries = productSlugMap.get(product.id) || [];
-  const productName = product.productName || product.name || '';
+  const slugEntries = product ? (productSlugMap.get(product.id) || []) : [];
+  const productName = product?.productName || product?.name || '';
+  const vendorSubtitle = product?.provider?.vendorName
+    ? `ספק: ${product.provider.vendorName}${product.sku ? ` | מק״ט: ${product.sku}` : ''}`
+    : (product?.sku ? `מק״ט: ${product.sku}` : '');
 
   return (
-    <Dialog open={!!product} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
-
-        {/* ── Header ── */}
-        <DialogHeader className="pb-2">
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <DialogTitle className="text-xl font-bold text-foreground">{productName}</DialogTitle>
-              <DialogDescription className="flex flex-wrap gap-3 text-xs">
-                {product.sku ? (
-                  <span dir="ltr" className="font-mono bg-slate-100 rounded px-1.5 py-0.5">{product.sku}</span>
-                ) : null}
-                {product.provider?.vendorName ? (
-                  <span className="text-muted-foreground">ספק: {product.provider.vendorName}</span>
-                ) : null}
-              </DialogDescription>
-            </div>
-            <Badge className="shrink-0 bg-green-100 text-green-800 border-green-200 hover:bg-green-100">
-              פעיל
-            </Badge>
-          </div>
-        </DialogHeader>
-
+    <RecordDetailDrawer
+      open={!!product}
+      onOpenChange={(o) => { if (!o) onClose(); }}
+      wide
+      title={productName}
+      subtitle={vendorSubtitle}
+      meta={[{ label: 'סטטוס', value: 'פעיל' }]}
+      onSave={product ? () => { onClose(); onEdit(product); } : undefined}
+      saveLabel="עריכה"
+    >
         {/* ── KPI Stats ── */}
         <div className="grid grid-cols-3 gap-3 rounded-xl border bg-gradient-to-l from-[#D9EAF3]/40 to-[#D9EAF3]/10 p-4">
           <div className="text-center space-y-0.5">
@@ -92,14 +83,14 @@ function ViewProductDialog({ product, productSlugMap, productPurchaseCounts, pro
           </div>
           <div className="text-center space-y-0.5">
             <p className="text-2xl font-bold text-[#C9A227]">
-              {Number(product.providerCost || 0) > 0 ? `₪${Number(product.providerCost)}` : '—'}
+              {Number(product?.providerCost || 0) > 0 ? `₪${Number(product.providerCost)}` : '—'}
             </p>
             <p className="text-xs text-muted-foreground">עלות ספק</p>
           </div>
         </div>
 
         {/* ── Product Details ── */}
-        {product.baseDescription ? (
+        {product?.baseDescription ? (
           <div className="rounded-xl border p-4 text-sm">
             <p className="text-xs font-semibold text-muted-foreground mb-1">תיאור</p>
             <p className="text-foreground">{product.baseDescription}</p>
@@ -133,7 +124,7 @@ function ViewProductDialog({ product, productSlugMap, productPurchaseCounts, pro
                   {slugEntries.map(({ slug, pageTitle }) => {
                     const link = `${window.location.origin}/p/${slug}`;
                     const justCopied = copiedLink === link;
-                    const slugCount = productSlugPurchaseCounts.get(`${product.id}::${slug}`) ?? 0;
+                    const slugCount = product ? (productSlugPurchaseCounts.get(`${product.id}::${slug}`) ?? 0) : 0;
                     return (
                       <tr key={slug} className="hover:bg-slate-50 transition-colors">
                         <td className="px-3 py-3 font-medium text-foreground">
@@ -190,15 +181,7 @@ function ViewProductDialog({ product, productSlugMap, productPurchaseCounts, pro
           )}
         </div>
 
-        <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse border-t pt-4">
-          <Button type="button" variant="outline" onClick={onClose}>סגור</Button>
-          <Button type="button" onClick={() => { onClose(); onEdit(product); }}>
-            <Edit2 className="size-3.5 me-1.5" />
-            עריכה
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </RecordDetailDrawer>
   );
 }
 
@@ -482,7 +465,7 @@ export default function ProductManagement() {
   return (
     <TooltipProvider delayDuration={250}>
       <AdminPageShell>
-      <ViewProductDialog
+      <ViewProductDrawer
         product={viewProduct}
         productSlugMap={productSlugMap}
         productPurchaseCounts={productPurchaseCounts}
@@ -776,7 +759,21 @@ export default function ProductManagement() {
                     {filteredProducts.map((p) => (
                       <TableRow key={p.id}>
                         <TableCell className="font-medium">{p.productName || p.name}</TableCell>
-                        <TableCell>{p.provider?.vendorName || '—'}</TableCell>
+                        <TableCell>
+                          {p.provider?.vendorName ? (
+                            p.provider?.id ? (
+                              <button
+                                type="button"
+                                className="text-primary hover:underline"
+                                onClick={() => openAdminPath(`/admin/vendors/${encodeURIComponent(p.provider.id)}`)}
+                              >
+                                {p.provider.vendorName}
+                              </button>
+                            ) : (
+                              p.provider.vendorName
+                            )
+                          ) : '—'}
+                        </TableCell>
                         <TableCell className="font-mono text-sm">{p.sku}</TableCell>
                         <TableCell dir="ltr">{Number(p.providerCost || 0)}</TableCell>
                         <TableCell className="max-w-xs truncate text-muted-foreground">
@@ -817,6 +814,12 @@ export default function ProductManagement() {
                       </TableRow>
                     ))}
                   </TableBody>
+                  <TableNumericFooter
+                    leadingColSpan={3}
+                    trailingColSpan={3}
+                    rows={filteredProducts}
+                    columns={[{ key: 'providerCost', format: 'currency2', getValue: (r) => r.providerCost }]}
+                  />
                 </Table>
               </div>
             )}

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowRight, Edit2, Lock, RefreshCw } from 'lucide-react';
+import { ArrowRight, Edit2, Lock, RefreshCw, Search } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import VendorPaymentEditDrawer from '../components/drawers/VendorPaymentEditDrawer.jsx';
@@ -12,6 +12,8 @@ import { Field, FieldGroup, FieldLabel } from '../components/ui/field.jsx';
 import { Badge } from '../components/ui/badge.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs.jsx';
+import TableNumericFooter from '../components/admin/TableNumericFooter.jsx';
+import { openAdminPath } from '../utils/adminNavigation.js';
 import {
   Dialog,
   DialogContent,
@@ -79,14 +81,14 @@ export default function VendorDetailPage() {
     }
   }, [token, id]);
 
-  const loadExportPreview = useCallback(async () => {
+  const loadExportPreview = useCallback(async (from, to) => {
     if (!token || !id) return;
     setPreviewLoading(true);
     setErr('');
     try {
       const q = new URLSearchParams();
-      if (fromDate) q.set('fromDate', fromDate);
-      if (toDate) q.set('toDate', toDate);
+      if (from) q.set('fromDate', from);
+      if (to) q.set('toDate', to);
       const res = await fetch(`${API_BASE}/api/admin/vendors/${encodeURIComponent(id)}/payout-preview?${q}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -102,7 +104,7 @@ export default function VendorDetailPage() {
     } finally {
       setPreviewLoading(false);
     }
-  }, [token, id, fromDate, toDate]);
+  }, [token, id]);
 
   const loadSnapshots = useCallback(async () => {
     if (!token || !id) return;
@@ -132,8 +134,9 @@ export default function VendorDetailPage() {
   }, [mainTab, loadSnapshots]);
 
   useEffect(() => {
-    if (mainTab === 'export') loadExportPreview();
-  }, [mainTab, loadExportPreview]);
+    if (mainTab === 'export') loadExportPreview(fromDate, toDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- טעינה רק במעבר לטאב, לא בשינוי תאריכים
+  }, [mainTab]);
 
   const openPreviewRows = (preview.rows || []).filter((r) => !r.ledgerLocked);
 
@@ -170,7 +173,7 @@ export default function VendorDetailPage() {
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.success) throw new Error(j.error || 'נעילה נכשלה');
-      await loadExportPreview();
+      await loadExportPreview(fromDate, toDate);
       await loadSnapshots();
       setMainTab('payments');
     } catch (e) {
@@ -243,7 +246,7 @@ export default function VendorDetailPage() {
             size="sm"
             onClick={() => {
               load();
-              if (mainTab === 'export') loadExportPreview();
+              if (mainTab === 'export') loadExportPreview(fromDate, toDate);
               if (mainTab === 'payments') loadSnapshots();
             }}
             disabled={loading}
@@ -330,6 +333,15 @@ export default function VendorDetailPage() {
                           </TableRow>
                         ) : null}
                       </TableBody>
+                      <TableNumericFooter
+                        leadingColSpan={1}
+                        trailingColSpan={3}
+                        rows={snapshots}
+                        columns={[
+                          { key: 'totalDeals', getValue: (s) => s.totalDeals ?? 0 },
+                          { key: 'totalAmount', format: 'currency2', getValue: (s) => s.totalAmount },
+                        ]}
+                      />
                     </Table>
                   </div>
                 </CardContent>
@@ -355,9 +367,9 @@ export default function VendorDetailPage() {
                       <FieldLabel>עד תאריך</FieldLabel>
                       <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
                     </Field>
-                    <Button type="button" variant="outline" onClick={loadExportPreview} disabled={previewLoading}>
-                      {previewLoading ? <RefreshCw className="size-4 me-2 animate-spin" /> : null}
-                      {previewLoading ? 'טוען…' : 'טען'}
+                    <Button type="button" variant="outline" className="gap-2" onClick={() => loadExportPreview(fromDate, toDate)} disabled={previewLoading}>
+                      {previewLoading ? <RefreshCw className="size-4 me-2 animate-spin" /> : <Search className="size-4 me-2" />}
+                      {previewLoading ? 'טוען…' : 'חיפוש'}
                     </Button>
                     <Button type="button" onClick={lockVendorPayouts} disabled={lockDisabled}>
                       {lockBusy ? <Spinner className="size-4 me-2" /> : <Lock className="size-4 me-2" />}
@@ -414,17 +426,33 @@ export default function VendorDetailPage() {
                             <TableCell>{r.productName || '—'}</TableCell>
                             <TableCell>{r.subscriptionStatus || '—'}</TableCell>
                             <TableCell>{formatCurrency(r.vendorPayout)}</TableCell>
-                            <TableCell className="font-mono text-xs">{r.transactionId || '—'}</TableCell>
+                            <TableCell className="font-mono text-xs">
+                              {r.transactionId ? (
+                                <button
+                                  type="button"
+                                  className="text-primary hover:underline"
+                                  onClick={() => openAdminPath(`/admin/subscribers?search=${encodeURIComponent(r.transactionId)}`)}
+                                >
+                                  {r.transactionId}
+                                </button>
+                              ) : '—'}
+                            </TableCell>
                           </TableRow>
                         ))}
                         {!openPreviewRows.length && !previewLoading ? (
                           <TableRow>
                             <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                              אין רשומות פתוחות בטווח — עדכנו תאריכים ולחצו טען
+                              אין רשומות פתוחות בטווח — עדכנו תאריכים ולחצו חיפוש
                             </TableCell>
                           </TableRow>
                         ) : null}
                       </TableBody>
+                      <TableNumericFooter
+                        leadingColSpan={5}
+                        trailingColSpan={1}
+                        rows={openPreviewRows}
+                        columns={[{ key: 'vendorPayout', format: 'currency2', getValue: (r) => r.vendorPayout }]}
+                      />
                     </Table>
                   </div>
                 </CardContent>
@@ -469,11 +497,26 @@ export default function VendorDetailPage() {
                 {(snapRowsTarget?.rows || []).map((r, i) => (
                   <TableRow key={`${r.ledgerEntryId || r.dealId || i}`}>
                     <TableCell>{`${r.firstName || ''} ${r.lastName || ''}`.trim() || '—'}</TableCell>
-                    <TableCell className="font-mono text-xs">{r.transactionId || '—'}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {r.transactionId ? (
+                        <button
+                          type="button"
+                          className="text-primary hover:underline"
+                          onClick={() => openAdminPath(`/admin/subscribers?search=${encodeURIComponent(r.transactionId)}`)}
+                        >
+                          {r.transactionId}
+                        </button>
+                      ) : '—'}
+                    </TableCell>
                     <TableCell>{formatCurrency(r.vendorPayout)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
+              <TableNumericFooter
+                leadingColSpan={2}
+                rows={snapRowsTarget?.rows || []}
+                columns={[{ key: 'vendorPayout', format: 'currency2', getValue: (r) => r.vendorPayout }]}
+              />
             </Table>
           </div>
         </DialogContent>

@@ -77,7 +77,6 @@ const HEADER_LABELS = {
   date: 'תאריך',
   isHandled: 'סטטוס טיפול',
   agentName: 'סוכן',
-  orgName: 'ארגון',
   organizationName: 'ארגון',
   companyName: 'שם חברה',
   companyId: 'ח.פ / מזהה חברה',

@@ -32,6 +32,7 @@ import { Badge } from '../components/ui/badge.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 import UnifiedFilterShell from '../components/admin/UnifiedFilterShell.jsx';
+import { openAdminPath } from '../utils/adminNavigation.js';
 
 const TOKEN_KEY = 'opal_admin_token';
 
@@ -756,7 +757,15 @@ export default function VendorDashboard() {
                               {expandedVendor === v.id ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
                             </Button>
                           </TableCell>
-                          <TableCell className="font-medium">{v.vendorName}</TableCell>
+                          <TableCell className="font-medium">
+                            <button
+                              type="button"
+                              className="text-primary hover:underline font-medium"
+                              onClick={() => openAdminPath(`/admin/vendors/${encodeURIComponent(v.id)}`)}
+                            >
+                              {v.vendorName}
+                            </button>
+                          </TableCell>
                           <TableCell className="text-right font-mono text-sm">
                             <span dir="ltr">{v.idNum}</span>
                           </TableCell>
@@ -770,10 +779,14 @@ export default function VendorDashboard() {
                             <div className="flex items-center gap-1">
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" type="button" asChild>
-                                    <Link to={`/admin/vendors/${v.id}`} aria-label="תשלומים לספק">
-                                      <CreditCard className="size-4" />
-                                    </Link>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    type="button"
+                                    onClick={() => openAdminPath(`/admin/vendors/${encodeURIComponent(v.id)}`)}
+                                    aria-label="תשלומים לספק"
+                                  >
+                                    <CreditCard className="size-4" />
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>תשלומים לספק</TooltipContent>
