@@ -8,8 +8,112 @@ import {
   passesServiceReportGate,
   parseFlexibleDate,
   STATUS_ACTIVE,
+  STATUS_CANCELED,
+  STATUS_NOT_ACTIVATED,
   STATUS_PENDING_CANCELLATION,
 } from './entitlementStatus.js';
+
+/** Dynamic payout-ledger row lifecycle states (Vendor Payout Ledger). */
+export const PAYOUT_ROW_STATUS = {
+  OPEN: 'open',
+  LOCKED_PENDING: 'locked_pending',
+  LOCKED_PAID: 'locked_paid',
+  NOT_YET_ACTIVE: 'not_yet_active',
+  TERMINATED_LOCKED_PAID: 'terminated_locked_paid',
+  TERMINATED_NOT_LOCKED: 'terminated_not_locked',
+};
+
+export function billingMonthPrecedesServiceActivation(deal, billingMonth) {
+  const bm = String(billingMonth || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(bm)) return false;
+  const [y, m] = bm.split('-').map(Number);
+  const monthEnd = new Date(y, m, 0, 23, 59, 59, 999);
+  const { serviceStart } = getReportingServiceWindow(deal);
+  if (!serviceStart || Number.isNaN(serviceStart.getTime())) return false;
+  return monthEnd.getTime() < serviceStart.getTime();
+}
+
+export function computePayoutRowStatus({ deal, billingMonth, ledgerLocked = false, snapshotStatus = '' } = {}) {
+  const ent = getEntitlementStatus(deal);
+  const locked = ledgerLocked === true;
+  const paid = String(snapshotStatus || '').trim() === 'Paid';
+
+  if (ent.status === STATUS_CANCELED) {
+    if (locked) {
+      return paid ? PAYOUT_ROW_STATUS.TERMINATED_LOCKED_PAID : PAYOUT_ROW_STATUS.LOCKED_PENDING;
+    }
+    return PAYOUT_ROW_STATUS.TERMINATED_NOT_LOCKED;
+  }
+
+  if (ent.status === STATUS_NOT_ACTIVATED || billingMonthPrecedesServiceActivation(deal, billingMonth)) {
+    return PAYOUT_ROW_STATUS.NOT_YET_ACTIVE;
+  }
+
+  if (locked) {
+    return paid ? PAYOUT_ROW_STATUS.LOCKED_PAID : PAYOUT_ROW_STATUS.LOCKED_PENDING;
+  }
+
+  if (ent.status === STATUS_ACTIVE || ent.status === STATUS_PENDING_CANCELLATION) {
+    return PAYOUT_ROW_STATUS.OPEN;
+  }
+
+  return PAYOUT_ROW_STATUS.NOT_YET_ACTIVE;
+}
+
+export function getPayoutRowStatusLabel(status) {
+  switch (status) {
+    case PAYOUT_ROW_STATUS.OPEN:
+      return 'פתוח לתשלום';
+    case PAYOUT_ROW_STATUS.LOCKED_PENDING:
+      return 'נעול מחכה לתשלום';
+    case PAYOUT_ROW_STATUS.LOCKED_PAID:
+      return 'נעול ושולם';
+    case PAYOUT_ROW_STATUS.NOT_YET_ACTIVE:
+      return 'מנוי טרם הופעל';
+    case PAYOUT_ROW_STATUS.TERMINATED_LOCKED_PAID:
+      return 'מנוי בוטל - ננעל ושולם';
+    case PAYOUT_ROW_STATUS.TERMINATED_NOT_LOCKED:
+      return 'מנוי בוטל - לא ננעל ושולם';
+    default:
+      return '—';
+  }
+}
+
+export function getPayoutRowStatusTooltip(status) {
+  switch (status) {
+    case PAYOUT_ROW_STATUS.LOCKED_PENDING:
+    case PAYOUT_ROW_STATUS.LOCKED_PAID:
+      return 'רשומה זו כבר ננעלה בסנאפשוט וממתינה לתשלום / שולמה ולא ניתן לשנותה';
+    case PAYOUT_ROW_STATUS.NOT_YET_ACTIVE:
+      return 'מנוי זה טרם הופעל ולכן לא זכאי לשירות הספק ולתשלום לנעילה';
+    case PAYOUT_ROW_STATUS.TERMINATED_LOCKED_PAID:
+      return 'מנוי בוטל - ננעל ושולם';
+    case PAYOUT_ROW_STATUS.TERMINATED_NOT_LOCKED:
+      return 'מנוי בוטל - לא ננעל ושולם';
+    default:
+      return '';
+  }
+}
+
+export function isPayoutRowSelectable(status) {
+  return status === PAYOUT_ROW_STATUS.OPEN;
+}
+
+export function enrichRowWithPayoutStatus(row, deal, snapshotStatus = '') {
+  const payoutRowStatus = computePayoutRowStatus({
+    deal,
+    billingMonth: row.billingMonth,
+    ledgerLocked: row.ledgerLocked === true,
+    snapshotStatus,
+  });
+  return {
+    ...row,
+    payoutRowStatus,
+    payoutStatusLabel: getPayoutRowStatusLabel(payoutRowStatus),
+    payoutStatusTooltip: getPayoutRowStatusTooltip(payoutRowStatus),
+    selectable: isPayoutRowSelectable(payoutRowStatus),
+  };
+}
 
 function parseReportServiceRange(fromStr, toStr) {
   const fromRaw = fromStr ? new Date(String(fromStr)) : null;
@@ -202,6 +306,131 @@ export function explodeDealToMonthlyBillingRows(deal) {
     return String(a.transactionId).localeCompare(String(b.transactionId));
   });
   return rows;
+}
+
+/**
+ * Explode monthly billing rows without eligibility / service-window filters —
+ * used for ledger preview so not-yet-active and terminated rows are visible.
+ */
+export function explodeDealToMonthlyBillingRowsUnfiltered(deal) {
+  const fs = deal?.formState && typeof deal.formState === 'object' ? deal.formState : {};
+  const vendorPayout = Number(fs.resolvedVendorCost ?? deal.resolvedVendorCost ?? 0);
+  if (vendorPayout <= 0) return [];
+
+  const dates = resolveSubscriptionDates(deal);
+  const identity = resolvePrimaryIdentity(deal);
+  const ent = getEntitlementStatus(deal);
+  const dealId = String(deal._id || '');
+  const transactionId = String(deal.transactionId || '');
+  const rows = [];
+  const seenMonths = new Set();
+
+  function pushRow(billingMonth, source, rowIdHint) {
+    const month = String(billingMonth || '').trim();
+    if (!month || seenMonths.has(month)) return;
+    seenMonths.add(month);
+    rows.push({
+      ledgerEntryId: '',
+      rowId: rowIdHint || '',
+      dealId,
+      transactionId,
+      billingMonth: month,
+      billingMonthDisplay: formatBillingMonthDisplay(month),
+      ...dates,
+      ...identity,
+      vendorPayout,
+      subscriptionStatus: ent.label,
+      entitlementStatus: ent.status,
+      ledgerLocked: false,
+      isSecondary: false,
+      source,
+    });
+  }
+
+  if (deal.isRecurringCycle !== true && isSuccessfulInitialPayment(deal)) {
+    const initialMonth =
+      String(deal.billingMonth || '').trim() || formatBillingMonthFromDate(deal.createdAt);
+    pushRow(initialMonth, 'initial_checkout', `VENDOR_INITIAL_${dealId}`);
+  }
+
+  const events = Array.isArray(deal.detailRecurringEvents) ? deal.detailRecurringEvents : [];
+  for (const ev of events) {
+    if (Number(ev?.statusCode) !== 1) continue;
+    const month =
+      String(ev?.billingMonth || '').trim() ||
+      formatBillingMonthFromDate(ev?.lastBillDateIso || ev?.lastBillDate || ev?.receivedAt);
+    const rowId = String(ev?.rowId || ev?.id || '').trim();
+    pushRow(
+      month,
+      'detail_recurring',
+      rowId ? `VENDOR_RECURRING_${rowId}` : `VENDOR_RECURRING_${dealId}_${month}`
+    );
+  }
+
+  rows.sort((a, b) => {
+    const cmp = String(a.billingMonth).localeCompare(String(b.billingMonth));
+    if (cmp !== 0) return cmp;
+    return String(a.transactionId).localeCompare(String(b.transactionId));
+  });
+  return rows;
+}
+
+/**
+ * Full vendor ledger preview — all monthly rows in range with lifecycle status.
+ */
+export function buildFullVendorLedgerPreviewRows({
+  ledgerDocs = [],
+  deals = [],
+  fromDate = '',
+  toDate = '',
+  monthFilter = '',
+  ledgerSnapshotStatusByEntryId = new Map(),
+} = {}) {
+  const dealsMap = new Map();
+  for (const d of deals) {
+    const id = String(d._id || '');
+    if (id) dealsMap.set(id, d);
+  }
+
+  const rowKey = (dealId, billingMonth) => `${dealId}:${billingMonth}`;
+  const covered = new Map();
+
+  for (const L of ledgerDocs) {
+    if (L.isSecondary === true) continue;
+    const dealId = String(L.dealId || '');
+    const deal = dealsMap.get(dealId);
+    if (!deal) continue;
+    const billingMonth = String(L.billingMonth || '').trim();
+    if (monthFilter && billingMonth !== String(monthFilter).trim()) continue;
+    if ((fromDate || toDate) && !billingMonthOverlapsDateRange(billingMonth, fromDate, toDate)) continue;
+
+    const entryId = String(L._id || '');
+    const snapshotStatus = ledgerSnapshotStatusByEntryId.get(entryId) || '';
+    const row = buildFinanceLedgerRowFromVendorLedgerEntry(L, deal);
+    covered.set(rowKey(dealId, billingMonth), enrichRowWithPayoutStatus(row, deal, snapshotStatus));
+  }
+
+  for (const deal of deals) {
+    const dealId = String(deal._id || '');
+    const exploded = explodeDealToMonthlyBillingRowsUnfiltered(deal);
+    for (const row of exploded) {
+      if (monthFilter && row.billingMonth !== String(monthFilter).trim()) continue;
+      if ((fromDate || toDate) && !billingMonthOverlapsDateRange(row.billingMonth, fromDate, toDate)) {
+        continue;
+      }
+      const key = rowKey(dealId, row.billingMonth);
+      if (covered.has(key)) continue;
+      covered.set(key, enrichRowWithPayoutStatus(row, deal, ''));
+    }
+  }
+
+  const merged = [...covered.values()];
+  merged.sort((a, b) => {
+    const cmp = String(a.billingMonth).localeCompare(String(b.billingMonth));
+    if (cmp !== 0) return cmp;
+    return String(a.transactionId).localeCompare(String(b.transactionId));
+  });
+  return merged;
 }
 
 export function buildFinanceLedgerRowFromVendorLedgerEntry(ledgerEntry, deal) {

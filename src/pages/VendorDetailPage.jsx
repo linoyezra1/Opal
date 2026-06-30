@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowRight, Edit2, Lock, RefreshCw, Search } from 'lucide-react';
+import { ArrowRight, Edit2, FileDown, Lock, RefreshCw, Search } from 'lucide-react';
 import { API_BASE } from '../apiBase.js';
 import AdminPageShell from '../components/admin/AdminPageShell.jsx';
 import VendorPaymentEditDrawer from '../components/drawers/VendorPaymentEditDrawer.jsx';
@@ -12,6 +12,7 @@ import { Field, FieldGroup, FieldLabel } from '../components/ui/field.jsx';
 import { Badge } from '../components/ui/badge.jsx';
 import { Spinner } from '../components/ui/spinner.jsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs.jsx';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip.jsx';
 import TableNumericFooter from '../components/admin/TableNumericFooter.jsx';
 import { openAdminPath } from '../utils/adminNavigation.js';
 import {
@@ -40,6 +41,72 @@ function formatCurrency(v) {
   );
 }
 
+async function downloadXlsx(url, token, fallbackName) {
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('application/json')) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j.error || 'הורדה נכשלה');
+    }
+    throw new Error('הורדה נכשלה');
+  }
+  const cd = res.headers.get('Content-Disposition') || '';
+  const m = /filename="?([^";]+)"?/i.exec(cd);
+  const name = m ? m[1].trim() : fallbackName;
+  const blob = await res.blob();
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(href);
+}
+
+function payoutStatusBadgeVariant(status) {
+  switch (status) {
+    case 'open':
+      return 'default';
+    case 'locked_pending':
+      return 'secondary';
+    case 'locked_paid':
+      return 'outline';
+    case 'not_yet_active':
+      return 'outline';
+    case 'terminated_locked_paid':
+    case 'terminated_not_locked':
+      return 'destructive';
+    default:
+      return 'secondary';
+  }
+}
+
+function LedgerCheckboxCell({ row, rowKey, previewLoading, checked, onToggle }) {
+  const selectable = row.selectable === true;
+  const tooltip = row.payoutStatusTooltip || '';
+  const checkbox = (
+    <input
+      type="checkbox"
+      className="size-4"
+      checked={checked}
+      disabled={previewLoading || !selectable}
+      onChange={() => onToggle(rowKey)}
+      aria-label={selectable ? 'בחר רשומה לנעילה' : 'רשומה לא זמינה לנעילה'}
+    />
+  );
+  if (!tooltip) return checkbox;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex cursor-not-allowed">{checkbox}</span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs text-right">
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 export default function VendorDetailPage() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
@@ -62,6 +129,8 @@ export default function VendorDetailPage() {
     return String(r.ledgerEntryId || r.rowId || `${r.dealId}-${r.billingMonth}`);
   }
   const [lockBusy, setLockBusy] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [infoMsg, setInfoMsg] = useState('');
   const [snapEditOpen, setSnapEditOpen] = useState(false);
   const [snapEditTarget, setSnapEditTarget] = useState(null);
   const [snapRowsOpen, setSnapRowsOpen] = useState(false);
@@ -100,7 +169,7 @@ export default function VendorDetailPage() {
       if (!res.ok) throw new Error(j.error || 'טעינת תצוגה מקדימה נכשלה');
       setPreview({ rows: j.rows || [], summary: j.summary || {}, note: j.note || '' });
       const openKeys = (j.rows || [])
-        .filter((r) => !r.ledgerLocked)
+        .filter((r) => r.selectable === true)
         .map((r) => previewRowKey(r));
       setSelectedEntryKeys(new Set(openKeys));
     } catch (e) {
@@ -144,9 +213,12 @@ export default function VendorDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- טעינה רק במעבר לטאב, לא בשינוי תאריכים
   }, [mainTab]);
 
-  const openPreviewRows = (preview.rows || []).filter((r) => !r.ledgerLocked);
+  const previewRows = preview.rows || [];
+  const selectablePreviewRows = previewRows.filter((r) => r.selectable === true);
 
   const toggleEntryRow = (key) => {
+    const row = previewRows.find((r) => previewRowKey(r) === String(key));
+    if (row && row.selectable !== true) return;
     setSelectedEntryKeys((prev) => {
       const next = new Set(prev);
       const k = String(key);
@@ -157,13 +229,32 @@ export default function VendorDetailPage() {
   };
 
   const toggleAllEntries = (checked) => {
-    if (!openPreviewRows.length) return;
-    if (checked) setSelectedEntryKeys(new Set(openPreviewRows.map((r) => previewRowKey(r))));
+    if (!selectablePreviewRows.length) return;
+    if (checked) setSelectedEntryKeys(new Set(selectablePreviewRows.map((r) => previewRowKey(r))));
     else setSelectedEntryKeys(new Set());
   };
 
+  const runServiceExport = async () => {
+    setExportBusy(true);
+    setErr('');
+    try {
+      const q = new URLSearchParams();
+      if (fromDate) q.set('fromDate', fromDate);
+      if (toDate) q.set('toDate', toDate);
+      await downloadXlsx(
+        `${API_BASE}/api/admin/vendors/${encodeURIComponent(id)}/service-export-xlsx?${q}`,
+        token,
+        'opal-vendor-export.xlsx'
+      );
+    } catch (e) {
+      setErr(e?.message || 'שגיאה');
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
   const lockVendorPayouts = async () => {
-    const selectedRows = openPreviewRows.filter((r) => selectedEntryKeys.has(previewRowKey(r)));
+    const selectedRows = selectablePreviewRows.filter((r) => selectedEntryKeys.has(previewRowKey(r)));
     if (!selectedRows.length) {
       setErr('נא לבחור לפחות רשומה אחת לנעילה');
       return;
@@ -176,6 +267,7 @@ export default function VendorDetailPage() {
       .map((r) => String(r.rowId));
     setLockBusy(true);
     setErr('');
+    setInfoMsg('');
     try {
       const body = {
         fromDate,
@@ -192,7 +284,16 @@ export default function VendorDetailPage() {
       if (!res.ok || !j.success) throw new Error(j.error || 'נעילה נכשלה');
       await loadExportPreview(fromDate, toDate);
       await loadSnapshots();
-      setMainTab('payments');
+      if (j.skippedCount > 0 && j.lockedCount === 0) {
+        setInfoMsg(j.message || `${j.skippedCount} רשומות כבר ננעלו — לא נוצרה דרישת תשלום חדשה`);
+        return;
+      }
+      if (j.skippedCount > 0) {
+        setInfoMsg(`ננעלו ${j.lockedCount} רשומות. ${j.skippedCount} רשומות דולגו (כבר ננעלו).`);
+      }
+      if (j.snapshotId || j.lockedCount > 0) {
+        setMainTab('payments');
+      }
     } catch (e) {
       setErr(e?.message || 'שגיאה');
     } finally {
@@ -245,6 +346,7 @@ export default function VendorDetailPage() {
 
   return (
     <AdminPageShell>
+      <TooltipProvider delayDuration={250}>
       <div className="space-y-6 p-4 md:p-6 max-w-7xl mx-auto text-right" dir="rtl">
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="outline" size="sm" asChild>
@@ -274,6 +376,7 @@ export default function VendorDetailPage() {
         </div>
 
         {err ? <p className="text-sm text-destructive">{err}</p> : null}
+        {infoMsg ? <p className="text-sm text-muted-foreground">{infoMsg}</p> : null}
         {loading && !vendor ? (
           <div className="flex justify-center py-12">
             <Spinner className="size-8" />
@@ -368,10 +471,10 @@ export default function VendorDetailPage() {
             <TabsContent value="export" className="mt-4 space-y-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>דוח יצוא לספק — רשומות פתוחות</CardTitle>
+                  <CardTitle>דוח יצוא לספק — רשומות חודשיות</CardTitle>
                   <CardDescription>
-                    מבוטחים ראשיים זכאים לשירות (פעיל / ממתין לביטול). בחרו שורות ונעלו ליצירת דרישת תשלום — זהה לדוח
-                    ייצוא לספק במסך דוחות.
+                    כל שורות השירות החודשיות לספק — פתוחות, נעולות, טרם הופעלו או מבוטלות. בחרו שורות פתוחות
+                    לנעילה, או הורידו דוח אקסל מלא (ראשי + משני) כמו במסך דוחות.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -388,6 +491,10 @@ export default function VendorDetailPage() {
                       {previewLoading ? <RefreshCw className="size-4 me-2 animate-spin" /> : <Search className="size-4 me-2" />}
                       {previewLoading ? 'טוען…' : 'חיפוש'}
                     </Button>
+                    <Button type="button" variant="secondary" onClick={runServiceExport} disabled={exportBusy || previewLoading}>
+                      {exportBusy ? <Spinner className="size-4 me-2" /> : <FileDown className="size-4 me-2" />}
+                      הורד אקסל מנויים לספק
+                    </Button>
                     <Button type="button" onClick={lockVendorPayouts} disabled={lockDisabled}>
                       {lockBusy ? <Spinner className="size-4 me-2" /> : <Lock className="size-4 me-2" />}
                       נעל וצור דרישת תשלום
@@ -395,7 +502,7 @@ export default function VendorDetailPage() {
                   </div>
                   <p className="text-sm text-muted-foreground">
                     סה״כ לתשלום לספק (פתוח): {formatCurrency(preview.summary?.totalVendorPayout || 0)} ·{' '}
-                    {openPreviewRows.length} רשומות
+                    {selectablePreviewRows.length} פתוחות מתוך {previewRows.length} רשומות
                     {selectedEntryKeys.size > 0 ? ` · נבחרו ${selectedEntryKeys.size}` : ''}
                   </p>
                   {preview.note ? (
@@ -414,9 +521,10 @@ export default function VendorDetailPage() {
                             <input
                               type="checkbox"
                               className="size-4"
-                              disabled={previewLoading || !openPreviewRows.length}
+                              disabled={previewLoading || !selectablePreviewRows.length}
                               checked={
-                                openPreviewRows.length > 0 && selectedEntryKeys.size === openPreviewRows.length
+                                selectablePreviewRows.length > 0 &&
+                                selectedEntryKeys.size === selectablePreviewRows.length
                               }
                               onChange={(e) => toggleAllEntries(e.target.checked)}
                             />
@@ -433,15 +541,27 @@ export default function VendorDetailPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {openPreviewRows.map((r) => (
-                          <TableRow key={previewRowKey(r)} className={r.ledgerLocked ? 'opacity-50 bg-muted/40' : undefined}>
+                        {previewRows.map((r) => {
+                          const rowKey = previewRowKey(r);
+                          const isNotYetActive = r.payoutRowStatus === 'not_yet_active';
+                          return (
+                          <TableRow
+                            key={rowKey}
+                            className={
+                              isNotYetActive
+                                ? 'opacity-60 bg-muted/50'
+                                : r.selectable !== true
+                                  ? 'opacity-80 bg-muted/30'
+                                  : undefined
+                            }
+                          >
                             <TableCell>
-                              <input
-                                type="checkbox"
-                                className="size-4"
-                                checked={selectedEntryKeys.has(previewRowKey(r))}
-                                disabled={previewLoading || r.ledgerLocked}
-                                onChange={() => toggleEntryRow(previewRowKey(r))}
+                              <LedgerCheckboxCell
+                                row={r}
+                                rowKey={rowKey}
+                                previewLoading={previewLoading}
+                                checked={selectedEntryKeys.has(rowKey)}
+                                onToggle={toggleEntryRow}
                               />
                             </TableCell>
                             <TableCell>{`${r.firstName || ''} ${r.lastName || ''}`.trim() || '—'}</TableCell>
@@ -452,7 +572,24 @@ export default function VendorDetailPage() {
                             <TableCell>{r.subscriptionStartDate || '—'}</TableCell>
                             <TableCell>{r.subscriptionEndDisplay || r.subscriptionEndDate || '—'}</TableCell>
                             <TableCell>{r.productName || '—'}</TableCell>
-                            <TableCell>{r.subscriptionStatus || '—'}</TableCell>
+                            <TableCell>
+                              {r.payoutStatusTooltip ? (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge variant={payoutStatusBadgeVariant(r.payoutRowStatus)} className="cursor-help">
+                                      {r.payoutStatusLabel || r.subscriptionStatus || '—'}
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="max-w-xs text-right">
+                                    {r.payoutStatusTooltip}
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : (
+                                <Badge variant={payoutStatusBadgeVariant(r.payoutRowStatus)}>
+                                  {r.payoutStatusLabel || r.subscriptionStatus || '—'}
+                                </Badge>
+                              )}
+                            </TableCell>
                             <TableCell>{formatCurrency(r.vendorPayout)}</TableCell>
                             <TableCell className="font-mono text-xs">
                               {r.transactionId ? (
@@ -466,11 +603,12 @@ export default function VendorDetailPage() {
                               ) : '—'}
                             </TableCell>
                           </TableRow>
-                        ))}
-                        {!openPreviewRows.length && !previewLoading ? (
+                          );
+                        })}
+                        {!previewRows.length && !previewLoading ? (
                           <TableRow>
                             <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
-                              אין רשומות פתוחות בטווח — עדכנו תאריכים ולחצו חיפוש
+                              אין רשומות בטווח — עדכנו תאריכים ולחצו חיפוש
                             </TableCell>
                           </TableRow>
                         ) : null}
@@ -478,7 +616,7 @@ export default function VendorDetailPage() {
                       <TableNumericFooter
                         leadingColSpan={8}
                         trailingColSpan={1}
-                        rows={openPreviewRows}
+                        rows={selectablePreviewRows}
                         columns={[{ key: 'vendorPayout', format: 'currency2', getValue: (r) => r.vendorPayout }]}
                       />
                     </Table>
@@ -549,6 +687,7 @@ export default function VendorDetailPage() {
           </div>
         </DialogContent>
       </Dialog>
+      </TooltipProvider>
     </AdminPageShell>
   );
 }

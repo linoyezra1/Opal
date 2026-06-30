@@ -80,6 +80,15 @@ export function filterDealsOverlappingEligibleServicePeriod(deals, fromStr, toSt
   );
 }
 
+/** חפיפת תקופת שירות בטווח — ללא שער זכאות (כולל מבוטל / טרם הופעל). */
+export function filterDealsOverlappingServicePeriod(deals, fromStr, toStr) {
+  const r = parseReportServiceRange(fromStr, toStr);
+  if (!r.valid) return [];
+  return (Array.isArray(deals) ? deals : []).filter((d) =>
+    dealOverlapsServiceReportPeriod(d, r.fromStart, r.toEnd)
+  );
+}
+
 /** דוח נגרעים: תאריך סיום שירות מחושב נופל בטווח (כולל) */
 export function filterDealsCancellationsServiceEndInPeriod(deals, fromStr, toStr) {
   const r = parseReportServiceRange(fromStr, toStr);
@@ -485,6 +494,16 @@ export function resolveVendorExportDeals(deals, { vendorName = '', month = '' } 
     month,
   });
   return filterDealsEligibleForVendorPayoutQueue(afterProvider);
+}
+
+/** כל עסקאות הספק בטווח — לתצוגת יומן מלא (כולל מבוטל / טרם הופעל). */
+export function resolveVendorPreviewDeals(deals, { vendorName = '', month = '' } = {}) {
+  const monthStr = String(month || '').trim();
+  return filterDealsByProvider(deals, vendorName).filter((d) => {
+    if (!monthStr) return true;
+    const bm = String(d.billingMonth || '').trim();
+    return !bm || bm === monthStr;
+  });
 }
 
 /** שורות תצוגה מקדימה לנעילת תשלום — שורה לכל חודש חיוב (מבוטח ראשי בלבד) */

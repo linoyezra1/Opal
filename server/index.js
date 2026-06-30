@@ -85,6 +85,7 @@ import {
   writeInitialCheckoutCommissionLedger,
   writeInitialCheckoutVendorPayoutLedger,
   getVendorPayoutPreview,
+  getVendorServiceExportDeals,
   lockVendorPayoutSnapshot,
   listVendorPayoutSnapshots,
   updateVendorPayoutSnapshot,
@@ -1915,6 +1916,33 @@ app.get('/api/admin/vendors/:id/payout-preview', requireAdmin, async (req, res) 
   }
 });
 
+app.get('/api/admin/vendors/:id/service-export-xlsx', requireAdmin, async (req, res) => {
+  try {
+    const fromDate = req.query.fromDate || req.query.from || '';
+    const toDate = req.query.toDate || req.query.to || '';
+    const month = req.query.month || '';
+    const deals = await getVendorServiceExportDeals(req.params.id, { fromDate, toDate, month });
+    const xlsxFile = await buildVendorExportXlsxBuffer(deals);
+    const vendor = await getVendorById(req.params.id);
+    const vendorSlug = String(vendor?.vendorName || 'vendor')
+      .replace(/[^\w\u0590-\u05FF-]+/g, '-')
+      .slice(0, 40);
+    const rangePart = fromDate && toDate ? `${fromDate}_${toDate}` : 'export';
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="opal-vendor-${vendorSlug}-${rangePart}.xlsx"`
+    );
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.send(xlsxFile);
+  } catch (e) {
+    console.error(`[${ts()}] admin/vendors/:id/service-export-xlsx error:`, e);
+    res.status(400).json({ success: false, error: e.message || 'Failed to build vendor service export' });
+  }
+});
+
 app.get('/api/admin/vendors/:id/payout-snapshots', requireAdmin, async (req, res) => {
   try {
     const snapshots = await listVendorPayoutSnapshots(req.params.id, Number(req.query.limit) || 100);
@@ -1927,14 +1955,15 @@ app.get('/api/admin/vendors/:id/payout-snapshots', requireAdmin, async (req, res
 
 app.post('/api/admin/vendors/:id/lock-payouts', requireAdmin, async (req, res) => {
   try {
-    const snapshot = await lockVendorPayoutSnapshot(req.params.id, {
+    const result = await lockVendorPayoutSnapshot(req.params.id, {
       fromDate: req.body?.fromDate || req.query.fromDate || '',
       toDate: req.body?.toDate || req.query.toDate || '',
       month: req.body?.month || req.query.month || '',
       dealIds: Array.isArray(req.body?.dealIds) ? req.body.dealIds : null,
       entryIds: Array.isArray(req.body?.entryIds) ? req.body.entryIds : null,
+      rowIds: Array.isArray(req.body?.rowIds) ? req.body.rowIds : null,
     });
-    res.json({ success: true, snapshot });
+    res.json({ success: true, ...result });
   } catch (e) {
     console.error(`[${ts()}] admin/vendors/:id/lock-payouts error:`, e);
     res.status(400).json({ success: false, error: e.message || 'Failed to lock vendor payouts' });

@@ -11,10 +11,13 @@ import { countPaymentTypeDeals } from '../lib/paymentTypeMetrics.js';
 import { isActiveContactTaskLead } from '../lib/contactLeadTasks.js';
 import {
   filterDealsOverlappingEligibleServicePeriod,
+  filterDealsOverlappingServicePeriod,
   resolveVendorExportDeals,
+  resolveVendorPreviewDeals,
 } from './reportController.js';
 import {
-  buildCentralFinanceLedgerVendorRows,
+  buildFullVendorLedgerPreviewRows,
+  isPayoutRowSelectable,
 } from './financeLedgerService.js';
 import { getReportingServiceWindow } from './entitlementStatus.js';
 
@@ -6190,7 +6193,7 @@ async function ensureVendorLedgerEntryForRow(db, vendorId, row) {
   if (rowId) {
     const existing = await db.collection('vendor_payout_ledger').findOne({ rowId });
     if (existing) {
-      if (existing.locked === true) throw new Error(`רשומה ${rowId} כבר ננעלה`);
+      if (existing.locked === true) return { locked: true, existing };
       return existing;
     }
     const did = String(row.dealId || '').trim();
@@ -6218,7 +6221,7 @@ async function ensureVendorLedgerEntryForDeal(db, vendorId, dealId, rowHints = {
 
   const existing = await db.collection('vendor_payout_ledger').findOne({ vendorId: vid, dealId: did });
   if (existing) {
-    if (existing.locked === true) throw new Error(`עסקה ${did} כבר ננעלה`);
+    if (existing.locked === true) return { locked: true, existing };
     return existing;
   }
 
@@ -6280,21 +6283,49 @@ export async function getVendorPayoutPreview(vendorId, { fromDate = '', toDate =
     }
   }
 
-  // Supplement deals in service window for ledger gaps (successful charges not yet persisted)
+  // Supplement deals in service window for ledger gaps (all vendor deals incl. cancelled)
   const candidates = await findDealsForServiceReportsCandidates();
-  const inServiceWindow = filterDealsOverlappingEligibleServicePeriod(candidates, fromDate, toDate);
-  const exportDeals = resolveVendorExportDeals(inServiceWindow, { vendorName, month: monthStr });
-  for (const d of exportDeals) {
+  const inServiceWindowAll = filterDealsOverlappingServicePeriod(candidates, fromDate, toDate);
+  const previewDeals = resolveVendorPreviewDeals(inServiceWindowAll, { vendorName, month: monthStr });
+  for (const d of previewDeals) {
     const id = String(d._id || '');
     if (id && !dealsMap.has(id)) dealsMap.set(id, d);
   }
 
-  const rows = buildCentralFinanceLedgerVendorRows({
+  const snapshotOids = [
+    ...new Set(
+      ledgerDocs
+        .filter((l) => l.locked === true && l.snapshotId)
+        .map((l) => {
+          try {
+            return new ObjectId(String(l.snapshotId));
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean)
+    ),
+  ];
+  const snapshotDocs = snapshotOids.length
+    ? await db.collection('vendor_payout_snapshots').find({ _id: { $in: snapshotOids } }).toArray()
+    : [];
+  const snapshotStatusById = new Map(snapshotDocs.map((s) => [String(s._id), String(s.status || 'Pending')]));
+  const ledgerSnapshotStatusByEntryId = new Map();
+  for (const L of ledgerDocs) {
+    const entryId = String(L._id || '');
+    const snapId = String(L.snapshotId || '');
+    if (entryId && snapId) {
+      ledgerSnapshotStatusByEntryId.set(entryId, snapshotStatusById.get(snapId) || 'Pending');
+    }
+  }
+
+  const rows = buildFullVendorLedgerPreviewRows({
     ledgerDocs,
     deals: [...dealsMap.values()],
     fromDate,
     toDate,
     monthFilter: monthStr,
+    ledgerSnapshotStatusByEntryId,
   });
 
   const snapshots = await db
@@ -6304,7 +6335,7 @@ export async function getVendorPayoutPreview(vendorId, { fromDate = '', toDate =
     .toArray();
   const pendingPayouts = snapshots.reduce((sum, s) => sum + Number(s.totalAmount || 0), 0);
 
-  const openRows = rows.filter((r) => !r.ledgerLocked);
+  const openRows = rows.filter((r) => isPayoutRowSelectable(r.payoutRowStatus));
 
   return {
     vendor: { id: vid, vendorName },
@@ -6316,15 +6347,38 @@ export async function getVendorPayoutPreview(vendorId, { fromDate = '', toDate =
       totalVendorPayout: openRows.reduce((s, r) => s + Number(r.vendorPayout || 0), 0),
       activeDeals: openRows.length,
       pendingPayouts,
+      totalRows: rows.length,
+      openRows: openRows.length,
+      lockedRows: rows.filter((r) => !isPayoutRowSelectable(r.payoutRowStatus)).length,
     },
     rows,
     ...(openRows.length === 0
       ? {
           note:
-            'אין רשומות פתוחות בטווח. תשלום לספק מחושב לפי חיובים בפועל (תשלום ראשון ואירועי DetailRecurring) — שורה נפרדת לכל חודש חיוב, בדומה לעמלות סוכן.',
+            'אין רשומות פתוחות לנעילה בטווח. שורות נעולות, מבוטלות או טרם הופעלו מוצגות לצפייה בלבד.',
         }
       : {}),
   };
+}
+
+/** עסקאות לייצוא אקסל דוח שירות לספק — זהה למסך דוחות, מסונן לספק בודד. */
+export async function getVendorServiceExportDeals(vendorId, { fromDate = '', toDate = '', month = '' } = {}) {
+  const db = await getDb();
+  const vid = String(vendorId || '').trim();
+  if (!vid) throw new Error('מזהה ספק חסר');
+
+  let vendor = null;
+  if (ObjectId.isValid(vid)) {
+    vendor = await db.collection('vendors').findOne({ _id: new ObjectId(vid) });
+  }
+  if (!vendor) vendor = await db.collection('vendors').findOne({ _id: vid });
+  if (!vendor) throw new Error('ספק לא נמצא');
+
+  const vendorName = String(vendor.vendorName || '').trim();
+  const monthStr = String(month || '').trim();
+  const candidates = await findDealsForServiceReportsCandidates();
+  const inServiceWindow = filterDealsOverlappingEligibleServicePeriod(candidates, fromDate, toDate);
+  return resolveVendorExportDeals(inServiceWindow, { vendorName, month: monthStr });
 }
 
 export async function lockVendorPayoutSnapshot(vendorId, options = {}) {
@@ -6351,18 +6405,32 @@ export async function lockVendorPayoutSnapshot(vendorId, options = {}) {
     const idSet = new Set(dealIds.map((x) => String(x)));
     rows = rows.filter((r) => r.dealId && idSet.has(String(r.dealId)));
     if (!rows.length) throw new Error('לא נבחרו רשומות תואמות לנעילה');
+  } else {
+    rows = rows.filter((r) => isPayoutRowSelectable(r.payoutRowStatus));
   }
   if (!rows.length) throw new Error('אין רשומות פתוחות לנעילה');
 
   const db = await getDb();
   const vid = String(preview.vendor.id);
   const resolvedRows = [];
+  const skipped = [];
   for (const row of rows) {
+    if (!isPayoutRowSelectable(row.payoutRowStatus) || row.ledgerLocked === true) {
+      skipped.push({
+        entryId: String(row.ledgerEntryId || ''),
+        rowId: String(row.rowId || ''),
+        reason: 'already_locked',
+      });
+      continue;
+    }
     const entryId = String(row.ledgerEntryId || '').trim();
     if (entryId && ObjectId.isValid(entryId)) {
       const ledger = await db.collection('vendor_payout_ledger').findOne({ _id: new ObjectId(entryId) });
       if (!ledger) throw new Error(`רשומת יומן ${entryId} לא נמצאה`);
-      if (ledger.locked === true) throw new Error(`רשומה ${entryId} כבר ננעלה`);
+      if (ledger.locked === true) {
+        skipped.push({ entryId, rowId: String(row.rowId || ''), reason: 'already_locked' });
+        continue;
+      }
       if (String(ledger.vendorId || '') !== vid) throw new Error('רשומת יומן לא שייכת לספק');
       resolvedRows.push({
         ...row,
@@ -6371,13 +6439,33 @@ export async function lockVendorPayoutSnapshot(vendorId, options = {}) {
       });
       continue;
     }
-    const ledger = await ensureVendorLedgerEntryForRow(db, vid, row);
+    const ledgerResult = await ensureVendorLedgerEntryForRow(db, vid, row);
+    if (ledgerResult?.locked === true) {
+      skipped.push({
+        entryId: String(ledgerResult.existing?._id || ''),
+        rowId: String(row.rowId || ''),
+        reason: 'already_locked',
+      });
+      continue;
+    }
+    const ledger = ledgerResult;
     resolvedRows.push({
       ...row,
       ledgerEntryId: String(ledger._id),
       vendorPayout: Number(ledger.vendorPayout ?? row.vendorPayout ?? 0),
     });
   }
+
+  if (!resolvedRows.length) {
+    return {
+      success: true,
+      skipped,
+      skippedCount: skipped.length,
+      lockedCount: 0,
+      message: 'כל הרשומות שנבחרו כבר ננעלו — לא נוצרה דרישת תשלום חדשה',
+    };
+  }
+
   rows = resolvedRows;
 
   const totalAmount = rows.reduce((sum, r) => sum + Number(r.vendorPayout || 0), 0);
@@ -6424,7 +6512,14 @@ export async function lockVendorPayoutSnapshot(vendorId, options = {}) {
     );
   }
 
-  return { success: true, snapshotId: snapId, ...snapshot };
+  return {
+    success: true,
+    snapshotId: snapId,
+    lockedCount: rows.length,
+    skippedCount: skipped.length,
+    skipped,
+    ...snapshot,
+  };
 }
 
 export async function listVendorPayoutSnapshots(vendorId, limit = 100) {
