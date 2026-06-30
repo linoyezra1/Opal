@@ -26,6 +26,10 @@ import {
   STATUS_ACTIVE,
   STATUS_PENDING_CANCELLATION,
 } from './entitlementStatus.js';
+import {
+  explodeDealToMonthlyBillingRows,
+  formatBillingMonthDisplay,
+} from './financeLedgerService.js';
 
 /**
  * סינון חודשי לדוחות בילינג ארגוני: רק עסקאות שחודש הבילינג שלהן (שדה billingMonth) תואם בדיוק ל־YYYY-MM.
@@ -483,32 +487,65 @@ export function resolveVendorExportDeals(deals, { vendorName = '', month = '' } 
   return filterDealsEligibleForVendorPayoutQueue(afterProvider);
 }
 
-/** שורות תצוגה מקדימה לנעילת תשלום — מבוטח ראשי בלבד, עלות 0 למוטב משני */
+/** שורות תצוגה מקדימה לנעילת תשלום — שורה לכל חודש חיוב (מבוטח ראשי בלבד) */
 export function buildVendorPayoutPreviewRowsFromDeals(deals, { lockedDealIds = new Set() } = {}) {
   const locked = lockedDealIds instanceof Set ? lockedDealIds : new Set(lockedDealIds);
   const rows = [];
   for (const d of Array.isArray(deals) ? deals : []) {
     const dealId = String(d._id || '');
     if (!dealId || locked.has(dealId)) continue;
+    const monthly = explodeDealToMonthlyBillingRows(d);
+    for (const row of monthly) {
+      rows.push({
+        ...row,
+        ledgerEntryId: row.ledgerEntryId || '',
+        ledgerLocked: false,
+      });
+    }
+  }
+  return rows;
+}
+
+/** שורות ייצוא לספק — פיצוץ חודשי לכל חיוב מוצלח + מוטבים משניים (עלות 0) */
+export function generateMonthlyVendorExportRows(deals) {
+  const rows = [];
+  for (const d of Array.isArray(deals) ? deals : []) {
+    const monthly = explodeDealToMonthlyBillingRows(d);
+    if (!monthly.length) continue;
+
     const flat = generateFlattenedSubscriberRows([d]);
-    const primary = flat.find((r) => r.rowRole === 'primary');
-    if (!primary) continue;
-    rows.push({
-      dealId,
-      transactionId: primary.transactionId,
-      firstName: primary.firstName,
-      lastName: primary.lastName,
-      idNumber: primary.idNumber,
-      productName: primary.productName,
-      vendorPayout: Number(primary.vendorPayout || 0),
-      billingMonth: primary.billingMonth,
-      subscriptionStatus: primary.subscriptionStatus,
-      subscriptionEndDisplay: primary.subscriptionEndDisplay,
-      entitlementStatus: getEntitlementStatus(d).status,
-      ledgerEntryId: '',
-      ledgerLocked: false,
-      isSecondary: false,
-    });
+    const secondary = flat.filter((r) => r.rowRole === 'beneficiary' || r.isSecondary);
+
+    for (const primary of monthly) {
+      rows.push({
+        ...primary,
+        rowRole: 'primary',
+        billingMonthDisplay: formatBillingMonthDisplay(primary.billingMonth),
+        subscriptionEndDisplay: primary.subscriptionEndDisplay || primary.subscriptionEndDate || '-',
+        payerAmount: Number(d.payerAmount || 0),
+        paymentStatus: String(d.paymentStatus || ''),
+        phone: flat.find((r) => r.rowRole === 'primary')?.phone || '',
+        email: flat.find((r) => r.rowRole === 'primary')?.email || '',
+        address: flat.find((r) => r.rowRole === 'primary')?.address || '',
+        dateOfBirth: flat.find((r) => r.rowRole === 'primary')?.dateOfBirth || '',
+        gender: flat.find((r) => r.rowRole === 'primary')?.gender || '',
+        healthFund: flat.find((r) => r.rowRole === 'primary')?.healthFund || '',
+        supplementalInsurance: flat.find((r) => r.rowRole === 'primary')?.supplementalInsurance || '',
+        createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt || '',
+      });
+      for (const sec of secondary) {
+        rows.push({
+          ...sec,
+          billingMonth: primary.billingMonth,
+          billingMonthDisplay: formatBillingMonthDisplay(primary.billingMonth),
+          subscriptionStartDate: primary.subscriptionStartDate,
+          subscriptionEndDisplay: primary.subscriptionEndDisplay,
+          subscriptionEndDateRaw: primary.subscriptionEndDate,
+          vendorPayout: 0,
+          isSecondary: true,
+        });
+      }
+    }
   }
   return rows;
 }
@@ -619,7 +656,7 @@ const VENDOR_EXPORT_HEADERS = [
   'מין',
   'קופת חולים',
   'ביטוח משלים',
-  'חודש בילינג',
+  'חודש חיוב',
   'סטטוס תשלום',
   'סטטוס מנוי',
   'מוצר',
@@ -638,9 +675,9 @@ const VENDOR_EXPORT_SUMMARY_LABELS = [
   ['סה"כ לתשלום לספק', 'totalVendorPayout'],
 ];
 
-/** ייצוא אקסל לספק — ללא עמודת מחיר ללקוח, עם עלות ספק וסיכום בראש הגיליון */
+/** ייצוא אקסל לספק — שורה לכל חודש חיוב + מוטבים משניים */
 export async function buildVendorExportXlsxBuffer(deals) {
-  const rows = generateFlattenedSubscriberRows(deals);
+  const rows = generateMonthlyVendorExportRows(deals);
   const summary = computeVendorExportSummary(rows);
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('VendorExport', { views: [{ rightToLeft: true }] });
@@ -670,7 +707,7 @@ export async function buildVendorExportXlsxBuffer(deals) {
       r.gender,
       r.healthFund,
       r.supplementalInsurance,
-      r.billingMonth,
+      r.billingMonthDisplay || r.billingMonth,
       r.paymentStatus,
       r.subscriptionStatus,
       r.productName,

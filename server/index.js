@@ -155,10 +155,12 @@ import {
   buildCancellationsCsv,
   buildAgentCommissionPayload,
   generateFlattenedSubscriberRows,
+  generateMonthlyVendorExportRows,
   filterDealsForSubscriberExport,
   filterDealsOverlappingEligibleServicePeriod,
   filterDealsCancellationsServiceEndInPeriod,
   filterDealsStrictlyCancelledInPeriod,
+  resolveVendorExportDeals,
   listProviderNamesFromDealsForFilter,
   buildSubscribersXlsxBuffer,
   buildVendorExportXlsxBuffer,
@@ -3232,18 +3234,26 @@ app.get('/api/admin/reports/subscribers-preview', requireAdmin, async (req, res)
   try {
     const fromDate = req.query.fromDate || req.query.from || '';
     const toDate = req.query.toDate || req.query.to || '';
+    const vendorMode = String(req.query.vendorExport || req.query.mode || '').trim() === 'vendor';
     const candidates = await findDealsForServiceReportsCandidates();
     const inServiceWindow = filterDealsOverlappingEligibleServicePeriod(candidates, fromDate, toDate);
-    const deals = filterDealsForSubscriberExport(inServiceWindow, {
-      billingType: req.query.billingType,
-      status: req.query.status,
-      product: req.query.product,
-      provider: req.query.provider,
-      agentId: req.query.agentId,
-      organizationId: req.query.organizationId,
-      month: req.query.month,
-    });
-    const allRows = generateFlattenedSubscriberRows(deals);
+    const deals = vendorMode
+      ? resolveVendorExportDeals(inServiceWindow, {
+          vendorName: String(req.query.provider || '').trim(),
+          month: String(req.query.month || '').trim(),
+        })
+      : filterDealsForSubscriberExport(inServiceWindow, {
+          billingType: req.query.billingType,
+          status: req.query.status,
+          product: req.query.product,
+          provider: req.query.provider,
+          agentId: req.query.agentId,
+          organizationId: req.query.organizationId,
+          month: req.query.month,
+        });
+    const allRows = vendorMode
+      ? generateMonthlyVendorExportRows(deals)
+      : generateFlattenedSubscriberRows(deals);
     res.json({ success: true, rows: allRows.slice(0, 200), totalRows: allRows.length });
   } catch (e) {
     console.error(`[${ts()}] reports/subscribers-preview error:`, e);

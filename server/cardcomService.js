@@ -109,6 +109,7 @@ export async function createLowProfileDeal(opts = {}) {
   form.set('UserName', username);
   form.set('Password', password);
   form.set('SumToBill', String(sumToBill));
+  form.set('Description', String(opts.productName || opts.invoiceDescription || '').trim());
   form.set('CoinId', '1');
   form.set('Language', language);
   form.set('APILevel', '10');

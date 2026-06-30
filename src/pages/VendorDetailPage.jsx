@@ -56,7 +56,11 @@ export default function VendorDetailPage() {
   const [preview, setPreview] = useState({ rows: [], summary: {} });
   const [previewLoading, setPreviewLoading] = useState(false);
   const [snapshots, setSnapshots] = useState([]);
-  const [selectedDealIds, setSelectedDealIds] = useState(() => new Set());
+  const [selectedEntryKeys, setSelectedEntryKeys] = useState(() => new Set());
+
+  function previewRowKey(r) {
+    return String(r.ledgerEntryId || r.rowId || `${r.dealId}-${r.billingMonth}`);
+  }
   const [lockBusy, setLockBusy] = useState(false);
   const [snapEditOpen, setSnapEditOpen] = useState(false);
   const [snapEditTarget, setSnapEditTarget] = useState(null);
@@ -94,13 +98,15 @@ export default function VendorDetailPage() {
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error || 'טעינת תצוגה מקדימה נכשלה');
-      setPreview({ rows: j.rows || [], summary: j.summary || {} });
-      const openIds = (j.rows || []).filter((r) => !r.ledgerLocked).map((r) => String(r.dealId));
-      setSelectedDealIds(new Set(openIds));
+      setPreview({ rows: j.rows || [], summary: j.summary || {}, note: j.note || '' });
+      const openKeys = (j.rows || [])
+        .filter((r) => !r.ledgerLocked)
+        .map((r) => previewRowKey(r));
+      setSelectedEntryKeys(new Set(openKeys));
     } catch (e) {
       setErr(e?.message || 'שגיאה');
       setPreview({ rows: [], summary: {} });
-      setSelectedDealIds(new Set());
+      setSelectedEntryKeys(new Set());
     } finally {
       setPreviewLoading(false);
     }
@@ -140,32 +146,43 @@ export default function VendorDetailPage() {
 
   const openPreviewRows = (preview.rows || []).filter((r) => !r.ledgerLocked);
 
-  const toggleDealRow = (dealId) => {
-    setSelectedDealIds((prev) => {
+  const toggleEntryRow = (key) => {
+    setSelectedEntryKeys((prev) => {
       const next = new Set(prev);
-      const key = String(dealId);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
+      const k = String(key);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
       return next;
     });
   };
 
-  const toggleAllDeals = (checked) => {
+  const toggleAllEntries = (checked) => {
     if (!openPreviewRows.length) return;
-    if (checked) setSelectedDealIds(new Set(openPreviewRows.map((r) => String(r.dealId))));
-    else setSelectedDealIds(new Set());
+    if (checked) setSelectedEntryKeys(new Set(openPreviewRows.map((r) => previewRowKey(r))));
+    else setSelectedEntryKeys(new Set());
   };
 
   const lockVendorPayouts = async () => {
-    const dealIds = [...selectedDealIds];
-    if (!dealIds.length) {
+    const selectedRows = openPreviewRows.filter((r) => selectedEntryKeys.has(previewRowKey(r)));
+    if (!selectedRows.length) {
       setErr('נא לבחור לפחות רשומה אחת לנעילה');
       return;
     }
+    const entryIds = selectedRows
+      .map((r) => String(r.ledgerEntryId || '').trim())
+      .filter(Boolean);
+    const rowIds = selectedRows
+      .filter((r) => !r.ledgerEntryId && r.rowId)
+      .map((r) => String(r.rowId));
     setLockBusy(true);
     setErr('');
     try {
-      const body = { fromDate, toDate, dealIds };
+      const body = {
+        fromDate,
+        toDate,
+        ...(entryIds.length ? { entryIds } : {}),
+        ...(rowIds.length ? { rowIds } : {}),
+      };
       const res = await fetch(`${API_BASE}/api/admin/vendors/${encodeURIComponent(id)}/lock-payouts`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -213,7 +230,7 @@ export default function VendorDetailPage() {
     }
   };
 
-  const lockDisabled = lockBusy || previewLoading || selectedDealIds.size === 0;
+  const lockDisabled = lockBusy || previewLoading || selectedEntryKeys.size === 0;
 
   if (!token) {
     return (
@@ -379,8 +396,11 @@ export default function VendorDetailPage() {
                   <p className="text-sm text-muted-foreground">
                     סה״כ לתשלום לספק (פתוח): {formatCurrency(preview.summary?.totalVendorPayout || 0)} ·{' '}
                     {openPreviewRows.length} רשומות
-                    {selectedDealIds.size > 0 ? ` · נבחרו ${selectedDealIds.size}` : ''}
+                    {selectedEntryKeys.size > 0 ? ` · נבחרו ${selectedEntryKeys.size}` : ''}
                   </p>
+                  {preview.note ? (
+                    <p className="text-xs text-muted-foreground">{preview.note}</p>
+                  ) : null}
                   <div className="rounded-md border overflow-x-auto relative">
                     {previewLoading ? (
                       <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
@@ -396,13 +416,16 @@ export default function VendorDetailPage() {
                               className="size-4"
                               disabled={previewLoading || !openPreviewRows.length}
                               checked={
-                                openPreviewRows.length > 0 && selectedDealIds.size === openPreviewRows.length
+                                openPreviewRows.length > 0 && selectedEntryKeys.size === openPreviewRows.length
                               }
-                              onChange={(e) => toggleAllDeals(e.target.checked)}
+                              onChange={(e) => toggleAllEntries(e.target.checked)}
                             />
                           </TableHead>
                           <TableHead>לקוח</TableHead>
                           <TableHead>ת.ז.</TableHead>
+                          <TableHead>חודש חיוב</TableHead>
+                          <TableHead>תאריך תחילת מנוי</TableHead>
+                          <TableHead>תאריך סיום מנוי</TableHead>
                           <TableHead>מוצר</TableHead>
                           <TableHead>סטטוס</TableHead>
                           <TableHead>תשלום לספק</TableHead>
@@ -411,18 +434,23 @@ export default function VendorDetailPage() {
                       </TableHeader>
                       <TableBody>
                         {openPreviewRows.map((r) => (
-                          <TableRow key={r.dealId}>
+                          <TableRow key={previewRowKey(r)} className={r.ledgerLocked ? 'opacity-50 bg-muted/40' : undefined}>
                             <TableCell>
                               <input
                                 type="checkbox"
                                 className="size-4"
-                                checked={selectedDealIds.has(String(r.dealId))}
-                                disabled={previewLoading}
-                                onChange={() => toggleDealRow(r.dealId)}
+                                checked={selectedEntryKeys.has(previewRowKey(r))}
+                                disabled={previewLoading || r.ledgerLocked}
+                                onChange={() => toggleEntryRow(previewRowKey(r))}
                               />
                             </TableCell>
                             <TableCell>{`${r.firstName || ''} ${r.lastName || ''}`.trim() || '—'}</TableCell>
                             <TableCell>{r.idNumber || '—'}</TableCell>
+                            <TableCell className="font-medium tabular-nums">
+                              {r.billingMonthDisplay || r.billingMonth || '—'}
+                            </TableCell>
+                            <TableCell>{r.subscriptionStartDate || '—'}</TableCell>
+                            <TableCell>{r.subscriptionEndDisplay || r.subscriptionEndDate || '—'}</TableCell>
                             <TableCell>{r.productName || '—'}</TableCell>
                             <TableCell>{r.subscriptionStatus || '—'}</TableCell>
                             <TableCell>{formatCurrency(r.vendorPayout)}</TableCell>
@@ -441,14 +469,14 @@ export default function VendorDetailPage() {
                         ))}
                         {!openPreviewRows.length && !previewLoading ? (
                           <TableRow>
-                            <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                            <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                               אין רשומות פתוחות בטווח — עדכנו תאריכים ולחצו חיפוש
                             </TableCell>
                           </TableRow>
                         ) : null}
                       </TableBody>
                       <TableNumericFooter
-                        leadingColSpan={5}
+                        leadingColSpan={8}
                         trailingColSpan={1}
                         rows={openPreviewRows}
                         columns={[{ key: 'vendorPayout', format: 'currency2', getValue: (r) => r.vendorPayout }]}

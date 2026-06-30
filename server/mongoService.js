@@ -12,8 +12,10 @@ import { isActiveContactTaskLead } from '../lib/contactLeadTasks.js';
 import {
   filterDealsOverlappingEligibleServicePeriod,
   resolveVendorExportDeals,
-  buildVendorPayoutPreviewRowsFromDeals,
 } from './reportController.js';
+import {
+  buildCentralFinanceLedgerVendorRows,
+} from './financeLedgerService.js';
 import { getReportingServiceWindow } from './entitlementStatus.js';
 
 const MONGO_URL = process.env.MONGODB_URI || process.env.MONGO_URL || '';
@@ -511,6 +513,61 @@ export async function writeInitialCheckoutVendorPayoutLedger({
     { upsert: true }
   );
   return { ok: true, rowId };
+}
+
+/** יומן תשלום לספק — שורה ייחודית לפי rowId (חודש חיוב / חיוב חוזר) */
+export async function upsertVendorPayoutLedgerRow({
+  rowId,
+  vendorId,
+  dealId,
+  transactionId,
+  vendorCost,
+  billingMonth,
+  source = 'manual_backfill',
+  lastBillDate = null,
+}) {
+  const rid = String(rowId || '').trim();
+  const vid = String(vendorId || '').trim();
+  const did = String(dealId || '').trim();
+  const cost = Number(vendorCost || 0);
+  if (!rid || !vid || !did || cost <= 0) return { ok: false, reason: 'missing fields' };
+
+  const db = await getDb();
+  const col = db.collection('vendor_payout_ledger');
+  const now = new Date();
+  const month = String(billingMonth || formatBillingMonthFromDate(now));
+  const billDt = lastBillDate ? parseFlexibleDate(lastBillDate) || now : now;
+
+  try {
+    await col.createIndex({ rowId: 1 }, { unique: true });
+  } catch {
+    /* may exist */
+  }
+
+  const existing = await col.findOne({ rowId: rid }, { projection: { locked: 1 } });
+  if (existing?.locked === true) return { ok: true, skipped: true, reason: 'locked' };
+
+  await col.updateOne(
+    { rowId: rid },
+    {
+      $set: {
+        vendorId: vid,
+        dealId: did,
+        transactionId: String(transactionId || ''),
+        vendorPayout: cost,
+        billingMonth: month,
+        lastBillDate: billDt,
+        locked: false,
+        snapshotId: null,
+        updatedAt: now,
+        source,
+        isSecondary: false,
+      },
+      $setOnInsert: { rowId: rid, createdAt: now },
+    },
+    { upsert: true }
+  );
+  return { ok: true, rowId: rid };
 }
 
 export async function findDealForRecurringEvent(params = {}) {
@@ -6126,6 +6183,33 @@ function mapVendorPayoutSnapshotDoc(d) {
   };
 }
 
+/** מבטח שיש רשומת יומן פתוחה לשורת חודש חיוב לפני נעילה */
+async function ensureVendorLedgerEntryForRow(db, vendorId, row) {
+  const vid = String(vendorId || '').trim();
+  const rowId = String(row?.rowId || '').trim();
+  if (rowId) {
+    const existing = await db.collection('vendor_payout_ledger').findOne({ rowId });
+    if (existing) {
+      if (existing.locked === true) throw new Error(`רשומה ${rowId} כבר ננעלה`);
+      return existing;
+    }
+    const did = String(row.dealId || '').trim();
+    if (!did) throw new Error('פרטי עסקה חסרים');
+    await upsertVendorPayoutLedgerRow({
+      rowId,
+      vendorId: vid,
+      dealId: did,
+      transactionId: row.transactionId,
+      vendorCost: row.vendorPayout,
+      billingMonth: row.billingMonth,
+      source: row.source || 'preview_backfill',
+    });
+    const created = await db.collection('vendor_payout_ledger').findOne({ rowId });
+    if (created) return created;
+  }
+  return ensureVendorLedgerEntryForDeal(db, vid, row.dealId, row);
+}
+
 /** מבטח שיש רשומת יומן פתוחה לעסקה לפני נעילה */
 async function ensureVendorLedgerEntryForDeal(db, vendorId, dealId, rowHints = {}) {
   const vid = String(vendorId || '').trim();
@@ -6161,7 +6245,7 @@ async function ensureVendorLedgerEntryForDeal(db, vendorId, dealId, rowHints = {
   return created;
 }
 
-/** תצוגה מקדימה לנעילת תשלומי ספק — אותו pipeline כמו דוחות -> ייצוא לספק */
+/** תצוגה מקדימה לנעילת תשלומי ספק — שורות חודשיות מיומן מרכזי (כמו עמלות סוכן) */
 export async function getVendorPayoutPreview(vendorId, { fromDate = '', toDate = '', month = '' } = {}) {
   const db = await getDb();
   const vid = String(vendorId || '').trim();
@@ -6177,33 +6261,40 @@ export async function getVendorPayoutPreview(vendorId, { fromDate = '', toDate =
   const vendorName = String(vendor.vendorName || '').trim();
   const monthStr = String(month || '').trim();
 
-  const candidates = await findDealsForServiceReportsCandidates();
-  const inServiceWindow = filterDealsOverlappingEligibleServicePeriod(candidates, fromDate, toDate);
-  const deals = resolveVendorExportDeals(inServiceWindow, { vendorName, month: monthStr });
-
   const ledgerDocs = await db
     .collection('vendor_payout_ledger')
-    .find({ vendorId: vid })
-    .project({ dealId: 1, locked: 1, snapshotId: 1 })
+    .find({ vendorId: vid, isSecondary: { $ne: true } })
+    .sort({ billingMonth: 1, lastBillDate: 1 })
     .toArray();
 
-  const lockedDealIds = new Set();
-  const ledgerByDealId = new Map();
-  for (const L of ledgerDocs) {
-    const did = String(L.dealId || '');
-    if (!did) continue;
-    ledgerByDealId.set(did, L);
-    if (L.locked === true) lockedDealIds.add(did);
+  const dealIds = [...new Set(ledgerDocs.map((l) => String(l.dealId || '')).filter(Boolean))];
+  const dealsMap = new Map();
+  if (dealIds.length) {
+    const oids = dealIds.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id));
+    if (oids.length) {
+      const drs = await db
+        .collection('deals')
+        .find({ _id: { $in: oids } })
+        .toArray();
+      for (const dr of drs) dealsMap.set(String(dr._id), dr);
+    }
   }
 
-  let rows = buildVendorPayoutPreviewRowsFromDeals(deals, { lockedDealIds });
-  rows = rows.map((r) => {
-    const ledger = ledgerByDealId.get(String(r.dealId));
-    return {
-      ...r,
-      ledgerEntryId: ledger ? String(ledger._id) : String(r.dealId),
-      ledgerLocked: ledger?.locked === true,
-    };
+  // Supplement deals in service window for ledger gaps (successful charges not yet persisted)
+  const candidates = await findDealsForServiceReportsCandidates();
+  const inServiceWindow = filterDealsOverlappingEligibleServicePeriod(candidates, fromDate, toDate);
+  const exportDeals = resolveVendorExportDeals(inServiceWindow, { vendorName, month: monthStr });
+  for (const d of exportDeals) {
+    const id = String(d._id || '');
+    if (id && !dealsMap.has(id)) dealsMap.set(id, d);
+  }
+
+  const rows = buildCentralFinanceLedgerVendorRows({
+    ledgerDocs,
+    deals: [...dealsMap.values()],
+    fromDate,
+    toDate,
+    monthFilter: monthStr,
   });
 
   const snapshots = await db
@@ -6213,17 +6304,26 @@ export async function getVendorPayoutPreview(vendorId, { fromDate = '', toDate =
     .toArray();
   const pendingPayouts = snapshots.reduce((sum, s) => sum + Number(s.totalAmount || 0), 0);
 
+  const openRows = rows.filter((r) => !r.ledgerLocked);
+
   return {
     vendor: { id: vid, vendorName },
     fromDate: String(fromDate || ''),
     toDate: String(toDate || ''),
     month: monthStr,
+    previewSource: 'monthly_billing_ledger',
     summary: {
-      totalVendorPayout: rows.reduce((s, r) => s + Number(r.vendorPayout || 0), 0),
-      activeDeals: rows.length,
+      totalVendorPayout: openRows.reduce((s, r) => s + Number(r.vendorPayout || 0), 0),
+      activeDeals: openRows.length,
       pendingPayouts,
     },
     rows,
+    ...(openRows.length === 0
+      ? {
+          note:
+            'אין רשומות פתוחות בטווח. תשלום לספק מחושב לפי חיובים בפועל (תשלום ראשון ואירועי DetailRecurring) — שורה נפרדת לכל חודש חיוב, בדומה לעמלות סוכן.',
+        }
+      : {}),
   };
 }
 
@@ -6236,18 +6336,20 @@ export async function lockVendorPayoutSnapshot(vendorId, options = {}) {
   let rows = Array.isArray(preview.rows) ? preview.rows : [];
   const dealIds = Array.isArray(options.dealIds) ? options.dealIds : null;
   const entryIds = Array.isArray(options.entryIds) ? options.entryIds : null;
+  const rowIds = Array.isArray(options.rowIds) ? options.rowIds : null;
 
-  if (dealIds && dealIds.length > 0) {
-    const idSet = new Set(dealIds.map((x) => String(x)));
-    rows = rows.filter((r) => r.dealId && idSet.has(String(r.dealId)));
-    if (!rows.length) throw new Error('לא נבחרו רשומות תואמות לנעילה');
-  } else if (entryIds && entryIds.length > 0) {
-    const idSet = new Set(entryIds.map((x) => String(x)));
+  if (entryIds?.length || rowIds?.length) {
+    const entrySet = new Set((entryIds || []).map((x) => String(x)));
+    const rowIdSet = new Set((rowIds || []).map((x) => String(x)));
     rows = rows.filter(
       (r) =>
-        (r.ledgerEntryId && idSet.has(String(r.ledgerEntryId))) ||
-        (r.dealId && idSet.has(String(r.dealId)))
+        (r.ledgerEntryId && entrySet.has(String(r.ledgerEntryId))) ||
+        (r.rowId && rowIdSet.has(String(r.rowId)))
     );
+    if (!rows.length) throw new Error('לא נבחרו רשומות תואמות לנעילה');
+  } else if (dealIds && dealIds.length > 0) {
+    const idSet = new Set(dealIds.map((x) => String(x)));
+    rows = rows.filter((r) => r.dealId && idSet.has(String(r.dealId)));
     if (!rows.length) throw new Error('לא נבחרו רשומות תואמות לנעילה');
   }
   if (!rows.length) throw new Error('אין רשומות פתוחות לנעילה');
@@ -6256,7 +6358,20 @@ export async function lockVendorPayoutSnapshot(vendorId, options = {}) {
   const vid = String(preview.vendor.id);
   const resolvedRows = [];
   for (const row of rows) {
-    const ledger = await ensureVendorLedgerEntryForDeal(db, vid, row.dealId, row);
+    const entryId = String(row.ledgerEntryId || '').trim();
+    if (entryId && ObjectId.isValid(entryId)) {
+      const ledger = await db.collection('vendor_payout_ledger').findOne({ _id: new ObjectId(entryId) });
+      if (!ledger) throw new Error(`רשומת יומן ${entryId} לא נמצאה`);
+      if (ledger.locked === true) throw new Error(`רשומה ${entryId} כבר ננעלה`);
+      if (String(ledger.vendorId || '') !== vid) throw new Error('רשומת יומן לא שייכת לספק');
+      resolvedRows.push({
+        ...row,
+        ledgerEntryId: entryId,
+        vendorPayout: Number(ledger.vendorPayout ?? row.vendorPayout ?? 0),
+      });
+      continue;
+    }
+    const ledger = await ensureVendorLedgerEntryForRow(db, vid, row);
     resolvedRows.push({
       ...row,
       ledgerEntryId: String(ledger._id),

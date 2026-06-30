@@ -242,6 +242,7 @@ export default function ReportsDashboard() {
       if (provAgentId) q.set('agentId', provAgentId);
       if (provOrgId) q.set('organizationId', provOrgId);
       if (provMonth) q.set('month', provMonth);
+      q.set('vendorExport', 'vendor');
       const res = await fetch(`${API_BASE}/api/admin/reports/subscribers-preview?${q.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -607,6 +608,7 @@ export default function ReportsDashboard() {
                         <TableHead className="text-right">שם פרטי</TableHead>
                         <TableHead className="text-right">שם משפחה</TableHead>
                         <TableHead className="text-right">ת.ז</TableHead>
+                        <TableHead className="text-right">חודש חיוב</TableHead>
                         <TableHead className="text-right">תאריך תחילת מנוי</TableHead>
                         <TableHead className="text-right">תאריך סיום מנוי</TableHead>
                         <TableHead className="text-right">מוצר</TableHead>
@@ -620,6 +622,9 @@ export default function ReportsDashboard() {
                           <TableCell>{String(r.firstName || '—')}</TableCell>
                           <TableCell>{String(r.lastName || '—')}</TableCell>
                           <TableCell>{String(r.idNumber || '—')}</TableCell>
+                          <TableCell className="tabular-nums">
+                            {String(r.billingMonthDisplay || r.billingMonth || '—')}
+                          </TableCell>
                           <TableCell>{String(r.subscriptionStartDate || '—')}</TableCell>
                           <TableCell>
                             {String(r.subscriptionEndDisplay || r.subscriptionEndDateRaw || '—')}
@@ -630,14 +635,14 @@ export default function ReportsDashboard() {
                       ))}
                       {!previewRows.length ? (
                         <TableRow>
-                          <TableCell className="text-center text-muted-foreground" colSpan={8}>
+                          <TableCell className="text-center text-muted-foreground" colSpan={9}>
                             אין נתונים לתצוגה מקדימה
                           </TableCell>
                         </TableRow>
                       ) : null}
                     </TableBody>
                     <TableNumericFooter
-                      leadingColSpan={7}
+                      leadingColSpan={8}
                       rows={previewRows}
                       columns={[
                         {
